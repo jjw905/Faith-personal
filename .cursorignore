@@ -1,8 +1,0 @@
-.secrets/
-**/.secrets/**
-!.secrets/README.md
-*.pem
-.env
-.env.*
-faith_team_do_ed25519
-*_do_ed25519
