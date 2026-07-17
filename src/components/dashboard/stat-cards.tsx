@@ -22,7 +22,7 @@ function Sparkline({ data, variant }: { data: number[]; variant?: string }) {
             key={index}
             className={cn(
               "w-1.5 rounded-sm",
-              variant === "alert" ? "bg-red-400/70" : "bg-blue-400/60",
+              variant === "alert" ? "bg-red-400/70" : "bg-primary/30",
             )}
             style={{ height: `${Math.max(15, height)}%` }}
           />
@@ -42,12 +42,12 @@ export function StatCards({ stats }: StatCardsProps) {
         return (
           <Card key={stat.id} className="overflow-hidden">
             <CardContent className="p-5">
-              <p className="text-sm text-slate-500">{stat.label}</p>
+              <p className="text-sm text-muted">{stat.label}</p>
               <div className="mt-2 flex items-end justify-between gap-4">
                 <p
                   className={cn(
                     "text-3xl font-bold tracking-tight",
-                    isAlert ? "text-red-600" : "text-slate-900",
+                    isAlert ? "text-red-600" : "text-foreground",
                   )}
                 >
                   {stat.value}
@@ -58,7 +58,7 @@ export function StatCards({ stats }: StatCardsProps) {
                     isAlert
                       ? "text-red-600"
                       : isPositive
-                        ? "text-emerald-600"
+                        ? "text-success"
                         : "text-red-600",
                   )}
                 >
@@ -71,7 +71,7 @@ export function StatCards({ stats }: StatCardsProps) {
                   {stat.trend}%
                 </div>
               </div>
-              <p className="mt-1 text-xs text-slate-400">{stat.trendLabel}</p>
+              <p className="mt-1 text-xs text-muted-2">{stat.trendLabel}</p>
               <div className="mt-4">
                 <Sparkline data={stat.sparkline} variant={stat.variant} />
               </div>

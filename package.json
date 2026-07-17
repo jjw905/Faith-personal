@@ -7,7 +7,12 @@
     "dev": "npm run dev:stop && next dev --hostname 0.0.0.0 --port 3000",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:masking": "npx --yes tsx --tsconfig tsconfig.json scripts/test-masking.ts",
+    "test:masking:random": "npx --yes tsx --tsconfig tsconfig.json scripts/test-random-masking.ts",
+    "train:pii-ner:smoke": "bash ml/pii-ner/run.sh smoke",
+    "train:pii-ner": "bash ml/pii-ner/run.sh full",
+    "ner:serve": "bash ml/pii-ner/serve.sh"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.2",

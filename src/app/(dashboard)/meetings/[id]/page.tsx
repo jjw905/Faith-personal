@@ -1,3 +1,10 @@
+import { notFound } from "next/navigation";
+
+import { PageContainer } from "@/components/layout/page-container";
+import { LiveMaskingTranscript } from "@/components/meetings/live-masking-transcript";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getRecentMeetings } from "@/lib/mock-loader";
+
 export default async function MeetingDetailPage({
   params,
 }: {
@@ -5,16 +12,41 @@ export default async function MeetingDetailPage({
 }) {
   const { id } = await params;
 
+  if (id === "live-mask") {
+    return (
+      <PageContainer>
+        <LiveMaskingTranscript />
+      </PageContainer>
+    );
+  }
+
+  const meeting = getRecentMeetings().find((m) => m.id === id);
+  if (!meeting) notFound();
+
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-white px-8 py-16 text-center">
-      <p className="text-sm font-medium text-gray-400">회의 ID: {id}</p>
-      <h2 className="mt-2 text-lg font-semibold text-gray-900">
-        클로바노트 스타일 회의록 상세
-      </h2>
-      <p className="mt-3 max-w-md text-sm leading-6 text-gray-500">
-        라이트 테마 전환이 완료되었습니다. 아래 컴포넌트 구조 승인 후 본문
-        UI(음성 기록, 요약 아코디언, 플레이어, 마스킹/RBAC)를 구현합니다.
-      </p>
-    </div>
+    <PageContainer>
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div>
+          <p className="text-xs font-medium text-muted-2">회의 ID: {id}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">
+            {meeting.title}
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            회의록 상세 화면입니다. 마스킹 검증은 좌측 &quot;개인정보
+            마스킹&quot; 메뉴를 사용하세요.
+          </p>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">회의 정보</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted">
+            <p>상태: {meeting.status}</p>
+            <p>일시: {meeting.date}</p>
+            <p>참석: {meeting.participants?.length ?? 0}명</p>
+          </CardContent>
+        </Card>
+      </div>
+    </PageContainer>
   );
 }

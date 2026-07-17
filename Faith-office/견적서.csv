@@ -1,7 +1,7 @@
-﻿Product,Details,Quantity,Add ons,Hourly Price,Monthly Price,
-Compute: App Platform - Dedicated,4 GiB: 2  Dedicated  CPUs,1,N/A,$0.12,$78,
-Databases: PostgreSQL - Basic Nodes - Regular CPU,2 GiB: 1 vCPU / 30 GiB SSD Disk,1,N/A,$0.05,$30.45,
-Databases: Valkey - Basic Nodes,1 GiB: 1 vCPU / 10 GiB SSD Disk,1,N/A,$0.02,$15,
-Storage: Spaces Object Storage,"250 GiB storage + 1 TiB outbound transfer (CDN included); overage $0.02/GiB storage, $0.01/GiB transfer",1,N/A,$0.01,$5,
-Total (estimate),Base stack + Spaces Standard subscription,4,N/A,,$128.45,
-,,,,,"192,269 원","1$/1,498원	"
+﻿Product,Details,Quantity,Add ons,Hourly Price,Monthly Price,,
+Compute: App Platform - Dedicated,4 GiB: 2  Dedicated  CPUs,1,N/A,$0.12,$78,,
+Databases: PostgreSQL - Basic Nodes - Regular CPU,2 GiB: 1 vCPU / 30 GiB SSD Disk,1,N/A,$0.05,$30.45,,
+Databases: Valkey - Basic Nodes,1 GiB: 1 vCPU / 10 GiB SSD Disk,1,N/A,$0.02,$15,,
+Storage: Spaces Object Storage,"250 GiB storage + 1 TiB outbound transfer (CDN included); overage $0.02/GiB storage, $0.01/GiB transfer",1,N/A,$0.01,$5,,
+Total (estimate),Base stack + Spaces Standard subscription,4,N/A,,$128.45,,
+,,,,,"192,269 원","1$/1,498원	 기준",

@@ -35,10 +35,10 @@ export function RecordingButton() {
       </Button>
 
       {status !== "idle" && (
-        <div className="flex items-center justify-between rounded-lg bg-slate-100 px-4 py-2 text-sm">
-          <span className="text-slate-600">
+        <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2 text-sm">
+          <span className="text-muted">
             상태:{" "}
-            <span className="font-medium text-slate-900">
+            <span className="font-medium text-foreground">
               {status === "recording"
                 ? "녹음 중"
                 : status === "stopped"
@@ -50,7 +50,7 @@ export function RecordingButton() {
             <button
               type="button"
               onClick={resetRecording}
-              className="text-xs font-medium text-blue-600 hover:underline"
+              className="text-xs font-medium text-primary hover:underline"
             >
               초기화
             </button>

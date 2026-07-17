@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8f9fa;
-  --foreground: #1a1a1a;
+  /* 60% — 중립 베이스 */
+  --background: #fbfbfd;
+  --foreground: #1d1d1f;
+
+  /* 30% — 표면/보조 */
   --card: #ffffff;
-  --card-foreground: #1a1a1a;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #374151;
-  --sidebar-border: #e5e7eb;
-  --sidebar-accent: #f3f4f6;
-  --sidebar-active: #eff6ff;
-  --sidebar-active-foreground: #2563eb;
-  --primary: #2563eb;
+  --card-foreground: #1d1d1f;
+  --surface: #f5f5f7;
+  --surface-2: #eef0f3;
+  --muted: #6e6e73;
+  --muted-2: #86868b;
+  --border: #ececee;
+  --border-strong: #d9d9de;
+
+  /* 10% — 액센트 (딥 네이비, 레퍼런스 톤) */
+  --primary: #11162e;
   --primary-foreground: #ffffff;
-  --muted: #6b7280;
-  --muted-foreground: #9ca3af;
-  --border: #e5e7eb;
-  --ring: #93c5fd;
-  --accent: #f3f4f6;
-  --highlight: #ecfccb;
-  --keyword: #dbeafe;
-  --keyword-foreground: #1d4ed8;
+  --primary-hover: #1c2444;
+  --primary-soft: #eef0f6;
+  --ring: #c7cbe0;
+
+  /* 시맨틱 */
+  --success: #248a3d;
+  --success-soft: #e7f6ec;
+  --warning: #9a6700;
+  --warning-soft: #fdf3d8;
+  --masked: #c81e5b;
+  --masked-soft: #fdeef3;
+
+  /* 사이드바 (공용 셸) */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #424245;
+  --sidebar-active: #f0f6ff;
+  --sidebar-active-foreground: #0071e3;
 }
 
 @theme inline {
@@ -28,25 +42,112 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-masked: var(--masked);
+  --color-masked-soft: var(--masked-soft);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-inter), var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-* {
-  border-color: var(--border);
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: var(--font-inter), var(--font-geist-sans), -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+}
+
+/* 부드러운 그림자 — 선 구분 대신 깊이로 요소를 분리 */
+.shadow-soft {
+  box-shadow:
+    0 1px 2px rgba(17, 24, 39, 0.04),
+    0 8px 24px rgba(17, 24, 39, 0.06);
+}
+
+.shadow-float {
+  box-shadow:
+    0 2px 6px rgba(17, 24, 39, 0.06),
+    0 18px 48px rgba(17, 24, 39, 0.1);
+}
+
+/* 애플식 큰 헤드라인 */
+.text-hero {
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+::selection {
+  background: var(--primary-soft);
+  color: var(--foreground);
+}
+
+@keyframes mask-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dot-bounce {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+.running-dots > span {
+  display: inline-block;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: dot-bounce 1s ease-in-out infinite;
+}
+
+.running-dots > span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.running-dots > span:nth-child(3) {
+  animation-delay: 0.3s;
 }

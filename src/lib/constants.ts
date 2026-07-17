@@ -1,6 +1,7 @@
 import {
   BarChart3,
   ClipboardList,
+  EyeOff,
   LayoutDashboard,
   ScrollText,
   Settings,
@@ -8,7 +9,7 @@ import {
   Users,
 } from "lucide-react";
 
-export const APP_NAME = "보안회의록";
+export const APP_NAME = "Faith";
 
 export const NAV_ITEMS = [
   {
@@ -21,6 +22,11 @@ export const NAV_ITEMS = [
     href: "/meetings",
     icon: ClipboardList,
     badge: 12,
+  },
+  {
+    title: "개인정보 마스킹",
+    href: "/meetings/live-mask",
+    icon: EyeOff,
   },
   {
     title: "분석",
@@ -59,13 +65,17 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
       title: "회의 목록",
       description: "등록된 회의를 검색하고 관리합니다.",
     },
+    "/meetings/live-mask": {
+      title: "개인정보 마스킹",
+      description: "원문과 마스킹 결과를 비교하며 R-08을 검증합니다.",
+    },
     "/analysis": {
       title: "분석",
       description: "회의 데이터와 보안 트렌드를 분석합니다.",
     },
     "/security": {
       title: "보안 설정",
-      description: "마스킹, 암호화, RBAC 정책을 구성합니다.",
+      description: "암호화, RBAC 정책을 구성합니다.",
     },
     "/audit": {
       title: "감사 로그",
@@ -76,7 +86,11 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
       description: "사용자 계정과 권한 레벨을 관리합니다.",
     },
     "/settings": {
-      title: "설정",
-      description: "알림, 언어, 계정 환경을 설정합니다.",
+      title: "시스템 설정",
+      description: "워크스페이스, 보존 정책 등 시스템 환경을 구성합니다.",
+    },
+    "/account": {
+      title: "계정 설정",
+      description: "프로필, 알림, 언어 등 개인 계정 환경을 관리합니다.",
     },
   };

@@ -32,10 +32,10 @@ export function AudioUploadZone() {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 transition-colors",
+            "relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-12 transition-colors",
             isDragging
-              ? "border-blue-500 bg-blue-50"
-              : "border-slate-200 bg-slate-50/50 hover:border-slate-300",
+              ? "border-primary bg-primary-soft"
+              : "border-border-strong bg-surface hover:border-muted-2",
           )}
         >
           {uploadStatus !== "done" && (
@@ -50,12 +50,12 @@ export function AudioUploadZone() {
 
           {uploadStatus === "done" && selectedFile ? (
             <div className="flex flex-col items-center gap-3 text-center">
-              <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+              <CheckCircle2 className="h-10 w-10 text-success" />
               <div>
-                <p className="font-medium text-slate-900">
+                <p className="font-medium text-foreground">
                   업로드 완료
                 </p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-muted">
                   {selectedFile.name}
                 </p>
               </div>
@@ -73,24 +73,24 @@ export function AudioUploadZone() {
             </div>
           ) : uploadStatus === "uploading" ? (
             <div className="flex flex-col items-center gap-3 text-center">
-              <div className="h-10 w-10 animate-pulse rounded-full bg-blue-100" />
-              <p className="font-medium text-slate-900">업로드 중...</p>
-              <p className="text-sm text-slate-500">{selectedFile?.name}</p>
+              <div className="h-10 w-10 animate-pulse rounded-full bg-surface-2" />
+              <p className="font-medium text-foreground">업로드 중...</p>
+              <p className="text-sm text-muted">{selectedFile?.name}</p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-3 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100">
-                <FileAudio className="h-7 w-7 text-blue-600" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2">
+                <FileAudio className="h-7 w-7 text-muted" />
               </div>
               <div>
-                <p className="font-medium text-slate-900">
+                <p className="font-medium text-foreground">
                   오디오 파일을 드래그하거나 클릭하여 업로드
                 </p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-muted">
                   MP3, WAV, M4A, OGG, FLAC, WEBM 지원
                 </p>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-400">
+              <div className="flex items-center gap-2 text-xs text-muted-2">
                 <Upload className="h-3.5 w-3.5" />
                 최대 500MB
               </div>

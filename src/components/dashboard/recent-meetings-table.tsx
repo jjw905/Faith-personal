@@ -72,13 +72,13 @@ export function RecentMeetingsTable({ meetings }: RecentMeetingsTableProps) {
                     href={`/meetings/${meeting.id}`}
                     className="group block"
                   >
-                    <p className="font-medium text-slate-900 group-hover:text-blue-600">
+                    <p className="font-medium text-foreground group-hover:text-primary">
                       {meeting.title}
                     </p>
-                    <p className="text-xs text-slate-500">{meeting.subtitle}</p>
+                    <p className="text-xs text-muted">{meeting.subtitle}</p>
                   </Link>
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-slate-600">
+                <TableCell className="whitespace-nowrap text-muted">
                   {formatDate(meeting.date)}
                 </TableCell>
                 <TableCell>
@@ -96,13 +96,13 @@ export function RecentMeetingsTable({ meetings }: RecentMeetingsTableProps) {
                       </Avatar>
                     ))}
                     {meeting.participants.length > 4 && (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-slate-200 text-xs font-medium text-slate-600">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-surface-2 text-xs font-medium text-muted">
                         +{meeting.participants.length - 4}
                       </div>
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="whitespace-nowrap text-slate-600">
+                <TableCell className="whitespace-nowrap text-muted">
                   {meeting.duration}
                 </TableCell>
                 <TableCell>
