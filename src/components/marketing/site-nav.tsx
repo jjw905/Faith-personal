@@ -43,7 +43,7 @@ export function SiteNav() {
 
         <div className="flex items-center gap-4">
           <Link
-            href="/"
+            href="/login"
             className="hidden text-[15px] font-semibold text-foreground/90 transition-colors hover:text-foreground sm:block"
           >
             로그인

@@ -23,7 +23,7 @@ export function Hero() {
             회의록 기록 관리도 안전하게.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-4">
-            <CtaButton href="/" className="px-6 py-3 text-base">
+            <CtaButton href="/signup" className="px-6 py-3 text-base">
               무료로 시작
             </CtaButton>
             <CtaButton

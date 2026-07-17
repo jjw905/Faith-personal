@@ -70,7 +70,7 @@ export default function SignupPage() {
           <p className="mt-6 text-center text-sm text-muted">
             이미 계정이 있으신가요?{" "}
             <Link
-              href="/"
+              href="/login"
               className="font-semibold text-foreground hover:underline"
             >
               로그인
