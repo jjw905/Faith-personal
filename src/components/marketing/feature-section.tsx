@@ -18,9 +18,9 @@ const FEATURES = [
 /** 기능 한 칸. */
 function FeatureItem({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="px-2 sm:px-6">
-      <h3 className="text-base font-semibold text-foreground">{title}</h3>
-      <p className="mt-3 text-sm leading-relaxed text-muted">{desc}</p>
+    <div className="px-2 sm:px-8">
+      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      <p className="mt-3 text-base leading-relaxed text-muted">{desc}</p>
     </div>
   );
 }
@@ -28,13 +28,13 @@ function FeatureItem({ title, desc }: { title: string; desc: string }) {
 /** 기능 소개 섹션 — 옅은 회색 배경, 아이콘 없이 3분할. */
 export function FeatureSection() {
   return (
-    <section id="features" className="bg-surface py-24">
+    <section id="features" className="bg-surface py-28 sm:py-32">
       <Container>
-        <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+        <h2 className="max-w-3xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
           민감정보는 가리고, 대화는 그대로.
         </h2>
 
-        <div className="mt-14 grid gap-10 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
+        <div className="mt-16 grid gap-12 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
           {FEATURES.map((f) => (
             <FeatureItem key={f.title} title={f.title} desc={f.desc} />
           ))}

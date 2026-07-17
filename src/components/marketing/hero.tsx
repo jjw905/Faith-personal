@@ -1,31 +1,42 @@
 import { ChatMock } from "@/components/marketing/chat-mock";
 import { Container } from "@/components/marketing/container";
 import { CtaButton } from "@/components/marketing/cta-button";
+import { VoiceStage } from "@/components/marketing/voice-stage";
 
-/** 랜딩 히어로 — 큰 헤드라인 + CTA + 채팅 목업. */
+/** 랜딩 히어로 — 풀 높이 3D 보이스 배경 위에 카피/채팅 오버레이. */
 export function Hero() {
   return (
-    <section className="pt-16 pb-24 sm:pt-24">
-      <Container className="grid items-center gap-14 lg:grid-cols-2 lg:gap-10">
-        <div className="max-w-xl">
-          <h1 className="text-hero text-4xl font-bold text-foreground sm:text-5xl lg:text-6xl">
-            팀 회의를 안전하게,
+    <section className="relative -mt-16 flex min-h-[100dvh] items-center overflow-hidden pt-16 sm:-mt-[4.5rem] sm:pt-[4.5rem]">
+      {/* 섹션 전체 높이를 채우는 인터랙티브 3D 배경 (그레이 톤) */}
+      <VoiceStage />
+
+      <Container className="relative z-10 grid w-full items-center gap-12 py-16 sm:py-20 lg:grid-cols-2 lg:gap-16 lg:py-24 xl:gap-20">
+        <div className="max-w-2xl">
+          <h1 className="text-hero text-5xl font-bold text-foreground sm:text-6xl lg:text-7xl">
+            안전한 회의진행,
             <br />
-            민감정보는 자동으로.
+            음성 텍스트 추출도 알아서.
           </h1>
-          <p className="mt-6 text-lg leading-relaxed text-muted">
-            Faith는 채팅과 회의록에서 개인정보를 감지, 마스킹합니다. 규칙과 NER
-            하이브리드로 더 정확하게.
+          <p className="mt-8 max-w-xl text-xl leading-relaxed text-muted">
+            개인정보 누출 걱정없이 회의를 진행해보세요.
+            <br />
+            회의록 기록 관리도 안전하게.
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-3">
-            <CtaButton href="/">무료로 시작</CtaButton>
-            <CtaButton href="/meetings/live-mask" variant="ghost">
+          <div className="mt-10 flex flex-wrap items-center gap-4">
+            <CtaButton href="/" className="px-6 py-3 text-base">
+              무료로 시작
+            </CtaButton>
+            <CtaButton
+              href="#features"
+              variant="ghost"
+              className="bg-[#ebe4d8] px-6 py-3 text-base text-foreground hover:bg-[#e0d8c8]"
+            >
               데모 둘러보기
             </CtaButton>
           </div>
         </div>
 
-        <div className="lg:pl-6">
+        <div className="w-full lg:justify-self-end">
           <ChatMock />
         </div>
       </Container>

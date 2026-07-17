@@ -1,13 +1,3 @@
-export interface StatCardData {
-  id: string;
-  label: string;
-  value: string;
-  trend: number;
-  trendLabel: string;
-  sparkline: number[];
-  variant?: "default" | "alert";
-}
-
 export interface SecurityMetric {
   id: string;
   label: string;

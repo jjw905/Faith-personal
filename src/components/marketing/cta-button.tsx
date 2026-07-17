@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
+import { scrollToHash } from "@/lib/scroll-to-hash";
 
 type Variant = "primary" | "ghost";
 
@@ -24,6 +27,23 @@ export function CtaButton({
   variant?: Variant;
   className?: string;
 }) {
+  const isHash = href.startsWith("#");
+
+  if (isHash) {
+    return (
+      <a
+        href={href}
+        className={cn(base, variants[variant], className)}
+        onClick={(e) => {
+          e.preventDefault();
+          scrollToHash(href);
+        }}
+      >
+        {children}
+      </a>
+    );
+  }
+
   return (
     <Link href={href} className={cn(base, variants[variant], className)}>
       {children}

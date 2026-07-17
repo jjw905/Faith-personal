@@ -1,17 +1,22 @@
 import {
-  BarChart3,
   ClipboardList,
   EyeOff,
   LayoutDashboard,
   ScrollText,
-  Settings,
-  Shield,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 
 export const APP_NAME = "Faith";
 
-export const NAV_ITEMS = [
+export type NavItem = {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+  badge?: number;
+};
+
+export const NAV_ITEMS: NavItem[] = [
   {
     title: "대시보드",
     href: "/",
@@ -24,21 +29,6 @@ export const NAV_ITEMS = [
     badge: 12,
   },
   {
-    title: "개인정보 마스킹",
-    href: "/meetings/live-mask",
-    icon: EyeOff,
-  },
-  {
-    title: "분석",
-    href: "/analysis",
-    icon: BarChart3,
-  },
-  {
-    title: "보안 설정",
-    href: "/security",
-    icon: Shield,
-  },
-  {
     title: "감사 로그",
     href: "/audit",
     icon: ScrollText,
@@ -48,12 +38,15 @@ export const NAV_ITEMS = [
     href: "/users",
     icon: Users,
   },
+];
+
+export const DEV_NAV_ITEMS: NavItem[] = [
   {
-    title: "설정",
-    href: "/settings",
-    icon: Settings,
+    title: "개인정보 마스킹",
+    href: "/meetings/live-mask",
+    icon: EyeOff,
   },
-] as const;
+];
 
 export const PAGE_TITLES: Record<string, { title: string; description: string }> =
   {

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { FeatureSection } from "@/components/marketing/feature-section";
+import { FeatureTimeline } from "@/components/marketing/feature-timeline";
 import { Hero } from "@/components/marketing/hero";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteNav } from "@/components/marketing/site-nav";
@@ -17,7 +17,7 @@ export default function WelcomePage() {
       <SiteNav />
       <main>
         <Hero />
-        <FeatureSection />
+        <FeatureTimeline />
       </main>
       <SiteFooter />
     </div>
