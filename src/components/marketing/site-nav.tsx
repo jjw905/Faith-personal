@@ -19,7 +19,7 @@ export function SiteNav() {
       <Container className="flex h-16 items-center justify-between sm:h-[4.5rem]">
         <div className="flex items-center gap-10 lg:gap-12">
           <Link
-            href="/welcome"
+            href="/"
             className="text-xl font-bold tracking-tight text-foreground"
           >
             Faith

@@ -19,7 +19,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   {
     title: "대시보드",
-    href: "/",
+    href: "/dashboard",
     icon: LayoutDashboard,
   },
   {
@@ -50,7 +50,7 @@ export const DEV_NAV_ITEMS: NavItem[] = [
 
 export const PAGE_TITLES: Record<string, { title: string; description: string }> =
   {
-    "/": {
+    "/dashboard": {
       title: "대시보드",
       description: "회의 현황과 보안 지표를 한눈에 확인하세요.",
     },

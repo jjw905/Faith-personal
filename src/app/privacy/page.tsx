@@ -114,7 +114,7 @@ export default function PrivacyPage() {
       <header className="border-b border-border/40">
         <Container className="flex h-16 items-center sm:h-[4.5rem]">
           <Link
-            href="/welcome"
+            href="/"
             className="text-xl font-bold tracking-tight text-foreground"
           >
             Faith
@@ -143,7 +143,7 @@ export default function PrivacyPage() {
 
           <div className="mt-16 border-t border-border pt-6">
             <Link
-              href="/welcome"
+              href="/"
               className="text-sm font-semibold text-foreground hover:underline"
             >
               ← 홈으로 돌아가기

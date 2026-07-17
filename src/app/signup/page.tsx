@@ -21,7 +21,7 @@ export default function SignupPage() {
       <header className="border-b border-border/40">
         <Container className="flex h-16 items-center sm:h-[4.5rem]">
           <Link
-            href="/welcome"
+            href="/"
             className="text-xl font-bold tracking-tight text-foreground"
           >
             Faith

@@ -8,15 +8,15 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
   {
     title: "제품",
     links: [
-      { label: "기능", href: "/welcome#features" },
-      { label: "요금제", href: "/welcome#pricing" },
-      { label: "데모", href: "/welcome#features" },
+      { label: "기능", href: "/#features" },
+      { label: "요금제", href: "/#pricing" },
+      { label: "데모", href: "/#features" },
     ],
   },
   {
     title: "회사",
     links: [
-      { label: "소개", href: "/welcome" },
+      { label: "소개", href: "/" },
       { label: "문의", href: "mailto:hello@faith.example" },
     ],
   },

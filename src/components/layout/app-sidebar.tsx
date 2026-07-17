@@ -15,8 +15,8 @@ interface AppSidebarProps {
 }
 
 function isNavActive(pathname: string, href: string) {
-  if (href === "/") {
-    return pathname === "/";
+  if (href === "/dashboard") {
+    return pathname === "/dashboard";
   }
   if (href === "/meetings") {
     return (
@@ -97,7 +97,7 @@ export function AppSidebar({
     >
       <div className="flex h-16 shrink-0 items-center px-5">
         <Link
-          href="/welcome"
+          href="/"
           onClick={onMobileClose}
           className="cursor-pointer text-lg font-bold tracking-tight text-foreground transition-opacity hover:opacity-70"
         >
