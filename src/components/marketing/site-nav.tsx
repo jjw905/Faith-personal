@@ -42,13 +42,12 @@ export function SiteNav() {
         </div>
 
         <div className="flex items-center gap-3">
-          <CtaButton
+          <Link
             href="/login"
-            variant="ghost"
-            className="bg-[#ebe4d8] px-5 py-2.5 text-[15px] text-foreground hover:bg-[#e0d8c8]"
+            className="px-2 py-2.5 text-[15px] font-semibold text-foreground/90 transition-colors hover:text-foreground"
           >
             로그인
-          </CtaButton>
+          </Link>
           <CtaButton href="/signup" className="px-5 py-2.5 text-[15px]">
             시작하기
           </CtaButton>
