@@ -116,7 +116,8 @@ const ALIAS_TO_FAMILY: Array<{ alias: string; family: BankFamily }> = [
   { alias: "토스은행", family: "toss" },
   { alias: "토뱅", family: "toss" },
   { alias: "토스", family: "toss" },
-].sort((a, b) => b.alias.length - a.alias.length);
+];
+ALIAS_TO_FAMILY.sort((a, b) => b.alias.length - a.alias.length);
 
 /** FAMILY_RULES: specs에서 파생 */
 export const FAMILY_RULES = Object.fromEntries(
