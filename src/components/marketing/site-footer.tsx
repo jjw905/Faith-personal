@@ -34,9 +34,9 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-border bg-background">
       <Container className="py-14">
-        <div className="mx-auto flex max-w-3xl flex-wrap justify-center gap-x-24 gap-y-10 sm:gap-x-28 lg:gap-x-36">
+        <div className="mx-auto flex max-w-3xl flex-wrap justify-center gap-x-24 gap-y-10 xl:gap-x-36">
           {COLUMNS.map((col) => (
-            <div key={col.title} className="min-w-[7rem] text-center sm:text-left">
+            <div key={col.title} className="min-w-[7rem] text-center xl:text-left">
               <h3 className="text-sm font-semibold text-foreground">
                 {col.title}
               </h3>

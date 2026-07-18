@@ -12,19 +12,19 @@ const NAV_LINKS = [
   { label: "요금제", href: "#pricing" },
 ];
 
-/** 상단 마케팅 내비게이션. */
+/** 상단 마케팅 내비게이션 — xl 이상에서만 전체 메뉴 표시. */
 export function SiteNav() {
   return (
-    <header className="sticky top-0 z-30 border-b border-border/70 bg-[#eef0f4]/80 backdrop-blur-md shadow-[0_1px_0_rgba(17,24,39,0.04)]">
-      <Container className="flex h-16 items-center justify-between sm:h-[4.5rem]">
-        <div className="flex items-center gap-10 lg:gap-12">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-[#eef0f4]/80 shadow-[0_1px_0_rgba(17,24,39,0.04)] backdrop-blur-md">
+      <Container className="flex h-16 items-center justify-between xl:h-[4.5rem]">
+        <div className="flex items-center gap-10 xl:gap-12">
           <Link
             href="/"
             className="text-xl font-bold tracking-tight text-foreground"
           >
             Faith
           </Link>
-          <nav className="hidden items-center gap-8 md:flex lg:gap-10">
+          <nav className="hidden items-center gap-10 xl:flex">
             {NAV_LINKS.map((link) => (
               <a
                 key={link.href}
@@ -44,7 +44,7 @@ export function SiteNav() {
         <div className="flex items-center gap-4">
           <Link
             href="/login"
-            className="hidden text-[15px] font-semibold text-foreground/90 transition-colors hover:text-foreground sm:block"
+            className="hidden text-[15px] font-semibold text-foreground/90 transition-colors hover:text-foreground xl:block"
           >
             로그인
           </Link>

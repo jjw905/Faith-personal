@@ -344,10 +344,10 @@ function MockBubble({
         </p>
         <div
           className={cn(
-            "inline-block rounded-2xl px-3.5 py-2.5 text-left text-[14px] leading-relaxed sm:text-[15px]",
+            "inline-block rounded-2xl px-3.5 py-2.5 text-left text-[14px] leading-relaxed xl:text-[15px]",
             isMe
-              ? "rounded-bl-md bg-primary text-primary-foreground shadow-soft"
-              : "rounded-br-md bg-card text-foreground ring-1 ring-border",
+              ? "rounded-bl-md bg-primary text-primary-foreground"
+              : "rounded-br-md bg-surface text-foreground",
           )}
         >
           {children}
@@ -357,37 +357,62 @@ function MockBubble({
   );
 }
 
+/** 접속일 + 세로 줄기 — 채팅과 함께 올라가다 화면 밖으로 사라짐. */
+function ChatDateDivider({ label }: { label: string }) {
+  if (!label) return null;
+  return (
+    <div className="flex flex-col items-center gap-3 py-2">
+      <span className="rounded-full bg-surface-2 px-3 py-1 text-[13px] font-semibold tabular-nums tracking-tight text-foreground">
+        {label}
+      </span>
+      <span className="h-24 w-px bg-border-strong xl:h-28" aria-hidden />
+    </div>
+  );
+}
+
 /** 히어로 우측 — 양방향 회의 채팅 목업 (약 1분 루프). */
 export function ChatMock() {
   const [visible, setVisible] = useState<VisibleMessage[]>([]);
   const [cycle, setCycle] = useState(0);
+  const [dateLabel, setDateLabel] = useState("");
+  /** 이번 사이클에서 올라온 메시지 수 — 날짜가 위로 떠난 뒤 숨김용. */
+  const [spawned, setSpawned] = useState(0);
 
   useEffect(() => {
-    const GAP = 200; // 이전 발화 종료 후 텀
-    const TYPING = 2000; // 점(...) 유지 시간
-    const READ = 1300; // 텍스트 변환 후 읽는 텀
-    const OVERLAP = 500; // 동시 발화 시 시작 간격
+    setDateLabel(
+      new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+      }).format(new Date()),
+    );
+  }, []);
+
+  useEffect(() => {
+    const GAP = 200;
+    const TYPING = 2000;
+    const READ = 1300;
+    const OVERLAP = 500;
     const timers: number[] = [];
 
-    let cursor = 400; // 다음 발화 시작 시점
-    let lastStart = 0; // 직전 발화 시작 시점
+    let cursor = 1200;
+    let lastStart = 0;
+    setSpawned(0);
 
     SCRIPT.forEach((line, i) => {
       const key = cycle * 1000 + i;
       const start =
         line.concurrent && i > 0 ? lastStart + OVERLAP : cursor + GAP;
 
-      // 입력중(...) 말풍선 등장
       timers.push(
         window.setTimeout(() => {
-          setVisible((prev) => {
-            const next = [...prev, { ...line, key, pending: true }];
-            return next.length > 6 ? next.slice(-6) : next;
-          });
+          setSpawned((n) => n + 1);
+          // 개수로 중간에서 지우지 않음 — overflow로 맨 위에서만 잘리게
+          setVisible((prev) => [...prev, { ...line, key, pending: true }]);
         }, start),
       );
 
-      // 같은 말풍선을 실제 채팅으로 변환
       timers.push(
         window.setTimeout(() => {
           setVisible((prev) =>
@@ -400,7 +425,6 @@ export function ChatMock() {
       cursor = Math.max(cursor, start + TYPING + READ);
     });
 
-    // 루프 재시작
     timers.push(
       window.setTimeout(() => {
         setVisible([]);
@@ -411,11 +435,20 @@ export function ChatMock() {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [cycle]);
 
+  // 메시지가 충분히 쌓여 날짜가 위로 밀린 뒤에만 숨김
+  const showDate = spawned < 5;
+
   return (
-    <div className="w-full overflow-hidden rounded-3xl bg-surface p-5 shadow-soft ring-1 ring-border sm:p-6">
-      <div className="relative h-[420px] overflow-hidden sm:h-[440px]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-10 bg-gradient-to-b from-surface to-transparent" />
-        <div className="flex h-full flex-col justify-end gap-3.5 overflow-hidden pb-1 pt-2">
+    <div
+      className="w-full rounded-3xl border border-transparent bg-card p-5 xl:p-6"
+      style={{
+        boxShadow:
+          "0 4px 12px rgba(17, 24, 39, 0.06), 0 24px 56px rgba(17, 24, 39, 0.14)",
+      }}
+    >
+      <div className="relative h-[400px] xl:h-[440px]">
+        <div className="absolute inset-0 flex flex-col justify-end gap-3.5 overflow-hidden pb-1">
+          {showDate && <ChatDateDivider label={dateLabel} />}
           {visible.map((msg) => (
             <MockBubble
               key={msg.key}
