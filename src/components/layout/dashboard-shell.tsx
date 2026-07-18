@@ -4,43 +4,61 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import {
+  MeetingChromeProvider,
+  useMeetingChrome,
+} from "@/context/meeting-chrome-context";
 import { cn } from "@/lib/utils";
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+function DashboardShellInner({ children }: { children: React.ReactNode }) {
+  const { focusMode } = useMeetingChrome();
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   useEffect(() => {
-    if (!mobileOpen) {
-      return;
-    }
-
+    if (!mobileOpen) return;
     document.body.style.overflow = "hidden";
-
     return () => {
       document.body.style.overflow = "";
     };
   }, [mobileOpen]);
 
-  return (
-    <div className="flex h-dvh overflow-hidden bg-background">
-      <div
-        className={cn(
-          "fixed inset-0 z-40 bg-black/40 transition-opacity lg:hidden",
-          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
-        )}
-        onClick={closeMobile}
-        aria-hidden={!mobileOpen}
-      />
+  useEffect(() => {
+    if (focusMode) setMobileOpen(false);
+  }, [focusMode]);
 
-      <AppSidebar mobileOpen={mobileOpen} onMobileClose={closeMobile} />
+  return (
+    <div className="flex h-dvh min-w-0 overflow-hidden bg-background">
+      {!focusMode ? (
+        <>
+          <div
+            className={cn(
+              "fixed inset-0 z-40 bg-black/40 transition-opacity lg:hidden",
+              mobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
+            )}
+            onClick={closeMobile}
+            aria-hidden={!mobileOpen}
+          />
+          <AppSidebar mobileOpen={mobileOpen} onMobileClose={closeMobile} />
+        </>
+      ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <AppHeader onMenuClick={() => setMobileOpen(true)} />
+        {!focusMode ? (
+          <AppHeader onMenuClick={() => setMobileOpen(true)} />
+        ) : null}
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {children}
         </main>
       </div>
     </div>
+  );
+}
+
+export function DashboardShell({ children }: { children: React.ReactNode }) {
+  return (
+    <MeetingChromeProvider>
+      <DashboardShellInner>{children}</DashboardShellInner>
+    </MeetingChromeProvider>
   );
 }

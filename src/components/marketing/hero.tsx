@@ -23,7 +23,7 @@ export function Hero() {
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4 xl:mt-10">
             <CtaButton href="/dashboard" className="px-6 py-3 text-base">
-              대시보드로
+              회의
             </CtaButton>
             <CtaButton
               href="#features"

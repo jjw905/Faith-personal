@@ -19,7 +19,7 @@ export function PageSkeleton({
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface text-muted">
           <Icon className="h-7 w-7" />
         </div>
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
         <p className="mt-2 max-w-md text-sm leading-6 text-muted">
           {description}
         </p>

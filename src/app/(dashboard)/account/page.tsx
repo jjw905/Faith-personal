@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { ShieldAlert, ShieldCheck, EyeOff } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
@@ -12,9 +13,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppContext } from "@/context/app-context";
+import { getNotifications } from "@/lib/mock-loader";
+import type { NotificationType } from "@/types/notification";
 import { cn } from "@/lib/utils";
 
-/** 좌: 라벨/설명, 우: 컨트롤 (설정 항목 공통 행). */
 function SettingRow({
   label,
   description,
@@ -37,7 +39,6 @@ function SettingRow({
   );
 }
 
-/** 토글 스위치. */
 function Toggle({
   on,
   onChange,
@@ -66,7 +67,6 @@ function Toggle({
   );
 }
 
-/** 세그먼트 선택. */
 function Segmented({
   options,
   value,
@@ -97,20 +97,34 @@ function Segmented({
   );
 }
 
+function notificationIcon(type: NotificationType) {
+  if (type === "masking") return EyeOff;
+  if (type === "storage") return ShieldCheck;
+  return ShieldAlert;
+}
+
 export default function AccountPage() {
   const { currentUser } = useAppContext();
+  const notifications = getNotifications();
   const [emailAlert, setEmailAlert] = useState(true);
   const [pushAlert, setPushAlert] = useState(false);
   const [weeklyReport, setWeeklyReport] = useState(true);
   const [language, setLanguage] = useState("ko");
   const [theme, setTheme] = useState("light");
 
+  useEffect(() => {
+    if (window.location.hash !== "#notifications") return;
+    document
+      .getElementById("notifications")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-3xl space-y-6">
         <PageHeader
           title="계정 설정"
-          description="프로필, 알림, 언어 등 개인 계정 환경을 관리합니다."
+          description="프로필, 알림 센터, 언어 등 개인 계정 환경을 관리합니다."
         />
 
         <Card>
@@ -132,18 +146,74 @@ export default function AccountPage() {
           </CardContent>
         </Card>
 
+        <Card id="notifications" className="scroll-mt-24">
+          <CardHeader>
+            <CardTitle className="text-base">알림 센터</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0">
+            <p className="text-xs text-muted">
+              마스킹, 접근, 저장 상태 등 보안·점검 알림을 여기서 확인합니다.
+            </p>
+            <div className="divide-y divide-border rounded-xl border border-border">
+              {notifications.map((n) => {
+                const Icon = notificationIcon(n.type);
+                return (
+                  <div
+                    key={n.id}
+                    className="flex gap-3 px-4 py-3.5"
+                  >
+                    <div
+                      className={cn(
+                        "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+                        n.unread ? "bg-primary-soft text-primary" : "bg-surface text-muted",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">
+                          {n.title}
+                        </p>
+                        <span className="shrink-0 text-[11px] text-muted-2">
+                          {n.time}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted">
+                        {n.body}
+                      </p>
+                    </div>
+                    {n.unread ? (
+                      <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">알림</CardTitle>
+            <CardTitle className="text-base">알림 수신</CardTitle>
           </CardHeader>
           <CardContent className="divide-y divide-border py-0">
-            <SettingRow label="이메일 알림" description="중요 보안 이벤트를 메일로 받습니다.">
+            <SettingRow
+              label="이메일 알림"
+              description="중요 보안 이벤트를 메일로 받습니다."
+            >
               <Toggle on={emailAlert} onChange={setEmailAlert} />
             </SettingRow>
-            <SettingRow label="푸시 알림" description="브라우저 푸시로 실시간 알림을 받습니다.">
+            <SettingRow
+              label="푸시 알림"
+              description="브라우저 푸시로 실시간 알림을 받습니다."
+            >
               <Toggle on={pushAlert} onChange={setPushAlert} />
             </SettingRow>
-            <SettingRow label="주간 리포트" description="매주 마스킹, 보안 요약을 받습니다.">
+            <SettingRow
+              label="주간 리포트"
+              description="매주 마스킹, 보안 요약을 받습니다."
+            >
               <Toggle on={weeklyReport} onChange={setWeeklyReport} />
             </SettingRow>
           </CardContent>

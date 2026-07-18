@@ -1,8 +1,10 @@
 import {
-  ClipboardList,
+  CircleHelp,
   EyeOff,
-  LayoutDashboard,
+  History,
+  Mic,
   ScrollText,
+  Settings,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -16,18 +18,27 @@ export type NavItem = {
   badge?: number;
 };
 
+/** 공통 메뉴. 감사·사용자는 팀 워크스페이스 하위로만 노출. */
 export const NAV_ITEMS: NavItem[] = [
   {
-    title: "대시보드",
+    title: "회의",
     href: "/dashboard",
-    icon: LayoutDashboard,
+    icon: Mic,
   },
   {
-    title: "회의 목록",
-    href: "/meetings",
-    icon: ClipboardList,
-    badge: 12,
+    title: "시스템 설정",
+    href: "/settings",
+    icon: Settings,
   },
+  {
+    title: "도움말",
+    href: "/help",
+    icon: CircleHelp,
+  },
+];
+
+/** 팀 워크스페이스 전용 하위 메뉴. */
+export const TEAM_NAV_ITEMS: NavItem[] = [
   {
     title: "감사 로그",
     href: "/audit",
@@ -42,48 +53,65 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const DEV_NAV_ITEMS: NavItem[] = [
   {
+    title: "Changelog",
+    href: "/changelog",
+    icon: History,
+  },
+  {
     title: "개인정보 마스킹",
     href: "/meetings/live-mask",
     icon: EyeOff,
+  },
+  {
+    title: "새 회의",
+    href: "/meetings/new",
+    icon: Mic,
   },
 ];
 
 export const PAGE_TITLES: Record<string, { title: string; description: string }> =
   {
     "/dashboard": {
-      title: "대시보드",
-      description: "회의 현황과 보안 지표를 한눈에 확인하세요.",
+      title: "회의",
+      description: "새 회의를 기록하고 목록을 관리합니다.",
     },
     "/meetings": {
-      title: "회의 목록",
-      description: "등록된 회의를 검색하고 관리합니다.",
+      title: "회의",
+      description: "새 회의를 기록하고 목록을 관리합니다.",
     },
     "/meetings/live-mask": {
       title: "개인정보 마스킹",
       description: "원문과 마스킹 결과를 비교하며 R-08을 검증합니다.",
     },
-    "/analysis": {
-      title: "분석",
-      description: "회의 데이터와 보안 트렌드를 분석합니다.",
-    },
-    "/security": {
-      title: "보안 설정",
-      description: "암호화, RBAC 정책을 구성합니다.",
+    "/meetings/new": {
+      title: "새 회의",
+      description: "개발전용, 실시간 인식·채팅 레이아웃을 검증합니다.",
     },
     "/audit": {
       title: "감사 로그",
-      description: "시스템 접근 및 보안 이벤트 기록을 조회합니다.",
+      description:
+        "팀 워크스페이스, 접근 기록, 보안 이벤트, 회의, 보안 추이를 확인합니다.",
     },
     "/users": {
       title: "사용자 관리",
-      description: "사용자 계정과 권한 레벨을 관리합니다.",
+      description:
+        "팀 워크스페이스, 사용자 계정과 권한 레벨을 관리합니다.",
     },
     "/settings": {
       title: "시스템 설정",
-      description: "워크스페이스, 보존 정책 등 시스템 환경을 구성합니다.",
+      description:
+        "워크스페이스에 따라 개인 기본값 또는 팀 운영 설정을 관리합니다.",
     },
     "/account": {
       title: "계정 설정",
-      description: "프로필, 알림, 언어 등 개인 계정 환경을 관리합니다.",
+      description: "프로필, 알림 센터, 언어 등 개인 계정 환경을 관리합니다.",
+    },
+    "/help": {
+      title: "도움말",
+      description: "이용 방법, FAQ, 문의 안내를 확인합니다.",
+    },
+    "/changelog": {
+      title: "Changelog",
+      description: "개발전용, Faith 웹 앱 변경 이력을 확인합니다.",
     },
   };

@@ -1,22 +1,87 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import usersData from "@/mocks/users.json";
+import { getNotifications } from "@/lib/mock-loader";
+import {
+  WORKSPACES,
+  type Workspace,
+  type WorkspaceId,
+} from "@/lib/workspaces";
 import type { User } from "@/types/user";
+
+const AUTO_TIMELINE_KEY = "faith.settings.autoOpenTimelineOnStart";
 
 interface AppContextValue {
   currentUser: User;
   notificationCount: number;
+  workspaceId: WorkspaceId;
+  workspace: Workspace;
+  setWorkspaceId: (id: WorkspaceId) => void;
+  /** 회의(녹음) 시작 시 타임라인을 열린 상태로 시작 */
+  autoOpenTimelineOnStart: boolean;
+  setAutoOpenTimelineOnStart: (value: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+function readAutoTimelinePref(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    const raw = window.localStorage.getItem(AUTO_TIMELINE_KEY);
+    if (raw === null) return true;
+    return raw === "1" || raw === "true";
+  } catch {
+    return true;
+  }
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const value: AppContextValue = {
-    currentUser: usersData.currentUser as User,
-    notificationCount: 3,
-  };
+  const unread = getNotifications().filter((n) => n.unread).length;
+  const [workspaceId, setWorkspaceId] = useState<WorkspaceId>("team");
+  const [autoOpenTimelineOnStart, setAutoOpenTimelineOnStartState] =
+    useState(true);
+
+  useEffect(() => {
+    setAutoOpenTimelineOnStartState(readAutoTimelinePref());
+  }, []);
+
+  const setAutoOpenTimelineOnStart = useCallback((value: boolean) => {
+    setAutoOpenTimelineOnStartState(value);
+    try {
+      window.localStorage.setItem(AUTO_TIMELINE_KEY, value ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const value = useMemo<AppContextValue>(() => {
+    const workspace =
+      WORKSPACES.find((w) => w.id === workspaceId) ?? WORKSPACES[1];
+
+    return {
+      currentUser: usersData.currentUser as User,
+      notificationCount: unread,
+      workspaceId,
+      workspace,
+      setWorkspaceId,
+      autoOpenTimelineOnStart,
+      setAutoOpenTimelineOnStart,
+    };
+  }, [
+    unread,
+    workspaceId,
+    autoOpenTimelineOnStart,
+    setAutoOpenTimelineOnStart,
+  ]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

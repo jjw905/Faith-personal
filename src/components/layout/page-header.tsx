@@ -5,29 +5,43 @@ export function PageHeader({
   title,
   description,
   actions,
+  leading,
   className,
 }: {
   title: string;
   description?: string;
   actions?: React.ReactNode;
+  /** 큰 제목 왼쪽에 붙는 보조 정보 (예: 오늘 날짜). */
+  leading?: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "flex flex-wrap items-end justify-between gap-4",
+        "flex flex-wrap items-center justify-between gap-4",
         className,
       )}
     >
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          {title}
-        </h1>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {leading ? (
+            <p className="text-2xl font-bold leading-none tracking-tight text-foreground">
+              {leading}
+            </p>
+          ) : null}
+          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+            {title}
+          </h1>
+        </div>
         {description ? (
           <p className="mt-1 text-sm text-muted">{description}</p>
         ) : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="flex min-w-0 flex-1 items-center justify-end sm:max-w-sm sm:flex-none">
+          {actions}
+        </div>
+      ) : null}
     </div>
   );
 }

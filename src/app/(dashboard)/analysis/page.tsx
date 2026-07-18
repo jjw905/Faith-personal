@@ -1,13 +1,6 @@
-import { BarChart3 } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { PageSkeleton } from "@/components/layout/page-skeleton";
-
+/** 분석은 감사 로그로 통합. */
 export default function AnalysisPage() {
-  return (
-    <PageSkeleton
-      title="분석"
-      description="Recharts 기반 차트로 회의 트렌드와 보안 지표를 시각화합니다."
-      icon={BarChart3}
-    />
-  );
+  redirect("/audit");
 }

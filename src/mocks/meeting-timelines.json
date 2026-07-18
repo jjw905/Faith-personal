@@ -1,0 +1,104 @@
+{
+  "timelines": {
+    "mtg-001": {
+      "meetingId": "mtg-001",
+      "durationLabel": "1시간 20분",
+      "overallSummary": "Q3 보안 정책 강화안을 검토하고, 마스킹 규칙 고도화와 배포 일정을 확정했습니다.",
+      "segments": [
+        {
+          "id": "s1",
+          "start": "00:00",
+          "end": "08:20",
+          "title": "안건 확인",
+          "summary": "Q3 보안 정책 범위, 개인정보 마스킹 강화, 배포 일정 세 가지를 안건으로 확정.",
+          "kind": "agenda",
+          "speakers": ["김철수"],
+          "tags": ["킥오프"]
+        },
+        {
+          "id": "s2",
+          "start": "08:20",
+          "end": "32:10",
+          "title": "마스킹 규칙 논의",
+          "summary": "전화·이메일·계좌 패턴 외에 구어체 변형 대응 필요성에 대해 논의. NER 보조 모델 도입을 검토.",
+          "kind": "discussion",
+          "speakers": ["이영희", "박민수"],
+          "tags": ["마스킹", "STT"]
+        },
+        {
+          "id": "s3",
+          "start": "32:10",
+          "end": "48:40",
+          "title": "결정사항",
+          "summary": "자동 마스킹을 기본 적용하고, 미확정 후보는 검수 큐로 분리하기로 결정.",
+          "kind": "decision",
+          "speakers": ["김철수", "최지원"],
+          "tags": ["결정"]
+        },
+        {
+          "id": "s4",
+          "start": "48:40",
+          "end": "01:05:00",
+          "title": "리스크 점검",
+          "summary": "외부 미팅 노이즈 환경에서 STT 정확도 하락 가능. 노이즈 30% 샘플로 재검증 필요.",
+          "kind": "risk",
+          "speakers": ["박민수"],
+          "tags": ["리스크"]
+        },
+        {
+          "id": "s5",
+          "start": "01:05:00",
+          "end": "01:20:00",
+          "title": "후속 조치",
+          "summary": "이영희: 마스킹 규칙 PR. 최지원: 배포 체크리스트. 다음 주 월요일까지 통합 테스트.",
+          "kind": "action",
+          "speakers": ["이영희", "최지원"],
+          "tags": ["액션"]
+        }
+      ]
+    },
+    "default": {
+      "meetingId": "default",
+      "durationLabel": "45분",
+      "overallSummary": "녹음 내용을 구간별로 분석해 안건, 논의, 결정, 후속 조치를 타임라인으로 정리했습니다.",
+      "segments": [
+        {
+          "id": "d1",
+          "start": "00:00",
+          "end": "05:00",
+          "title": "시작·안건",
+          "summary": "회의 목적과 오늘 다룰 핵심 안건을 공유했습니다.",
+          "kind": "agenda",
+          "speakers": ["진행자"]
+        },
+        {
+          "id": "d2",
+          "start": "05:00",
+          "end": "25:00",
+          "title": "본 논의",
+          "summary": "핵심 이슈에 대한 의견 교환과 대안 비교가 이어졌습니다.",
+          "kind": "discussion",
+          "speakers": ["참석자"]
+        },
+        {
+          "id": "d3",
+          "start": "25:00",
+          "end": "35:00",
+          "title": "결정",
+          "summary": "우선순위와 진행 방향을 합의했습니다.",
+          "kind": "decision",
+          "speakers": ["진행자"]
+        },
+        {
+          "id": "d4",
+          "start": "35:00",
+          "end": "45:00",
+          "title": "후속 조치",
+          "summary": "담당자와 마감일을 포함한 액션 아이템을 정리했습니다.",
+          "kind": "action",
+          "speakers": ["참석자"]
+        }
+      ]
+    }
+  }
+}

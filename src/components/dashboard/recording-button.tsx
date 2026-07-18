@@ -11,14 +11,14 @@ export function RecordingButton() {
     useRecording();
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <Button
+        type="button"
         onClick={toggleRecording}
         className={cn(
           "h-12 w-full text-base font-semibold",
-          isRecording
-            ? "bg-red-700 hover:bg-red-800"
-            : "bg-red-600 hover:bg-red-700",
+          isRecording &&
+            "bg-primary-hover ring-4 ring-primary-soft hover:bg-primary",
         )}
       >
         {isRecording ? (
@@ -29,13 +29,13 @@ export function RecordingButton() {
         ) : (
           <>
             <Mic className="h-4 w-4" />
-            실시간 녹음 시작
+            새 회의 시작
           </>
         )}
       </Button>
 
       {status !== "idle" && (
-        <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2 text-sm">
+        <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-2.5 text-sm">
           <span className="text-muted">
             상태:{" "}
             <span className="font-medium text-foreground">
@@ -50,14 +50,14 @@ export function RecordingButton() {
             <button
               type="button"
               onClick={resetRecording}
-              className="text-xs font-medium text-primary hover:underline"
+              className="cursor-pointer text-xs font-medium text-primary hover:underline"
             >
               초기화
             </button>
           )}
           {isRecording && (
-            <span className="flex items-center gap-1.5 text-red-600">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+            <span className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-primary">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
               REC
             </span>
           )}

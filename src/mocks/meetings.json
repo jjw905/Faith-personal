@@ -3,71 +3,341 @@
     {
       "id": "mtg-001",
       "title": "Q3 보안 정책 검토",
-      "subtitle": "Project Sync-up",
-      "date": "2026-07-06T14:00:00",
+      "tags": [
+        "보안",
+        "마스킹",
+        "정책"
+      ],
+      "summaryTags": [
+        "정책 강화",
+        "마스킹 고도화",
+        "배포 확정"
+      ],
+      "daysAgo": 2,
+      "time": "14:00:00",
       "duration": "1시간 20분",
       "participants": [
-        { "id": "p1", "name": "김철수", "initials": "김", "color": "bg-blue-500" },
-        { "id": "p2", "name": "이영희", "initials": "이", "color": "bg-emerald-500" },
-        { "id": "p3", "name": "박민수", "initials": "박", "color": "bg-violet-500" },
-        { "id": "p4", "name": "최지원", "initials": "최", "color": "bg-amber-500" }
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭"
+        },
+        {
+          "id": "p2",
+          "name": "이영희",
+          "initials": "이",
+          "color": "bg-emerald-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭"
+        },
+        {
+          "id": "p3",
+          "name": "박민수",
+          "initials": "박",
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "낮은 톤, '민수'로 호칭됨"
+        },
+        {
+          "id": "p4",
+          "name": "최지원",
+          "initials": "최",
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "guest",
+          "recognitionNote": "외부 게스트, 입장명으로 표시"
+        },
+        {
+          "id": "p5",
+          "name": "정하늘",
+          "initials": "정",
+          "color": "bg-rose-500",
+          "isMember": true,
+          "recognition": "voice",
+          "recognitionNote": "빠른 말투, 높은 톤"
+        },
+        {
+          "id": "p6",
+          "name": "한서연",
+          "initials": "한",
+          "color": "bg-cyan-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "조용한 톤, 질문 위주"
+        }
       ],
       "status": "completed",
-      "security": "protected"
+      "security": "protected",
+      "workspace": "team"
     },
     {
       "id": "mtg-002",
-      "title": "개인정보 마스킹 파이프라인 점검",
-      "subtitle": "Security Review",
-      "date": "2026-07-05T10:30:00",
+      "title": "마스킹 규칙 혼자 점검",
+      "tags": [
+        "개인",
+        "마스킹"
+      ],
+      "summaryTags": [
+        "규칙 점검",
+        "예외 케이스"
+      ],
+      "daysAgo": 1,
+      "time": "10:30:00",
       "duration": "45분",
       "participants": [
-        { "id": "p1", "name": "김철수", "initials": "김", "color": "bg-blue-500" },
-        { "id": "p5", "name": "정하늘", "initials": "정", "color": "bg-rose-500" }
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500"
+        }
       ],
       "status": "completed",
-      "security": "protected"
+      "security": "protected",
+      "workspace": "personal"
     },
     {
       "id": "mtg-003",
       "title": "RBAC 권한 체계 개편 회의",
-      "subtitle": "Access Control",
-      "date": "2026-07-04T15:00:00",
+      "tags": [
+        "권한",
+        "RBAC"
+      ],
+      "summaryTags": [
+        "변환 중",
+        "마스킹 중"
+      ],
+      "daysAgo": 0,
+      "time": "15:00:00",
       "duration": "2시간",
       "participants": [
-        { "id": "p2", "name": "이영희", "initials": "이", "color": "bg-emerald-500" },
-        { "id": "p3", "name": "박민수", "initials": "박", "color": "bg-violet-500" },
-        { "id": "p6", "name": "한서연", "initials": "한", "color": "bg-cyan-500" }
+        {
+          "id": "p2",
+          "name": "이영희",
+          "initials": "이",
+          "color": "bg-emerald-500"
+        },
+        {
+          "id": "p3",
+          "name": "박민수",
+          "initials": "박",
+          "color": "bg-violet-500"
+        },
+        {
+          "id": "p6",
+          "name": "한서연",
+          "initials": "한",
+          "color": "bg-cyan-500"
+        }
       ],
       "status": "in_progress",
-      "security": "protected"
+      "security": "protected",
+      "workspace": "team"
     },
     {
       "id": "mtg-004",
       "title": "주간 팀 스탠드업",
-      "subtitle": "Weekly Standup",
-      "date": "2026-07-03T09:00:00",
+      "tags": [
+        "스탠드업",
+        "주간"
+      ],
+      "summaryTags": [
+        "진행 공유",
+        "블로커",
+        "다음 주 계획"
+      ],
+      "daysAgo": 5,
+      "time": "09:00:00",
       "duration": "30분",
       "participants": [
-        { "id": "p1", "name": "김철수", "initials": "김", "color": "bg-blue-500" },
-        { "id": "p2", "name": "이영희", "initials": "이", "color": "bg-emerald-500" },
-        { "id": "p3", "name": "박민수", "initials": "박", "color": "bg-violet-500" }
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500"
+        },
+        {
+          "id": "p2",
+          "name": "이영희",
+          "initials": "이",
+          "color": "bg-emerald-500"
+        },
+        {
+          "id": "p3",
+          "name": "박민수",
+          "initials": "박",
+          "color": "bg-violet-500"
+        }
       ],
       "status": "completed",
-      "security": "protected"
+      "security": "protected",
+      "workspace": "team"
     },
     {
       "id": "mtg-005",
       "title": "STT 엔진 성능 벤치마크",
-      "subtitle": "Tech Evaluation",
-      "date": "2026-07-02T13:30:00",
+      "tags": [
+        "STT",
+        "성능"
+      ],
+      "summaryTags": [
+        "정확도",
+        "노이즈 테스트",
+        "엔진 비교"
+      ],
+      "daysAgo": 3,
+      "time": "13:30:00",
       "duration": "1시간 10분",
       "participants": [
-        { "id": "p4", "name": "최지원", "initials": "최", "color": "bg-amber-500" },
-        { "id": "p5", "name": "정하늘", "initials": "정", "color": "bg-rose-500" }
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500"
+        }
       ],
       "status": "completed",
-      "security": "protected"
+      "security": "protected",
+      "workspace": "personal"
+    },
+    {
+      "id": "mtg-006",
+      "title": "발표 연습 녹음",
+      "tags": [
+        "연습"
+      ],
+      "summaryTags": [
+        "발표 흐름",
+        "시간 점검"
+      ],
+      "daysAgo": 12,
+      "time": "19:00:00",
+      "duration": "25분",
+      "participants": [
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500"
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "personal"
+    },
+    {
+      "id": "mtg-007",
+      "title": "외부 파트너 킥오프",
+      "tags": [
+        "파트너",
+        "킥오프"
+      ],
+      "summaryTags": [
+        "킥오프 예정"
+      ],
+      "daysAgo": -1,
+      "time": "10:00:00",
+      "duration": "1시간",
+      "participants": [
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500"
+        },
+        {
+          "id": "p2",
+          "name": "이영희",
+          "initials": "이",
+          "color": "bg-emerald-500"
+        },
+        {
+          "id": "p4",
+          "name": "최지원",
+          "initials": "최",
+          "color": "bg-amber-500"
+        }
+      ],
+      "status": "scheduled",
+      "security": "protected",
+      "workspace": "team"
+    },
+    {
+      "id": "mtg-008",
+      "title": "상반기 보안 감사 준비",
+      "tags": [
+        "감사",
+        "보안"
+      ],
+      "summaryTags": [
+        "체크리스트",
+        "증적 정리",
+        "일정 확정"
+      ],
+      "daysAgo": 35,
+      "time": "11:00:00",
+      "duration": "1시간 15분",
+      "participants": [
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500"
+        },
+        {
+          "id": "p3",
+          "name": "박민수",
+          "initials": "박",
+          "color": "bg-violet-500"
+        },
+        {
+          "id": "p4",
+          "name": "최지원",
+          "initials": "최",
+          "color": "bg-amber-500"
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "team"
+    },
+    {
+      "id": "mtg-009",
+      "title": "연초 운영 계획 회의",
+      "tags": [
+        "계획",
+        "운영"
+      ],
+      "summaryTags": [
+        "연간 목표",
+        "인력 배정"
+      ],
+      "daysAgo": 180,
+      "time": "14:30:00",
+      "duration": "2시간",
+      "participants": [
+        {
+          "id": "p1",
+          "name": "김철수",
+          "initials": "김",
+          "color": "bg-blue-500"
+        },
+        {
+          "id": "p2",
+          "name": "이영희",
+          "initials": "이",
+          "color": "bg-emerald-500"
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "team"
     }
   ]
 }
