@@ -49,22 +49,3 @@ export function buildSupportMailto(options?: {
   }
   return href;
 }
-
-export const MAIL_SETUP = {
-  mac: {
-    title: "Mac",
-    steps: [
-      "Mail > 설정 > 일반",
-      "기본 이메일 읽기 프로그램 선택",
-      "메일 보내기 다시 실행",
-    ],
-  },
-  windows: {
-    title: "Windows",
-    steps: [
-      "설정 > 앱 > 기본 앱",
-      "이메일 또는 mailto 기본값 지정",
-      "메일 보내기 다시 실행",
-    ],
-  },
-} as const;

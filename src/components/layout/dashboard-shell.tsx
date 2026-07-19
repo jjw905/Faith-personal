@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
@@ -11,9 +12,11 @@ import {
 import { cn } from "@/lib/utils";
 
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { focusMode } = useMeetingChrome();
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
+  const hideChrome = focusMode || pathname === "/help";
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -24,12 +27,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   }, [mobileOpen]);
 
   useEffect(() => {
-    if (focusMode) setMobileOpen(false);
-  }, [focusMode]);
+    if (hideChrome) setMobileOpen(false);
+  }, [hideChrome]);
 
   return (
     <div className="flex h-dvh min-w-0 overflow-hidden bg-background">
-      {!focusMode ? (
+      {!hideChrome ? (
         <>
           <div
             className={cn(
@@ -44,7 +47,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {!focusMode ? (
+        {!hideChrome ? (
           <AppHeader onMenuClick={() => setMobileOpen(true)} />
         ) : null}
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">

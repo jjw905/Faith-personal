@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { ArrowLeft, Search, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ContactMailPanel } from "@/components/help/contact-mail-panel";
@@ -60,27 +61,36 @@ function ArticleBlock({ article }: { article: HelpArticle }) {
       <p className="mt-1.5 text-sm leading-relaxed text-muted sm:text-[15px]">
         {article.summary}
       </p>
-      <ul className="mt-4 space-y-2 border-l border-border pl-3.5">
-        {article.bullets.map((item) => (
-          <li
-            key={item}
-            className="text-sm leading-snug text-foreground/80 sm:text-[15px] sm:leading-relaxed"
+      <div className="mt-4 space-y-2.5">
+        {article.body.map((paragraph) => (
+          <p
+            key={paragraph}
+            className="text-sm leading-relaxed text-foreground/85 sm:text-[15px] sm:leading-[1.65]"
           >
-            {item}
-          </li>
+            {paragraph}
+          </p>
         ))}
-      </ul>
+      </div>
       {article.id === "contact" ? <ContactMailPanel /> : null}
     </article>
   );
 }
 
 export default function HelpPage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState(HELP_ARTICLES[0]?.id ?? "welcome");
 
   const results = useMemo(() => searchHelpArticles(query), [query]);
   const searching = query.trim().length > 0;
+
+  function goBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/dashboard");
+  }
 
   useEffect(() => {
     if (searching) return;
@@ -115,6 +125,17 @@ export default function HelpPage() {
   return (
     <PageContainer className="!pb-12">
       <div className="mx-auto w-full max-w-5xl">
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={goBack}
+            className="-ml-1 inline-flex cursor-pointer items-center gap-1.5 px-1 py-1 text-sm font-semibold text-foreground transition-opacity hover:opacity-70"
+          >
+            <ArrowLeft className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+            돌아가기
+          </button>
+        </div>
+
         <header className="mb-8 max-w-2xl sm:mb-10">
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             도움말
