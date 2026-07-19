@@ -1,6 +1,7 @@
 import { PageContainer } from "@/components/layout/page-container";
 import {
   CHANGELOG,
+  DEV_AGENDA,
   getChangelogDateLabel,
   type ChangelogEntry,
 } from "@/lib/changelog";
@@ -72,7 +73,7 @@ export default function ChangelogPage() {
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-3xl">
-        <header className="mb-10 sm:mb-12">
+        <header className="mb-8 sm:mb-10">
           <p className="text-xs font-semibold tracking-wide text-muted-2">
             개발전용
           </p>
@@ -80,6 +81,36 @@ export default function ChangelogPage() {
             Changelog
           </h1>
         </header>
+
+        <section
+          aria-labelledby="dev-agenda-heading"
+          className="mb-12 border-b border-border pb-10 sm:mb-14 sm:pb-12"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2
+              id="dev-agenda-heading"
+              className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl"
+            >
+              오늘의 개발안건
+            </h2>
+            <p className="text-xs tabular-nums text-muted-2">
+              {getChangelogDateLabel(DEV_AGENDA.date)}
+            </p>
+          </div>
+          <ol className="mt-4 list-none space-y-2.5 border-l border-border pl-3.5">
+            {DEV_AGENDA.items.map((item, index) => (
+              <li
+                key={item}
+                className="flex gap-2.5 text-[15px] leading-[1.65] text-muted"
+              >
+                <span className="shrink-0 tabular-nums font-medium text-foreground/70">
+                  {index + 1}.
+                </span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
 
         <div className="space-y-12 sm:space-y-14">
           {CHANGELOG.map((entry, index) => (
