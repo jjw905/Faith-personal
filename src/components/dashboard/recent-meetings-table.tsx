@@ -77,7 +77,7 @@ const VISIBLE_AVATARS = 3;
 const col = {
   title: "w-[28%] pl-5 text-left",
   date: "w-[14%] text-center",
-  participants: "w-[18%] text-center",
+  participants: "w-[18%] min-w-[5.75rem] text-center",
   summary: "w-[28%] text-left",
   duration: "w-[12%] text-left max-xl:hidden",
 } as const;
@@ -219,7 +219,7 @@ function PeriodDateNav({
   const current = isCurrentPeriod(anchor, unit);
 
   return (
-    <div className="flex min-w-0 items-center justify-center gap-1">
+    <div className="mx-auto flex w-max max-w-full items-center justify-center gap-1">
       <Button
         type="button"
         variant="ghost"
@@ -344,11 +344,8 @@ function SortControl({
   );
 }
 
-function recognitionLabel(p: Participant) {
-  if (p.recognition === "voice") return "음성 톤 구분";
-  if (p.recognition === "guest") return "외부 게스트";
-  if (p.recognition === "member" || p.isMember) return "회원 매칭";
-  return "음성 톤 구분";
+function isSiteMember(p: Participant) {
+  return p.isMember === true || p.recognition === "member";
 }
 
 function ParticipantsPopup({
@@ -386,16 +383,10 @@ function ParticipantsPopup({
         role="dialog"
         aria-modal="true"
         aria-label="참석자"
-        className="fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,85vh)] w-[min(26rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_50px_rgba(17,24,46,0.18)]"
+        className="fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,85vh)] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_50px_rgba(17,24,46,0.18)]"
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">참석자</h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-              회의록 인식 시 화자를 구분합니다. 회원이 아니어도 음성 톤, 호칭
-              등으로 상대방을 매칭할 수 있습니다.
-            </p>
-          </div>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+          <h2 className="text-base font-semibold text-foreground">참석자</h2>
           <Button
             type="button"
             variant="ghost"
@@ -408,38 +399,37 @@ function ParticipantsPopup({
           </Button>
         </div>
 
-        <ul className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-4">
-          {participants.map((p) => (
-            <li key={p.id} className="rounded-xl bg-surface px-3 py-3">
-              <div className="flex items-center gap-2.5">
-                <Avatar className="h-8 w-8">
+        <ul className="grid min-h-0 grid-cols-2 gap-2 overflow-y-auto px-5 py-4 sm:grid-cols-3">
+          {participants.map((p) => {
+            const member = isSiteMember(p);
+            return (
+              <li
+                key={p.id}
+                className="flex flex-col items-center gap-2 rounded-xl bg-surface px-3 py-3 text-center"
+              >
+                <Avatar className="h-10 w-10 shrink-0">
                   <AvatarFallback
-                    className={cn("text-[11px] text-white", p.color)}
+                    className={cn("text-xs text-white", p.color)}
                   >
                     {p.initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {p.name}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-muted">
-                    {p.isMember ? "사이트 회원" : "비회원/외부"},{" "}
-                    {recognitionLabel(p)}
-                  </p>
-                </div>
-              </div>
-              {p.recognitionNote ? (
-                <p className="mt-2 text-xs leading-relaxed text-muted-2">
-                  {p.recognitionNote}
+                <p className="w-full truncate text-sm font-medium text-foreground">
+                  {p.name}
                 </p>
-              ) : (
-                <p className="mt-2 text-xs text-muted-2">
-                  녹취 시 톤과 호칭으로 이 참석자를 구분합니다.
-                </p>
-              )}
-            </li>
-          ))}
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    member
+                      ? "bg-primary-soft text-primary"
+                      : "bg-surface-2 text-muted",
+                  )}
+                >
+                  {member ? "회원" : "화자"}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </>
@@ -456,12 +446,16 @@ function ParticipantsCell({ participants }: { participants: Participant[] }) {
       : participants.map((p) => p.name).join(", ");
 
   if (participants.length === 0) {
-    return <span className="text-xs text-muted-2">-</span>;
+    return (
+      <div className="flex w-full items-center justify-center">
+        <span className="text-xs text-muted-2">-</span>
+      </div>
+    );
   }
 
   return (
     <>
-      <div className="relative inline-flex justify-center">
+      <div className="flex w-full items-center justify-center">
         <button
           type="button"
           aria-haspopup="dialog"
@@ -470,16 +464,17 @@ function ParticipantsCell({ participants }: { participants: Participant[] }) {
           title={label}
           onClick={() => setOpen(true)}
           className={cn(
-            "inline-flex cursor-pointer items-center rounded-full p-0.5 transition-colors",
+            "inline-flex shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors",
             "hover:bg-surface-2",
             open && "bg-surface-2",
           )}
         >
-          <span className="flex -space-x-1.5">
-            {visible.map((participant) => (
+          <span className="flex shrink-0 whitespace-nowrap -space-x-1.5">
+            {visible.map((participant, index) => (
               <Avatar
                 key={participant.id}
                 className="h-7 w-7 border-2 border-white"
+                style={{ zIndex: index + 1 }}
               >
                 <AvatarFallback
                   className={`${participant.color} text-[10px] text-white`}
@@ -489,7 +484,10 @@ function ParticipantsCell({ participants }: { participants: Participant[] }) {
               </Avatar>
             ))}
             {overflow > 0 ? (
-              <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-surface-2 text-[10px] font-semibold text-foreground">
+              <span
+                className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-surface-2 text-[10px] font-semibold text-foreground"
+                style={{ zIndex: visible.length + 1 }}
+              >
                 +{overflow}
               </span>
             ) : null}
@@ -531,15 +529,15 @@ export function RecentMeetingsTable({
 
   return (
     <Card>
-      <CardHeader className="relative grid grid-cols-1 items-center gap-3 space-y-0 px-6 py-4 md:grid-cols-[1fr_auto_1fr]">
-        <div className="flex min-w-0 items-center gap-2 md:justify-self-start">
+      <CardHeader className="relative grid grid-cols-1 items-center gap-3 space-y-0 px-6 py-4 xl:grid-cols-[1fr_auto_1fr]">
+        <div className="flex min-w-0 items-center gap-2 xl:justify-self-start">
           <CardTitle>회의 기록</CardTitle>
           <span className="inline-flex min-w-7 items-center justify-center rounded-lg bg-surface px-2 py-1 text-sm font-semibold tabular-nums text-foreground">
             {sorted.length}
           </span>
         </div>
 
-        <div className="md:justify-self-center">
+        <div className="justify-self-center">
           <PeriodDateNav
             unit={periodUnit}
             anchor={periodAnchor}
@@ -547,15 +545,17 @@ export function RecentMeetingsTable({
           />
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-2 md:justify-self-end">
-          <PeriodUnitControl
-            unit={periodUnit}
-            onUnitChange={(unit) => {
-              setPeriodUnit(unit);
-              setPeriodAnchor(new Date());
-            }}
-          />
-          <SortControl value={sortKey} onChange={setSortKey} />
+        <div className="flex w-full justify-center xl:w-auto xl:justify-self-end">
+          <div className="inline-flex w-max max-w-full flex-nowrap items-center gap-1.5">
+            <PeriodUnitControl
+              unit={periodUnit}
+              onUnitChange={(unit) => {
+                setPeriodUnit(unit);
+                setPeriodAnchor(new Date());
+              }}
+            />
+            <SortControl value={sortKey} onChange={setSortKey} />
+          </div>
         </div>
       </CardHeader>
 
