@@ -14,61 +14,48 @@ function EntryBlock({
   isLast: boolean;
 }) {
   return (
-    <article className="relative grid gap-6 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-10">
-      <div className="sm:pt-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:flex-col sm:items-start sm:gap-1.5">
-          <span className="inline-flex rounded-md bg-surface px-2 py-0.5 text-xs font-semibold tabular-nums text-foreground">
-            {entry.version}
-          </span>
-          <p className="whitespace-nowrap text-xs text-muted-2">
-            {getChangelogDateLabel(entry.date)}
-          </p>
-          <p className="text-xs text-muted-2">Changelog</p>
-        </div>
-      </div>
+    <article
+      className={cn(
+        "grid gap-4 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:gap-10",
+        !isLast && "border-b border-border pb-12 sm:pb-14",
+      )}
+    >
+      <aside className="sm:pt-1">
+        <p className="text-sm font-semibold tabular-nums tracking-tight text-foreground">
+          {entry.version}
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-2">
+          {getChangelogDateLabel(entry.date)}
+        </p>
+      </aside>
 
-      <div
-        className={cn(
-          "relative border-l border-border pl-6 sm:border-l-0 sm:pl-0",
-          !isLast && "pb-14 sm:pb-16",
-        )}
-      >
-        <span
-          className="absolute top-1.5 -left-[5px] h-2.5 w-2.5 rounded-full border-2 border-primary bg-card sm:hidden"
-          aria-hidden
-        />
-
-        <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem]">
+      <div className="min-w-0">
+        <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
           {entry.title}
         </h2>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted">
+        <p className="mt-2.5 max-w-2xl text-[15px] leading-[1.65] text-muted">
           {entry.summary}
         </p>
 
-        <div className="mt-8 space-y-8">
+        <div className="mt-7 space-y-7">
           {entry.sections.map((section) => (
-            <section key={section.title}>
-              <h3 className="text-base font-semibold tracking-tight text-foreground">
-                <span className="mr-1.5 font-normal text-muted-2">#</span>
+            <section key={section.title} className="max-w-2xl">
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">
                 {section.title}
               </h3>
               {section.body ? (
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+                <p className="mt-1.5 text-sm leading-[1.65] text-muted">
                   {section.body}
                 </p>
               ) : null}
               {section.items?.length ? (
-                <ul className="mt-3 max-w-2xl space-y-2">
+                <ul className="mt-2.5 list-none space-y-1.5 border-l border-border pl-3.5">
                   {section.items.map((item) => (
                     <li
                       key={item}
-                      className="flex gap-2.5 text-sm leading-relaxed text-muted"
+                      className="text-sm leading-[1.65] text-muted"
                     >
-                      <span
-                        className="mt-2 h-1 w-1 shrink-0 rounded-full bg-muted-2"
-                        aria-hidden
-                      />
-                      <span>{item}</span>
+                      {item}
                     </li>
                   ))}
                 </ul>
@@ -85,35 +72,23 @@ export default function ChangelogPage() {
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-3xl">
-        <header className="mb-12 sm:mb-14">
+        <header className="mb-10 sm:mb-12">
           <p className="text-xs font-semibold tracking-wide text-muted-2">
             개발전용
           </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Changelog
           </h1>
         </header>
 
-        <div className="relative">
-          <div
-            className="absolute top-2 bottom-8 left-[calc(9.5rem+1.25rem)] hidden w-px bg-border sm:block"
-            aria-hidden
-          />
-
-          <div className="space-y-0">
-            {CHANGELOG.map((entry, index) => (
-              <div key={entry.version} className="relative">
-                <span
-                  className="absolute top-2 left-[calc(9.5rem+1.25rem-4px)] z-10 hidden h-2.5 w-2.5 rounded-full border-2 border-primary bg-card sm:block"
-                  aria-hidden
-                />
-                <EntryBlock
-                  entry={entry}
-                  isLast={index === CHANGELOG.length - 1}
-                />
-              </div>
-            ))}
-          </div>
+        <div className="space-y-12 sm:space-y-14">
+          {CHANGELOG.map((entry, index) => (
+            <EntryBlock
+              key={entry.version}
+              entry={entry}
+              isLast={index === CHANGELOG.length - 1}
+            />
+          ))}
         </div>
       </div>
     </PageContainer>

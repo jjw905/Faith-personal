@@ -238,6 +238,18 @@
           "text": "짧은 이름과 지역번호 조합이 애매합니다. 02-345-6789 형태를 한 번 더 확인해야겠어요."
         },
         {
+          "id": "p2b",
+          "time": "09:05",
+          "speaker": "김철수",
+          "segmentId": "d2",
+          "text": "점검용 샘플 오디오도 올려둡니다.",
+          "attachment": {
+            "name": "meeting-pii-noise30.wav",
+            "sizeLabel": "980 KB",
+            "kind": "audio"
+          }
+        },
+        {
           "id": "p3",
           "time": "22:40",
           "speaker": "김철수",
@@ -245,11 +257,95 @@
           "text": "예외 목록을 문서로 남기고, 규칙 PR에 케이스를 추가하겠습니다."
         },
         {
+          "id": "p3b",
+          "time": "23:10",
+          "speaker": "김철수",
+          "segmentId": "d3",
+          "text": "",
+          "attachment": {
+            "name": "예외-케이스-메모.md",
+            "sizeLabel": "18 KB",
+            "kind": "doc"
+          }
+        },
+        {
+          "id": "p3c",
+          "time": "24:00",
+          "speaker": "김철수",
+          "segmentId": "d3",
+          "text": "표로도 정리해 두었습니다.",
+          "attachment": {
+            "name": "예외-케이스.xlsx",
+            "sizeLabel": "54 KB",
+            "kind": "sheet"
+          }
+        },
+        {
           "id": "p4",
           "time": "38:15",
           "speaker": "김철수",
           "segmentId": "d4",
           "text": "오늘은 여기까지. 다음엔 NER 보조 옵션이랑 같이 보겠습니다."
+        }
+      ]
+    },
+    "mtg-003": {
+      "meetingId": "mtg-003",
+      "lines": [
+        {
+          "id": "r1",
+          "time": "00:30",
+          "speaker": "이영희",
+          "segmentId": "d1",
+          "text": "RBAC 권한 체계 개편 안건부터 확인하겠습니다."
+        },
+        {
+          "id": "r2",
+          "time": "12:20",
+          "speaker": "박민수",
+          "segmentId": "d2",
+          "text": "역할 매트릭스 초안을 PDF로 공유합니다.",
+          "attachment": {
+            "name": "RBAC-역할-매트릭스.pdf",
+            "sizeLabel": "312 KB",
+            "kind": "pdf"
+          }
+        },
+        {
+          "id": "r3",
+          "time": "28:40",
+          "speaker": "한서연",
+          "segmentId": "d2",
+          "text": "화면 캡처도 같이 남겨둘게요.",
+          "attachment": {
+            "name": "권한-화면-캡처.png",
+            "sizeLabel": "540 KB",
+            "kind": "image"
+          }
+        },
+        {
+          "id": "r4",
+          "time": "45:10",
+          "speaker": "이영희",
+          "segmentId": "d3",
+          "text": "합의안 슬라이드입니다.",
+          "attachment": {
+            "name": "RBAC-합의안.pptx",
+            "sizeLabel": "2.1 MB",
+            "kind": "slide"
+          }
+        },
+        {
+          "id": "r5",
+          "time": "01:10:00",
+          "speaker": "박민수",
+          "segmentId": "d4",
+          "text": "관련 로그 샘플도 압축해 올립니다.",
+          "attachment": {
+            "name": "access-log-samples.zip",
+            "sizeLabel": "4.8 MB",
+            "kind": "archive"
+          }
         }
       ]
     },
@@ -262,6 +358,18 @@
           "speaker": "진행자",
           "segmentId": "d1",
           "text": "오늘 회의 목적과 핵심 안건을 먼저 공유하겠습니다."
+        },
+        {
+          "id": "d1b",
+          "time": "01:20",
+          "speaker": "진행자",
+          "segmentId": "d1",
+          "text": "안건 자료입니다.",
+          "attachment": {
+            "name": "회의-안건.pdf",
+            "sizeLabel": "180 KB",
+            "kind": "pdf"
+          }
         },
         {
           "id": "d2",
@@ -278,6 +386,18 @@
           "text": "대안 A가 일정에 더 현실적입니다. 리스크도 상대적으로 낮아요."
         },
         {
+          "id": "d3b",
+          "time": "19:00",
+          "speaker": "참석자",
+          "segmentId": "d2",
+          "text": "비교표도 올려둡니다.",
+          "attachment": {
+            "name": "대안-비교표.xlsx",
+            "sizeLabel": "72 KB",
+            "kind": "sheet"
+          }
+        },
+        {
           "id": "d4",
           "time": "27:30",
           "speaker": "진행자",
@@ -290,6 +410,30 @@
           "speaker": "참석자",
           "segmentId": "d4",
           "text": "후속 조치 담당자와 마감일을 메모에 남겨 두겠습니다."
+        },
+        {
+          "id": "d5b",
+          "time": "37:20",
+          "speaker": "참석자",
+          "segmentId": "d4",
+          "text": "",
+          "attachment": {
+            "name": "후속-액션.docx",
+            "sizeLabel": "64 KB",
+            "kind": "doc"
+          }
+        },
+        {
+          "id": "d5c",
+          "time": "38:00",
+          "speaker": "진행자",
+          "segmentId": "d4",
+          "text": "참고 이미지도 함께 둡니다.",
+          "attachment": {
+            "name": "화이트보드-메모.png",
+            "sizeLabel": "390 KB",
+            "kind": "image"
+          }
         },
         {
           "id": "d6",
