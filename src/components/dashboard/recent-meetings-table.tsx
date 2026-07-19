@@ -75,16 +75,16 @@ const VISIBLE_AVATARS = 3;
  * 3) 다운로드(제목 옆 소형), 소요 시간(가장 먼저 숨김)
  */
 const col = {
-  title: "w-[28%] pl-5 text-left",
-  date: "w-[14%] text-center",
-  participants: "w-[18%] min-w-[5.75rem] text-center",
-  summary: "w-[28%] text-left",
+  title: "w-[30%] pl-5 text-left",
+  date: "w-[16%] text-center",
+  participants: "w-[20%] text-center",
+  summary: "w-[34%] text-left",
   duration: "w-[12%] text-left max-xl:hidden",
 } as const;
 
 const headCellClass =
   "h-12 whitespace-nowrap bg-surface/70 px-3 text-xs font-semibold text-muted";
-const bodyCellClass = "px-3 py-4 align-middle";
+const bodyCellClass = "overflow-hidden px-3 py-4 align-middle";
 
 function parseDurationMinutes(duration: string) {
   const hour = duration.match(/(\d+)\s*시간/);
@@ -153,21 +153,28 @@ function MeetingSummary({ meeting }: { meeting: Meeting }) {
     return <span className="text-xs text-muted-2">-</span>;
   }
 
+  const visible = tags.slice(0, 2);
+  const overflow = tags.length - visible.length;
   const full = tags.join(", ");
 
   return (
     <div
-      className="flex max-h-[4.75rem] min-w-0 flex-wrap content-start gap-1 overflow-hidden"
+      className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-hidden"
       title={full}
     >
-      {tags.map((tag) => (
+      {visible.map((tag) => (
         <span
           key={tag}
-          className="inline-flex shrink-0 rounded-full border border-primary/15 bg-primary-soft px-2 py-0.5 text-[11px] font-medium leading-5 text-primary"
+          className="inline-flex min-w-0 max-w-[7.5rem] truncate rounded-full border border-primary/15 bg-primary-soft px-2 py-0.5 text-[11px] font-medium leading-5 text-primary"
         >
           {tag}
         </span>
       ))}
+      {overflow > 0 ? (
+        <span className="inline-flex shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
+          +{overflow}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -399,27 +406,27 @@ function ParticipantsPopup({
           </Button>
         </div>
 
-        <ul className="grid min-h-0 grid-cols-2 gap-2 overflow-y-auto px-5 py-4 sm:grid-cols-3">
+        <ul className="flex min-h-0 flex-wrap content-start gap-2 overflow-y-auto px-5 py-4">
           {participants.map((p) => {
             const member = isSiteMember(p);
             return (
               <li
                 key={p.id}
-                className="flex flex-col items-center gap-2 rounded-xl bg-surface px-3 py-3 text-center"
+                className="flex min-w-0 max-w-full items-center gap-2 rounded-full bg-surface py-1.5 pl-1.5 pr-3"
               >
-                <Avatar className="h-10 w-10 shrink-0">
+                <Avatar className="h-8 w-8 shrink-0">
                   <AvatarFallback
-                    className={cn("text-xs text-white", p.color)}
+                    className={cn("text-[11px] text-white", p.color)}
                   >
                     {p.initials}
                   </AvatarFallback>
                 </Avatar>
-                <p className="w-full truncate text-sm font-medium text-foreground">
+                <span className="truncate text-sm font-medium text-foreground">
                   {p.name}
-                </p>
+                </span>
                 <span
                   className={cn(
-                    "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
                     member
                       ? "bg-primary-soft text-primary"
                       : "bg-surface-2 text-muted",
@@ -545,8 +552,8 @@ export function RecentMeetingsTable({
           />
         </div>
 
-        <div className="flex w-full justify-center xl:w-auto xl:justify-self-end">
-          <div className="inline-flex w-max max-w-full flex-nowrap items-center gap-1.5">
+        <div className="flex w-full items-center justify-center xl:w-auto xl:justify-self-end">
+          <div className="inline-flex shrink-0 flex-nowrap items-center gap-1.5">
             <PeriodUnitControl
               unit={periodUnit}
               onUnitChange={(unit) => {
@@ -566,7 +573,7 @@ export function RecentMeetingsTable({
           </p>
         ) : (
           <div className="overflow-x-auto px-2 sm:px-3">
-            <Table className="w-full table-fixed border-separate border-spacing-0">
+            <Table className="w-full min-w-[40rem] table-fixed border-separate border-spacing-0 xl:min-w-0">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead
