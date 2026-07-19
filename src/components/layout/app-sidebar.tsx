@@ -15,7 +15,7 @@ import {
   TEAM_NAV_ITEMS,
   type NavItem,
 } from "@/lib/constants";
-import { WORKSPACES } from "@/lib/workspaces";
+import { getWorkspaceProfile, WORKSPACES } from "@/lib/workspaces";
 import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
@@ -187,10 +187,14 @@ function MeetingsNav({
       {open ? (
         <ul className="mt-0.5 space-y-0.5 border-l border-border ml-5 pl-2">
           {WORKSPACES.map((ws) => {
+            const profile = getWorkspaceProfile(ws.id);
             const wsActive =
               workspaceId === ws.id &&
-              (ws.id === "team" ? sectionActive : meetingsActive);
-            const showTeamChildren = ws.id === "team";
+              (ws.id === "team"
+                ? meetingsActive || teamAdminActive
+                : meetingsActive);
+            const showTeamChildren =
+              ws.id === "team" && (workspaceId === "team" || teamAdminActive);
 
             return (
               <li key={ws.id}>
@@ -201,7 +205,7 @@ function MeetingsNav({
                     onNavigate?.();
                   }}
                   className={cn(
-                    "flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-[13px] transition-colors",
+                    "flex cursor-pointer items-start gap-1.5 rounded-lg px-2 py-1.5 text-[13px] transition-colors",
                     "hover:bg-surface-2 hover:text-foreground",
                     wsActive
                       ? "bg-primary-soft font-medium text-primary"
@@ -210,16 +214,27 @@ function MeetingsNav({
                 >
                   <ChevronRight
                     className={cn(
-                      "h-3 w-3 shrink-0",
+                      "mt-0.5 h-3 w-3 shrink-0",
                       wsActive ? "text-primary" : "text-muted-2/80",
                     )}
                     strokeWidth={2}
                   />
-                  <span className="truncate">{ws.title} 워크스페이스</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">
+                      {profile.title} 워크스페이스
+                    </span>
+                    <span
+                      className={cn(
+                        "mt-0.5 block truncate text-[11px] font-normal leading-snug",
+                        wsActive ? "text-primary/75" : "text-muted-2/90",
+                      )}
+                    >
+                      {profile.subtitle}
+                    </span>
+                  </span>
                 </Link>
 
-                {showTeamChildren &&
-                (workspaceId === "team" || teamAdminActive) ? (
+                {showTeamChildren ? (
                   <ul className="mt-0.5 space-y-0.5 border-l border-border ml-3 pl-2">
                     {TEAM_NAV_ITEMS.map((sub) => {
                       const SubIcon = sub.icon;

@@ -25,7 +25,9 @@ import {
   type PeriodUnit,
 } from "@/lib/meeting-date";
 import { meetingTopicKeywords } from "@/lib/meeting-keywords";
+import { getWorkspaceProfile } from "@/lib/workspaces";
 import type { Meeting, Participant } from "@/types/meeting";
+import { useAppContext } from "@/context/app-context";
 import { cn } from "@/lib/utils";
 
 interface RecentMeetingsTableProps {
@@ -366,7 +368,13 @@ function ParticipantsPopup({
   );
 }
 
-function ParticipantsCell({ participants }: { participants: Participant[] }) {
+function ParticipantsCell({
+  participants,
+  showCount = true,
+}: {
+  participants: Participant[];
+  showCount?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const visible = participants.slice(0, VISIBLE_AVATARS);
   const overflow = Math.max(0, participants.length - VISIBLE_AVATARS);
@@ -421,9 +429,11 @@ function ParticipantsCell({ participants }: { participants: Participant[] }) {
             </span>
           ) : null}
         </span>
-        <span className="hidden text-xs font-medium text-muted sm:inline">
-          {participants.length}명
-        </span>
+        {showCount ? (
+          <span className="hidden text-xs font-medium text-muted sm:inline">
+            {participants.length}명
+          </span>
+        ) : null}
       </button>
       <ParticipantsPopup
         participants={participants}
@@ -438,6 +448,8 @@ export function RecentMeetingsTable({
   meetings,
   searchQuery = "",
 }: RecentMeetingsTableProps) {
+  const { workspaceId } = useAppContext();
+  const profile = getWorkspaceProfile(workspaceId);
   const [sortKey, setSortKey] = useState<SortKey>("date_desc");
   const [periodUnit, setPeriodUnit] = useState<PeriodUnit>("week");
   const [periodAnchor, setPeriodAnchor] = useState(() => new Date());
@@ -473,7 +485,7 @@ export function RecentMeetingsTable({
 
   const titleBlock = (
     <div className="flex min-w-0 items-center gap-2">
-      <CardTitle>회의 기록</CardTitle>
+      <CardTitle>{profile.recordsTitle}</CardTitle>
       <span className="inline-flex min-w-7 items-center justify-center rounded-lg bg-surface px-2 py-1 text-sm font-semibold tabular-nums text-foreground">
         {sorted.length}
       </span>
@@ -513,13 +525,16 @@ export function RecentMeetingsTable({
       <CardContent className="px-0 pb-2 pt-0">
         {sorted.length === 0 ? (
           <p className="mx-6 mb-3 rounded-xl bg-surface px-4 py-8 text-center text-sm text-muted">
-            이 기간에 해당하는 회의 기록이 없습니다.
+            {profile.recordsEmpty}
           </p>
         ) : (
           <ul className="divide-y divide-border border-t border-border">
             {sorted.map((meeting) => (
               <li key={meeting.id}>
-                <MeetingRecordListItem meeting={meeting} />
+                <MeetingRecordListItem
+                  meeting={meeting}
+                  showPeopleDensity={profile.showPeopleDensity}
+                />
               </li>
             ))}
           </ul>
@@ -529,8 +544,14 @@ export function RecentMeetingsTable({
   );
 }
 
-/** M3 three-line list item: leading · headline · supporting · trailing */
-function MeetingRecordListItem({ meeting }: { meeting: Meeting }) {
+/** M3 three-line list item: leading, headline, supporting, trailing */
+function MeetingRecordListItem({
+  meeting,
+  showPeopleDensity,
+}: {
+  meeting: Meeting;
+  showPeopleDensity: boolean;
+}) {
   const { day, time } = formatSeoulListLeading(meeting.date);
   const recent = formatRecentDaysLabel(meeting.date);
   const href = `/meetings/${meeting.id}`;
@@ -594,14 +615,19 @@ function MeetingRecordListItem({ meeting }: { meeting: Meeting }) {
           </div>
         </div>
 
-        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <ParticipantsCell participants={meeting.participants} />
-          {meeting.tags.length > 0 ? (
-            <p className="min-w-0 truncate text-xs text-muted-2">
-              {meeting.tags.slice(0, 3).join(", ")}
-            </p>
-          ) : null}
-        </div>
+        {showPeopleDensity ? (
+          <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <ParticipantsCell
+              participants={meeting.participants}
+              showCount
+            />
+            {meeting.tags.length > 0 ? (
+              <p className="min-w-0 truncate text-xs text-muted-2">
+                {meeting.tags.slice(0, 3).join(", ")}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

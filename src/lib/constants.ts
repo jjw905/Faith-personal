@@ -99,8 +99,7 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
     },
     "/settings": {
       title: "시스템 설정",
-      description:
-        "워크스페이스에 따라 개인 기본값 또는 팀 운영 설정을 관리합니다.",
+      description: "",
     },
     "/account": {
       title: "계정 설정",
@@ -108,7 +107,7 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
     },
     "/help": {
       title: "도움말",
-      description: "이용 방법, FAQ, 문의 안내를 확인합니다.",
+      description: "",
     },
     "/changelog": {
       title: "Changelog",

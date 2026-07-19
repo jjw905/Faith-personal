@@ -1,94 +1,210 @@
-import { Mail, BookOpen, MessageCircle } from "lucide-react";
+"use client";
 
+import { Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+
+import { ContactMailPanel } from "@/components/help/contact-mail-panel";
 import { PageContainer } from "@/components/layout/page-container";
-import { PageHeader } from "@/components/layout/page-header";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  HELP_ARTICLES,
+  HELP_NAV,
+  searchHelpArticles,
+  type HelpArticle,
+} from "@/lib/help";
+import { cn } from "@/lib/utils";
 
-const FAQ = [
-  {
-    q: "회의는 어떻게 기록하나요?",
-    a: "회의 화면에서 실시간 녹음 시작 또는 파일 업로드를 선택하면 됩니다.",
-  },
-  {
-    q: "개인정보는 어떻게 가려지나요?",
-    a: "녹음·업로드 후 자동으로 감지해 마스킹합니다. 진행 상황은 상단 최근 활동에서 확인할 수 있습니다.",
-  },
-  {
-    q: "타임라인 요약은 어디서 보나요?",
-    a: "회의 기록에서 회의를 열면 녹음 구간별 안건, 논의, 결정, 후속 조치가 타임라인으로 정리됩니다.",
-  },
-  {
-    q: "알림은 어디서 보나요?",
-    a: "헤더 오른쪽 벨 아이콘을 누르면 알림 센터가 열립니다. 수신 설정은 계정 설정에서 변경합니다.",
-  },
-  {
-    q: "회의록 보존 기간은 어디서 바꾸나요?",
-    a: "왼쪽 메뉴의 시스템 설정에서 회의 보존, 기본 마스킹을 관리합니다.",
-  },
-];
+function DocsSearch({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="relative flex h-11 w-full items-center rounded-xl border border-border bg-card px-3 transition-colors focus-within:border-border-strong focus-within:bg-surface">
+      <span className="sr-only">문서 검색</span>
+      <Search
+        className="h-4 w-4 shrink-0 text-muted"
+        strokeWidth={1.75}
+        aria-hidden
+      />
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="문서 검색..."
+        className="min-w-0 flex-1 bg-transparent px-2.5 text-sm text-foreground outline-none placeholder:text-muted-2 [&::-webkit-search-cancel-button]:hidden"
+        autoComplete="off"
+        enterKeyHint="search"
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground"
+          aria-label="검색어 지우기"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
+      ) : null}
+    </label>
+  );
+}
+
+function ArticleBlock({ article }: { article: HelpArticle }) {
+  return (
+    <article id={article.id} className="scroll-mt-24">
+      <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+        {article.title}
+      </h2>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted sm:text-[15px]">
+        {article.summary}
+      </p>
+      <ul className="mt-4 space-y-2 border-l border-border pl-3.5">
+        {article.bullets.map((item) => (
+          <li
+            key={item}
+            className="text-sm leading-snug text-foreground/80 sm:text-[15px] sm:leading-relaxed"
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
+      {article.id === "contact" ? <ContactMailPanel /> : null}
+    </article>
+  );
+}
 
 export default function HelpPage() {
+  const [query, setQuery] = useState("");
+  const [activeId, setActiveId] = useState(HELP_ARTICLES[0]?.id ?? "welcome");
+
+  const results = useMemo(() => searchHelpArticles(query), [query]);
+  const searching = query.trim().length > 0;
+
+  useEffect(() => {
+    if (searching) return;
+
+    const nodes = HELP_ARTICLES.map((article) =>
+      document.getElementById(article.id),
+    ).filter((node): node is HTMLElement => Boolean(node));
+
+    if (nodes.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (a, b) =>
+              (a.boundingClientRect.top ?? 0) - (b.boundingClientRect.top ?? 0),
+          );
+        const top = visible[0]?.target.id;
+        if (top) setActiveId(top);
+      },
+      {
+        rootMargin: "-20% 0px -65% 0px",
+        threshold: [0, 1],
+      },
+    );
+
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [searching]);
+
   return (
-    <PageContainer>
-      <div className="mx-auto w-full max-w-3xl space-y-6">
-        <PageHeader
-          title="도움말"
-          description="이용 방법과 자주 묻는 질문, 문의 안내입니다."
-        />
+    <PageContainer className="!pb-12">
+      <div className="mx-auto w-full max-w-5xl">
+        <header className="mb-8 max-w-2xl sm:mb-10">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            도움말
+          </h1>
+          <div className="mt-5 max-w-md">
+            <DocsSearch value={query} onChange={setQuery} />
+          </div>
+        </header>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <BookOpen className="h-5 w-5 text-primary" strokeWidth={1.75} />
-              <CardTitle className="text-base">시작 가이드</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted">
-              녹음·업로드부터 마스킹·회의록 확인까지 기본 흐름을 안내합니다.
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <MessageCircle
-                className="h-5 w-5 text-primary"
-                strokeWidth={1.75}
-              />
-              <CardTitle className="text-base">FAQ</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted">
-              자주 묻는 질문과 답변을 아래에 모아 두었습니다.
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <Mail className="h-5 w-5 text-primary" strokeWidth={1.75} />
-              <CardTitle className="text-base">문의</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted">
-              support@faith.app 으로 연락해 주세요. (예시)
-            </CardContent>
-          </Card>
-        </div>
+        <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
+          <aside className="lg:w-52 lg:shrink-0">
+            <nav
+              className="lg:sticky lg:top-4"
+              aria-label="도움말 목차"
+            >
+              {searching ? (
+                <div className="space-y-1">
+                  <p className="px-2 text-xs font-semibold tracking-wide text-muted-2">
+                    검색 결과
+                  </p>
+                  {results.length === 0 ? (
+                    <p className="px-2 py-2 text-sm text-muted">
+                      일치하는 문서가 없습니다.
+                    </p>
+                  ) : (
+                    results.map((article) => (
+                      <a
+                        key={article.id}
+                        href={`#${article.id}`}
+                        className="block rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-surface hover:text-foreground"
+                      >
+                        {article.title}
+                      </a>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {HELP_NAV.map((group) => (
+                    <div key={group.title}>
+                      <p className="px-2 text-xs font-semibold tracking-wide text-muted-2">
+                        {group.title}
+                      </p>
+                      <ul className="mt-1.5 space-y-0.5">
+                        {group.items.map((item) => (
+                          <li key={item.id}>
+                            <a
+                              href={`#${item.id}`}
+                              onClick={() => setActiveId(item.id)}
+                              className={cn(
+                                "block rounded-lg px-2 py-1.5 text-sm transition-colors",
+                                activeId === item.id
+                                  ? "bg-surface font-medium text-foreground"
+                                  : "text-muted hover:bg-surface/70 hover:text-foreground",
+                              )}
+                            >
+                              {item.title}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </nav>
+          </aside>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">자주 묻는 질문</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border py-0">
-            {FAQ.map((item) => (
-              <div key={item.q} className="py-4">
-                <p className="text-sm font-medium text-foreground">{item.q}</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted">
-                  {item.a}
-                </p>
+          <div className="min-w-0 flex-1">
+            {searching && results.length === 0 ? (
+              <p className="text-sm text-muted">
+                다른 검색어로 다시 시도해 보세요.
+              </p>
+            ) : (
+              <div className="space-y-12 sm:space-y-14">
+                {(searching ? results : HELP_ARTICLES).map((article, index, list) => (
+                  <div
+                    key={article.id}
+                    className={cn(
+                      index < list.length - 1 &&
+                        "border-b border-border pb-12 sm:pb-14",
+                    )}
+                  >
+                    <ArticleBlock article={article} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </CardContent>
-        </Card>
+            )}
+          </div>
+        </div>
       </div>
     </PageContainer>
   );

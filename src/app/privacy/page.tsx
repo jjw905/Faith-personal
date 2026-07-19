@@ -73,7 +73,7 @@ const SECTIONS: Section[] = [
     title: "7. 개인정보 보호책임자 및 문의처",
     items: [
       "개인정보 보호책임자: Faith 보안팀",
-      "문의: hello@faith.example",
+      "문의: support@faith.app",
       "접수된 요청은 관련 법령에 따라 신속히 처리",
     ],
   },

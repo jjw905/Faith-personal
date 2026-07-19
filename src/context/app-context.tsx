@@ -19,6 +19,7 @@ import {
 import type { User } from "@/types/user";
 
 const AUTO_TIMELINE_KEY = "faith.settings.autoOpenTimelineOnStart";
+const WORKSPACE_KEY = "faith.workspaceId";
 
 interface AppContextValue {
   currentUser: User;
@@ -44,14 +45,35 @@ function readAutoTimelinePref(): boolean {
   }
 }
 
+function readWorkspaceId(): WorkspaceId {
+  if (typeof window === "undefined") return "team";
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_KEY);
+    if (raw === "personal" || raw === "team") return raw;
+  } catch {
+    /* ignore */
+  }
+  return "team";
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const unread = getNotifications().filter((n) => n.unread).length;
-  const [workspaceId, setWorkspaceId] = useState<WorkspaceId>("team");
+  const [workspaceId, setWorkspaceIdState] = useState<WorkspaceId>("team");
   const [autoOpenTimelineOnStart, setAutoOpenTimelineOnStartState] =
     useState(true);
 
   useEffect(() => {
+    setWorkspaceIdState(readWorkspaceId());
     setAutoOpenTimelineOnStartState(readAutoTimelinePref());
+  }, []);
+
+  const setWorkspaceId = useCallback((id: WorkspaceId) => {
+    setWorkspaceIdState(id);
+    try {
+      window.localStorage.setItem(WORKSPACE_KEY, id);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const setAutoOpenTimelineOnStart = useCallback((value: boolean) => {
@@ -79,6 +101,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [
     unread,
     workspaceId,
+    setWorkspaceId,
     autoOpenTimelineOnStart,
     setAutoOpenTimelineOnStart,
   ]);

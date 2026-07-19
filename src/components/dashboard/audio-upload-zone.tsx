@@ -19,7 +19,13 @@ const FORMAT_GUIDES = [
   { ext: ".webm", hint: "브라우저 녹음" },
 ] as const;
 
-export function AudioUploadZone() {
+export function AudioUploadZone({
+  ctaStart = "새 회의 시작",
+  ctaUpload = "파일 업로드",
+}: {
+  ctaStart?: string;
+  ctaUpload?: string;
+}) {
   const [mode, setMode] = useState<Mode>("idle");
 
   const {
@@ -54,7 +60,7 @@ export function AudioUploadZone() {
             <Mic className="h-5 w-5" strokeWidth={1.75} />
           </span>
           <span className="text-lg font-semibold tracking-tight">
-            새 회의 시작
+            {ctaStart}
           </span>
         </Link>
 
@@ -70,7 +76,7 @@ export function AudioUploadZone() {
             <Upload className="h-5 w-5" strokeWidth={1.75} />
           </span>
           <span className="text-lg font-semibold tracking-tight text-foreground">
-            파일 업로드
+            {ctaUpload}
           </span>
         </button>
       </div>

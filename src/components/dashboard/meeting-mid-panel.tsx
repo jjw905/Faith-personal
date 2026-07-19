@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowRight, LayoutGrid, List, Plus, Users } from "lucide-react";
+import { ArrowRight, LayoutGrid, List, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { UpcomingDetailPanel } from "@/components/dashboard/upcoming-detail-panel";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/context/app-context";
-import { dateLabelToIso, formatDdayLabel } from "@/lib/meeting-date";
+import { formatDdayLabel } from "@/lib/meeting-date";
 import {
   getMeetingPlatform,
   inferMeetingPlatform,
@@ -20,162 +20,22 @@ import {
   resolveWorkspacePerson,
   type UpcomingItem,
 } from "@/lib/workspace-data";
+import { getWorkspaceProfile } from "@/lib/workspaces";
 import { cn } from "@/lib/utils";
 
 const LAYOUT_KEY = "faith.upcoming.layout";
-/** 기본 축소 슬롯. 5개 이상이면 6칸(2×3)으로 확장. */
-const COMPACT_SLOT_BASE = 4;
-const COMPACT_SLOT_WIDE = 6;
-const COMPACT_WIDE_MIN = 5;
-const COMPACT_CARD_HEIGHT = "h-[7.25rem]";
-type UpcomingLayout = "compact" | "expanded";
-
-function compactSlotCount(itemCount: number) {
-  return itemCount >= COMPACT_WIDE_MIN ? COMPACT_SLOT_WIDE : COMPACT_SLOT_BASE;
-}
+type UpcomingLayout = "list" | "grid";
 
 function readLayout(): UpcomingLayout {
-  if (typeof window === "undefined") return "compact";
+  if (typeof window === "undefined") return "list";
   const saved = window.localStorage.getItem(LAYOUT_KEY);
-  return saved === "expanded" ? "expanded" : "compact";
+  // 이전 compact/expanded 키 호환
+  if (saved === "expanded" || saved === "grid") return "grid";
+  return "list";
 }
 
 function platformOf(item: UpcomingItem) {
   return item.platform ?? inferMeetingPlatform(item.location);
-}
-
-function DetailArrow() {
-  return (
-    <ArrowRight
-      className="h-5 w-5 shrink-0 text-foreground/45"
-      strokeWidth={2.25}
-      absoluteStrokeWidth
-      aria-hidden
-    />
-  );
-}
-
-function ParticipantsLine({
-  participants,
-  className,
-}: {
-  participants: string[];
-  className?: string;
-}) {
-  return (
-    <p
-      className={cn(
-        "flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground/75",
-        className,
-      )}
-    >
-      <Users
-        className="h-3.5 w-3.5 shrink-0 text-foreground/40"
-        strokeWidth={1.5}
-        absoluteStrokeWidth
-        aria-hidden
-      />
-      <span className="truncate">
-        {participants.slice(0, 3).join(", ")}
-        {participants.length > 3 ? ` 외 ${participants.length - 3}명` : ""}
-      </span>
-    </p>
-  );
-}
-
-function DdayBadge({ dateLabel }: { dateLabel: string }) {
-  const dday = formatDdayLabel(dateLabel);
-  if (!dday) return null;
-  return (
-    <span className="inline-flex items-center justify-center rounded-md bg-card px-1.5 py-0.5 text-[11px] font-medium tabular-nums tracking-tight text-muted">
-      {dday}
-    </span>
-  );
-}
-
-/**
- * 이벤트 카드형 날짜 레일 (캘린더/이벤트 카드 관례: 날짜를 좌측 앵커로 고정).
- * 참고: CivicTheme Event Card, 일반 event-card left date badge 패턴.
- */
-function DateRail({ dateLabel }: { dateLabel: string }) {
-  const iso = dateLabelToIso(dateLabel);
-  const dday = formatDdayLabel(dateLabel);
-  const month = iso ? `${Number(iso.slice(5, 7))}월` : "";
-  const day = iso ? String(Number(iso.slice(8, 10))) : "";
-
-  return (
-    <div
-      className="flex w-[3.5rem] shrink-0 flex-col items-center justify-center self-stretch rounded-xl bg-card px-1 py-2"
-      aria-hidden
-    >
-      {month ? (
-        <span className="text-[11px] font-semibold text-muted">{month}</span>
-      ) : null}
-      {day ? (
-        <span className="mt-0.5 text-2xl font-bold leading-none tabular-nums tracking-tight text-foreground">
-          {day}
-        </span>
-      ) : (
-        <span className="text-sm font-semibold text-foreground">{dateLabel}</span>
-      )}
-      <span className="mt-1.5 text-[10px] font-medium text-muted-2">
-        {dday ?? dateLabel}
-      </span>
-    </div>
-  );
-}
-
-function ParticipantAvatars({
-  participants,
-  max = 4,
-}: {
-  participants: string[];
-  max?: number;
-}) {
-  if (participants.length === 0) {
-    return <p className="text-xs text-muted-2">참석자 없음</p>;
-  }
-
-  const visible = participants.slice(0, max);
-  const overflow = participants.length - visible.length;
-
-  return (
-    <div
-      className="flex items-center"
-      title={participants.join(", ")}
-      aria-label={`참석자 ${participants.length}명`}
-    >
-      <div className="flex -space-x-2">
-        {visible.map((name, index) => {
-          const person = resolveWorkspacePerson(name);
-          return (
-            <Avatar
-              key={`${name}-${index}`}
-              className="h-6 w-6 border-2 border-surface"
-              style={{ zIndex: index + 1 }}
-            >
-              <AvatarFallback
-                className={cn(
-                  "text-[9px] font-semibold text-white",
-                  person.color,
-                )}
-              >
-                {person.initials}
-              </AvatarFallback>
-            </Avatar>
-          );
-        })}
-        {overflow > 0 ? (
-          <span
-            className="relative flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-card text-[9px] font-medium text-muted"
-            style={{ zIndex: visible.length + 1 }}
-          >
-            +{overflow}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 function locationCaption(item: UpcomingItem) {
@@ -187,135 +47,213 @@ function locationCaption(item: UpcomingItem) {
   return item.location;
 }
 
-function CompactCard({
-  item,
-  onOpen,
-}: {
-  item: UpcomingItem;
-  onOpen: (item: UpcomingItem) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(item)}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-xl bg-surface px-3 py-3 text-left transition-colors hover:bg-surface-2",
-        COMPACT_CARD_HEIGHT,
-      )}
-    >
-      <div className="flex w-28 shrink-0 flex-col items-center gap-1">
-        <MeetingPlatformIcon platform={platformOf(item)} size="md" />
-        <p className="w-full text-center text-[10px] font-medium leading-snug text-muted">
-          {item.location}
-        </p>
-        <DdayBadge dateLabel={item.dateLabel} />
-      </div>
+function showUpcomingPeople(
+  participants: string[],
+  showPeopleDensity: boolean,
+) {
+  if (!showPeopleDensity) return false;
+  return participants.length > 1;
+}
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold leading-snug text-foreground">
-          {item.title}
-        </p>
-        <p className="mt-1 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm font-semibold tabular-nums tracking-tight text-foreground">
-          <span>{item.dateLabel}</span>
-          <span>{item.timeLabel}</span>
-          <span className="text-xs font-medium text-muted-2">
-            {item.duration}
+function ParticipantAvatars({
+  participants,
+  max = 3,
+}: {
+  participants: string[];
+  max?: number;
+}) {
+  if (participants.length === 0) return null;
+
+  const visible = participants.slice(0, max);
+  const overflow = participants.length - visible.length;
+
+  return (
+    <div
+      className="flex items-center gap-2"
+      title={participants.join(", ")}
+      aria-label={`참석자 ${participants.length}명`}
+    >
+      <div className="flex -space-x-1.5">
+        {visible.map((name, index) => {
+          const person = resolveWorkspacePerson(name);
+          return (
+            <Avatar
+              key={`${name}-${index}`}
+              className="h-7 w-7 border-2 border-card"
+              style={{ zIndex: index + 1 }}
+            >
+              <AvatarFallback
+                className={cn(
+                  "text-[10px] font-semibold text-white",
+                  person.color,
+                )}
+              >
+                {person.initials}
+              </AvatarFallback>
+            </Avatar>
+          );
+        })}
+        {overflow > 0 ? (
+          <span
+            className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-surface-2 text-[10px] font-semibold text-foreground"
+            style={{ zIndex: visible.length + 1 }}
+          >
+            +{overflow}
           </span>
-        </p>
-        <ParticipantsLine participants={item.participants} className="mt-1.5" />
+        ) : null}
       </div>
-
-      <DetailArrow />
-    </button>
+      <span className="hidden text-xs font-medium text-muted sm:inline">
+        {participants.length}명
+      </span>
+    </div>
   );
 }
 
-function CompactEmptySlot({ onAdd }: { onAdd: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onAdd}
-      className={cn(
-        "flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-surface/60 px-3 text-muted transition-colors hover:border-foreground/25 hover:bg-surface-2 hover:text-foreground",
-        COMPACT_CARD_HEIGHT,
-      )}
-      aria-label="예정 회의 추가"
-    >
-      <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-      <span className="text-xs font-semibold">추가</span>
-    </button>
-  );
-}
-
-function ExpandedCard({
+/**
+ * M3 three-line list item
+ * leading: 날짜·시간 / headline: 제목 / supporting: 장소·참석 / trailing: 소요·화살표
+ */
+function UpcomingListItem({
   item,
   onOpen,
+  showPeopleDensity,
 }: {
   item: UpcomingItem;
   onOpen: (item: UpcomingItem) => void;
+  showPeopleDensity: boolean;
 }) {
-  const platform = platformOf(item);
+  const dday = formatDdayLabel(item.dateLabel);
   const place = locationCaption(item);
-  const agendaPreview = item.agenda.slice(0, 2);
-  const agendaMore = Math.max(0, item.agenda.length - agendaPreview.length);
+  const peopleVisible = showUpcomingPeople(
+    item.participants,
+    showPeopleDensity,
+  );
 
   return (
     <button
       type="button"
       onClick={() => onOpen(item)}
-      className="group flex h-full min-h-[11.5rem] w-full gap-3 rounded-2xl bg-surface p-3 text-left transition-colors hover:bg-surface-2"
+      className="group flex min-h-[5.5rem] w-full gap-3 px-3 py-3.5 text-left transition-colors hover:bg-surface/70 sm:gap-4 sm:px-4"
     >
-      {/* 좌측 날짜 앵커 (이벤트 카드 관례) */}
-      <DateRail dateLabel={item.dateLabel} />
+      {/* leadingContent */}
+      <div className="flex w-[4.25rem] shrink-0 flex-col items-start pt-0.5 sm:w-[5rem]">
+        <p className="text-[11px] font-medium leading-4 tracking-tight text-muted">
+          {item.dateLabel}
+        </p>
+        <p className="mt-1 text-[1.25rem] font-semibold leading-7 tabular-nums tracking-tight text-foreground">
+          {item.timeLabel}
+        </p>
+        {dday ? (
+          <p className="mt-1 text-[11px] font-semibold leading-4 text-primary">
+            {dday}
+          </p>
+        ) : null}
+      </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* 1줄: 제목(주) + 화살표(보조, 우측) — Material list 관례 */}
-        <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 flex-1 line-clamp-2 text-base font-semibold leading-snug text-foreground">
+      {/* headline + supporting */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <p className="min-w-0 flex-1 truncate text-base font-medium leading-6 text-foreground group-hover:text-primary">
             {item.title}
           </p>
-          <DetailArrow />
+          {/* trailingSupportingText */}
+          <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+            <span className="text-xs font-medium tabular-nums text-muted">
+              {item.duration}
+            </span>
+            <ArrowRight
+              className="h-4 w-4 text-foreground/40"
+              strokeWidth={2}
+              absoluteStrokeWidth
+              aria-hidden
+            />
+          </div>
         </div>
 
-        {/* 2줄: 시간 (날짜와 역할 분리, 동일 계층 과시 금지) */}
-        <p className="mt-1.5 flex flex-wrap items-baseline gap-x-1.5 text-sm font-semibold tabular-nums tracking-tight text-foreground">
-          <span>{item.timeLabel}</span>
-          <span className="text-xs font-medium text-muted-2">
-            {item.duration}
-          </span>
-        </p>
-
-        {/* 3줄: 장소 (아이콘+텍스트, 보조) */}
-        <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
-          <MeetingPlatformIcon platform={platform} size="sm" />
+        <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+          <MeetingPlatformIcon platform={platformOf(item)} size="sm" />
           <span className="truncate">{place}</span>
         </p>
 
+        {peopleVisible ? (
+          <div className="mt-2">
+            <ParticipantAvatars participants={item.participants} max={3} />
+          </div>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
+function UpcomingGridItem({
+  item,
+  onOpen,
+  showPeopleDensity,
+}: {
+  item: UpcomingItem;
+  onOpen: (item: UpcomingItem) => void;
+  showPeopleDensity: boolean;
+}) {
+  const dday = formatDdayLabel(item.dateLabel);
+  const place = locationCaption(item);
+  const peopleVisible = showUpcomingPeople(
+    item.participants,
+    showPeopleDensity,
+  );
+  const agendaPreview = item.agenda.slice(0, 2);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(item)}
+      className="group flex h-full min-h-[10.5rem] w-full flex-col rounded-xl bg-surface p-3.5 text-left transition-colors hover:bg-surface-2"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium text-muted">{item.dateLabel}</p>
+          <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-foreground">
+            {item.timeLabel}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {dday ? (
+            <span className="text-[11px] font-semibold text-primary">{dday}</span>
+          ) : null}
+          <span className="text-xs font-medium tabular-nums text-muted">
+            {item.duration}
+          </span>
+        </div>
+      </div>
+
+      <p className="mt-2.5 line-clamp-2 text-base font-medium leading-snug text-foreground group-hover:text-primary">
+        {item.title}
+      </p>
+
+      <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+        <MeetingPlatformIcon platform={platformOf(item)} size="sm" />
+        <span className="truncate">{place}</span>
+      </p>
+
+      {peopleVisible ? (
         <div className="mt-2.5">
           <ParticipantAvatars participants={item.participants} max={3} />
         </div>
+      ) : null}
 
-        {/* 상세 미리보기: 여백으로 구분, 추가 박스/뱃지 없음 */}
-        {agendaPreview.length > 0 ? (
-          <ul className="mt-auto space-y-0.5 pt-3">
-            {agendaPreview.map((line, index) => (
-              <li
-                key={`${item.id}-preview-${index}`}
-                className="truncate text-xs font-medium text-muted-2"
-              >
-                {line}
-              </li>
-            ))}
-            {agendaMore > 0 ? (
-              <li className="text-xs font-medium text-muted-2/80">
-                외 {agendaMore}개
-              </li>
-            ) : null}
-          </ul>
-        ) : (
-          <div className="mt-auto" />
-        )}
-      </div>
+      {agendaPreview.length > 0 ? (
+        <ul className="mt-auto space-y-0.5 pt-3">
+          {agendaPreview.map((line, index) => (
+            <li
+              key={`${item.id}-preview-${index}`}
+              className="truncate text-xs font-medium text-muted-2"
+            >
+              {line}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="mt-auto" />
+      )}
     </button>
   );
 }
@@ -327,12 +265,13 @@ export function MeetingMidPanel({
   searchQuery?: string;
 }) {
   const { workspaceId, currentUser } = useAppContext();
+  const profile = getWorkspaceProfile(workspaceId);
   const seed = useMemo(
     () => getUpcomingByWorkspace(workspaceId),
     [workspaceId],
   );
   const [items, setItems] = useState<UpcomingItem[]>(seed);
-  const [layout, setLayout] = useState<UpcomingLayout>("compact");
+  const [layout, setLayout] = useState<UpcomingLayout>("list");
   const [selected, setSelected] = useState<UpcomingItem | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailMode, setDetailMode] = useState<"view" | "create">("view");
@@ -400,10 +339,12 @@ export function MeetingMidPanel({
 
   return (
     <>
-      <section className="rounded-2xl border border-border bg-card p-4 shadow-soft">
-        <div className="mb-3 flex items-center justify-between gap-2">
+      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+        <div className="flex items-center justify-between gap-2 px-4 py-3.5">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-sm font-semibold text-foreground">예정 회의</h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              {profile.upcomingTitle}
+            </h2>
             {visibleItems.length > 0 ? (
               <span className="inline-flex min-w-7 items-center justify-center rounded-lg bg-surface px-2 py-1 text-sm font-semibold tabular-nums text-foreground">
                 {visibleItems.length}
@@ -417,7 +358,7 @@ export function MeetingMidPanel({
               variant="ghost"
               size="icon"
               className="h-8 w-8 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
-              aria-label="예정 회의 추가"
+              aria-label={profile.upcomingAddLabel}
               onClick={openCreate}
             >
               <Plus className="h-4 w-4" strokeWidth={1.75} />
@@ -425,7 +366,7 @@ export function MeetingMidPanel({
             <div
               className="flex items-center rounded-lg bg-surface p-0.5"
               role="group"
-              aria-label="예정 회의 레이아웃"
+              aria-label={`${profile.upcomingTitle} 레이아웃`}
             >
               <Button
                 type="button"
@@ -433,11 +374,11 @@ export function MeetingMidPanel({
                 size="icon"
                 className={cn(
                   "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
-                  layout === "compact" && "bg-card text-foreground shadow-soft",
+                  layout === "list" && "bg-card text-foreground shadow-soft",
                 )}
-                aria-pressed={layout === "compact"}
-                aria-label="축소 보기"
-                onClick={() => setLayoutPersist("compact")}
+                aria-pressed={layout === "list"}
+                aria-label="목록 보기"
+                onClick={() => setLayoutPersist("list")}
               >
                 <List className="h-4 w-4" strokeWidth={1.75} />
               </Button>
@@ -447,11 +388,11 @@ export function MeetingMidPanel({
                 size="icon"
                 className={cn(
                   "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
-                  layout === "expanded" && "bg-card text-foreground shadow-soft",
+                  layout === "grid" && "bg-card text-foreground shadow-soft",
                 )}
-                aria-pressed={layout === "expanded"}
-                aria-label="확장 보기"
-                onClick={() => setLayoutPersist("expanded")}
+                aria-pressed={layout === "grid"}
+                aria-label="격자 보기"
+                onClick={() => setLayoutPersist("grid")}
               >
                 <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
               </Button>
@@ -459,30 +400,12 @@ export function MeetingMidPanel({
           </div>
         </div>
 
-        {layout === "compact" ? (
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {Array.from(
-              { length: compactSlotCount(visibleItems.length) },
-              (_, index) => {
-                const item = visibleItems[index];
-                return (
-                  <li key={item?.id ?? `compact-slot-${index}`}>
-                    {item ? (
-                      <CompactCard item={item} onOpen={openDetail} />
-                    ) : (
-                      <CompactEmptySlot onAdd={openCreate} />
-                    )}
-                  </li>
-                );
-              },
-            )}
-          </ul>
-        ) : visibleItems.length === 0 ? (
-          <div className="rounded-xl bg-surface px-3 py-6 text-center">
+        {visibleItems.length === 0 ? (
+          <div className="border-t border-border px-4 py-8 text-center">
             <p className="text-sm text-muted">
               {searchQuery.trim()
                 ? "검색 결과가 없습니다."
-                : "예정된 회의가 없습니다."}
+                : profile.upcomingEmpty}
             </p>
             {!searchQuery.trim() ? (
               <Button
@@ -493,21 +416,47 @@ export function MeetingMidPanel({
                 onClick={openCreate}
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} />
-                예정 회의 추가
+                {profile.upcomingAddLabel}
               </Button>
             ) : null}
           </div>
+        ) : layout === "list" ? (
+          <ul className="divide-y divide-border border-t border-border">
+            {visibleItems.map((item) => (
+              <li key={item.id}>
+                <UpcomingListItem
+                  item={item}
+                  onOpen={openDetail}
+                  showPeopleDensity={profile.showPeopleDensity}
+                />
+              </li>
+            ))}
+            <li>
+              <button
+                type="button"
+                onClick={openCreate}
+                className="flex w-full cursor-pointer items-center justify-center gap-1.5 px-4 py-3.5 text-sm font-medium text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
+                aria-label={profile.upcomingAddLabel}
+              >
+                <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                {profile.upcomingAddLabel}
+              </button>
+            </li>
+          </ul>
         ) : (
           <ul
             className={cn(
-              "grid auto-rows-fr gap-3 sm:grid-cols-2",
-              // 3열(최대 6칸 느낌)은 5개 이상일 때만
-              visibleItems.length >= COMPACT_WIDE_MIN && "xl:grid-cols-3",
+              "grid gap-3 border-t border-border p-4 sm:grid-cols-2",
+              visibleItems.length >= 5 && "xl:grid-cols-3",
             )}
           >
             {visibleItems.map((item) => (
               <li key={item.id} className="min-h-0">
-                <ExpandedCard item={item} onOpen={openDetail} />
+                <UpcomingGridItem
+                  item={item}
+                  onOpen={openDetail}
+                  showPeopleDensity={profile.showPeopleDensity}
+                />
               </li>
             ))}
           </ul>

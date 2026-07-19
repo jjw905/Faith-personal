@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Container } from "@/components/marketing/container";
+import { buildSupportMailto } from "@/lib/support-email";
 
 type FooterLink = { label: string; href: string };
 
@@ -17,7 +18,14 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     title: "회사",
     links: [
       { label: "소개", href: "/" },
-      { label: "문의", href: "mailto:hello@faith.example" },
+      {
+        label: "문의",
+        href: buildSupportMailto({
+          subject: "Faith 문의",
+          body: "안녕하세요,\n\n문의 내용:\n\n",
+          os: "other",
+        }),
+      },
     ],
   },
   {

@@ -4,14 +4,16 @@ import { Search, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/** 대시보드 제목 옆 — 회의·참석자 간단 검색. */
+/** 대시보드 제목 옆 — 회의 간단 검색. */
 export function MeetingSearch({
   value,
   onChange,
+  placeholder = "회의 검색",
   className,
 }: {
   value: string;
   onChange: (value: string) => void;
+  placeholder?: string;
   className?: string;
 }) {
   return (
@@ -31,7 +33,7 @@ export function MeetingSearch({
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="회의·참석자 검색"
+        placeholder={placeholder}
         className="min-w-0 flex-1 bg-transparent px-2.5 text-sm font-medium text-foreground outline-none placeholder:text-foreground/45 [&::-webkit-search-cancel-button]:hidden"
         autoComplete="off"
         enterKeyHint="search"
