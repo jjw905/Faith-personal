@@ -558,21 +558,18 @@ export function RecentMeetingsTable({
 
   return (
     <Card>
-      {/* CardHeader의 flex-col과 충돌하지 않도록 헤더를 직접 구성 */}
       <div className="px-4 py-4 sm:px-6">
-        {/* 모바일·축소: 제목 / (날짜 + 주월년·최신순 한 줄) */}
+        {/* 모바일·축소: 제목+필터 한 줄(우끝), 날짜는 아래 가운데 */}
         <div className="flex flex-col gap-3 xl:hidden">
-          {titleBlock}
-          <div className="flex w-full min-w-0 items-center gap-1.5">
-            <div className="min-w-0 flex-1">
-              <PeriodDateNav
-                unit={periodUnit}
-                anchor={periodAnchor}
-                onAnchorChange={setPeriodAnchor}
-              />
-            </div>
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="min-w-0">{titleBlock}</div>
             <div className="shrink-0">{periodFilters}</div>
           </div>
+          <PeriodDateNav
+            unit={periodUnit}
+            anchor={periodAnchor}
+            onAnchorChange={setPeriodAnchor}
+          />
         </div>
 
         {/* 넓은 PC: 좌 제목 · 중 날짜 · 우 필터 */}
@@ -595,153 +592,217 @@ export function RecentMeetingsTable({
             이 기간에 해당하는 회의 기록이 없습니다.
           </p>
         ) : (
-          <div className="overflow-x-auto px-2 sm:px-3">
-            <Table className="w-full min-w-[40rem] table-fixed border-separate border-spacing-0 xl:min-w-0">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead
-                    className={cn(
-                      headCellClass,
-                      col.title,
-                      "border-t border-b border-r border-border first:rounded-tl-lg",
-                    )}
-                  >
-                    회의 제목
-                  </TableHead>
-                  <TableHead
-                    className={cn(
-                      headCellClass,
-                      col.date,
-                      "border-t border-b border-r border-border",
-                    )}
-                  >
-                    날짜 및 시간
-                  </TableHead>
-                  <TableHead
-                    className={cn(
-                      headCellClass,
-                      col.participants,
-                      "border-t border-b border-r border-border",
-                    )}
-                  >
-                    참석자
-                  </TableHead>
-                  <TableHead
-                    className={cn(
-                      headCellClass,
-                      col.summary,
-                      "border-t border-b border-r border-border",
-                    )}
-                  >
-                    AI 요약
-                  </TableHead>
-                  <TableHead
-                    className={cn(
-                      headCellClass,
-                      col.duration,
-                      "border-t border-b border-border last:rounded-tr-lg",
-                    )}
-                  >
-                    소요 시간
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorted.map((meeting, index) => {
-                  const isLast = index === sorted.length - 1;
-                  return (
-                    <TableRow
-                      key={meeting.id}
-                      className="border-0 hover:bg-surface/50"
+          <>
+            {/* 좁은 화면: 카드 리스트 (가로 스크롤 없음) */}
+            <ul className="space-y-2 px-4 xl:hidden sm:px-6">
+              {sorted.map((meeting) => (
+                <li key={meeting.id}>
+                  <MeetingRecordMobileCard meeting={meeting} />
+                </li>
+              ))}
+            </ul>
+
+            {/* 넓은 PC: 테이블 */}
+            <div className="hidden px-2 sm:px-3 xl:block">
+              <Table className="w-full table-fixed border-separate border-spacing-0">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead
+                      className={cn(
+                        headCellClass,
+                        col.title,
+                        "border-t border-b border-r border-border first:rounded-tl-lg",
+                      )}
                     >
-                      <TableCell
-                        className={cn(
-                          bodyCellClass,
-                          col.title,
-                          "border-r border-border",
-                          !isLast && "border-b",
-                          isLast && "rounded-bl-lg",
-                        )}
+                      회의 제목
+                    </TableHead>
+                    <TableHead
+                      className={cn(
+                        headCellClass,
+                        col.date,
+                        "border-t border-b border-r border-border",
+                      )}
+                    >
+                      날짜 및 시간
+                    </TableHead>
+                    <TableHead
+                      className={cn(
+                        headCellClass,
+                        col.participants,
+                        "border-t border-b border-r border-border",
+                      )}
+                    >
+                      참석자
+                    </TableHead>
+                    <TableHead
+                      className={cn(
+                        headCellClass,
+                        col.summary,
+                        "border-t border-b border-r border-border",
+                      )}
+                    >
+                      AI 요약
+                    </TableHead>
+                    <TableHead
+                      className={cn(
+                        headCellClass,
+                        col.duration,
+                        "border-t border-b border-border last:rounded-tr-lg",
+                      )}
+                    >
+                      소요 시간
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sorted.map((meeting, index) => {
+                    const isLast = index === sorted.length - 1;
+                    return (
+                      <TableRow
+                        key={meeting.id}
+                        className="border-0 hover:bg-surface/50"
                       >
-                        <div className="flex min-w-0 items-start gap-1.5">
-                          <Link
-                            href={`/meetings/${meeting.id}`}
-                            className="group min-w-0 flex-1"
-                            title={meeting.title}
-                          >
-                            <p className="truncate font-medium text-foreground group-hover:text-primary">
-                              {meeting.title}
-                            </p>
-                            <MeetingTags tags={meeting.tags} />
-                          </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="mt-0.5 h-6 w-6 shrink-0 text-muted hover:text-foreground"
-                            type="button"
-                            aria-label={`${meeting.title} 내보내기`}
-                            title="내보내기"
-                            onClick={(e) => e.preventDefault()}
-                          >
-                            <Download
-                              className="h-3.5 w-3.5"
-                              strokeWidth={1.75}
-                            />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          bodyCellClass,
-                          col.date,
-                          "border-r border-border",
-                          !isLast && "border-b",
-                        )}
-                      >
-                        <DateTimeCell date={meeting.date} />
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          bodyCellClass,
-                          col.participants,
-                          "border-r border-border",
-                          !isLast && "border-b",
-                        )}
-                      >
-                        <ParticipantsCell
-                          participants={meeting.participants}
-                        />
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          bodyCellClass,
-                          col.summary,
-                          "border-r border-border",
-                          !isLast && "border-b",
-                        )}
-                      >
-                        <MeetingSummary meeting={meeting} />
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          bodyCellClass,
-                          col.duration,
-                          !isLast && "border-b",
-                          isLast && "rounded-br-lg",
-                        )}
-                      >
-                        <span className="inline-flex items-center whitespace-nowrap rounded-lg bg-surface px-2 py-1 text-xs font-semibold tabular-nums text-foreground">
-                          {meeting.duration}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                        <TableCell
+                          className={cn(
+                            bodyCellClass,
+                            col.title,
+                            "border-r border-border",
+                            !isLast && "border-b",
+                            isLast && "rounded-bl-lg",
+                          )}
+                        >
+                          <div className="flex min-w-0 items-start gap-1.5">
+                            <Link
+                              href={`/meetings/${meeting.id}`}
+                              className="group min-w-0 flex-1"
+                              title={meeting.title}
+                            >
+                              <p className="truncate font-medium text-foreground group-hover:text-primary">
+                                {meeting.title}
+                              </p>
+                              <MeetingTags tags={meeting.tags} />
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="mt-0.5 h-6 w-6 shrink-0 text-muted hover:text-foreground"
+                              type="button"
+                              aria-label={`${meeting.title} 내보내기`}
+                              title="내보내기"
+                              onClick={(e) => e.preventDefault()}
+                            >
+                              <Download
+                                className="h-3.5 w-3.5"
+                                strokeWidth={1.75}
+                              />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            bodyCellClass,
+                            col.date,
+                            "border-r border-border",
+                            !isLast && "border-b",
+                          )}
+                        >
+                          <DateTimeCell date={meeting.date} />
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            bodyCellClass,
+                            col.participants,
+                            "border-r border-border",
+                            !isLast && "border-b",
+                          )}
+                        >
+                          <ParticipantsCell
+                            participants={meeting.participants}
+                          />
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            bodyCellClass,
+                            col.summary,
+                            "border-r border-border",
+                            !isLast && "border-b",
+                          )}
+                        >
+                          <MeetingSummary meeting={meeting} />
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            bodyCellClass,
+                            col.duration,
+                            !isLast && "border-b",
+                            isLast && "rounded-br-lg",
+                          )}
+                        >
+                          <span className="inline-flex items-center whitespace-nowrap rounded-lg bg-surface px-2 py-1 text-xs font-semibold tabular-nums text-foreground">
+                            {meeting.duration}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function MeetingRecordMobileCard({ meeting }: { meeting: Meeting }) {
+  const { day, time } = formatSeoulDateParts(meeting.date);
+  const recent = formatRecentDaysLabel(meeting.date);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card px-3.5 py-3">
+      <div className="flex min-w-0 items-start gap-2">
+        <Link
+          href={`/meetings/${meeting.id}`}
+          className="group min-w-0 flex-1"
+          title={meeting.title}
+        >
+          <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
+            {meeting.title}
+          </p>
+          <MeetingTags tags={meeting.tags} />
+        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 text-muted hover:text-foreground"
+          type="button"
+          aria-label={`${meeting.title} 내보내기`}
+          title="내보내기"
+          onClick={(e) => e.preventDefault()}
+        >
+          <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+        </Button>
+      </div>
+
+      <div className="mt-2.5 flex min-w-0 items-center justify-between gap-3">
+        <div className="min-w-0 leading-snug">
+          <p className="truncate text-xs font-medium text-foreground">
+            {day} {time}
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted">
+            {meeting.duration}
+            {recent ? ` · ${recent}` : ""}
+          </p>
+        </div>
+        <div className="shrink-0">
+          <ParticipantsCell participants={meeting.participants} />
+        </div>
+      </div>
+
+      <div className="mt-2.5 min-w-0">
+        <MeetingSummary meeting={meeting} />
+      </div>
+    </div>
   );
 }
