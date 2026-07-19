@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -534,39 +534,60 @@ export function RecentMeetingsTable({
     [filtered, sortKey],
   );
 
+  const periodFilters = (
+    <div className="inline-flex flex-nowrap items-center gap-1 sm:gap-1.5">
+      <PeriodUnitControl
+        unit={periodUnit}
+        onUnitChange={(unit) => {
+          setPeriodUnit(unit);
+          setPeriodAnchor(new Date());
+        }}
+      />
+      <SortControl value={sortKey} onChange={setSortKey} />
+    </div>
+  );
+
+  const titleBlock = (
+    <div className="flex min-w-0 items-center gap-2">
+      <CardTitle>회의 기록</CardTitle>
+      <span className="inline-flex min-w-7 items-center justify-center rounded-lg bg-surface px-2 py-1 text-sm font-semibold tabular-nums text-foreground">
+        {sorted.length}
+      </span>
+    </div>
+  );
+
   return (
     <Card>
-      <CardHeader className="relative grid grid-cols-1 items-center gap-3 space-y-0 px-4 py-4 sm:px-6 xl:grid-cols-[1fr_auto_1fr]">
-        <div className="flex min-w-0 items-center gap-2 xl:justify-self-start">
-          <CardTitle>회의 기록</CardTitle>
-          <span className="inline-flex min-w-7 items-center justify-center rounded-lg bg-surface px-2 py-1 text-sm font-semibold tabular-nums text-foreground">
-            {sorted.length}
-          </span>
+      {/* CardHeader의 flex-col과 충돌하지 않도록 헤더를 직접 구성 */}
+      <div className="px-4 py-4 sm:px-6">
+        {/* 모바일·축소: 제목 / (날짜 + 주월년·최신순 한 줄) */}
+        <div className="flex flex-col gap-3 xl:hidden">
+          {titleBlock}
+          <div className="flex w-full min-w-0 items-center gap-1.5">
+            <div className="min-w-0 flex-1">
+              <PeriodDateNav
+                unit={periodUnit}
+                anchor={periodAnchor}
+                onAnchorChange={setPeriodAnchor}
+              />
+            </div>
+            <div className="shrink-0">{periodFilters}</div>
+          </div>
         </div>
 
-        {/* 좁은 화면: 날짜 + 주/월/년·최신순 한 줄, xl+: 그리드 좌·중·우 */}
-        <div className="flex w-full min-w-0 items-center gap-2 xl:contents">
-          <div className="min-w-0 flex-1 xl:justify-self-center xl:flex-none">
+        {/* 넓은 PC: 좌 제목 · 중 날짜 · 우 필터 */}
+        <div className="hidden items-center gap-3 xl:grid xl:grid-cols-[1fr_auto_1fr]">
+          <div className="justify-self-start">{titleBlock}</div>
+          <div className="justify-self-center">
             <PeriodDateNav
               unit={periodUnit}
               anchor={periodAnchor}
               onAnchorChange={setPeriodAnchor}
             />
           </div>
-          <div className="shrink-0 xl:justify-self-end">
-            <div className="inline-flex flex-nowrap items-center gap-1 sm:gap-1.5">
-              <PeriodUnitControl
-                unit={periodUnit}
-                onUnitChange={(unit) => {
-                  setPeriodUnit(unit);
-                  setPeriodAnchor(new Date());
-                }}
-              />
-              <SortControl value={sortKey} onChange={setSortKey} />
-            </div>
-          </div>
+          <div className="justify-self-end">{periodFilters}</div>
         </div>
-      </CardHeader>
+      </div>
 
       <CardContent className="px-0 pb-4 pt-0">
         {sorted.length === 0 ? (
