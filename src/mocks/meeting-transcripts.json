@@ -1,0 +1,304 @@
+{
+  "transcripts": {
+    "mtg-001": {
+      "meetingId": "mtg-001",
+      "lines": [
+        {
+          "id": "l1",
+          "time": "00:18",
+          "speaker": "김철수",
+          "segmentId": "s1",
+          "text": "안녕하세요. Q3 보안 정책 검토 시작하겠습니다. 오늘은 범위, 마스킹 강화, 배포 일정 세 가지를 다루겠습니다."
+        },
+        {
+          "id": "l2",
+          "time": "01:40",
+          "speaker": "이영희",
+          "segmentId": "s1",
+          "text": "네, 안건 순서 동의합니다. 마스킹 규칙부터 깊게 보는 게 좋을 것 같아요."
+        },
+        {
+          "id": "l3",
+          "time": "03:05",
+          "speaker": "김철수",
+          "segmentId": "s1",
+          "text": "좋습니다. 개인정보 마스킹 강화안을 핵심으로 두고, 배포는 이번 분기 내로 맞추죠."
+        },
+        {
+          "id": "l4",
+          "time": "08:35",
+          "speaker": "이영희",
+          "segmentId": "s2",
+          "text": "현재 규칙이 전화·이메일·계좌는 잘 잡는데, 구어체 변형이 빠져 있어요. 예를 들어 공일공으로 읽는 번호요."
+        },
+        {
+          "id": "l5",
+          "time": "10:12",
+          "speaker": "박민수",
+          "segmentId": "s2",
+          "text": "맞아요. 테스트할 때 010-2847-3916 같은 것도 끊어 말하면 놓치는 경우가 있었습니다."
+        },
+        {
+          "id": "l6",
+          "time": "14:50",
+          "speaker": "이영희",
+          "segmentId": "s2",
+          "text": "NER 보조 모델을 붙이면 이름·주소 후보를 더 안정적으로 잡을 수 있을 것 같습니다. 샘플 오디오 올려둘게요."
+        },
+        {
+          "id": "l6b",
+          "time": "15:05",
+          "speaker": "이영희",
+          "segmentId": "s2",
+          "text": "",
+          "attachment": {
+            "name": "meeting-cafe-noise30.wav",
+            "sizeLabel": "1.2 MB",
+            "kind": "audio"
+          }
+        },
+        {
+          "id": "l7",
+          "time": "18:22",
+          "speaker": "최지원",
+          "segmentId": "s2",
+          "text": "외부 검수 쪽에서는 seoyeon.lee@partner.co.kr 로 샘플을 받아 보고 있어요. 예외 케이스가 꽤 있습니다."
+        },
+        {
+          "id": "l7b",
+          "time": "19:10",
+          "speaker": "최지원",
+          "segmentId": "s2",
+          "text": "검수 체크리스트도 같이 공유합니다.",
+          "attachment": {
+            "name": "마스킹-검수-체크리스트.pdf",
+            "sizeLabel": "248 KB",
+            "kind": "pdf"
+          }
+        },
+        {
+          "id": "l7c",
+          "time": "20:40",
+          "speaker": "박민수",
+          "segmentId": "s2",
+          "text": "예외 케이스 표도 올려둘게요.",
+          "attachment": {
+            "name": "마스킹-예외-케이스.xlsx",
+            "sizeLabel": "86 KB",
+            "kind": "sheet"
+          }
+        },
+        {
+          "id": "l7d",
+          "time": "21:15",
+          "speaker": "최지원",
+          "segmentId": "s2",
+          "text": "",
+          "attachment": {
+            "name": "검수화면-캡처.png",
+            "sizeLabel": "420 KB",
+            "kind": "image"
+          }
+        },
+        {
+          "id": "l8",
+          "time": "24:10",
+          "speaker": "박민수",
+          "segmentId": "s2",
+          "text": "계좌도 국민은행 123456-12-123456 형태가 문장 중간에 끼면 분절이 깨지더라고요."
+        },
+        {
+          "id": "l9",
+          "time": "32:40",
+          "speaker": "김철수",
+          "segmentId": "s3",
+          "text": "정리하면, 자동 마스킹을 기본으로 적용하고 미확정 후보는 검수 큐로 보내겠습니다."
+        },
+        {
+          "id": "l10",
+          "time": "36:05",
+          "speaker": "최지원",
+          "segmentId": "s3",
+          "text": "동의합니다. 검수 큐 SLA는 영업일 기준 하루로 두면 배포 일정에도 맞을 것 같아요."
+        },
+        {
+          "id": "l11",
+          "time": "41:30",
+          "speaker": "김철수",
+          "segmentId": "s3",
+          "text": "좋습니다. 마스킹 기본 적용과 검수 큐 분리를 결정사항으로 확정합니다."
+        },
+        {
+          "id": "l12",
+          "time": "49:15",
+          "speaker": "박민수",
+          "segmentId": "s4",
+          "text": "리스크로는 외부 미팅 노이즈예요. 카페 환경에서 STT 정확도가 눈에 띄게 떨어집니다."
+        },
+        {
+          "id": "l13",
+          "time": "54:40",
+          "speaker": "이영희",
+          "segmentId": "s4",
+          "text": "노이즈 30% 샘플로 재검증하는 게 좋겠어요. 실패 케이스는 규칙 쪽에 바로 반영하죠."
+        },
+        {
+          "id": "l14",
+          "time": "01:02:10",
+          "speaker": "박민수",
+          "segmentId": "s4",
+          "text": "주소도 서울특별시 강남구 테헤란로 123 처럼 긴 표현이 끊기면 마스킹이 반만 되는 경우가 있었습니다."
+        },
+        {
+          "id": "l15",
+          "time": "01:06:20",
+          "speaker": "이영희",
+          "segmentId": "s5",
+          "text": "후속은 제가 마스킹 규칙 PR을 올리겠습니다. 목표 마감은 다음 주 월요일입니다."
+        },
+        {
+          "id": "l15b",
+          "time": "01:07:00",
+          "speaker": "이영희",
+          "segmentId": "s5",
+          "text": "",
+          "attachment": {
+            "name": "masking-rules-draft.md",
+            "sizeLabel": "36 KB",
+            "kind": "doc"
+          }
+        },
+        {
+          "id": "l15c",
+          "time": "01:08:20",
+          "speaker": "김철수",
+          "segmentId": "s5",
+          "text": "배포 브리핑 슬라이드도 공유합니다.",
+          "attachment": {
+            "name": "Q3-배포-브리핑.pptx",
+            "sizeLabel": "3.4 MB",
+            "kind": "slide"
+          }
+        },
+        {
+          "id": "l15d",
+          "time": "01:09:05",
+          "speaker": "박민수",
+          "segmentId": "s5",
+          "text": "",
+          "attachment": {
+            "name": "noise-samples.zip",
+            "sizeLabel": "12 MB",
+            "kind": "archive"
+          }
+        },
+        {
+          "id": "l15e",
+          "time": "01:09:40",
+          "speaker": "이영희",
+          "segmentId": "s5",
+          "text": "규칙 샘플 JSON도 같이 둡니다.",
+          "attachment": {
+            "name": "masking-rules.sample.json",
+            "sizeLabel": "12 KB",
+            "kind": "code"
+          }
+        },
+        {
+          "id": "l16",
+          "time": "01:10:05",
+          "speaker": "최지원",
+          "segmentId": "s5",
+          "text": "저는 배포 체크리스트 정리할게요. 통합 테스트 일정은 월요일 오후로 잡아 두겠습니다."
+        },
+        {
+          "id": "l17",
+          "time": "01:16:40",
+          "speaker": "김철수",
+          "segmentId": "s5",
+          "text": "감사합니다. 액션 아이템과 일정 공유된 걸로 회의 마무리하겠습니다."
+        }
+      ]
+    },
+    "mtg-002": {
+      "meetingId": "mtg-002",
+      "lines": [
+        {
+          "id": "p1",
+          "time": "00:20",
+          "speaker": "김철수",
+          "segmentId": "d1",
+          "text": "마스킹 규칙 혼자 점검 시작합니다. 예외 케이스부터 볼게요."
+        },
+        {
+          "id": "p2",
+          "time": "08:10",
+          "speaker": "김철수",
+          "segmentId": "d2",
+          "text": "짧은 이름과 지역번호 조합이 애매합니다. 02-345-6789 형태를 한 번 더 확인해야겠어요."
+        },
+        {
+          "id": "p3",
+          "time": "22:40",
+          "speaker": "김철수",
+          "segmentId": "d3",
+          "text": "예외 목록을 문서로 남기고, 규칙 PR에 케이스를 추가하겠습니다."
+        },
+        {
+          "id": "p4",
+          "time": "38:15",
+          "speaker": "김철수",
+          "segmentId": "d4",
+          "text": "오늘은 여기까지. 다음엔 NER 보조 옵션이랑 같이 보겠습니다."
+        }
+      ]
+    },
+    "default": {
+      "meetingId": "default",
+      "lines": [
+        {
+          "id": "d1",
+          "time": "00:40",
+          "speaker": "진행자",
+          "segmentId": "d1",
+          "text": "오늘 회의 목적과 핵심 안건을 먼저 공유하겠습니다."
+        },
+        {
+          "id": "d2",
+          "time": "06:20",
+          "speaker": "참석자",
+          "segmentId": "d2",
+          "text": "이슈별로 의견이 갈리는데, 우선순위부터 맞춰보면 좋겠습니다."
+        },
+        {
+          "id": "d3",
+          "time": "18:05",
+          "speaker": "참석자",
+          "segmentId": "d2",
+          "text": "대안 A가 일정에 더 현실적입니다. 리스크도 상대적으로 낮아요."
+        },
+        {
+          "id": "d4",
+          "time": "27:30",
+          "speaker": "진행자",
+          "segmentId": "d3",
+          "text": "우선순위와 진행 방향을 합의합니다. 오늘은 A안으로 가겠습니다."
+        },
+        {
+          "id": "d5",
+          "time": "36:50",
+          "speaker": "참석자",
+          "segmentId": "d4",
+          "text": "후속 조치 담당자와 마감일을 메모에 남겨 두겠습니다."
+        },
+        {
+          "id": "d6",
+          "time": "42:10",
+          "speaker": "진행자",
+          "segmentId": "d4",
+          "text": "액션 아이템 공유된 걸로 회의를 마무리합니다. 감사합니다."
+        }
+      ]
+    }
+  }
+}

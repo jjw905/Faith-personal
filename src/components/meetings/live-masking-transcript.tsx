@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 
+import { MaskedText } from "@/components/meetings/masked-text";
+import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { useHybridMask } from "@/hooks/use-hybrid-mask";
 import { useLiveTranscript } from "@/hooks/use-live-transcript";
 import { maskPii, type MaskStyle, type PiiMatch } from "@/lib/masking";
@@ -16,103 +18,6 @@ type ChatLine = {
   masked: string;
   matches: PiiMatch[];
 };
-
-// 마스킹 토큰 키 — 같은 문장 안 개별 매치 구분
-function matchKey(m: PiiMatch) {
-  return `${m.start}:${m.end}:${m.type}`;
-}
-
-/** 마스킹 칩 클릭 시 해당 항목만 원문으로 토글. */
-function MaskedText({
-  original,
-  matches,
-}: {
-  original: string;
-  matches: PiiMatch[];
-}) {
-  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
-
-  // 원문이 바뀌면 공개 상태 초기화
-  useEffect(() => {
-    setRevealed(new Set());
-  }, [original]);
-
-  const segments = useMemo(() => {
-    if (!original) return [];
-    if (!matches.length) {
-      return [{ kind: "text" as const, text: original, key: "all" }];
-    }
-    const sorted = [...matches].sort((a, b) => a.start - b.start);
-    const out: Array<
-      | { kind: "text"; text: string; key: string }
-      | { kind: "mask"; match: PiiMatch; key: string }
-    > = [];
-    let cursor = 0;
-    for (const m of sorted) {
-      const start = Math.max(0, Math.min(m.start, original.length));
-      const end = Math.max(start, Math.min(m.end, original.length));
-      if (start > cursor) {
-        out.push({
-          kind: "text",
-          text: original.slice(cursor, start),
-          key: `t-${cursor}`,
-        });
-      }
-      out.push({ kind: "mask", match: m, key: matchKey(m) });
-      cursor = end;
-    }
-    if (cursor < original.length) {
-      out.push({
-        kind: "text",
-        text: original.slice(cursor),
-        key: `t-${cursor}`,
-      });
-    }
-    return out;
-  }, [original, matches]);
-
-  const toggle = useCallback((key: string) => {
-    setRevealed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
-
-  if (!original) return null;
-
-  return (
-    <>
-      {segments.map((seg) => {
-        if (seg.kind === "text") {
-          return <span key={seg.key}>{seg.text}</span>;
-        }
-        const open = revealed.has(seg.key);
-        return (
-          <button
-            key={seg.key}
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggle(seg.key);
-            }}
-            title={open ? "다시 가리기" : "클릭하여 원문 보기"}
-            className={cn(
-              "mx-0.5 inline-block rounded-md px-1.5 font-mono text-[0.85em] font-semibold transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              open
-                ? "bg-success-soft text-success underline decoration-dotted underline-offset-2"
-                : "animate-[mask-chip-in_220ms_ease-out] cursor-pointer bg-masked-soft text-masked hover:brightness-95",
-            )}
-          >
-            {open ? seg.match.value : seg.match.replacement}
-          </button>
-        );
-      })}
-    </>
-  );
-}
 
 /** 카드형 표면 — 선 대신 소프트 섀도우로 요소를 분리. */
 function Panel({
@@ -292,18 +197,16 @@ export function LiveMaskingTranscript() {
         </Panel>
 
         <Panel className="flex h-[560px] min-h-[560px] flex-col overflow-hidden">
-          {/* 채팅 상단: 마스킹 슬라이드 */}
-          <div className="space-y-3 border-b border-border px-5 pb-3 pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-foreground">
-                마스킹 결과
-              </h2>
+          <div className="flex items-center justify-between gap-3 border-b border-border px-5 pb-3 pt-4">
+            <h2 className="text-sm font-semibold text-foreground">
+              마스킹 결과
+            </h2>
+            <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-muted">
                 탐지 {detectionCount}건
               </span>
+              <MaskStylePopup value={maskStyle} onChange={setMaskStyle} />
             </div>
-
-            <MaskStyleSlide value={maskStyle} onChange={setMaskStyle} />
           </div>
 
           <div className="relative mt-3 flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -435,52 +338,6 @@ export function LiveMaskingTranscript() {
           </div>
         </Panel>
       </div>
-    </div>
-  );
-}
-
-/** MD3 세그먼트 슬라이드 — 부분 마스킹 / 유형 토큰 */
-function MaskStyleSlide({
-  value,
-  onChange,
-}: {
-  value: MaskStyle;
-  onChange: (next: MaskStyle) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="마스킹 표기 방식"
-      className="grid grid-cols-2 gap-0.5 rounded-xl bg-card p-0.5 shadow-soft"
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={value === "partial"}
-        onClick={() => onChange("partial")}
-        className={cn(
-          "flex w-full items-center justify-center rounded-[10px] px-[5px] py-[5px] text-center text-xs font-semibold leading-snug transition-colors",
-          value === "partial"
-            ? "bg-primary text-primary-foreground"
-            : "bg-transparent text-muted hover:text-foreground",
-        )}
-      >
-        부분 마스킹, 2049420****
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={value === "label"}
-        onClick={() => onChange("label")}
-        className={cn(
-          "flex w-full items-center justify-center rounded-[10px] px-[5px] py-[5px] text-center text-xs font-semibold leading-snug transition-colors",
-          value === "label"
-            ? "bg-primary text-primary-foreground"
-            : "bg-transparent text-muted hover:text-foreground",
-        )}
-      >
-        유형 토큰, [비밀키]
-      </button>
     </div>
   );
 }

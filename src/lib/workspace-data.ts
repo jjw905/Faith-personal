@@ -167,7 +167,7 @@ const PROCESSING: ProcessItem[] = [
     id: "pr-1",
     title: "Q3 보안 정책 검토.wav",
     status: "masking",
-    detail: "개인정보 후보 8건 검수 중",
+    detail: "안건, 개인정보 후보 검수",
     time: "방금",
     href: "/meetings/mtg-001",
     workspace: "team",
@@ -176,7 +176,7 @@ const PROCESSING: ProcessItem[] = [
     id: "pr-2",
     title: "RBAC 개편 회의 녹음",
     status: "transcribing",
-    detail: "음성 → 텍스트 변환 62%",
+    detail: "논의 구간 받아쓰기 62%",
     time: "3분 전",
     href: "/meetings/mtg-003",
     workspace: "team",
@@ -185,7 +185,7 @@ const PROCESSING: ProcessItem[] = [
     id: "pr-3",
     title: "발표 연습 녹음",
     status: "masking",
-    detail: "개인정보 후보 2건 검수 중",
+    detail: "피드백, 개인정보 후보 검수",
     time: "방금",
     href: "/meetings/mtg-006",
     workspace: "personal",
@@ -194,7 +194,7 @@ const PROCESSING: ProcessItem[] = [
     id: "pr-4",
     title: "마스킹 규칙 혼자 점검",
     status: "done",
-    detail: "마스킹, 요약 완료",
+    detail: "논의, 미결, 예외",
     time: "오늘 11:20",
     href: "/meetings/mtg-002",
     workspace: "personal",
@@ -203,12 +203,57 @@ const PROCESSING: ProcessItem[] = [
     id: "pr-5",
     title: "주간 팀 스탠드업",
     status: "done",
-    detail: "팀 공유 완료",
+    detail: "블로커, 후속, 일정",
     time: "어제",
     href: "/meetings/mtg-004",
     workspace: "team",
   },
 ];
+
+/** 예정 회의 참석자/주최 빠른 선택용 디렉터리 (목 데이터). */
+export type WorkspacePerson = {
+  name: string;
+  initials: string;
+  color: string;
+};
+
+export const WORKSPACE_PEOPLE: WorkspacePerson[] = [
+  { name: "김보안", initials: "김", color: "bg-teal-600" },
+  { name: "이정책", initials: "이", color: "bg-violet-600" },
+  { name: "박감사", initials: "박", color: "bg-sky-600" },
+  { name: "최개발", initials: "최", color: "bg-amber-600" },
+  { name: "정운영", initials: "정", color: "bg-rose-600" },
+  { name: "한기획", initials: "한", color: "bg-indigo-600" },
+  { name: "나", initials: "나", color: "bg-slate-600" },
+];
+
+/** 오프라인/기타 장소 빠른 선택. */
+export const PLACE_PRESETS = [
+  "본사 3층 미팅룸 B",
+  "본사 2층 대회의실",
+  "모바일 녹음",
+] as const;
+
+export function resolveWorkspacePerson(name: string): WorkspacePerson {
+  const found = WORKSPACE_PEOPLE.find((p) => p.name === name);
+  if (found) return found;
+  const initials = name.trim().slice(0, 1) || "?";
+  const palette = [
+    "bg-teal-600",
+    "bg-violet-600",
+    "bg-sky-600",
+    "bg-amber-600",
+    "bg-rose-600",
+    "bg-indigo-600",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash + name.charCodeAt(i)) % palette.length;
+  return {
+    name,
+    initials,
+    color: palette[hash] ?? "bg-slate-600",
+  };
+}
 
 export function getUpcomingByWorkspace(workspaceId: WorkspaceId): UpcomingItem[] {
   return UPCOMING.filter((item) => item.workspace === workspaceId);

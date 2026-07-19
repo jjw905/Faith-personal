@@ -1,5 +1,6 @@
 import meetingsData from "@/mocks/meetings.json";
 import meetingTimelinesData from "@/mocks/meeting-timelines.json";
+import meetingTranscriptsData from "@/mocks/meeting-transcripts.json";
 import notificationsData from "@/mocks/notifications.json";
 import securityMetricsData from "@/mocks/security-metrics.json";
 import { resolveDateFromDaysAgo } from "@/lib/meeting-date";
@@ -7,6 +8,7 @@ import type { SecurityMetricsData } from "@/types/dashboard";
 import type { Meeting } from "@/types/meeting";
 import type { AppNotification } from "@/types/notification";
 import type { MeetingTimeline } from "@/types/timeline";
+import type { MeetingTranscript } from "@/types/transcript";
 import type { WorkspaceId } from "@/lib/workspaces";
 
 type MeetingMock = Omit<Meeting, "date"> & {
@@ -54,6 +56,15 @@ export function getNotifications(): AppNotification[] {
 
 export function getMeetingTimeline(meetingId: string): MeetingTimeline {
   const map = meetingTimelinesData.timelines as Record<string, MeetingTimeline>;
+  const found = map[meetingId] ?? map.default;
+  return { ...found, meetingId };
+}
+
+export function getMeetingTranscript(meetingId: string): MeetingTranscript {
+  const map = meetingTranscriptsData.transcripts as Record<
+    string,
+    MeetingTranscript
+  >;
   const found = map[meetingId] ?? map.default;
   return { ...found, meetingId };
 }

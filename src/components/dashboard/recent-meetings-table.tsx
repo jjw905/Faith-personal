@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { GroupedParticipantsList } from "@/components/meetings/meeting-participants";
 import {
   formatRecentDaysLabel,
   formatSeoulDateParts,
@@ -31,6 +32,7 @@ import {
   shiftPeriodAnchor,
   type PeriodUnit,
 } from "@/lib/meeting-date";
+import { meetingTopicKeywords } from "@/lib/meeting-keywords";
 import type { Meeting, Participant } from "@/types/meeting";
 import { cn } from "@/lib/utils";
 
@@ -140,14 +142,7 @@ function MeetingTags({ tags }: { tags: string[] }) {
 }
 
 function MeetingSummary({ meeting }: { meeting: Meeting }) {
-  const tags =
-    meeting.summaryTags.length > 0
-      ? meeting.summaryTags
-      : meeting.status === "in_progress"
-        ? ["처리 중"]
-        : meeting.status === "scheduled"
-          ? ["예정"]
-          : [];
+  const tags = meetingTopicKeywords(meeting.summaryTags, meeting.tags, 4);
 
   if (tags.length === 0) {
     return <span className="text-xs text-muted-2">-</span>;
@@ -351,10 +346,6 @@ function SortControl({
   );
 }
 
-function isSiteMember(p: Participant) {
-  return p.isMember === true || p.recognition === "member";
-}
-
 function ParticipantsPopup({
   participants,
   open,
@@ -393,7 +384,12 @@ function ParticipantsPopup({
         className="fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,85vh)] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_20px_50px_rgba(17,24,46,0.18)]"
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3.5">
-          <h2 className="text-base font-semibold text-foreground">참석자</h2>
+          <div>
+            <h2 className="text-base font-semibold text-foreground">참석자</h2>
+            <p className="mt-0.5 text-xs font-medium text-muted-2">
+              {participants.length}명
+            </p>
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -406,38 +402,9 @@ function ParticipantsPopup({
           </Button>
         </div>
 
-        <ul className="flex min-h-0 flex-wrap content-start gap-2 overflow-y-auto px-5 py-4">
-          {participants.map((p) => {
-            const member = isSiteMember(p);
-            return (
-              <li
-                key={p.id}
-                className="flex min-w-0 max-w-full items-center gap-2 rounded-full bg-surface py-1.5 pl-1.5 pr-3"
-              >
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback
-                    className={cn("text-[11px] text-white", p.color)}
-                  >
-                    {p.initials}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="truncate text-sm font-medium text-foreground">
-                  {p.name}
-                </span>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                    member
-                      ? "bg-primary-soft text-primary"
-                      : "bg-surface-2 text-muted",
-                  )}
-                >
-                  {member ? "회원" : "화자"}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <GroupedParticipantsList participants={participants} />
+        </div>
       </div>
     </>
   );
@@ -641,7 +608,7 @@ export function RecentMeetingsTable({
                         "border-t border-b border-r border-border",
                       )}
                     >
-                      AI 요약
+                      키워드
                     </TableHead>
                     <TableHead
                       className={cn(

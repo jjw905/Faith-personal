@@ -15,20 +15,20 @@ import { cn } from "@/lib/utils";
 function statusVisual(status: ProcessStatus) {
   if (status === "masking") {
     return {
-      label: "마스킹 중",
+      label: "개인정보 검수",
       icon: Shield,
       className: "bg-primary-soft text-primary",
     };
   }
   if (status === "transcribing") {
     return {
-      label: "변환 중",
+      label: "받아쓰기",
       icon: Loader2,
       className: "bg-warning-soft text-warning",
     };
   }
   return {
-    label: "완료",
+    label: "정리됨",
     icon: CheckCircle2,
     className: "bg-success-soft text-success",
   };
@@ -81,7 +81,7 @@ function ProcessRow({
   );
 }
 
-/** 헤더 등에서 클릭 시 열리는 최근 처리 상태 팝업. */
+/** 헤더 등에서 클릭 시 열리는 최근 회의 활동 팝업. */
 export function ProcessingStatusPopup() {
   const { workspaceId, workspace } = useAppContext();
   const items = getProcessingByWorkspace(workspaceId);
@@ -133,7 +133,7 @@ export function ProcessingStatusPopup() {
           )}
           strokeWidth={1.75}
         />
-        처리 상태
+        최근 활동
         {activeCount > 0 ? (
           <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
             {activeCount}
@@ -145,12 +145,12 @@ export function ProcessingStatusPopup() {
         <div
           id={panelId}
           role="dialog"
-          aria-label="최근 처리 상태"
+          aria-label="최근 회의 활동"
           className="absolute top-[calc(100%+0.5rem)] right-0 z-40 w-[min(100vw-2rem,22rem)] overflow-hidden rounded-2xl border border-border bg-card shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
         >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <p className="text-sm font-semibold text-foreground">
-              최근 처리 상태
+              최근 회의 활동
             </p>
             <span className="text-[11px] text-muted-2">
               {workspace.title}
@@ -166,12 +166,12 @@ export function ProcessingStatusPopup() {
                   <Inbox className="h-5 w-5" strokeWidth={1.75} />
                 </span>
                 <p className="text-sm font-medium text-foreground">
-                  진행 중인 처리가 없습니다
+                  진행 중인 회의가 없습니다
                 </p>
                 <p className="text-xs leading-relaxed text-muted">
                   녹음이나 업로드를 시작하면
                   <br />
-                  변환,마스킹 상태가 여기에 표시됩니다.
+                  안건,받아쓰기 흐름이 여기에 표시됩니다.
                 </p>
               </div>
             ) : (
@@ -189,7 +189,7 @@ export function ProcessingStatusPopup() {
                 className={cn(activeCount > 0 && "mt-2 border-t border-border pt-2")}
               >
                 <p className="px-3 pb-1 text-[11px] font-medium text-muted-2">
-                  최근 완료
+                  최근 회의
                 </p>
                 <ul className="space-y-1">
                   {doneItems.map((item) => (

@@ -28,10 +28,13 @@ import {
   type ReactNode,
 } from "react";
 
+import { MaskedText } from "@/components/meetings/masked-text";
+import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { useAppContext } from "@/context/app-context";
 import { useMeetingChrome } from "@/context/meeting-chrome-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { useRecording } from "@/hooks/use-recording";
+import { maskPii, type MaskStyle } from "@/lib/masking";
 import { cn } from "@/lib/utils";
 
 type Side = "left" | "right";
@@ -88,6 +91,8 @@ const SPEAKERS = [
 const CONTENT_POOL = [
   "오늘 안건부터 정리할까요?",
   "지난주 마스킹 오탐 리뷰 공유드릴게요.",
+  "연락처는 010-3942-3916 로 남겨 주세요.",
+  "샘플은 seoyeon.lee@partner.co.kr 로 보내 두었습니다.",
   "권한 매트릭스는 아직 초안 단계입니다.",
   "데모 계정은 어제 준비 끝났어요.",
   "민감정보는 자동 마스킹되는지 같이 보죠.",
@@ -281,6 +286,7 @@ function ChatBubble({
   team,
   content,
   attachment,
+  maskStyle,
 }: {
   side: Side;
   name: string;
@@ -288,16 +294,26 @@ function ChatBubble({
   team?: string;
   content: string;
   attachment?: ChatMessage["attachment"];
+  maskStyle: MaskStyle;
 }) {
   const isMe = side === "left";
+  const matches = content
+    ? maskPii(content, { style: maskStyle }).matches
+    : [];
 
   return (
     <div
       className={cn(
-        "flex w-full min-w-0 animate-[bubble-in_320ms_ease-out] items-end gap-2.5",
-        isMe ? "flex-row" : "flex-row-reverse",
+        "flex w-full min-w-0 animate-[bubble-in_320ms_ease-out]",
+        isMe ? "justify-end" : "justify-start",
       )}
     >
+      <div
+        className={cn(
+          "flex max-w-[min(85%,22rem)] items-end gap-2.5",
+          isMe ? "flex-row-reverse" : "flex-row",
+        )}
+      >
       <div
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
@@ -310,14 +326,14 @@ function ChatBubble({
       </div>
       <div
         className={cn(
-          "min-w-0 max-w-[min(78%,20rem)]",
-          isMe ? "text-left" : "text-right",
+          "min-w-0",
+          isMe ? "text-right" : "text-left",
         )}
       >
         <p
           className={cn(
             "mb-1 flex min-w-0 items-baseline gap-1.5 text-[11px] font-semibold",
-            isMe ? "text-primary" : "flex-row-reverse text-foreground",
+            isMe ? "flex-row-reverse text-primary" : "text-foreground",
           )}
         >
           <span className="truncate">{name}</span>
@@ -328,7 +344,7 @@ function ChatBubble({
           ) : null}
         </p>
         {attachment ? (
-          <div className={cn("flex", isMe ? "justify-start" : "justify-end")}>
+          <div className={cn("flex", isMe ? "justify-end" : "justify-start")}>
             <FileAttachmentCard
               name={attachment.name}
               sizeLabel={attachment.sizeLabel}
@@ -341,13 +357,18 @@ function ChatBubble({
             className={cn(
               "inline-block max-w-full whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-left text-[14px] font-medium leading-relaxed xl:text-[15px]",
               isMe
-                ? "rounded-bl-md bg-primary text-primary-foreground"
-                : "rounded-br-md bg-surface text-foreground",
+                ? "rounded-br-md bg-primary text-primary-foreground"
+                : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
             )}
           >
-            {content}
+            <MaskedText
+              original={content}
+              matches={matches}
+              onPrimary={isMe}
+            />
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -928,6 +949,7 @@ export function NewMeetingSession() {
   const [meetingTitle, setMeetingTitle] = useState(DEFAULT_MEETING_TITLE);
   const [editingTitle, setEditingTitle] = useState(false);
   const [memo, setMemo] = useState<MeetingMemo>(() => createDefaultMeetingMemo());
+  const [maskStyle, setMaskStyle] = useState<MaskStyle>("partial");
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -1273,20 +1295,21 @@ export function NewMeetingSession() {
                 </h1>
               </button>
             )}
-            <div className="justify-self-end">
+            <div className="flex items-center justify-self-end gap-1.5">
+              <MaskStylePopup value={maskStyle} onChange={setMaskStyle} />
               <button
                 type="button"
                 onClick={() => setTimelineOpen((v) => !v)}
                 aria-pressed={timelineOpen}
                 aria-label={timelineOpen ? "타임라인 숨기기" : "타임라인 보기"}
                 className={cn(
-                  "inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full transition-all",
+                  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-all sm:h-10 sm:w-10",
                   timelineOpen
                     ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
                     : "bg-surface-2 text-foreground/70 ring-1 ring-border-strong hover:bg-[#e4e6eb] hover:text-foreground",
                 )}
               >
-                <History className="h-5 w-5" strokeWidth={1.75} />
+                <History className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.75} />
               </button>
             </div>
           </div>
@@ -1315,6 +1338,7 @@ export function NewMeetingSession() {
                     team={msg.team}
                     content={msg.content}
                     attachment={msg.attachment}
+                    maskStyle={maskStyle}
                   />
                 ))}
               </div>

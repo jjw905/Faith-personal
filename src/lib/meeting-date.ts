@@ -86,14 +86,129 @@ const WEEKDAY_KO: Record<string, number> = {
   토요일: 6,
 };
 
+const WEEKDAY_SHORT = ["일", "월", "화", "수", "목", "금", "토"] as const;
+const WEEKDAY_FULL = [
+  "일요일",
+  "월요일",
+  "화요일",
+  "수요일",
+  "목요일",
+  "금요일",
+  "토요일",
+] as const;
+
+export type UpcomingDayOption = {
+  offset: number;
+  label: string;
+  weekdayShort: string;
+  day: number;
+  month: number;
+  iso: string;
+};
+
+function seoulDayOffset(now: Date, offset: number) {
+  const parts = seoulParts(now);
+  const base = toUtcDay(parts.year, parts.month, parts.day);
+  return fromUtcDay(base + offset * 24 * 60 * 60 * 1000);
+}
+
+/** 예정 회의용 날짜 라벨 (오늘/내일/모레, 일주일 안은 요일, 그 외는 M월 D일). */
+export function formatUpcomingDateLabel(
+  offset: number,
+  now: Date = new Date(),
+): string {
+  if (offset === 0) return "오늘";
+  if (offset === 1) return "내일";
+  if (offset === 2) return "모레";
+
+  const parts = seoulDayOffset(now, offset);
+  const weekday = new Date(
+    toUtcDay(parts.year, parts.month, parts.day),
+  ).getUTCDay();
+
+  if (offset >= 3 && offset <= 6) {
+    return WEEKDAY_FULL[weekday] ?? `${parts.month}월 ${parts.day}일`;
+  }
+
+  return `${parts.month}월 ${parts.day}일`;
+}
+
+/** 앞으로 N일 선택 옵션 (오늘 포함). */
+export function listUpcomingDays(
+  count = 14,
+  now: Date = new Date(),
+): UpcomingDayOption[] {
+  return Array.from({ length: count }, (_, offset) => {
+    const parts = seoulDayOffset(now, offset);
+    const weekday = new Date(
+      toUtcDay(parts.year, parts.month, parts.day),
+    ).getUTCDay();
+    return {
+      offset,
+      label: formatUpcomingDateLabel(offset, now),
+      weekdayShort: WEEKDAY_SHORT[weekday] ?? "",
+      day: parts.day,
+      month: parts.month,
+      iso: `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`,
+    };
+  });
+}
+
+/** dateLabel → YYYY-MM-DD (서울 기준). 파싱 실패 시 null. */
+export function dateLabelToIso(
+  dateLabel: string,
+  now: Date = new Date(),
+): string | null {
+  const days = daysUntilFromDateLabel(dateLabel, now);
+  if (days === null) return null;
+  const parts = seoulDayOffset(now, days);
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
+}
+
+/** YYYY-MM-DD → 예정 회의 dateLabel. */
+export function isoToUpcomingDateLabel(
+  iso: string,
+  now: Date = new Date(),
+): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return formatUpcomingDateLabel(0, now);
+
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const parts = seoulParts(now);
+  const todayMs = toUtcDay(parts.year, parts.month, parts.day);
+  const targetMs = toUtcDay(year, month, day);
+  const offset = Math.round((targetMs - todayMs) / (24 * 60 * 60 * 1000));
+  if (offset < 0) return `${month}월 ${day}일`;
+  return formatUpcomingDateLabel(offset, now);
+}
+
 /** 예정 회의 dateLabel → 오늘부터 남은 일수 (오늘=0). Asia/Seoul 기준. */
 export function daysUntilFromDateLabel(
   dateLabel: string,
   now: Date = new Date(),
 ): number | null {
   const label = dateLabel.trim();
+  if (!label) return null;
   if (label === "오늘") return 0;
   if (label === "내일") return 1;
+  if (label === "모레") return 2;
+
+  const monthDay = label.match(/^(\d{1,2})월\s*(\d{1,2})일$/);
+  if (monthDay) {
+    const month = Number(monthDay[1]);
+    const day = Number(monthDay[2]);
+    const parts = seoulParts(now);
+    let year = parts.year;
+    let targetMs = toUtcDay(year, month, day);
+    const todayMs = toUtcDay(parts.year, parts.month, parts.day);
+    if (targetMs < todayMs) {
+      year += 1;
+      targetMs = toUtcDay(year, month, day);
+    }
+    return Math.round((targetMs - todayMs) / (24 * 60 * 60 * 1000));
+  }
 
   const target = WEEKDAY_KO[label];
   if (target === undefined) return null;

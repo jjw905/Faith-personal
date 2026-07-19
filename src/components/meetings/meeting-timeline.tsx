@@ -1,126 +1,359 @@
+"use client";
+
+import { useDeferredValue, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  ClipboardList,
   ListChecks,
   MessageSquare,
-  Sparkles,
+  Search,
+  X,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { MeetingTimeline, TimelineSegmentKind } from "@/types/timeline";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { Participant } from "@/types/meeting";
+import type {
+  MeetingTimeline,
+  TimelineSegment,
+  TimelineSegmentKind,
+} from "@/types/timeline";
 import { cn } from "@/lib/utils";
 
+/** 아이콘 획만 색 구분. 채운 배경은 쓰지 않음(눈 피로 방지). */
 const KIND_META: Record<
   TimelineSegmentKind,
-  { label: string; icon: typeof Sparkles; tone: string }
+  {
+    label: string;
+    icon: typeof ClipboardList;
+    iconTone: string;
+  }
 > = {
   agenda: {
     label: "안건",
-    icon: Sparkles,
-    tone: "bg-primary-soft text-primary",
+    icon: ClipboardList,
+    iconTone: "text-[#3d6a8a]",
   },
   discussion: {
     label: "논의",
     icon: MessageSquare,
-    tone: "bg-surface-2 text-foreground",
+    iconTone: "text-[#5c6570]",
   },
   decision: {
     label: "결정",
     icon: CheckCircle2,
-    tone: "bg-success-soft text-success",
+    iconTone: "text-[#2f6b45]",
   },
   action: {
-    label: "조치",
+    label: "후속 조치",
     icon: ListChecks,
-    tone: "bg-primary-soft text-primary",
+    iconTone: "text-[#2f6f9f]",
   },
   risk: {
     label: "리스크",
     icon: AlertTriangle,
-    tone: "bg-warning-soft text-warning",
+    iconTone: "text-[#8a6a28]",
   },
 };
 
-/** 녹음 구간 분석 타임라인 + 구간별 요약. */
+type SpeakerRole = "host" | "attendee" | "voice";
+
+type SpeakerView = {
+  key: string;
+  name: string;
+  initials: string;
+  color: string;
+  roleLabel: string;
+  roleClass: string;
+};
+
+/** 구분은 테두리가 아니라 역할 뱃지 면색·글자색. */
+const ROLE_META: Record<
+  SpeakerRole,
+  { label: string; roleClass: string; fallbackColor: string }
+> = {
+  host: {
+    label: "진행자",
+    roleClass: "bg-[#c5d8e8] text-[#1f4a63]",
+    fallbackColor: "bg-[#3d6a8a]",
+  },
+  attendee: {
+    label: "참석자",
+    roleClass: "bg-[#e4e6ea] text-[#3a3f4a]",
+    fallbackColor: "bg-slate-500",
+  },
+  voice: {
+    label: "발화",
+    roleClass: "bg-[#e8d9c8] text-[#5c4028]",
+    fallbackColor: "bg-[#8a6a4a]",
+  },
+};
+
+function resolveSpeakerRole(
+  name: string,
+  found: Participant | undefined,
+): SpeakerRole {
+  if (name === "진행자" || found?.isHost === true) return "host";
+  if (name === "참석자") return "attendee";
+  if (found?.recognition === "voice") return "voice";
+  if (found?.recognition === "guest" || found?.recognition === "member") {
+    return "attendee";
+  }
+  if (found?.isMember === true) return "attendee";
+  if (name === "발화" || name.startsWith("화자")) return "voice";
+  return found ? "attendee" : "voice";
+}
+
+function resolveSpeaker(
+  name: string,
+  participants: Participant[],
+  index: number,
+): SpeakerView {
+  const found = participants.find((p) => p.name === name);
+  const role = resolveSpeakerRole(name, found);
+  const meta = ROLE_META[role];
+
+  if (found) {
+    return {
+      key: `${found.id}-${index}`,
+      name: found.name,
+      initials: found.initials,
+      color: found.color,
+      roleLabel: meta.label,
+      roleClass: meta.roleClass,
+    };
+  }
+
+  return {
+    key: `${role}-${index}-${name}`,
+    name,
+    initials: name.slice(0, 1),
+    color: meta.fallbackColor,
+    roleLabel: meta.label,
+    roleClass: meta.roleClass,
+  };
+}
+
+function SpeakerChips({
+  names,
+  participants,
+}: {
+  names: string[];
+  participants: Participant[];
+}) {
+  const speakers = names.map((name, index) =>
+    resolveSpeaker(name, participants, index),
+  );
+
+  return (
+    <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="발화자">
+      {speakers.map((s) => {
+        const roleOnly = s.name === s.roleLabel;
+
+        if (roleOnly) {
+          return (
+            <li
+              key={s.key}
+              className={cn(
+                "inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-bold leading-none",
+                s.roleClass,
+              )}
+            >
+              {s.roleLabel}
+            </li>
+          );
+        }
+
+        return (
+          <li
+            key={s.key}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card py-0.5 pl-0.5 pr-2"
+          >
+            <Avatar className="h-7 w-7 shrink-0">
+              <AvatarFallback
+                className={cn(
+                  "text-[11px] font-semibold leading-none text-white",
+                  s.color,
+                )}
+              >
+                {s.initials}
+              </AvatarFallback>
+            </Avatar>
+            <span className="max-w-[4.5rem] truncate text-xs font-semibold leading-none text-foreground">
+              {s.name}
+            </span>
+            <span
+              className={cn(
+                "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-bold leading-none",
+                s.roleClass,
+              )}
+            >
+              {s.roleLabel}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function segmentMatches(seg: TimelineSegment, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const kindLabel = KIND_META[seg.kind].label;
+  const haystack = [
+    seg.title,
+    seg.summary,
+    seg.start,
+    seg.end,
+    kindLabel,
+    ...(seg.speakers ?? []),
+    ...(seg.tags ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(q);
+}
+
+/**
+ * 녹음 00:00부터 시간 순으로 흐르는 세로 타임라인.
+ * 말한 길이가 아니라, 구간이 언제 시작·끝나는지만 표시.
+ */
 export function MeetingTimelineView({
   timeline,
+  participants = [],
+  onSegmentSelect,
 }: {
   timeline: MeetingTimeline;
+  participants?: Participant[];
+  /** 구간 선택 시 대화기록 점프용 */
+  onSegmentSelect?: (segmentId: string) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const filtered = timeline.segments.filter((seg) =>
+    segmentMatches(seg, deferredQuery),
+  );
+  const searching = deferredQuery.trim().length > 0;
+
   return (
-    <Card>
-      <CardHeader className="space-y-2 pb-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">녹음 타임라인 요약</CardTitle>
-          <span className="text-xs text-muted-2">{timeline.durationLabel}</span>
-        </div>
-        <p className="text-sm leading-relaxed text-muted">
-          {timeline.overallSummary}
-        </p>
-      </CardHeader>
+    <section>
+      <div className="mb-5 flex items-center gap-2">
+        <span className="shrink-0 text-xs font-medium text-muted-2">
+          {searching
+            ? `${filtered.length}/${timeline.segments.length}`
+            : timeline.durationLabel}
+        </span>
 
-      <CardContent className="pt-0">
-        <ol className="relative space-y-0">
-          <span
+        <label className="ml-auto flex h-8 min-w-0 max-w-[11rem] flex-1 items-center rounded-lg bg-surface-2 px-2 sm:max-w-[13rem]">
+          <span className="sr-only">타임라인 검색</span>
+          <Search
+            className="h-3.5 w-3.5 shrink-0 text-foreground/50"
+            strokeWidth={1.75}
             aria-hidden
-            className="pointer-events-none absolute top-3 bottom-3 left-[1.15rem] w-px bg-border"
           />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="검색"
+            className="min-w-0 flex-1 bg-transparent px-1.5 text-sm font-medium text-foreground outline-none placeholder:text-foreground/40 [&::-webkit-search-cancel-button]:hidden"
+            autoComplete="off"
+            enterKeyHint="search"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground/50 hover:text-foreground"
+              aria-label="검색어 지우기"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          ) : null}
+        </label>
+      </div>
 
-          {timeline.segments.map((seg, index) => {
+      {filtered.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted">
+          검색 결과가 없습니다.
+        </p>
+      ) : (
+        <ol className="relative">
+          {filtered.map((seg, index) => {
             const meta = KIND_META[seg.kind];
             const Icon = meta.icon;
-            const isLast = index === timeline.segments.length - 1;
+            const isLast = index === filtered.length - 1;
 
             return (
               <li
                 key={seg.id}
-                className={cn("relative flex gap-4", !isLast && "pb-6")}
+                className={cn("relative flex gap-3 sm:gap-4", !isLast && "pb-9")}
               >
-                <div
-                  className={cn(
-                    "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-                    meta.tone,
-                  )}
-                >
-                  <Icon className="h-4 w-4" strokeWidth={1.75} />
+                {/* 녹음 시각: 이 구간이 시작되는 지점 */}
+                <div className="flex w-[3.75rem] shrink-0 justify-end pt-1.5 sm:w-[4.25rem]">
+                  <time
+                    dateTime={seg.start}
+                    className="text-sm font-bold tabular-nums tracking-tight text-foreground"
+                  >
+                    {seg.start}
+                  </time>
                 </div>
 
-                <div className="min-w-0 flex-1 rounded-2xl border border-border bg-surface/60 px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs tabular-nums text-muted-2">
-                      {seg.start} – {seg.end}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {meta.label}
-                    </Badge>
-                    {seg.tags?.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant="outline"
-                        className="text-[10px]"
-                      >
-                        {tag}
-                      </Badge>
-                    ))}
+                {/* 흐르는 축 */}
+                <div className="relative flex w-9 shrink-0 justify-center">
+                  {!isLast ? (
+                    <span
+                      aria-hidden
+                      className="absolute top-9 bottom-[-2.25rem] w-px bg-border"
+                    />
+                  ) : null}
+                  <div
+                    className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card"
+                    aria-label={meta.label}
+                    title={meta.label}
+                  >
+                    <Icon
+                      className={cn("h-4 w-4", meta.iconTone)}
+                      strokeWidth={2.25}
+                      aria-hidden
+                    />
                   </div>
-                  <h3 className="mt-1.5 text-sm font-semibold text-foreground">
-                    {seg.title}
-                  </h3>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">
+                </div>
+
+                <div className="min-w-0 flex-1 pt-1">
+                  {onSegmentSelect ? (
+                    <button
+                      type="button"
+                      onClick={() => onSegmentSelect(seg.id)}
+                      className="text-left text-sm font-semibold text-foreground underline-offset-2 hover:underline"
+                    >
+                      {seg.title}
+                    </button>
+                  ) : (
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {seg.title}
+                    </h3>
+                  )}
+                  <p className="mt-2 text-sm leading-relaxed text-muted">
                     {seg.summary}
                   </p>
                   {seg.speakers && seg.speakers.length > 0 ? (
-                    <p className="mt-2 text-xs text-muted-2">
-                      발화: {seg.speakers.join(", ")}
-                    </p>
+                    <div className="mt-3">
+                      <SpeakerChips
+                        names={seg.speakers}
+                        participants={participants}
+                      />
+                    </div>
                   ) : null}
                 </div>
               </li>
             );
           })}
         </ol>
-      </CardContent>
-    </Card>
+      )}
+    </section>
   );
 }

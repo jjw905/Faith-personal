@@ -1,0 +1,208 @@
+"use client";
+
+import { EyeOff } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+
+import { labelFor } from "@/lib/masking/mask-style";
+import type { MaskStyle } from "@/lib/masking/types";
+import { cn } from "@/lib/utils";
+
+/** 가림 방식 미리보기 칩 — 말풍선 마스킹과 같은 톤 */
+function MaskPreviewChip({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-block max-w-full truncate rounded-md bg-masked-soft px-1.5 font-mono text-[10px] font-semibold leading-5 text-masked">
+      {children}
+    </span>
+  );
+}
+
+/** 실제 마스킹 결과와 같은 미리보기 샘플 */
+const MASK_STYLE_SAMPLES = {
+  partial: {
+    phone: "010-****-3916",
+    email: "s*********e@partner.co.kr",
+  },
+  label: {
+    phone: labelFor("phone"),
+    email: labelFor("email"),
+  },
+} as const;
+
+/** 부분 가림 / 유형 표시 선택. 실시간 기록 UI용. */
+export function MaskStylePicker({
+  value,
+  onChange,
+  className,
+  showHeading = true,
+  compact = false,
+}: {
+  value: MaskStyle;
+  onChange: (next: MaskStyle) => void;
+  className?: string;
+  showHeading?: boolean;
+  /** 실시간 세션용 — 한 줄 + 샘플 칩 하나 */
+  compact?: boolean;
+}) {
+  return (
+    <div className={cn(className)}>
+      {showHeading ? (
+        <p className="mb-1.5 text-[11px] font-semibold text-muted-2">
+          개인정보 가림
+        </p>
+      ) : null}
+      <div
+        role="tablist"
+        aria-label="개인정보 가림 방식"
+        className={cn(
+          "grid grid-cols-2",
+          compact ? "gap-0.5 rounded-xl bg-surface-2 p-0.5" : "gap-1.5",
+        )}
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={value === "partial"}
+          onClick={() => onChange("partial")}
+          className={cn(
+            "flex min-w-0 text-left transition-colors",
+            compact
+              ? "flex-col items-start gap-0.5 rounded-[10px] px-2.5 py-1.5"
+              : "flex-col items-start gap-1.5 rounded-xl px-3 py-2.5",
+            value === "partial"
+              ? compact
+                ? "bg-card text-foreground shadow-sm"
+                : "bg-card text-foreground shadow-soft ring-1 ring-foreground/15"
+              : "text-muted hover:text-foreground",
+            !compact && value !== "partial" && "bg-surface-2",
+          )}
+        >
+          <span
+            className={cn(
+              "text-xs font-bold",
+              value === "partial" ? "text-foreground" : "text-muted",
+            )}
+          >
+            부분 가림
+          </span>
+          {compact ? (
+            <MaskPreviewChip>{MASK_STYLE_SAMPLES.partial.phone}</MaskPreviewChip>
+          ) : (
+            <span className="flex w-full min-w-0 flex-col gap-1">
+              <MaskPreviewChip>
+                {MASK_STYLE_SAMPLES.partial.phone}
+              </MaskPreviewChip>
+              <MaskPreviewChip>
+                {MASK_STYLE_SAMPLES.partial.email}
+              </MaskPreviewChip>
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={value === "label"}
+          onClick={() => onChange("label")}
+          className={cn(
+            "flex min-w-0 text-left transition-colors",
+            compact
+              ? "flex-col items-start gap-0.5 rounded-[10px] px-2.5 py-1.5"
+              : "flex-col items-start gap-1.5 rounded-xl px-3 py-2.5",
+            value === "label"
+              ? compact
+                ? "bg-card text-foreground shadow-sm"
+                : "bg-card text-foreground shadow-soft ring-1 ring-foreground/15"
+              : "text-muted hover:text-foreground",
+            !compact && value !== "label" && "bg-surface-2",
+          )}
+        >
+          <span
+            className={cn(
+              "text-xs font-bold",
+              value === "label" ? "text-foreground" : "text-muted",
+            )}
+          >
+            유형 표시
+          </span>
+          {compact ? (
+            <MaskPreviewChip>{MASK_STYLE_SAMPLES.label.phone}</MaskPreviewChip>
+          ) : (
+            <span className="flex w-full min-w-0 flex-col gap-1">
+              <MaskPreviewChip>{MASK_STYLE_SAMPLES.label.phone}</MaskPreviewChip>
+              <MaskPreviewChip>{MASK_STYLE_SAMPLES.label.email}</MaskPreviewChip>
+            </span>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 필요할 때만 여는 가림 방식 팝업. */
+export function MaskStylePopup({
+  value,
+  onChange,
+  className,
+}: {
+  value: MaskStyle;
+  onChange: (next: MaskStyle) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const panelId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className={cn("relative", className)}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-label="개인정보 가림 방식"
+        title="가림 방식"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-colors",
+          open
+            ? "bg-primary text-primary-foreground shadow-soft"
+            : "bg-surface-2 text-muted hover:text-foreground",
+        )}
+      >
+        <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+      </button>
+
+      {open ? (
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label="개인정보 가림 방식"
+          className="absolute right-0 top-[calc(100%+0.4rem)] z-40 w-[min(100vw-2rem,18rem)] rounded-2xl border border-border bg-card p-3 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
+        >
+          <MaskStylePicker
+            value={value}
+            onChange={(next) => {
+              onChange(next);
+              setOpen(false);
+            }}
+            compact
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}

@@ -4,11 +4,15 @@ import { ArrowLeft } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/page-container";
 import { LiveMaskingTranscript } from "@/components/meetings/live-masking-transcript";
-import { MeetingTimelineView } from "@/components/meetings/meeting-timeline";
-import { Badge } from "@/components/ui/badge";
+import { MeetingDetailBody } from "@/components/meetings/meeting-detail-body";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getMeetingTimeline, getRecentMeetings } from "@/lib/mock-loader";
+import { formatSeoulDateParts } from "@/lib/meeting-date";
+import { meetingTopicKeywords } from "@/lib/meeting-keywords";
+import {
+  getMeetingTimeline,
+  getMeetingTranscript,
+  getRecentMeetings,
+} from "@/lib/mock-loader";
 
 export default async function MeetingDetailPage({
   params,
@@ -29,10 +33,17 @@ export default async function MeetingDetailPage({
   if (!meeting) notFound();
 
   const timeline = getMeetingTimeline(id);
+  const transcript = getMeetingTranscript(id);
+  const { day, time } = formatSeoulDateParts(meeting.date);
+  const keywords = meetingTopicKeywords(
+    meeting.summaryTags,
+    meeting.tags,
+    4,
+  );
 
   return (
     <PageContainer>
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="mx-auto max-w-3xl space-y-5">
         <div>
           <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">
             <Link href="/dashboard">
@@ -40,53 +51,41 @@ export default async function MeetingDetailPage({
               회의로 돌아가기
             </Link>
           </Button>
-          <div className="flex flex-wrap gap-1.5">
-            {meeting.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-md bg-surface px-2 py-0.5 text-xs font-medium text-muted"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground">
+
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {meeting.title}
           </h1>
-          <p className="mt-1 text-sm text-muted">
-            녹음 구간을 분석해 타임라인 요약을 제공합니다.
-          </p>
+
+          {/* 가로 3칸 분산 대신 내용 너비로 촘촘히 */}
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className="text-sm font-semibold tabular-nums tracking-tight text-foreground">
+              {day}{" "}
+              <span className="font-medium text-muted">{time}</span>
+            </p>
+            <span className="text-sm font-semibold text-foreground">
+              {meeting.duration}
+            </span>
+          </div>
+          {keywords.length > 0 ? (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {keywords.map((kw) => (
+                <span
+                  key={kw}
+                  className="rounded-md bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted"
+                >
+                  {kw}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">회의 정보</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
-            <div className="flex items-center gap-1.5">
-              <span>상태:</span>
-              <Badge variant="secondary">
-                {meeting.status === "completed"
-                  ? "완료"
-                  : meeting.status === "in_progress"
-                    ? "처리 중"
-                    : "예정"}
-              </Badge>
-            </div>
-            <p>
-              일시:{" "}
-              {new Date(
-                /[zZ]|[+-]\d{2}:\d{2}$/.test(meeting.date)
-                  ? meeting.date
-                  : `${meeting.date}+09:00`,
-              ).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
-            </p>
-            <p>길이: {meeting.duration}</p>
-            <p>참석: {meeting.participants.length}명</p>
-          </CardContent>
-        </Card>
-
-        <MeetingTimelineView timeline={timeline} />
+        <MeetingDetailBody
+          meeting={meeting}
+          timeline={timeline}
+          transcript={transcript}
+          summary={timeline.overallSummary}
+        />
       </div>
     </PageContainer>
   );

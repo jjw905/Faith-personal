@@ -13,6 +13,8 @@ export interface Participant {
   color: string;
   /** 이 사이트 회원 여부. 기본 false(외부). */
   isMember?: boolean;
+  /** 회의 진행자(호스트) 여부. */
+  isHost?: boolean;
   /** 녹취 시 화자 구분 방식. */
   recognition?: ParticipantRecognition;
   /** 톤/호칭 등 인식 힌트. */
