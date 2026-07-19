@@ -34,18 +34,21 @@ function EntryBlock({
         <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
           {entry.title}
         </h2>
-        {entry.summary ? (
-          <p className="mt-2.5 max-w-2xl text-[15px] leading-[1.65] text-muted">
-            {entry.summary}
-          </p>
-        ) : null}
+        <p className="mt-2.5 max-w-2xl text-[15px] leading-[1.65] text-muted">
+          {entry.summary}
+        </p>
 
-        <div className={cn("space-y-6", entry.summary ? "mt-7" : "mt-5")}>
+        <div className="mt-7 space-y-6">
           {entry.sections.map((section) => (
             <section key={section.title} className="max-w-2xl">
               <h3 className="text-sm font-semibold tracking-tight text-foreground">
                 {section.title}
               </h3>
+              {section.body ? (
+                <p className="mt-1.5 text-sm leading-[1.65] text-muted">
+                  {section.body}
+                </p>
+              ) : null}
               {section.items?.length ? (
                 <ul className="mt-2 list-none space-y-1.5 border-l border-border pl-3.5">
                   {section.items.map((item) => (
