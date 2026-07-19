@@ -226,7 +226,7 @@ function PeriodDateNav({
   const current = isCurrentPeriod(anchor, unit);
 
   return (
-    <div className="mx-auto flex w-max max-w-full items-center justify-center gap-1">
+    <div className="flex w-full min-w-0 max-w-full items-center justify-center gap-0.5 sm:gap-1 xl:w-max">
       <Button
         type="button"
         variant="ghost"
@@ -237,7 +237,7 @@ function PeriodDateNav({
       >
         <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
       </Button>
-      <p className="min-w-0 truncate px-1 text-center text-sm font-medium tabular-nums text-foreground">
+      <p className="min-w-0 flex-1 truncate px-0.5 text-center text-xs font-medium tabular-nums text-foreground sm:px-1 sm:text-sm">
         {range.label}
       </p>
       <Button
@@ -536,7 +536,7 @@ export function RecentMeetingsTable({
 
   return (
     <Card>
-      <CardHeader className="relative grid grid-cols-1 items-center gap-3 space-y-0 px-6 py-4 xl:grid-cols-[1fr_auto_1fr]">
+      <CardHeader className="relative grid grid-cols-1 items-center gap-3 space-y-0 px-4 py-4 sm:px-6 xl:grid-cols-[1fr_auto_1fr]">
         <div className="flex min-w-0 items-center gap-2 xl:justify-self-start">
           <CardTitle>회의 기록</CardTitle>
           <span className="inline-flex min-w-7 items-center justify-center rounded-lg bg-surface px-2 py-1 text-sm font-semibold tabular-nums text-foreground">
@@ -544,24 +544,26 @@ export function RecentMeetingsTable({
           </span>
         </div>
 
-        <div className="justify-self-center">
-          <PeriodDateNav
-            unit={periodUnit}
-            anchor={periodAnchor}
-            onAnchorChange={setPeriodAnchor}
-          />
-        </div>
-
-        <div className="flex w-full items-center justify-center xl:w-auto xl:justify-self-end">
-          <div className="inline-flex shrink-0 flex-nowrap items-center gap-1.5">
-            <PeriodUnitControl
+        {/* 좁은 화면: 날짜 + 주/월/년·최신순 한 줄, xl+: 그리드 좌·중·우 */}
+        <div className="flex w-full min-w-0 items-center gap-2 xl:contents">
+          <div className="min-w-0 flex-1 xl:justify-self-center xl:flex-none">
+            <PeriodDateNav
               unit={periodUnit}
-              onUnitChange={(unit) => {
-                setPeriodUnit(unit);
-                setPeriodAnchor(new Date());
-              }}
+              anchor={periodAnchor}
+              onAnchorChange={setPeriodAnchor}
             />
-            <SortControl value={sortKey} onChange={setSortKey} />
+          </div>
+          <div className="shrink-0 xl:justify-self-end">
+            <div className="inline-flex flex-nowrap items-center gap-1 sm:gap-1.5">
+              <PeriodUnitControl
+                unit={periodUnit}
+                onUnitChange={(unit) => {
+                  setPeriodUnit(unit);
+                  setPeriodAnchor(new Date());
+                }}
+              />
+              <SortControl value={sortKey} onChange={setSortKey} />
+            </div>
           </div>
         </div>
       </CardHeader>
