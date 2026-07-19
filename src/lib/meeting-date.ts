@@ -282,6 +282,23 @@ export function formatSeoulDateParts(dateString: string) {
   return { day, time };
 }
 
+/** 리스트 leading용 짧은 날짜 + 시간 (M3 list leading / overline 관례). */
+export function formatSeoulListLeading(dateString: string) {
+  const date = parseMeetingDate(dateString);
+  const day = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: SEOUL,
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).format(date);
+  const time = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: SEOUL,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+  return { day, time };
+}
+
 export type PeriodUnit = "week" | "month" | "year";
 
 export type PeriodRange = {

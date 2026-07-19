@@ -14,18 +14,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { GroupedParticipantsList } from "@/components/meetings/meeting-participants";
 import {
   formatRecentDaysLabel,
-  formatSeoulDateParts,
+  formatSeoulListLeading,
   getPeriodRange,
   isCurrentPeriod,
   isMeetingInPeriod,
@@ -71,22 +63,14 @@ const PERIOD_OPTIONS: { value: PeriodUnit; label: string }[] = [
 const VISIBLE_AVATARS = 3;
 
 /**
- * 표시 우선순위
- * 1) 제목, 날짜, 참석자
- * 2) AI 요약 (최대 3줄, 초과는 말줄임)
- * 3) 다운로드(제목 옆 소형), 소요 시간(가장 먼저 숨김)
+ * M3 List 3줄 템플릿
+ * - leading: 날짜/시간
+ * - headline: 제목
+ * - supporting: 키워드 · 참석자
+ * - trailing: 소요시간 · 내보내기
+ * 참고: m3.material.io/components/lists
  */
-const col = {
-  title: "w-[30%] pl-5 text-left",
-  date: "w-[16%] text-center",
-  participants: "w-[20%] text-center",
-  summary: "w-[34%] text-left",
-  duration: "w-[12%] text-left max-xl:hidden",
-} as const;
-
-const headCellClass =
-  "h-12 whitespace-nowrap bg-surface/70 px-3 text-xs font-semibold text-muted";
-const bodyCellClass = "overflow-hidden px-3 py-4 align-middle";
+const KEYWORD_VISIBLE = 5;
 
 function parseDurationMinutes(duration: string) {
   const hour = duration.match(/(\d+)\s*시간/);
@@ -111,62 +95,34 @@ function sortMeetings(list: Meeting[], sortKey: SortKey) {
   return next;
 }
 
-function DateTimeCell({ date }: { date: string }) {
-  const { day, time } = formatSeoulDateParts(date);
-  const recent = formatRecentDaysLabel(date);
-  return (
-    <div className="leading-snug text-center">
-      <p className="text-sm font-medium text-foreground">{day}</p>
-      <p className="text-xs text-muted-2">{time}</p>
-      {recent ? (
-        <p className="mt-0.5 text-[11px] font-medium text-primary">{recent}</p>
-      ) : null}
-    </div>
+function MeetingKeywords({ meeting }: { meeting: Meeting }) {
+  const tags = meetingTopicKeywords(
+    meeting.summaryTags,
+    meeting.tags,
+    KEYWORD_VISIBLE + 2,
   );
-}
 
-function MeetingTags({ tags }: { tags: string[] }) {
-  if (!tags.length) return null;
-  return (
-    <div className="mt-1 flex min-w-0 flex-wrap gap-1">
-      {tags.map((tag) => (
-        <span
-          key={tag}
-          className="inline-flex max-w-full truncate rounded-md bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted"
-        >
-          {tag}
-        </span>
-      ))}
-    </div>
-  );
-}
+  if (tags.length === 0) return null;
 
-function MeetingSummary({ meeting }: { meeting: Meeting }) {
-  const tags = meetingTopicKeywords(meeting.summaryTags, meeting.tags, 4);
-
-  if (tags.length === 0) {
-    return <span className="text-xs text-muted-2">-</span>;
-  }
-
-  const visible = tags.slice(0, 2);
+  const visible = tags.slice(0, KEYWORD_VISIBLE);
   const overflow = tags.length - visible.length;
   const full = tags.join(", ");
 
   return (
     <div
-      className="flex min-w-0 max-w-full flex-nowrap items-center gap-1 overflow-hidden"
+      className="flex min-w-0 flex-wrap items-center gap-1.5"
       title={full}
     >
       {visible.map((tag) => (
         <span
           key={tag}
-          className="inline-flex min-w-0 max-w-[7.5rem] truncate rounded-full border border-primary/15 bg-primary-soft px-2 py-0.5 text-[11px] font-medium leading-5 text-primary"
+          className="inline-flex max-w-full truncate rounded-lg bg-primary-soft px-2.5 py-1 text-xs font-semibold leading-none text-primary"
         >
           {tag}
         </span>
       ))}
       {overflow > 0 ? (
-        <span className="inline-flex shrink-0 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
+        <span className="inline-flex shrink-0 text-xs font-semibold text-muted">
           +{overflow}
         </span>
       ) : null}
@@ -420,54 +376,55 @@ function ParticipantsCell({ participants }: { participants: Participant[] }) {
       : participants.map((p) => p.name).join(", ");
 
   if (participants.length === 0) {
-    return (
-      <div className="flex w-full items-center justify-center">
-        <span className="text-xs text-muted-2">-</span>
-      </div>
-    );
+    return <span className="text-xs text-muted-2">참석자 없음</span>;
   }
 
   return (
     <>
-      <div className="flex w-full items-center justify-center">
-        <button
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label={`참석자 ${participants.length}명: ${label}`}
-          title={label}
-          onClick={() => setOpen(true)}
-          className={cn(
-            "inline-flex shrink-0 cursor-pointer items-center rounded-full p-0.5 transition-colors",
-            "hover:bg-surface-2",
-            open && "bg-surface-2",
-          )}
-        >
-          <span className="flex shrink-0 whitespace-nowrap -space-x-1.5">
-            {visible.map((participant, index) => (
-              <Avatar
-                key={participant.id}
-                className="h-7 w-7 border-2 border-white"
-                style={{ zIndex: index + 1 }}
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`참석자 ${participants.length}명: ${label}`}
+        title={label}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className={cn(
+          "inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full py-0.5 pr-1.5 transition-colors",
+          "hover:bg-surface-2",
+          open && "bg-surface-2",
+        )}
+      >
+        <span className="flex shrink-0 whitespace-nowrap -space-x-1.5">
+          {visible.map((participant, index) => (
+            <Avatar
+              key={participant.id}
+              className="h-7 w-7 border-2 border-card"
+              style={{ zIndex: index + 1 }}
+            >
+              <AvatarFallback
+                className={`${participant.color} text-[10px] text-white`}
               >
-                <AvatarFallback
-                  className={`${participant.color} text-[10px] text-white`}
-                >
-                  {participant.initials}
-                </AvatarFallback>
-              </Avatar>
-            ))}
-            {overflow > 0 ? (
-              <span
-                className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-surface-2 text-[10px] font-semibold text-foreground"
-                style={{ zIndex: visible.length + 1 }}
-              >
-                +{overflow}
-              </span>
-            ) : null}
-          </span>
-        </button>
-      </div>
+                {participant.initials}
+              </AvatarFallback>
+            </Avatar>
+          ))}
+          {overflow > 0 ? (
+            <span
+              className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-surface-2 text-[10px] font-semibold text-foreground"
+              style={{ zIndex: visible.length + 1 }}
+            >
+              +{overflow}
+            </span>
+          ) : null}
+        </span>
+        <span className="hidden text-xs font-medium text-muted sm:inline">
+          {participants.length}명
+        </span>
+      </button>
       <ParticipantsPopup
         participants={participants}
         open={open}
@@ -553,222 +510,98 @@ export function RecentMeetingsTable({
         </div>
       </div>
 
-      <CardContent className="px-0 pb-4 pt-0">
+      <CardContent className="px-0 pb-2 pt-0">
         {sorted.length === 0 ? (
-          <p className="mx-6 mb-1 rounded-xl bg-surface px-4 py-8 text-center text-sm text-muted">
+          <p className="mx-6 mb-3 rounded-xl bg-surface px-4 py-8 text-center text-sm text-muted">
             이 기간에 해당하는 회의 기록이 없습니다.
           </p>
         ) : (
-          <>
-            {/* 좁은 화면: 카드 리스트 (가로 스크롤 없음) */}
-            <ul className="space-y-2 px-4 xl:hidden sm:px-6">
-              {sorted.map((meeting) => (
-                <li key={meeting.id}>
-                  <MeetingRecordMobileCard meeting={meeting} />
-                </li>
-              ))}
-            </ul>
-
-            {/* 넓은 PC: 테이블 */}
-            <div className="hidden px-2 sm:px-3 xl:block">
-              <Table className="w-full table-fixed border-separate border-spacing-0">
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead
-                      className={cn(
-                        headCellClass,
-                        col.title,
-                        "border-t border-b border-r border-border first:rounded-tl-lg",
-                      )}
-                    >
-                      회의 제목
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        headCellClass,
-                        col.date,
-                        "border-t border-b border-r border-border",
-                      )}
-                    >
-                      날짜 및 시간
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        headCellClass,
-                        col.participants,
-                        "border-t border-b border-r border-border",
-                      )}
-                    >
-                      참석자
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        headCellClass,
-                        col.summary,
-                        "border-t border-b border-r border-border",
-                      )}
-                    >
-                      키워드
-                    </TableHead>
-                    <TableHead
-                      className={cn(
-                        headCellClass,
-                        col.duration,
-                        "border-t border-b border-border last:rounded-tr-lg",
-                      )}
-                    >
-                      소요 시간
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sorted.map((meeting, index) => {
-                    const isLast = index === sorted.length - 1;
-                    return (
-                      <TableRow
-                        key={meeting.id}
-                        className="border-0 hover:bg-surface/50"
-                      >
-                        <TableCell
-                          className={cn(
-                            bodyCellClass,
-                            col.title,
-                            "border-r border-border",
-                            !isLast && "border-b",
-                            isLast && "rounded-bl-lg",
-                          )}
-                        >
-                          <div className="flex min-w-0 items-start gap-1.5">
-                            <Link
-                              href={`/meetings/${meeting.id}`}
-                              className="group min-w-0 flex-1"
-                              title={meeting.title}
-                            >
-                              <p className="truncate font-medium text-foreground group-hover:text-primary">
-                                {meeting.title}
-                              </p>
-                              <MeetingTags tags={meeting.tags} />
-                            </Link>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="mt-0.5 h-6 w-6 shrink-0 text-muted hover:text-foreground"
-                              type="button"
-                              aria-label={`${meeting.title} 내보내기`}
-                              title="내보내기"
-                              onClick={(e) => e.preventDefault()}
-                            >
-                              <Download
-                                className="h-3.5 w-3.5"
-                                strokeWidth={1.75}
-                              />
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            bodyCellClass,
-                            col.date,
-                            "border-r border-border",
-                            !isLast && "border-b",
-                          )}
-                        >
-                          <DateTimeCell date={meeting.date} />
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            bodyCellClass,
-                            col.participants,
-                            "border-r border-border",
-                            !isLast && "border-b",
-                          )}
-                        >
-                          <ParticipantsCell
-                            participants={meeting.participants}
-                          />
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            bodyCellClass,
-                            col.summary,
-                            "border-r border-border",
-                            !isLast && "border-b",
-                          )}
-                        >
-                          <MeetingSummary meeting={meeting} />
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            bodyCellClass,
-                            col.duration,
-                            !isLast && "border-b",
-                            isLast && "rounded-br-lg",
-                          )}
-                        >
-                          <span className="inline-flex items-center whitespace-nowrap rounded-lg bg-surface px-2 py-1 text-xs font-semibold tabular-nums text-foreground">
-                            {meeting.duration}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </>
+          <ul className="divide-y divide-border border-t border-border">
+            {sorted.map((meeting) => (
+              <li key={meeting.id}>
+                <MeetingRecordListItem meeting={meeting} />
+              </li>
+            ))}
+          </ul>
         )}
       </CardContent>
     </Card>
   );
 }
 
-function MeetingRecordMobileCard({ meeting }: { meeting: Meeting }) {
-  const { day, time } = formatSeoulDateParts(meeting.date);
+/** M3 three-line list item: leading · headline · supporting · trailing */
+function MeetingRecordListItem({ meeting }: { meeting: Meeting }) {
+  const { day, time } = formatSeoulListLeading(meeting.date);
   const recent = formatRecentDaysLabel(meeting.date);
+  const href = `/meetings/${meeting.id}`;
 
   return (
-    <div className="rounded-2xl border border-border bg-card px-3.5 py-3">
-      <div className="flex min-w-0 items-start gap-2">
-        <Link
-          href={`/meetings/${meeting.id}`}
-          className="group min-w-0 flex-1"
-          title={meeting.title}
-        >
-          <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary">
-            {meeting.title}
+    <div className="group flex min-h-[5.5rem] gap-3 px-4 py-3.5 transition-colors hover:bg-surface/70 sm:gap-4 sm:px-6">
+      {/* leadingContent — 날짜·시간을 고정 폭으로 스캔 */}
+      <Link
+        href={href}
+        className="flex w-[4.5rem] shrink-0 flex-col items-start pt-0.5 outline-none sm:w-[5.25rem]"
+        tabIndex={-1}
+        aria-hidden
+      >
+        <p className="text-[11px] font-medium leading-4 tracking-tight text-muted">
+          {day}
+        </p>
+        <p className="mt-1 text-[1.25rem] font-semibold leading-7 tabular-nums tracking-tight text-foreground">
+          {time}
+        </p>
+        {recent ? (
+          <p className="mt-1 text-[11px] font-semibold leading-4 text-primary">
+            {recent}
           </p>
-          <MeetingTags tags={meeting.tags} />
-        </Link>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0 text-muted hover:text-foreground"
-          type="button"
-          aria-label={`${meeting.title} 내보내기`}
-          title="내보내기"
-          onClick={(e) => e.preventDefault()}
-        >
-          <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
-        </Button>
-      </div>
+        ) : null}
+      </Link>
 
-      <div className="mt-2.5 flex min-w-0 items-center justify-between gap-3">
-        <div className="min-w-0 leading-snug">
-          <p className="truncate text-xs font-medium text-foreground">
-            {day} {time}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted">
-            {meeting.duration}
-            {recent ? ` · ${recent}` : ""}
-          </p>
+      {/* headline + supporting */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-center lg:gap-3">
+            <Link
+              href={href}
+              className="min-w-0 outline-none lg:max-w-[42%]"
+              title={meeting.title}
+            >
+              <p className="truncate text-base font-medium leading-6 text-foreground group-hover:text-primary">
+                {meeting.title}
+              </p>
+            </Link>
+            <div className="min-w-0 lg:flex-1">
+              <MeetingKeywords meeting={meeting} />
+            </div>
+          </div>
+
+          {/* trailingSupportingText + action */}
+          <div className="flex shrink-0 items-center gap-0.5 pt-0.5">
+            <span className="px-1 text-xs font-medium tabular-nums text-muted">
+              {meeting.duration}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted hover:text-foreground"
+              type="button"
+              aria-label={`${meeting.title} 내보내기`}
+              title="내보내기"
+              onClick={(e) => e.preventDefault()}
+            >
+              <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </Button>
+          </div>
         </div>
-        <div className="shrink-0">
+
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <ParticipantsCell participants={meeting.participants} />
+          {meeting.tags.length > 0 ? (
+            <p className="min-w-0 truncate text-xs text-muted-2">
+              {meeting.tags.slice(0, 3).join(", ")}
+            </p>
+          ) : null}
         </div>
-      </div>
-
-      <div className="mt-2.5 min-w-0">
-        <MeetingSummary meeting={meeting} />
       </div>
     </div>
   );

@@ -263,6 +263,30 @@ export function getUpcomingById(id: string): UpcomingItem | undefined {
   return UPCOMING.find((item) => item.id === id);
 }
 
+/** 예정 회의 추가용 초안 (로컬 상태용). */
+export function createUpcomingDraft(
+  workspaceId: WorkspaceId,
+  organizer: string,
+): UpcomingItem {
+  const host = organizer.trim() || "나";
+  return {
+    id: `up-${Date.now()}`,
+    title: "",
+    when: "오늘 16:00, 40분",
+    dateLabel: "오늘",
+    timeLabel: "16:00",
+    duration: "40분",
+    location: "Google Meet",
+    platform: "meet",
+    organizer: host,
+    participants: [host],
+    agenda: [],
+    notes: "",
+    href: "/meetings/new",
+    workspace: workspaceId,
+  };
+}
+
 export function getProcessingByWorkspace(
   workspaceId: WorkspaceId,
 ): ProcessItem[] {

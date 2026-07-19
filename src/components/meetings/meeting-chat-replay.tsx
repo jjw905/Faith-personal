@@ -109,13 +109,13 @@ function ReplayBubble({
       </div>
       <div
         className={cn(
-          "min-w-0",
-          meta.mine ? "text-right" : "text-left",
+          "flex min-w-0 flex-col gap-2.5",
+          meta.mine ? "items-end text-right" : "items-start text-left",
         )}
       >
         <p
           className={cn(
-            "mb-1 flex min-w-0 items-baseline gap-1.5 text-[11px] font-semibold",
+            "flex min-w-0 items-baseline gap-1.5 text-[11px] font-semibold",
             meta.mine
               ? "flex-row-reverse text-primary"
               : "text-foreground",
@@ -127,14 +127,10 @@ function ReplayBubble({
           </span>
         </p>
         {line.attachment ? (
-          <div
-            className={cn("flex", meta.mine ? "justify-end" : "justify-start")}
-          >
-            <TranscriptAttachmentCard
-              attachment={line.attachment}
-              hostSide={meta.mine}
-            />
-          </div>
+          <TranscriptAttachmentCard
+            attachment={line.attachment}
+            hostSide={meta.mine}
+          />
         ) : null}
         {text ? (
           <div

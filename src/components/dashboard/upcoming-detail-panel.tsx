@@ -41,6 +41,8 @@ interface UpcomingDetailPanelProps {
   open: boolean;
   onClose: () => void;
   onSave: (item: UpcomingItem) => void;
+  /** 추가 모드면 처음부터 편집 폼을 연다. */
+  mode?: "view" | "create";
 }
 
 type FormState = {
@@ -142,7 +144,7 @@ function fromForm(item: UpcomingItem, form: FormState): UpcomingItem {
 
   return {
     ...item,
-    title: form.title.trim() || item.title,
+    title: form.title.trim() || item.title || "새 예정 회의",
     dateLabel: form.dateLabel.trim() || item.dateLabel,
     timeLabel: form.timeLabel.trim() || item.timeLabel,
     duration: form.duration.trim() || item.duration,
@@ -150,7 +152,7 @@ function fromForm(item: UpcomingItem, form: FormState): UpcomingItem {
     platform: form.platform,
     organizer: form.organizer.trim() || item.organizer,
     participants: participants.length ? participants : item.participants,
-    agenda: agenda.length ? agenda : item.agenda,
+    agenda,
     notes: form.notes.trim(),
     when: `${form.dateLabel.trim()} ${form.timeLabel.trim()}, ${form.duration.trim()}`,
   };
@@ -340,7 +342,9 @@ export function UpcomingDetailPanel({
   open,
   onClose,
   onSave,
+  mode = "view",
 }: UpcomingDetailPanelProps) {
+  const isCreate = mode === "create";
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
   const [participantDraft, setParticipantDraft] = useState("");
@@ -363,17 +367,17 @@ export function UpcomingDetailPanel({
 
   useEffect(() => {
     if (!open || !item) return;
-    setEditing(false);
+    setEditing(isCreate);
     setForm(toForm(item));
     resetEditors();
-  }, [open, item]);
+  }, [open, item, isCreate]);
 
   useEffect(() => {
     if (!open) return;
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (editing) {
+        if (editing && !isCreate) {
           setEditing(false);
           if (item) setForm(toForm(item));
           resetEditors();
@@ -389,7 +393,7 @@ export function UpcomingDetailPanel({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [open, onClose, editing, item]);
+  }, [open, onClose, editing, item, isCreate]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -399,6 +403,16 @@ export function UpcomingDetailPanel({
     if (!item || !form) return;
     onSave(fromForm(item, form));
     setEditing(false);
+    resetEditors();
+  }
+
+  function cancelEdit() {
+    if (isCreate) {
+      onClose();
+      return;
+    }
+    setEditing(false);
+    if (item) setForm(toForm(item));
     resetEditors();
   }
 
@@ -453,7 +467,7 @@ export function UpcomingDetailPanel({
         role="dialog"
         aria-modal={open}
         aria-hidden={!open}
-        aria-label="예정 회의 상세"
+        aria-label={isCreate ? "예정 회의 추가" : "예정 회의 상세"}
         inert={!open}
         className={cn(
           "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-card shadow-[0_0_40px_rgba(17,24,46,0.12)] transition-transform duration-200 ease-out",
@@ -463,7 +477,11 @@ export function UpcomingDetailPanel({
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-5">
           <div className="min-w-0 flex-1 pr-2">
             <p className="text-xs text-muted">
-              {editing ? "예정 회의 수정" : "예정 회의"}
+              {isCreate
+                ? "예정 회의 추가"
+                : editing
+                  ? "예정 회의 수정"
+                  : "예정 회의"}
             </p>
             {editing && form ? (
               <Input
@@ -479,7 +497,7 @@ export function UpcomingDetailPanel({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {!editing && view ? (
+            {!editing && view && !isCreate ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -1011,7 +1029,7 @@ export function UpcomingDetailPanel({
                   {editing ? (
                     form.agenda.length === 0 ? (
                       <p className="text-xs text-muted">
-                        필요할 때만 안건을 추가하세요.
+                        미리 적어 두면 회의 때 흐름을 잡기 좋아요.
                       </p>
                     ) : (
                       <ol className="space-y-2">
@@ -1093,17 +1111,13 @@ export function UpcomingDetailPanel({
               {editing ? (
                 <>
                   <Button type="button" className="flex-1" onClick={handleSave}>
-                    저장
+                    {isCreate ? "추가" : "저장"}
                   </Button>
                   <Button
                     type="button"
                     variant="outline"
                     className="flex-1"
-                    onClick={() => {
-                      setEditing(false);
-                      setForm(toForm(view));
-                      resetEditors();
-                    }}
+                    onClick={cancelEdit}
                   >
                     취소
                   </Button>

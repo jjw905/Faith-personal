@@ -140,37 +140,26 @@ function kindTone(kind: TranscriptAttachmentKind, hostSide: boolean) {
   }
 }
 
-/** 새 회의 첨부 카드와 같은 톤 — 다시보기 말풍선용. */
+/** 다시보기 말풍선용 첨부 카드. 말풍선과 구분되도록 항상 밝은 톤. */
 export function TranscriptAttachmentCard({
   attachment,
-  hostSide,
 }: {
   attachment: TranscriptAttachment;
-  hostSide: boolean;
+  hostSide?: boolean;
 }) {
   const kind = resolveAttachmentKind(attachment);
   const ext = (attachment.name.split(".").pop() ?? "file").toUpperCase();
 
   return (
-    <div
-      className={cn(
-        "w-full max-w-[15.75rem] overflow-hidden rounded-2xl text-left shadow-soft",
-        hostSide
-          ? "rounded-bl-md bg-primary text-primary-foreground"
-          : "rounded-br-md bg-card text-foreground ring-1 ring-border",
-      )}
-    >
+    <div className="w-full max-w-[15.75rem] shrink-0 overflow-hidden rounded-2xl bg-card text-left text-foreground shadow-soft ring-1 ring-border">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div
           className={cn(
             "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl",
-            kindTone(kind, hostSide),
+            kindTone(kind, false),
           )}
         >
-          <KindIcon
-            kind={kind}
-            className={hostSide ? "text-primary-foreground" : undefined}
-          />
+          <KindIcon kind={kind} />
           <span className="mt-0.5 text-[8px] font-bold leading-none tracking-wide opacity-80">
             {ext}
           </span>
@@ -179,12 +168,7 @@ export function TranscriptAttachmentCard({
           <p className="truncate text-[13px] font-semibold leading-snug">
             {attachment.name}
           </p>
-          <p
-            className={cn(
-              "mt-1 text-[11px] font-medium tabular-nums",
-              hostSide ? "text-primary-foreground/75" : "text-muted",
-            )}
-          >
+          <p className="mt-1 text-[11px] font-medium tabular-nums text-muted">
             {kindLabel(kind)} {attachment.sizeLabel}
           </p>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, LayoutGrid, List, Users } from "lucide-react";
+import { ArrowRight, LayoutGrid, List, Plus, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { UpcomingDetailPanel } from "@/components/dashboard/upcoming-detail-panel";
@@ -15,6 +15,7 @@ import {
   platformDefaultLocation,
 } from "@/lib/meeting-platform";
 import {
+  createUpcomingDraft,
   getUpcomingByWorkspace,
   resolveWorkspacePerson,
   type UpcomingItem,
@@ -22,9 +23,16 @@ import {
 import { cn } from "@/lib/utils";
 
 const LAYOUT_KEY = "faith.upcoming.layout";
-const COMPACT_SLOT_COUNT = 4;
+/** 기본 축소 슬롯. 5개 이상이면 6칸(2×3)으로 확장. */
+const COMPACT_SLOT_BASE = 4;
+const COMPACT_SLOT_WIDE = 6;
+const COMPACT_WIDE_MIN = 5;
 const COMPACT_CARD_HEIGHT = "h-[7.25rem]";
 type UpcomingLayout = "compact" | "expanded";
+
+function compactSlotCount(itemCount: number) {
+  return itemCount >= COMPACT_WIDE_MIN ? COMPACT_SLOT_WIDE : COMPACT_SLOT_BASE;
+}
 
 function readLayout(): UpcomingLayout {
   if (typeof window === "undefined") return "compact";
@@ -222,17 +230,20 @@ function CompactCard({
   );
 }
 
-function CompactEmptySlot() {
+function CompactEmptySlot({ onAdd }: { onAdd: () => void }) {
   return (
-    <div
+    <button
+      type="button"
+      onClick={onAdd}
       className={cn(
-        "flex w-full items-center justify-center rounded-xl border border-dashed border-border bg-surface/60 px-3",
+        "flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-surface/60 px-3 text-muted transition-colors hover:border-foreground/25 hover:bg-surface-2 hover:text-foreground",
         COMPACT_CARD_HEIGHT,
       )}
-      aria-hidden
+      aria-label="예정 회의 추가"
     >
-      <p className="text-xs font-medium text-muted">비어 있음</p>
-    </div>
+      <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+      <span className="text-xs font-semibold">추가</span>
+    </button>
   );
 }
 
@@ -315,7 +326,7 @@ export function MeetingMidPanel({
 }: {
   searchQuery?: string;
 }) {
-  const { workspaceId } = useAppContext();
+  const { workspaceId, currentUser } = useAppContext();
   const seed = useMemo(
     () => getUpcomingByWorkspace(workspaceId),
     [workspaceId],
@@ -324,11 +335,13 @@ export function MeetingMidPanel({
   const [layout, setLayout] = useState<UpcomingLayout>("compact");
   const [selected, setSelected] = useState<UpcomingItem | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailMode, setDetailMode] = useState<"view" | "create">("view");
 
   useEffect(() => {
     setItems(seed);
     setDetailOpen(false);
     setSelected(null);
+    setDetailMode("view");
   }, [seed]);
 
   useEffect(() => {
@@ -358,17 +371,31 @@ export function MeetingMidPanel({
   }, []);
 
   const openDetail = useCallback((item: UpcomingItem) => {
+    setDetailMode("view");
     setSelected(item);
     setDetailOpen(true);
   }, []);
 
+  const openCreate = useCallback(() => {
+    setDetailMode("create");
+    setSelected(createUpcomingDraft(workspaceId, currentUser.name));
+    setDetailOpen(true);
+  }, [workspaceId, currentUser.name]);
+
   const closeDetail = useCallback(() => {
     setDetailOpen(false);
+    setDetailMode("view");
   }, []);
 
   const saveItem = useCallback((next: UpcomingItem) => {
-    setItems((prev) => prev.map((item) => (item.id === next.id ? next : item)));
+    setItems((prev) => {
+      const exists = prev.some((item) => item.id === next.id);
+      return exists
+        ? prev.map((item) => (item.id === next.id ? next : item))
+        : [...prev, next];
+    });
     setSelected(next);
+    setDetailMode("view");
   }, []);
 
   return (
@@ -384,65 +411,100 @@ export function MeetingMidPanel({
             ) : null}
           </div>
 
-          <div
-            className="flex items-center rounded-lg bg-surface p-0.5"
-            role="group"
-            aria-label="예정 회의 레이아웃"
-          >
+          <div className="flex items-center gap-1.5">
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className={cn(
-                "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
-                layout === "compact" && "bg-card text-foreground shadow-soft",
-              )}
-              aria-pressed={layout === "compact"}
-              aria-label="축소 보기"
-              onClick={() => setLayoutPersist("compact")}
+              className="h-8 w-8 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
+              aria-label="예정 회의 추가"
+              onClick={openCreate}
             >
-              <List className="h-4 w-4" strokeWidth={1.75} />
+              <Plus className="h-4 w-4" strokeWidth={1.75} />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
-                layout === "expanded" && "bg-card text-foreground shadow-soft",
-              )}
-              aria-pressed={layout === "expanded"}
-              aria-label="확장 보기"
-              onClick={() => setLayoutPersist("expanded")}
+            <div
+              className="flex items-center rounded-lg bg-surface p-0.5"
+              role="group"
+              aria-label="예정 회의 레이아웃"
             >
-              <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
+                  layout === "compact" && "bg-card text-foreground shadow-soft",
+                )}
+                aria-pressed={layout === "compact"}
+                aria-label="축소 보기"
+                onClick={() => setLayoutPersist("compact")}
+              >
+                <List className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
+                  layout === "expanded" && "bg-card text-foreground shadow-soft",
+                )}
+                aria-pressed={layout === "expanded"}
+                aria-label="확장 보기"
+                onClick={() => setLayoutPersist("expanded")}
+              >
+                <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
+              </Button>
+            </div>
           </div>
         </div>
 
         {layout === "compact" ? (
           <ul className="grid gap-2 sm:grid-cols-2">
-            {Array.from({ length: COMPACT_SLOT_COUNT }, (_, index) => {
-              const item = visibleItems[index];
-              return (
-                <li key={item?.id ?? `compact-slot-${index}`}>
-                  {item ? (
-                    <CompactCard item={item} onOpen={openDetail} />
-                  ) : (
-                    <CompactEmptySlot />
-                  )}
-                </li>
-              );
-            })}
+            {Array.from(
+              { length: compactSlotCount(visibleItems.length) },
+              (_, index) => {
+                const item = visibleItems[index];
+                return (
+                  <li key={item?.id ?? `compact-slot-${index}`}>
+                    {item ? (
+                      <CompactCard item={item} onOpen={openDetail} />
+                    ) : (
+                      <CompactEmptySlot onAdd={openCreate} />
+                    )}
+                  </li>
+                );
+              },
+            )}
           </ul>
         ) : visibleItems.length === 0 ? (
-          <p className="rounded-xl bg-surface px-3 py-4 text-center text-sm text-muted">
-            {searchQuery.trim()
-              ? "검색 결과가 없습니다."
-              : "예정된 회의가 없습니다."}
-          </p>
+          <div className="rounded-xl bg-surface px-3 py-6 text-center">
+            <p className="text-sm text-muted">
+              {searchQuery.trim()
+                ? "검색 결과가 없습니다."
+                : "예정된 회의가 없습니다."}
+            </p>
+            {!searchQuery.trim() ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 cursor-pointer"
+                onClick={openCreate}
+              >
+                <Plus className="h-4 w-4" strokeWidth={1.75} />
+                예정 회의 추가
+              </Button>
+            ) : null}
+          </div>
         ) : (
-          <ul className="grid auto-rows-fr gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <ul
+            className={cn(
+              "grid auto-rows-fr gap-3 sm:grid-cols-2",
+              // 3열(최대 6칸 느낌)은 5개 이상일 때만
+              visibleItems.length >= COMPACT_WIDE_MIN && "xl:grid-cols-3",
+            )}
+          >
             {visibleItems.map((item) => (
               <li key={item.id} className="min-h-0">
                 <ExpandedCard item={item} onOpen={openDetail} />
@@ -455,6 +517,7 @@ export function MeetingMidPanel({
       <UpcomingDetailPanel
         item={selected}
         open={detailOpen}
+        mode={detailMode}
         onClose={closeDetail}
         onSave={saveItem}
       />
