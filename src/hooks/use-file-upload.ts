@@ -67,6 +67,7 @@ export function useFileUpload() {
     handleDragLeave,
     handleDrop,
     handleFileSelect,
+    selectFile: processFile,
     clearFile,
   };
 }

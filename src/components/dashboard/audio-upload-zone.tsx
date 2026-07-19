@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, Mic, Upload, X } from "lucide-react";
+import { Archive, CheckCircle2, Mic, Upload, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,7 @@ export function AudioUploadZone({
   ctaUpload?: string;
 }) {
   const [mode, setMode] = useState<Mode>("idle");
+  const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
 
   const {
     isDragging,
@@ -37,6 +39,7 @@ export function AudioUploadZone({
     handleDragLeave,
     handleDrop,
     handleFileSelect,
+    selectFile,
     clearFile,
   } = useFileUpload();
 
@@ -182,11 +185,31 @@ export function AudioUploadZone({
                     </li>
                   ))}
                 </ul>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="relative z-10 h-8 cursor-pointer gap-1.5"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setVaultPickerOpen(true);
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  보관함에서
+                </Button>
               </>
             )}
           </div>
         </div>
       )}
+
+      <VaultPickerDialog
+        open={vaultPickerOpen}
+        onClose={() => setVaultPickerOpen(false)}
+        onPick={(file) => selectFile(file)}
+      />
     </div>
   );
 }

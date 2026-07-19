@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  Archive,
   ArrowLeft,
   Clock3,
   FileAudio,
@@ -30,6 +31,7 @@ import {
 
 import { MaskedText } from "@/components/meetings/masked-text";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
+import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { useAppContext } from "@/context/app-context";
 import { useMeetingChrome } from "@/context/meeting-chrome-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
@@ -406,7 +408,7 @@ function createDefaultMeetingMemo(): MeetingMemo {
     purpose: [
       "홈 ChatMock과 동일한 채팅 버블 레이아웃 확인",
       "인식 시작 시 좌측 메뉴 숨김, 우측 시나리오 노출 점검",
-      "파일 첨부·메모 보기 동선이 방해되지 않는지 확인",
+      "파일 첨부, 메모 보기 동선이 방해되지 않는지 확인",
     ].map(createMemoLine),
     notes: [
       "민감정보가 나오면 마스킹 칩으로 가려진 뒤 클릭 시에만 원문 확인",
@@ -577,10 +579,12 @@ function RecordBeatBars() {
 function AttachMenuPopup({
   open,
   onAttach,
+  onVault,
   onRandomSend,
 }: {
   open: boolean;
   onAttach: () => void;
+  onVault: () => void;
   onRandomSend: () => void;
 }) {
   if (!open) return null;
@@ -589,7 +593,7 @@ function AttachMenuPopup({
     <div
       role="menu"
       aria-label="파일 첨부 메뉴"
-      className="absolute bottom-full left-1/2 z-50 mb-2 w-52 -translate-x-1/2 rounded-2xl bg-card p-1.5 shadow-soft ring-1 ring-border"
+      className="absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-2xl bg-card p-1.5 shadow-soft ring-1 ring-border"
       style={{
         animation: "fab-item-up 220ms cubic-bezier(0.2, 0, 0, 1) both",
       }}
@@ -604,6 +608,20 @@ function AttachMenuPopup({
           <Upload className="h-4 w-4" strokeWidth={1.75} />
         </span>
         <span className="min-w-0 flex-1 truncate">파일 첨부</span>
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={onVault}
+        className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] font-semibold text-foreground transition-colors hover:bg-surface-2"
+      >
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground">
+          <Archive className="h-4 w-4" strokeWidth={1.75} />
+        </span>
+        <span className="min-w-0 flex-1 truncate">보관함에서</span>
+        <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold leading-none text-primary-foreground">
+          개발
+        </span>
       </button>
       <button
         type="button"
@@ -934,6 +952,7 @@ export function NewMeetingSession() {
     selectedFile,
     acceptedFormats,
     handleFileSelect,
+    selectFile,
     clearFile,
   } = useFileUpload();
 
@@ -945,6 +964,7 @@ export function NewMeetingSession() {
   const [memoOpen, setMemoOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [meetingTitle, setMeetingTitle] = useState(DEFAULT_MEETING_TITLE);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -1096,6 +1116,13 @@ export function NewMeetingSession() {
     pushFileMessage(me, file.name, formatFileSize(file.size));
     setAttachMenuOpen(false);
     event.target.value = "";
+  }
+
+  function onVaultFilePicked(file: File) {
+    selectFile(file);
+    const me = SPEAKERS[0]!;
+    pushFileMessage(me, file.name, formatFileSize(file.size));
+    setAttachMenuOpen(false);
   }
 
   function sendRandomTestFiles() {
@@ -1444,6 +1471,10 @@ export function NewMeetingSession() {
                     setAttachMenuOpen(false);
                     fileInputRef.current?.click();
                   }}
+                  onVault={() => {
+                    setAttachMenuOpen(false);
+                    setVaultPickerOpen(true);
+                  }}
                   onRandomSend={sendRandomTestFiles}
                 />
                 <button
@@ -1493,6 +1524,12 @@ export function NewMeetingSession() {
           </div>
         </div>
       </div>
+
+      <VaultPickerDialog
+        open={vaultPickerOpen}
+        onClose={() => setVaultPickerOpen(false)}
+        onPick={(file) => onVaultFilePicked(file)}
+      />
 
       <ResetConfirmDialog
         open={resetConfirmOpen}

@@ -1,4 +1,5 @@
 import {
+  Archive,
   CircleHelp,
   EyeOff,
   History,
@@ -58,6 +59,11 @@ export const DEV_NAV_ITEMS: NavItem[] = [
     icon: History,
   },
   {
+    title: "보관함",
+    href: "/vault",
+    icon: Archive,
+  },
+  {
     title: "개인정보 마스킹",
     href: "/meetings/live-mask",
     icon: EyeOff,
@@ -112,5 +118,10 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
     "/changelog": {
       title: "Changelog",
       description: "개발전용, Faith 웹 앱 변경 이력을 확인합니다.",
+    },
+    "/vault": {
+      title: "보관함",
+      description:
+        "개발전용, 자주 쓰는 파일을 올려 두고 첨부 UI에서 바로 고릅니다.",
     },
   };

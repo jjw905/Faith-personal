@@ -22,10 +22,10 @@ function EntryBlock({
     >
       <aside className="sm:pt-1">
         <p className="text-sm font-semibold tabular-nums tracking-tight text-foreground">
-          {entry.version}
+          {getChangelogDateLabel(entry.date)}
         </p>
         <p className="mt-1 text-xs leading-relaxed text-muted-2">
-          {getChangelogDateLabel(entry.date)}
+          {entry.version}
         </p>
       </aside>
 
@@ -84,7 +84,7 @@ export default function ChangelogPage() {
         <div className="space-y-12 sm:space-y-14">
           {CHANGELOG.map((entry, index) => (
             <EntryBlock
-              key={entry.version}
+              key={entry.date}
               entry={entry}
               isLast={index === CHANGELOG.length - 1}
             />

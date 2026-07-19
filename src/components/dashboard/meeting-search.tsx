@@ -4,16 +4,18 @@ import { Search, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/** 대시보드 제목 옆 — 회의 간단 검색. */
+/** 제목 아래·옆에서 쓰는 간단 검색. */
 export function MeetingSearch({
   value,
   onChange,
   placeholder = "회의 검색",
+  label = "검색",
   className,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  label?: string;
   className?: string;
 }) {
   return (
@@ -23,7 +25,7 @@ export function MeetingSearch({
         className,
       )}
     >
-      <span className="sr-only">회의 검색</span>
+      <span className="sr-only">{label}</span>
       <Search
         className="h-4 w-4 shrink-0 text-foreground/55"
         strokeWidth={1.75}
