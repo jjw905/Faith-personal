@@ -17,7 +17,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   Disabled: "비활성화된 계정입니다.",
   Configuration:
     "서버 로그인 설정이 불완전합니다. AUTH_SECRET, AUTH_URL, DATABASE_URL을 확인하세요.",
-  OAuthAccountNotLinked: "이미 다른 방식으로 가입된 이메일입니다.",
+  OAuthAccountNotLinked:
+    "이미 다른 소셜로 가입된 이메일입니다. 처음에 사용한 방식으로 로그인해 주세요.",
 };
 
 /** 로그인 패널 — Credentials + 소셜. */

@@ -156,7 +156,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       const email = (user.email || "").trim().toLowerCase();
 
-      // 동일 이메일에 비밀번호 계정이 있으면 새 OAuth 병합 거부
+      // 동일 이메일이 이미 있으면, 그 계정에 연결된 소셜만 허용 (중복 가입 차단)
       if (account?.type === "oauth" && email) {
         const existing = await prisma.user.findUnique({
           where: { email },
@@ -168,14 +168,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             },
           },
         });
-        if (existing?.passwordHash) {
+        if (existing) {
           const alreadyLinked = existing.accounts.some(
             (a) =>
               a.provider === account.provider &&
               a.providerAccountId === account.providerAccountId,
           );
           if (!alreadyLinked) {
-            return "/login?error=EmailConflict";
+            return existing.passwordHash
+              ? "/login?error=EmailConflict"
+              : "/login?error=OAuthAccountNotLinked";
           }
         }
       }
