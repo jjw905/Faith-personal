@@ -38,10 +38,24 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (await isEmailTaken(email)) {
+
+  try {
+    if (await isEmailTaken(email)) {
+      return NextResponse.json(
+        { ok: false, message: "이미 사용 중인 이메일입니다." },
+        { status: 409 },
+      );
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
     return NextResponse.json(
-      { ok: false, message: "이미 사용 중인 이메일입니다." },
-      { status: 409 },
+      {
+        ok: false,
+        message: /does not exist|P2021/i.test(msg)
+          ? "데이터베이스가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요."
+          : "회원가입에 실패했습니다. 다시 시도해 주세요.",
+      },
+      { status: 503 },
     );
   }
   if (!isValidPassword(password)) {
@@ -71,15 +85,42 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await hashPassword(password);
-  await prisma.user.create({
-    data: {
-      email,
-      name,
-      passwordHash,
-    },
-  });
 
-  await sendVerificationEmail(email, name);
+  try {
+    await prisma.user.create({
+      data: {
+        email,
+        name,
+        passwordHash,
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    console.error("[signup]", msg.slice(0, 300));
+    return NextResponse.json(
+      {
+        ok: false,
+        message: /does not exist|P2021/i.test(msg)
+          ? "데이터베이스가 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요."
+          : "회원가입에 실패했습니다. 다시 시도해 주세요.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const mailed = await sendVerificationEmail(email, name);
+  if (!mailed.ok && mailed.reason === "missing_key") {
+    // Resend 미설정 시 바로 로그인 가능하도록 인증 처리
+    await prisma.user.update({
+      where: { email },
+      data: { emailVerified: new Date() },
+    });
+    return NextResponse.json({
+      ok: true,
+      message: "회원가입이 완료되었습니다. 바로 로그인할 수 있습니다.",
+      emailVerified: true,
+    });
+  }
 
   const res = NextResponse.json({
     ok: true,

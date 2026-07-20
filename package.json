@@ -10,7 +10,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
-    "start": "next start --hostname 0.0.0.0 --port ${PORT:-3000}",
+    "start": "prisma migrate deploy && next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "lint": "eslint",
     "test:masking": "npx --yes tsx --tsconfig tsconfig.json scripts/test-masking.ts",
     "test:masking:random": "npx --yes tsx --tsconfig tsconfig.json scripts/test-random-masking.ts",

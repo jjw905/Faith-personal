@@ -13,7 +13,19 @@ export async function POST(request: Request) {
   const auth = request.headers.get("authorization") ?? "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
 
-  const userCount = await prisma.user.count();
+  let userCount = 0;
+  try {
+    userCount = await prisma.user.count();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message.slice(0, 200) : "db_error";
+    return NextResponse.json(
+      {
+        ok: false,
+        message: `DB 스키마가 없습니다. migrate 후 다시 시도하세요. (${msg})`,
+      },
+      { status: 503 },
+    );
+  }
 
   if (setupSecret) {
     if (token !== setupSecret) {

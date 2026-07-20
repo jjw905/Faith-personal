@@ -26,20 +26,33 @@ export async function GET() {
     .map(([key]) => key);
 
   let databaseOk: boolean | null = null;
+  let schemaOk: boolean | null = null;
   let databaseError: string | null = null;
   if (required.DATABASE_URL) {
     try {
       const { prisma } = await import("@/lib/prisma");
       await prisma.$queryRaw`SELECT 1`;
       databaseOk = true;
+      try {
+        await prisma.user.count();
+        schemaOk = true;
+      } catch (err) {
+        schemaOk = false;
+        databaseError =
+          err instanceof Error ? err.message.slice(0, 200) : "schema_error";
+      }
     } catch (err) {
       databaseOk = false;
+      schemaOk = false;
       databaseError =
         err instanceof Error ? err.message.slice(0, 200) : "db_error";
     }
   }
 
-  const ok = missingRequired.length === 0 && databaseOk !== false;
+  const ok =
+    missingRequired.length === 0 &&
+    databaseOk !== false &&
+    schemaOk !== false;
 
   return NextResponse.json(
     {
@@ -48,6 +61,7 @@ export async function GET() {
       required,
       optional,
       databaseOk,
+      schemaOk,
       databaseError,
       authUrlHost: (() => {
         try {

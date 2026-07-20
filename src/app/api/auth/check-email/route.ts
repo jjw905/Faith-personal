@@ -40,17 +40,34 @@ export async function POST(request: Request) {
     );
   }
 
-  if (await isEmailTaken(email)) {
+  try {
+    if (await isEmailTaken(email)) {
+      return NextResponse.json({
+        ok: true,
+        available: false,
+        message: "이미 사용 중인 이메일입니다.",
+      });
+    }
+
     return NextResponse.json({
       ok: true,
-      available: false,
-      message: "이미 사용 중인 이메일입니다.",
+      available: true,
+      message: "사용 가능한 이메일입니다.",
     });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    const schemaMissing =
+      /does not exist|P2021|relation .* does not exist/i.test(msg);
+    console.error("[check-email]", msg.slice(0, 300));
+    return NextResponse.json(
+      {
+        ok: false,
+        available: false,
+        message: schemaMissing
+          ? "데이터베이스 테이블이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요."
+          : "중복 확인에 실패했습니다. 다시 시도해 주세요.",
+      },
+      { status: 503 },
+    );
   }
-
-  return NextResponse.json({
-    ok: true,
-    available: true,
-    message: "사용 가능한 이메일입니다.",
-  });
 }
