@@ -84,36 +84,50 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = String(credentials?.email ?? "")
-          .trim()
-          .toLowerCase();
-        const password = String(credentials?.password ?? "");
-        if (!isValidEmail(email) || !password) return null;
+        try {
+          if (!process.env.AUTH_SECRET?.trim()) {
+            console.error("[auth] AUTH_SECRET missing");
+            return null;
+          }
+          if (!process.env.DATABASE_URL?.trim()) {
+            console.error("[auth] DATABASE_URL missing");
+            return null;
+          }
 
-        const user = await prisma.user.findUnique({
-          where: { email },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            image: true,
-            role: true,
-            disabled: true,
-            passwordHash: true,
-          },
-        });
-        if (!user || user.disabled || !user.passwordHash) return null;
-        const ok = await verifyPassword(password, user.passwordHash);
-        if (!ok) return null;
+          const email = String(credentials?.email ?? "")
+            .trim()
+            .toLowerCase();
+          const password = String(credentials?.password ?? "");
+          if (!isValidEmail(email) || !password) return null;
 
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-          role: user.role,
-          disabled: user.disabled,
-        };
+          const user = await prisma.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              image: true,
+              role: true,
+              disabled: true,
+              passwordHash: true,
+            },
+          });
+          if (!user || user.disabled || !user.passwordHash) return null;
+          const ok = await verifyPassword(password, user.passwordHash);
+          if (!ok) return null;
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            role: user.role,
+            disabled: user.disabled,
+          };
+        } catch (err) {
+          console.error("[auth] credentials authorize failed", err);
+          return null;
+        }
       },
     }),
     ...oauthProviders(),

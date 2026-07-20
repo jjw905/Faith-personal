@@ -15,7 +15,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   CredentialsSignin: "이메일 또는 비밀번호가 올바르지 않습니다.",
   EmailConflict: "이미 이메일·비밀번호로 가입된 계정입니다. 이메일로 로그인해 주세요.",
   Disabled: "비활성화된 계정입니다.",
-  Configuration: "로그인 설정에 문제가 있습니다.",
+  Configuration:
+    "서버 로그인 설정이 불완전합니다. AUTH_SECRET, AUTH_URL, DATABASE_URL을 확인하세요.",
   OAuthAccountNotLinked: "이미 다른 방식으로 가입된 이메일입니다.",
 };
 
