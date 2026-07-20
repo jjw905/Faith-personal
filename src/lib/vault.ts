@@ -35,14 +35,35 @@ export function notifyVaultChanged() {
   window.dispatchEvent(new CustomEvent(VAULT_CHANGED_EVENT));
 }
 
+/**
+ * 응답을 JSON으로 안전 파싱. 서버가 HTML 오류 페이지(500/413/프록시)를 주면
+ * "Unexpected token '<'" 대신 상태 코드 기반의 사람이 읽을 메시지로 변환.
+ */
+async function readJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const byStatus =
+      res.status === 413
+        ? "파일이 너무 커서 업로드할 수 없습니다."
+        : res.status === 401 || res.status === 403
+          ? "로그인이 필요합니다."
+          : res.status >= 500
+            ? "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+            : "요청을 처리하지 못했습니다.";
+    throw new Error(byStatus);
+  }
+}
+
 export async function listVaultItems(): Promise<VaultItemMeta[]> {
   const res = await fetch("/api/vault", { cache: "no-store" });
-  const data = (await res.json()) as {
+  const data = await readJson<{
     ok: boolean;
     items?: VaultItemMeta[];
     usage?: VaultUsage;
     message?: string;
-  };
+  }>(res);
   if (!res.ok || !data.ok) {
     throw new Error(data.message ?? "보관함을 불러오지 못했습니다.");
   }
@@ -54,12 +75,12 @@ export async function getVaultBundle(): Promise<{
   usage: VaultUsage;
 }> {
   const res = await fetch("/api/vault", { cache: "no-store" });
-  const data = (await res.json()) as {
+  const data = await readJson<{
     ok: boolean;
     items?: VaultItemMeta[];
     usage?: VaultUsage;
     message?: string;
-  };
+  }>(res);
   if (!res.ok || !data.ok || !data.usage) {
     throw new Error(data.message ?? "보관함을 불러오지 못했습니다.");
   }
@@ -74,7 +95,7 @@ export async function getVaultUsage(): Promise<VaultUsage> {
 export async function getVaultItem(id: string): Promise<VaultItem | null> {
   const res = await fetch(`/api/vault/${id}`, { cache: "no-store" });
   if (res.status === 404) return null;
-  const data = (await res.json()) as {
+  const data = await readJson<{
     ok: boolean;
     url?: string;
     name?: string;
@@ -82,7 +103,7 @@ export async function getVaultItem(id: string): Promise<VaultItem | null> {
     size?: number;
     createdAt?: string;
     message?: string;
-  };
+  }>(res);
   if (!res.ok || !data.ok || !data.url) {
     throw new Error(data.message ?? "파일을 열지 못했습니다.");
   }
@@ -120,7 +141,7 @@ export async function addVaultFile(
       purpose,
     }),
   });
-  const prepared = (await presignRes.json()) as {
+  const prepared = await readJson<{
     ok: boolean;
     mode?: "local" | "spaces";
     id?: string;
@@ -128,7 +149,7 @@ export async function addVaultFile(
     uploadUrl?: string | null;
     mime?: string;
     message?: string;
-  };
+  }>(presignRes);
   if (!presignRes.ok || !prepared.ok || !prepared.id || !prepared.key) {
     throw new Error(prepared.message ?? "업로드 준비에 실패했습니다.");
   }
@@ -145,11 +166,11 @@ export async function addVaultFile(
       method: "POST",
       body: form,
     });
-    const data = (await localRes.json()) as {
+    const data = await readJson<{
       ok: boolean;
       item?: VaultItemMeta;
       message?: string;
-    };
+    }>(localRes);
     if (!localRes.ok || !data.ok || !data.item) {
       throw new Error(data.message ?? "업로드에 실패했습니다.");
     }
@@ -181,11 +202,11 @@ export async function addVaultFile(
       purpose,
     }),
   });
-  const data = (await completeRes.json()) as {
+  const data = await readJson<{
     ok: boolean;
     item?: VaultItemMeta;
     message?: string;
-  };
+  }>(completeRes);
   if (!completeRes.ok || !data.ok || !data.item) {
     throw new Error(data.message ?? "업로드 완료 처리에 실패했습니다.");
   }
@@ -195,7 +216,7 @@ export async function addVaultFile(
 
 export async function removeVaultItem(id: string): Promise<void> {
   const res = await fetch(`/api/vault/${id}`, { method: "DELETE" });
-  const data = (await res.json()) as { ok: boolean; message?: string };
+  const data = await readJson<{ ok: boolean; message?: string }>(res);
   if (!res.ok || !data.ok) {
     throw new Error(data.message ?? "삭제에 실패했습니다.");
   }
@@ -204,7 +225,7 @@ export async function removeVaultItem(id: string): Promise<void> {
 
 export async function clearVault(): Promise<void> {
   const res = await fetch("/api/vault?all=1", { method: "DELETE" });
-  const data = (await res.json()) as { ok: boolean; message?: string };
+  const data = await readJson<{ ok: boolean; message?: string }>(res);
   if (!res.ok || !data.ok) {
     throw new Error(data.message ?? "비우기에 실패했습니다.");
   }

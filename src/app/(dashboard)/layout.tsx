@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -19,9 +18,8 @@ export default async function DashboardLayout({
     redirect("/login?error=Disabled");
   }
 
-  const jar = await cookies();
-  const pending = jar.get("faith.pending-email")?.value;
-  const email = (session.user.email || pending || "").trim().toLowerCase();
+  // 신원 판단은 DB 기반 세션 이메일만 사용 (다른 흐름의 쿠키 오염 방지)
+  const email = (session.user.email || "").trim().toLowerCase();
 
   let verified =
     session.user.emailVerified ||

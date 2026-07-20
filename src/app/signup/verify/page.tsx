@@ -22,7 +22,8 @@ export default async function SignupVerifyPage({
   const session = await auth();
   const jar = await cookies();
   const pending = jar.get("faith.pending-email")?.value;
-  const email = (session?.user?.email || pending || "").trim().toLowerCase();
+  // 신원 판단은 세션(DB) 이메일만 사용. pending 쿠키는 미로그인 진입 판단에만 사용.
+  const email = (session?.user?.email || "").trim().toLowerCase();
 
   // 소셜+이메일은 인증 메일 없이 즉시 통과
   if (session?.user?.id && shouldAutoVerify(session.user.provider, email)) {

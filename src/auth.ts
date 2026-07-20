@@ -300,15 +300,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email = user.email.trim().toLowerCase();
       }
 
-      try {
-        const pending = (await cookies()).get("faith.pending-email")?.value;
-        if (pending && !token.email) {
-          token.email = pending.trim().toLowerCase();
-        }
-      } catch {
-        /* ignore */
-      }
-
       const oauthWithEmail = shouldAutoVerify(
         (account?.provider ?? token.provider) as string | undefined,
         (token.email ?? user?.email) as string | undefined,
@@ -333,8 +324,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.emailVerified = oauthWithEmail || Boolean(dbUser.emailVerified);
           }
 
-          // ADMIN_EMAILS에 있으면 매 요청 승격 (Google/네이버 기존 USER도 치유)
-          const adminMail = (token.email as string | undefined)?.toLowerCase();
+          // ADMIN_EMAILS 승격은 계정 DB 이메일만 근거로 판단한다.
+          // (토큰 이메일은 다른 흐름의 쿠키/프로필로 오염될 수 있어 신원 근거로 쓰지 않음)
+          const adminMail = dbUser.email?.trim().toLowerCase();
           if (
             adminMail &&
             adminEmails().includes(adminMail) &&

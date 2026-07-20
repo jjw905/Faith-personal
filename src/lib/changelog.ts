@@ -119,16 +119,24 @@ export const CHANGELOG: ChangelogEntry[] = [
   },
 ];
 
+export type DevAgendaItem = {
+  label: string;
+  done?: boolean;
+};
+
 /** Changelog 페이지 상단, 오늘 개발 안건. */
-export const DEV_AGENDA = {
+export const DEV_AGENDA: {
+  date: string;
+  items: DevAgendaItem[];
+} = {
   date: "2026-07-20",
   items: [
-    "로그인 / 회원가입 실제 서비스 연동 및 테스트",
-    "유저권한 설정 구현 및 테스트",
-    "보관함 기능 스토리지 연결",
-    "STT AI 연결 및 테스트",
+    { label: "로그인 / 회원가입 실제 서비스 연동 및 테스트" },
+    { label: "유저권한 설정 구현 및 테스트" },
+    { label: "보관함 기능 스토리지 연결", done: true },
+    { label: "STT AI 연결 및 테스트" },
   ],
-} as const;
+};
 
 function formatChangelogDate(iso: string) {
   const d = new Date(`${iso}T12:00:00`);

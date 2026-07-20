@@ -37,13 +37,20 @@ export default async function DevChangelogPage() {
           <ol className="mt-4 list-none space-y-2.5 border-l border-border pl-3.5">
             {DEV_AGENDA.items.map((item, index) => (
               <li
-                key={item}
+                key={item.label}
                 className="flex gap-2.5 text-[15px] leading-[1.65] text-muted"
               >
                 <span className="shrink-0 tabular-nums font-medium text-foreground/70">
                   {index + 1}.
                 </span>
-                <span>{item}</span>
+                <span className={item.done ? "text-muted-2 line-through" : ""}>
+                  {item.label}
+                </span>
+                {item.done ? (
+                  <span className="shrink-0 self-center rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-foreground/70">
+                    완료
+                  </span>
+                ) : null}
               </li>
             ))}
           </ol>
