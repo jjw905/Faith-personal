@@ -162,6 +162,12 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
         return;
       }
       if (!res.ok || !data.ok) {
+        if (res.status === 429) {
+          setFormError(
+            data.message ?? "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+          );
+          return;
+        }
         setFormError(data.message ?? "회원가입에 실패했습니다.");
         if (res.status === 409) {
           setEmailCheck("taken");

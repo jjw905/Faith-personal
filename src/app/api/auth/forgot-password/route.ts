@@ -6,10 +6,10 @@ import { isValidEmail } from "@/lib/auth-validation";
 import { storeResetToken } from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
-import { sendPasswordResetEmail } from "@/lib/resend-mail";
+import { isResendConfigured, sendPasswordResetEmail } from "@/lib/resend-mail";
 
 export async function POST(request: Request) {
-  const limited = enforceAuthRateLimit(request, "forgot-password", 10, 60_000);
+  const limited = enforceAuthRateLimit(request, "forgot-password", 5, 60_000);
   if (limited) return limited;
 
   let body: unknown;
@@ -34,20 +34,24 @@ export async function POST(request: Request) {
     );
   }
 
-  // 열거 완화: 항상 동일 응답
+  const mailEnabled = isResendConfigured();
+
+  if (!mailEnabled) {
+    // 열거 완화: 존재 여부와 무관하게 동일 안내
+    return NextResponse.json({
+      ok: true,
+      mailEnabled: false,
+      message:
+        "현재 이메일 재설정 기능을 사용할 수 없습니다. 관리자에게 문의해 주세요.",
+    });
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     select: { id: true, passwordHash: true, disabled: true },
   });
 
   if (user && !user.disabled && user.passwordHash) {
-    if (!process.env.AUTH_RESEND_KEY?.trim()) {
-      // 메일 비활성: 토큰만 만들지 않고 동일 응답
-      return NextResponse.json({
-        ok: true,
-        message: "가입된 이메일이면 재설정 안내를 보냈습니다.",
-      });
-    }
     const raw = randomBytes(32).toString("base64url");
     await storeResetToken(email, raw);
     await sendPasswordResetEmail(email, raw);
@@ -55,6 +59,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    mailEnabled: true,
     message: "가입된 이메일이면 재설정 안내를 보냈습니다.",
   });
 }

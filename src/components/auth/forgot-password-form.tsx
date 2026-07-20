@@ -14,7 +14,10 @@ export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [result, setResult] = useState<null | {
+    mailEnabled: boolean;
+    message: string;
+  }>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -37,18 +40,29 @@ export function ForgotPasswordForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: trimmed }),
       });
-      const data = (await res.json()) as { ok?: boolean; message?: string };
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        mailEnabled?: boolean;
+      };
+      if (res.status === 429) {
+        setError(data.message ?? "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
       if (!res.ok || !data.ok) {
         setError(data.message ?? "요청에 실패했습니다.");
         return;
       }
-      setSent(true);
+      setResult({
+        mailEnabled: data.mailEnabled !== false,
+        message: data.message ?? "가입된 이메일이면 재설정 안내를 보냈습니다.",
+      });
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (sent) {
+  if (result) {
     return (
       <div className="w-full max-w-md self-start">
         <Link
@@ -61,22 +75,26 @@ export function ForgotPasswordForm() {
 
         <div className="text-center">
           <h1 className="text-[26px] font-bold tracking-tight text-foreground sm:text-[28px]">
-            메일을 확인하세요
+            {result.mailEnabled ? "메일을 확인하세요" : "재설정 불가"}
           </h1>
-          <p className="mt-2 text-sm text-muted">
-            가입된 주소라면 비밀번호 재설정 안내를 보냈습니다.
-          </p>
+          <p className="mt-2 text-sm text-muted">{result.message}</p>
         </div>
 
         <div className="mt-4 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong">
-          <p className="text-center text-sm leading-relaxed text-foreground">
-            <span className="font-semibold">{email.trim()}</span>
-            <br />
-            <span className="text-muted">
-              메일이 오지 않으면 스팸함을 확인하거나, 잠시 후 다시 시도해
-              주세요.
-            </span>
-          </p>
+          {result.mailEnabled ? (
+            <p className="text-center text-sm leading-relaxed text-foreground">
+              <span className="font-semibold">{email.trim()}</span>
+              <br />
+              <span className="text-muted">
+                메일이 오지 않으면 스팸함을 확인하거나, 잠시 후 다시 시도해
+                주세요.
+              </span>
+            </p>
+          ) : (
+            <p className="text-center text-sm leading-relaxed text-muted">
+              메일 서비스 연결 후 비밀번호 찾기를 이용할 수 있습니다.
+            </p>
+          )}
 
           <Link
             href="/login"

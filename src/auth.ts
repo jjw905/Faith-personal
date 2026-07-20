@@ -1,5 +1,5 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import Naver from "next-auth/providers/naver";
@@ -13,6 +13,16 @@ import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
 import { isResendConfigured, sendVerificationEmail } from "@/lib/resend-mail";
+
+class InvalidCredentials extends CredentialsSignin {
+  code = "invalid_credentials";
+}
+class RateLimitedCredentials extends CredentialsSignin {
+  code = "rate_limited";
+}
+class DisabledCredentials extends CredentialsSignin {
+  code = "disabled";
+}
 
 function adminEmails() {
   return (process.env.ADMIN_EMAILS ?? "")
@@ -100,21 +110,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
             h.get("x-real-ip")?.trim() ||
             "unknown";
-          const limited = rateLimit({
-            key: `login:${ip}`,
-            limit: 20,
-            windowMs: 60_000,
-          });
-          if (!limited.ok) {
-            console.warn("[auth] login rate limited", ip);
-            return null;
-          }
 
           const email = String(credentials?.email ?? "")
             .trim()
             .toLowerCase();
           const password = String(credentials?.password ?? "");
-          if (!isValidEmail(email) || !password) return null;
+          if (!isValidEmail(email) || !password) {
+            throw new InvalidCredentials();
+          }
+
+          // IP + 이메일 단위 제한 (무차별 대입 완화)
+          const ipLimit = rateLimit({
+            key: `login:ip:${ip}`,
+            limit: 10,
+            windowMs: 60_000,
+          });
+          const emailLimit = rateLimit({
+            key: `login:email:${email}`,
+            limit: 8,
+            windowMs: 15 * 60_000,
+          });
+          if (!ipLimit.ok || !emailLimit.ok) {
+            console.warn("[auth] login rate limited", ip, email);
+            throw new RateLimitedCredentials();
+          }
 
           const user = await prisma.user.findUnique({
             where: { email },
@@ -128,9 +147,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               passwordHash: true,
             },
           });
-          if (!user || user.disabled || !user.passwordHash) return null;
+          if (!user || !user.passwordHash) {
+            throw new InvalidCredentials();
+          }
+          if (user.disabled) {
+            throw new DisabledCredentials();
+          }
           const ok = await verifyPassword(password, user.passwordHash);
-          if (!ok) return null;
+          if (!ok) {
+            throw new InvalidCredentials();
+          }
 
           return {
             id: user.id,
@@ -141,8 +167,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             disabled: user.disabled,
           };
         } catch (err) {
+          if (err instanceof CredentialsSignin) throw err;
           console.error("[auth] credentials authorize failed", err);
-          return null;
+          throw new InvalidCredentials();
         }
       },
     }),

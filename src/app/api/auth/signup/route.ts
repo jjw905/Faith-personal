@@ -16,7 +16,7 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const limited = enforceAuthRateLimit(request, "signup", 10, 60_000);
+    const limited = enforceAuthRateLimit(request, "signup", 5, 60_000);
     if (limited) return limited;
 
     let body: unknown;

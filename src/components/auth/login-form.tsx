@@ -16,9 +16,20 @@ const ERROR_MESSAGES: Record<string, string> = {
   EmailConflict: "이미 이메일·비밀번호로 가입된 계정입니다. 이메일로 로그인해 주세요.",
   Disabled: "비활성화된 계정입니다.",
   Configuration:
-    "서버 로그인 설정이 불완전합니다. AUTH_SECRET, AUTH_URL, DATABASE_URL을 확인하세요.",
+    "서버 로그인 설정이 불완전합니다. 잠시 후 다시 시도해 주세요.",
   OAuthAccountNotLinked:
     "이미 다른 소셜로 가입된 이메일입니다. 처음에 사용한 방식으로 로그인해 주세요.",
+  AccessDenied: "로그인이 거부되었습니다.",
+  OAuthCallback: "소셜 로그인 중 오류가 발생했습니다. 다시 시도해 주세요.",
+  Callback: "로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.",
+  Verification: "인증 링크가 만료되었거나 올바르지 않습니다.",
+};
+
+const CODE_MESSAGES: Record<string, string> = {
+  invalid_credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
+  rate_limited: "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+  disabled: "비활성화된 계정입니다. 관리자에게 문의해 주세요.",
+  credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
 };
 
 /** 로그인 패널 — Credentials + 소셜. */
@@ -32,9 +43,11 @@ export function LoginForm() {
   const [pending, setPending] = useState(false);
 
   const urlError = searchParams.get("error");
+  const urlCode = searchParams.get("code");
   const registered = searchParams.get("registered") === "1";
   const displayError =
     error ||
+    (urlCode && CODE_MESSAGES[urlCode]) ||
     (urlError ? ERROR_MESSAGES[urlError] || "로그인에 실패했습니다." : "");
   const displayInfo = registered
     ? "회원가입이 완료되었습니다. 로그인해 주세요."
@@ -52,8 +65,13 @@ export function LoginForm() {
         redirect: false,
       });
       if (!res || res.error) {
+        const code =
+          typeof (res as { code?: string } | undefined)?.code === "string"
+            ? (res as { code?: string }).code
+            : undefined;
         setError(
-          ERROR_MESSAGES[res?.error ?? ""] ??
+          (code && CODE_MESSAGES[code]) ||
+            ERROR_MESSAGES[res?.error ?? ""] ||
             "이메일 또는 비밀번호가 올바르지 않습니다.",
         );
         return;
