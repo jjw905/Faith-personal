@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Archive, CheckCircle2, Mic, Upload, X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -29,17 +30,20 @@ export function AudioUploadZone({
 }) {
   const [mode, setMode] = useState<Mode>("idle");
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
 
   const {
     isDragging,
     selectedFile,
     uploadStatus,
+    uploadError,
     acceptedFormats,
     handleDragOver,
     handleDragLeave,
     handleDrop,
     handleFileSelect,
-    selectFile,
+    attachExistingFile,
     clearFile,
   } = useFileUpload();
 
@@ -54,24 +58,31 @@ export function AudioUploadZone({
 
   return (
     <div className="w-full space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Link
-          href="/meetings/new"
-          className="flex h-24 cursor-pointer items-center gap-4 rounded-2xl bg-primary px-6 text-left text-primary-foreground shadow-soft transition-colors hover:bg-primary-hover"
-        >
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary">
-            <Mic className="h-5 w-5" strokeWidth={1.75} />
-          </span>
-          <span className="text-lg font-semibold tracking-tight">
-            {ctaStart}
-          </span>
-        </Link>
+      <div
+        className={cn(
+          "grid gap-3",
+          isAdmin ? "sm:grid-cols-2" : "sm:grid-cols-1",
+        )}
+      >
+        {isAdmin ? (
+          <Link
+            href="/meetings/new"
+            className="flex h-24 cursor-pointer items-center gap-4 rounded-2xl bg-primary px-6 text-left text-primary-foreground shadow-soft transition-colors hover:bg-primary-hover"
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary">
+              <Mic className="h-5 w-5" strokeWidth={1.75} />
+            </span>
+            <span className="text-lg font-semibold tracking-tight">
+              {ctaStart}
+            </span>
+          </Link>
+        ) : null}
 
         <button
           type="button"
           onClick={openUpload}
           className={cn(
-            "flex h-24 cursor-pointer items-center gap-4 rounded-2xl border border-border-strong bg-card px-6 text-left shadow-soft transition-colors hover:bg-surface",
+            "flex h-24 cursor-pointer items-center gap-4 rounded-2xl border border-border bg-card px-6 text-left shadow-soft transition-colors hover:bg-surface",
             mode === "upload" && "border-primary bg-primary-soft",
           )}
         >
@@ -162,6 +173,26 @@ export function AudioUploadZone({
                   {selectedFile?.name}
                 </p>
               </div>
+            ) : uploadStatus === "error" ? (
+              <div className="flex flex-col items-center gap-2 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  업로드 실패
+                </p>
+                <p className="max-w-[320px] text-xs text-masked">
+                  {uploadError ?? "다시 시도해 주세요."}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="relative z-10 h-8"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearFile();
+                  }}
+                >
+                  다시 선택
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
@@ -169,7 +200,7 @@ export function AudioUploadZone({
                     드래그하거나 클릭해서 업로드
                   </p>
                   <span className="rounded-md bg-card px-1.5 py-0.5 text-[11px] font-medium text-muted ring-1 ring-border">
-                    ≤500MB
+                    계정 500MB
                   </span>
                 </div>
                 <ul className="flex flex-wrap justify-center gap-2">
@@ -208,7 +239,7 @@ export function AudioUploadZone({
       <VaultPickerDialog
         open={vaultPickerOpen}
         onClose={() => setVaultPickerOpen(false)}
-        onPick={(file) => selectFile(file)}
+        onPick={(file, meta) => attachExistingFile(file, meta.id)}
       />
     </div>
   );

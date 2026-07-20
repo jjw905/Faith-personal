@@ -113,7 +113,7 @@ export function VaultPickerDialog({
             >
               보관함에서 선택
             </h2>
-            <p className="mt-0.5 text-xs text-muted">개발 보관함 파일을 첨부합니다.</p>
+            <p className="mt-0.5 text-xs text-muted">보관함 파일을 회의에 첨부합니다.</p>
           </div>
           <button
             type="button"
@@ -135,7 +135,7 @@ export function VaultPickerDialog({
               <Archive className="mx-auto h-8 w-8 text-muted-2" strokeWidth={1.5} />
               <p className="mt-3 text-sm text-muted">보관함이 비어 있습니다.</p>
               <p className="mt-1 text-xs text-muted-2">
-                개발 메뉴 → 보관함에서 파일을 올려 주세요.
+                보관함 메뉴에서 파일을 올려 주세요.
               </p>
             </div>
           ) : (

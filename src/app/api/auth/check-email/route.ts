@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (isEmailTaken(email)) {
+  if (await isEmailTaken(email)) {
     return NextResponse.json({
       ok: true,
       available: false,

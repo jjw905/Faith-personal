@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
+import { auth } from "@/auth";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { SignupFlow } from "@/components/auth/signup-flow";
 import { Container } from "@/components/marketing/container";
@@ -10,7 +12,12 @@ export const metadata: Metadata = {
   description: "Faith 계정을 만들어 안전한 회의록 관리를 시작하세요.",
 };
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  const session = await auth();
+  if (session?.user?.id && session.user.emailVerified && !session.user.disabled) {
+    redirect("/dashboard");
+  }
+
   return (
     <AuthShell>
       <header className="shrink-0 border-b border-border-strong/50 bg-[#e6e8ed]">

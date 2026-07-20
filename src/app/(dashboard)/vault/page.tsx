@@ -9,22 +9,22 @@ import { Button } from "@/components/ui/button";
 import {
   VAULT_CHANGED_EVENT,
   VAULT_MAX_BYTES,
+  VAULT_QUOTA_BYTES,
   addVaultFile,
   clearVault,
   formatVaultSize,
-  listVaultItems,
+  getVaultBundle,
   removeVaultItem,
   type VaultItemMeta,
+  type VaultUsage,
 } from "@/lib/vault";
 import { cn } from "@/lib/utils";
 
-/**
- * 개발용 보관함.
- * M3: 타이틀+액션 同行, 검색 고정, List(leading/headline/supporting/trailing).
- */
+/** 유저별 스토리지 보관함 (한도 500MB). */
 export default function VaultPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<VaultItemMeta[]>([]);
+  const [usage, setUsage] = useState<VaultUsage | null>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,11 +32,14 @@ export default function VaultPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await listVaultItems();
+      const { items: next, usage: nextUsage } = await getVaultBundle();
       setItems(next);
+      setUsage(nextUsage);
       setError(null);
-    } catch {
-      setError("보관함을 불러오지 못했습니다.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "보관함을 불러오지 못했습니다.",
+      );
     }
   }, []);
 
@@ -76,13 +79,13 @@ export default function VaultPage() {
     <PageContainer className="!pb-12">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3">
         <header className="min-w-0">
-          <p className="text-xs font-medium tracking-wide text-muted-2">
-            개발전용
-          </p>
-          <div className="mt-1.5 flex items-center gap-3">
-            <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem] sm:leading-9">
-              보관함
-            </h1>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <h1 className="shrink-0 text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem] sm:leading-9">
+                보관함
+              </h1>
+              <VaultQuotaGauge usage={usage} />
+            </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
               {items.length > 0 ? (
                 <Button
@@ -204,6 +207,48 @@ export default function VaultPage() {
         </section>
       </div>
     </PageContainer>
+  );
+}
+
+/** 타이틀 옆 용량 게이지. 사용량 / 한도. */
+function VaultQuotaGauge({ usage }: { usage: VaultUsage | null }) {
+  const quota = usage?.quota ?? VAULT_QUOTA_BYTES;
+  const used = usage?.used ?? 0;
+  const ratio = quota > 0 ? Math.min(1, used / quota) : 0;
+  const pct = Math.round(ratio * 1000) / 10;
+  const barPct = Math.max(ratio > 0 ? 2 : 0, Math.round(ratio * 100));
+  const tight = ratio >= 0.9;
+
+  return (
+    <div
+      className="flex min-w-0 max-w-[16rem] flex-1 items-center gap-2.5 sm:max-w-[18rem]"
+      title={`${pct}% 사용`}
+    >
+      <div
+        className="relative h-1.5 min-w-[4.5rem] flex-1 overflow-hidden rounded-full bg-surface-2"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(ratio * 100)}
+        aria-label={`저장 공간 ${formatVaultSize(used)} / ${formatVaultSize(quota)}`}
+      >
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width,background-color]",
+            tight ? "bg-warning" : "bg-primary",
+          )}
+          style={{ width: `${barPct}%` }}
+        />
+      </div>
+      <p
+        className={cn(
+          "shrink-0 text-xs font-medium tabular-nums",
+          tight ? "text-warning" : "text-muted",
+        )}
+      >
+        {formatVaultSize(used)} / {formatVaultSize(quota)}
+      </p>
+    </div>
   );
 }
 

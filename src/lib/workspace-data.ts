@@ -88,7 +88,7 @@ const UPCOMING: UpcomingItem[] = [
       "퇴사자 계정 정리 현황",
       "감사 로그 보관 주기 확인",
     ],
-    notes: "결정 사항은 사용자 관리 메뉴에 반영하고, 변경 이력은 감사 로그에 남깁니다.",
+    notes: "결정 사항은 팀 관리 메뉴에 반영하고, 변경 이력은 감사 로그에 남깁니다.",
     href: "/meetings/new",
     workspace: "team",
   },

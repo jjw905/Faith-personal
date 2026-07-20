@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local vault fallback storage
+.data/
+
 # secrets / deploy keys (DigitalOcean)
 .secrets/*
 !.secrets/README.md
@@ -57,3 +60,5 @@ CLAUDE.md
 
 # office docs (local only)
 Faith-office/
+
+/src/generated/prisma

@@ -3,11 +3,16 @@ import { NextResponse } from "next/server";
 import { mergeRuleAndNer } from "@/lib/masking/hybrid";
 import { detectNerSpans, nerHealth } from "@/lib/masking/ner-client";
 import type { MaskStyle } from "@/lib/masking/types";
+import { requireUser } from "@/lib/require-user";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await requireUser();
+  if (!session) {
+    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+  }
   const health = await nerHealth();
   return NextResponse.json({
     maskApi: true,
@@ -16,6 +21,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const session = await requireUser();
+  if (!session) {
+    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+  }
   try {
     const body = (await req.json()) as {
       text?: string;

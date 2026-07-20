@@ -102,7 +102,7 @@ const CONTENT_POOL = [
   "참석자 발화 구분도 테스트에 넣어 주세요.",
   "다음 액션은 월요일까지로 잡겠습니다.",
   "외부 공유 전 검수 체크리스트 한번 볼게요.",
-  "결정 사항은 사용자 관리 메뉴에 반영합시다.",
+  "결정 사항은 팀 관리 메뉴에 반영합시다.",
   "소요 시간은 대략 40분 정도로 보면 됩니다.",
   "시나리오 칸에 요약 대사가 뜨는지 봐 주세요.",
   "파일 업로드 클립도 이어서 검증하겠습니다.",
@@ -949,10 +949,9 @@ export function NewMeetingSession() {
   const { autoOpenTimelineOnStart } = useAppContext();
   const { isRecording, toggleRecording, resetRecording } = useRecording();
   const {
-    selectedFile,
     acceptedFormats,
     handleFileSelect,
-    selectFile,
+    attachExistingFile,
     clearFile,
   } = useFileUpload();
 
@@ -1118,8 +1117,8 @@ export function NewMeetingSession() {
     event.target.value = "";
   }
 
-  function onVaultFilePicked(file: File) {
-    selectFile(file);
+  function onVaultFilePicked(file: File, id: string) {
+    attachExistingFile(file, id);
     const me = SPEAKERS[0]!;
     pushFileMessage(me, file.name, formatFileSize(file.size));
     setAttachMenuOpen(false);
@@ -1528,7 +1527,7 @@ export function NewMeetingSession() {
       <VaultPickerDialog
         open={vaultPickerOpen}
         onClose={() => setVaultPickerOpen(false)}
-        onPick={(file) => onVaultFilePicked(file)}
+        onPick={(file, meta) => onVaultFilePicked(file, meta.id)}
       />
 
       <ResetConfirmDialog

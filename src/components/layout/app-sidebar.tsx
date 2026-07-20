@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -33,12 +34,12 @@ function isMeetingsPath(pathname: string) {
   );
 }
 
-function isTeamAdminPath(pathname: string) {
+function isTeamOnlyPath(pathname: string) {
   return (
     pathname === "/audit" ||
     pathname.startsWith("/audit/") ||
-    pathname === "/users" ||
-    pathname.startsWith("/users/") ||
+    pathname === "/team" ||
+    pathname.startsWith("/team/") ||
     pathname.startsWith("/analysis")
   );
 }
@@ -55,6 +56,9 @@ function isNavActive(pathname: string, href: string) {
   }
   if (href === "/audit") {
     return pathname === "/audit" || pathname.startsWith("/analysis");
+  }
+  if (href === "/changelog") {
+    return pathname === "/changelog";
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -115,17 +119,17 @@ function MeetingsNav({
 }) {
   const { workspaceId, setWorkspaceId } = useAppContext();
   const meetingsActive = isMeetingsPath(pathname);
-  const teamAdminActive = isTeamAdminPath(pathname);
-  const sectionActive = meetingsActive || teamAdminActive;
+  const teamOnlyActive = isTeamOnlyPath(pathname);
+  const sectionActive = meetingsActive || teamOnlyActive;
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? true;
   const Icon = item.icon;
 
   useEffect(() => {
-    if (teamAdminActive && workspaceId !== "team") {
+    if (teamOnlyActive && workspaceId !== "team") {
       setWorkspaceId("team");
     }
-  }, [teamAdminActive, workspaceId, setWorkspaceId]);
+  }, [teamOnlyActive, workspaceId, setWorkspaceId]);
 
   return (
     <div>
@@ -135,27 +139,13 @@ function MeetingsNav({
           sectionActive ? "bg-surface text-foreground" : "text-muted",
         )}
       >
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-label={open ? "워크스페이스 접기" : "워크스페이스 펼치기"}
-          onClick={() => setUserOpen((v) => !(v ?? true))}
-          className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
-        >
-          {open ? (
-            <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
-          ) : (
-            <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
-          )}
-        </button>
-
         <Link
           href={item.href}
           onClick={() => {
             onNavigate?.();
           }}
           className={cn(
-            "flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg py-2 pr-2 text-sm font-medium outline-none transition-colors",
+            "flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-2 text-sm font-medium outline-none transition-colors",
             "hover:text-foreground",
             "focus-visible:ring-2 focus-visible:ring-ring",
             sectionActive ? "text-foreground" : "text-muted",
@@ -182,6 +172,20 @@ function MeetingsNav({
             </Badge>
           ) : null}
         </Link>
+
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={open ? "워크스페이스 접기" : "워크스페이스 펼치기"}
+          onClick={() => setUserOpen((v) => !(v ?? true))}
+          className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+          ) : (
+            <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+          )}
+        </button>
       </div>
 
       {open ? (
@@ -191,10 +195,10 @@ function MeetingsNav({
             const wsActive =
               workspaceId === ws.id &&
               (ws.id === "team"
-                ? meetingsActive || teamAdminActive
+                ? meetingsActive || teamOnlyActive
                 : meetingsActive);
             const showTeamChildren =
-              ws.id === "team" && (workspaceId === "team" || teamAdminActive);
+              ws.id === "team" && (workspaceId === "team" || teamOnlyActive);
 
             return (
               <li key={ws.id}>
@@ -285,7 +289,7 @@ function PersonalWorkspaceGuard() {
   const { workspaceId } = useAppContext();
 
   useEffect(() => {
-    if (workspaceId === "personal" && isTeamAdminPath(pathname)) {
+    if (workspaceId === "personal" && isTeamOnlyPath(pathname)) {
       router.replace("/dashboard");
     }
   }, [workspaceId, pathname, router]);
@@ -298,6 +302,8 @@ export function AppSidebar({
   onMobileClose,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
 
   useEffect(() => {
     onMobileClose?.();
@@ -316,7 +322,7 @@ export function AppSidebar({
       >
         <div className="flex h-16 shrink-0 items-center px-5">
           <Link
-            href="/"
+            href="/dashboard"
             onClick={onMobileClose}
             className="cursor-pointer text-lg font-bold tracking-tight text-foreground transition-opacity hover:opacity-70"
           >
@@ -345,21 +351,23 @@ export function AppSidebar({
             )}
           </div>
 
-          <div className="mt-5">
-            <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-2">
-              개발전용
-            </p>
-            <div className="space-y-0.5">
-              {DEV_NAV_ITEMS.map((item) => (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={isNavActive(pathname, item.href)}
-                  onNavigate={onMobileClose}
-                />
-              ))}
+          {isAdmin ? (
+            <div className="mt-5">
+              <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-2">
+                개발전용
+              </p>
+              <div className="space-y-0.5">
+                {DEV_NAV_ITEMS.map((item) => (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    active={isNavActive(pathname, item.href)}
+                    onNavigate={onMobileClose}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
         </nav>
 
         <div className="shrink-0 border-t border-border p-3">

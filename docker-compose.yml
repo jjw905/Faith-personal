@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: faith
+      POSTGRES_PASSWORD: faith
+      POSTGRES_DB: faith
+    ports:
+      - "5432:5432"
+    volumes:
+      - faith_pg:/var/lib/postgresql/data
+
+volumes:
+  faith_pg:

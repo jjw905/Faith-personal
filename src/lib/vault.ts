@@ -1,7 +1,8 @@
-/** 개발용 파일 보관함. IndexedDB에 저장해 첨부 UI 어디서든 재사용. */
+/** 보관함 클라이언트 — DO Spaces + DB API 연동. */
 
 export const VAULT_CHANGED_EVENT = "faith.vault.changed";
-export const VAULT_MAX_BYTES = 40 * 1024 * 1024;
+export const VAULT_MAX_BYTES = 100 * 1024 * 1024;
+export const VAULT_QUOTA_BYTES = 500 * 1024 * 1024;
 
 export type VaultItemMeta = {
   id: string;
@@ -9,37 +10,19 @@ export type VaultItemMeta = {
   size: number;
   mime: string;
   createdAt: string;
+  purpose?: "VAULT" | "MEETING";
+};
+
+export type VaultUsage = {
+  used: number;
+  quota: number;
+  remaining: number;
+  count: number;
 };
 
 export type VaultItem = VaultItemMeta & {
   blob: Blob;
 };
-
-const DB_NAME = "faith-vault";
-const DB_VERSION = 1;
-const STORE = "files";
-
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: "id" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("vault db open failed"));
-  });
-}
-
-function txDone(tx: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("vault tx failed"));
-    tx.onabort = () => reject(tx.error ?? new Error("vault tx aborted"));
-  });
-}
 
 export function formatVaultSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -53,71 +36,177 @@ export function notifyVaultChanged() {
 }
 
 export async function listVaultItems(): Promise<VaultItemMeta[]> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const store = tx.objectStore(STORE);
-    const req = store.getAll();
-    req.onsuccess = () => {
-      const rows = (req.result as VaultItem[]).map(
-        ({ id, name, size, mime, createdAt }) => ({
-          id,
-          name,
-          size,
-          mime,
-          createdAt,
-        }),
-      );
-      rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      resolve(rows);
-    };
-    req.onerror = () => reject(req.error ?? new Error("vault list failed"));
-  });
+  const res = await fetch("/api/vault", { cache: "no-store" });
+  const data = (await res.json()) as {
+    ok: boolean;
+    items?: VaultItemMeta[];
+    usage?: VaultUsage;
+    message?: string;
+  };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.message ?? "보관함을 불러오지 못했습니다.");
+  }
+  return data.items ?? [];
+}
+
+export async function getVaultBundle(): Promise<{
+  items: VaultItemMeta[];
+  usage: VaultUsage;
+}> {
+  const res = await fetch("/api/vault", { cache: "no-store" });
+  const data = (await res.json()) as {
+    ok: boolean;
+    items?: VaultItemMeta[];
+    usage?: VaultUsage;
+    message?: string;
+  };
+  if (!res.ok || !data.ok || !data.usage) {
+    throw new Error(data.message ?? "보관함을 불러오지 못했습니다.");
+  }
+  return { items: data.items ?? [], usage: data.usage };
+}
+
+export async function getVaultUsage(): Promise<VaultUsage> {
+  const { usage } = await getVaultBundle();
+  return usage;
 }
 
 export async function getVaultItem(id: string): Promise<VaultItem | null> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).get(id);
-    req.onsuccess = () => resolve((req.result as VaultItem | undefined) ?? null);
-    req.onerror = () => reject(req.error ?? new Error("vault get failed"));
-  });
+  const res = await fetch(`/api/vault/${id}`, { cache: "no-store" });
+  if (res.status === 404) return null;
+  const data = (await res.json()) as {
+    ok: boolean;
+    url?: string;
+    name?: string;
+    mime?: string;
+    size?: number;
+    createdAt?: string;
+    message?: string;
+  };
+  if (!res.ok || !data.ok || !data.url) {
+    throw new Error(data.message ?? "파일을 열지 못했습니다.");
+  }
+  const blobRes = await fetch(data.url);
+  if (!blobRes.ok) throw new Error("파일을 내려받지 못했습니다.");
+  const blob = await blobRes.blob();
+  return {
+    id,
+    name: data.name ?? "file",
+    size: data.size ?? blob.size,
+    mime: data.mime || blob.type || "application/octet-stream",
+    createdAt: data.createdAt ?? new Date().toISOString(),
+    blob,
+  };
 }
 
-export async function addVaultFile(file: File): Promise<VaultItemMeta> {
+export async function addVaultFile(
+  file: File,
+  purpose: "VAULT" | "MEETING" = "VAULT",
+): Promise<VaultItemMeta> {
   if (file.size > VAULT_MAX_BYTES) {
-    throw new Error(`파일은 ${formatVaultSize(VAULT_MAX_BYTES)} 이하만 넣을 수 있습니다.`);
+    throw new Error(
+      `파일은 ${formatVaultSize(VAULT_MAX_BYTES)} 이하만 올릴 수 있습니다.`,
+    );
   }
-  const item: VaultItem = {
-    id: `vault-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: file.name,
-    size: file.size,
-    mime: file.type || "application/octet-stream",
-    createdAt: new Date().toISOString(),
-    blob: file,
+
+  const mime = file.type || "application/octet-stream";
+  const presignRes = await fetch("/api/vault/presign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: file.name,
+      size: file.size,
+      mime,
+      purpose,
+    }),
+  });
+  const prepared = (await presignRes.json()) as {
+    ok: boolean;
+    mode?: "local" | "spaces";
+    id?: string;
+    key?: string;
+    uploadUrl?: string | null;
+    mime?: string;
+    message?: string;
   };
-  const db = await openDb();
-  const tx = db.transaction(STORE, "readwrite");
-  tx.objectStore(STORE).put(item);
-  await txDone(tx);
+  if (!presignRes.ok || !prepared.ok || !prepared.id || !prepared.key) {
+    throw new Error(prepared.message ?? "업로드 준비에 실패했습니다.");
+  }
+
+  if (prepared.mode === "local" || !prepared.uploadUrl) {
+    const form = new FormData();
+    form.set("file", file);
+    form.set("id", prepared.id);
+    form.set("key", prepared.key);
+    form.set("name", file.name);
+    form.set("mime", prepared.mime || mime);
+    form.set("purpose", purpose);
+    const localRes = await fetch("/api/vault/local", {
+      method: "POST",
+      body: form,
+    });
+    const data = (await localRes.json()) as {
+      ok: boolean;
+      item?: VaultItemMeta;
+      message?: string;
+    };
+    if (!localRes.ok || !data.ok || !data.item) {
+      throw new Error(data.message ?? "업로드에 실패했습니다.");
+    }
+    notifyVaultChanged();
+    return data.item;
+  }
+
+  const putRes = await fetch(prepared.uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers: {
+      "Content-Type": prepared.mime || mime,
+      "x-amz-acl": "private",
+    },
+  });
+  if (!putRes.ok) {
+    throw new Error("스토리지 업로드에 실패했습니다. Spaces CORS를 확인해 주세요.");
+  }
+
+  const completeRes = await fetch("/api/vault/complete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: prepared.id,
+      key: prepared.key,
+      name: file.name,
+      size: file.size,
+      mime: prepared.mime || mime,
+      purpose,
+    }),
+  });
+  const data = (await completeRes.json()) as {
+    ok: boolean;
+    item?: VaultItemMeta;
+    message?: string;
+  };
+  if (!completeRes.ok || !data.ok || !data.item) {
+    throw new Error(data.message ?? "업로드 완료 처리에 실패했습니다.");
+  }
   notifyVaultChanged();
-  const { blob: _blob, ...meta } = item;
-  return meta;
+  return data.item;
 }
 
 export async function removeVaultItem(id: string): Promise<void> {
-  const db = await openDb();
-  const tx = db.transaction(STORE, "readwrite");
-  tx.objectStore(STORE).delete(id);
-  await txDone(tx);
+  const res = await fetch(`/api/vault/${id}`, { method: "DELETE" });
+  const data = (await res.json()) as { ok: boolean; message?: string };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.message ?? "삭제에 실패했습니다.");
+  }
   notifyVaultChanged();
 }
 
 export async function clearVault(): Promise<void> {
-  const db = await openDb();
-  const tx = db.transaction(STORE, "readwrite");
-  tx.objectStore(STORE).clear();
-  await txDone(tx);
+  const res = await fetch("/api/vault?all=1", { method: "DELETE" });
+  const data = (await res.json()) as { ok: boolean; message?: string };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.message ?? "비우기에 실패했습니다.");
+  }
   notifyVaultChanged();
 }

@@ -79,9 +79,9 @@ export function scoreAccountCandidate(
     : findLinkedBank(text, start, end);
   const ctx = hasAccountContextNear(text, start, end);
 
-  // 은행명이 명시됐는데 형식이 안 맞아도, 길이가 타당하면 계좌로 인정(STT 그룹핑 다양)
+  // 은행명이 명시됐는데 형식이 다른 은행이면 거부 (카뱅 번호+신한 등)
   if (bank && !isBankFormatCompatible(bank.name, rawNumber)) {
-    if (digits.length < 9 || digits.length > 14) return false;
+    return false;
   }
 
   // 은행명이 명시되고 형식이 호환되면 RRN 유사 숫자라도 계좌로 인정

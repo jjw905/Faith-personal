@@ -1,0 +1,97 @@
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+function required(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`${name} 환경변수가 필요합니다.`);
+  return v;
+}
+
+export function spacesConfigured() {
+  const keys = [
+    "DO_SPACES_ENDPOINT",
+    "DO_SPACES_REGION",
+    "DO_SPACES_BUCKET",
+    "DO_SPACES_KEY",
+    "DO_SPACES_SECRET",
+  ] as const;
+  return keys.every((name) => Boolean(process.env[name]?.trim()));
+}
+
+function client() {
+  const endpoint = required("DO_SPACES_ENDPOINT");
+  return new S3Client({
+    endpoint,
+    region: required("DO_SPACES_REGION"),
+    credentials: {
+      accessKeyId: required("DO_SPACES_KEY"),
+      secretAccessKey: required("DO_SPACES_SECRET"),
+    },
+    forcePathStyle: false,
+  });
+}
+
+function bucket() {
+  return required("DO_SPACES_BUCKET");
+}
+
+export function buildObjectKey(userId: string, fileId: string, name: string) {
+  const safe = name.replace(/[^\w.\-()+\uac00-\ud7a3]/g, "_").slice(0, 120);
+  return `users/${userId}/${fileId}/${safe}`;
+}
+
+export async function deleteObject(key: string) {
+  await client().send(
+    new DeleteObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+    }),
+  );
+}
+
+export async function getDownloadUrl(key: string, expiresIn = 60 * 10) {
+  return getSignedUrl(
+    client(),
+    new GetObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+    }),
+    { expiresIn },
+  );
+}
+
+export async function getUploadUrl(params: {
+  key: string;
+  contentType: string;
+  expiresIn?: number;
+}) {
+  return getSignedUrl(
+    client(),
+    new PutObjectCommand({
+      Bucket: bucket(),
+      Key: params.key,
+      ContentType: params.contentType,
+      ACL: "private",
+    }),
+    { expiresIn: params.expiresIn ?? 60 * 10 },
+  );
+}
+
+export async function headObject(key: string) {
+  const res = await client().send(
+    new HeadObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+    }),
+  );
+  return {
+    size: res.ContentLength ?? 0,
+    contentType: res.ContentType ?? "application/octet-stream",
+  };
+}

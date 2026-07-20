@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { isEmailTaken, registerEmail } from "@/lib/auth-store";
+import { isEmailTaken } from "@/lib/auth-store";
 import {
   isValidEmail,
   isValidKoreanName,
   isValidPassword,
 } from "@/lib/auth-validation";
+import { hashPassword } from "@/lib/password";
+import { prisma } from "@/lib/prisma";
+import { sendVerificationEmail } from "@/lib/resend-mail";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -23,7 +26,7 @@ export async function POST(request: Request) {
       ? (body as Record<string, unknown>)
       : {};
 
-  const email = typeof data.email === "string" ? data.email.trim() : "";
+  const email = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
   const password = typeof data.password === "string" ? data.password : "";
   const passwordConfirm =
     typeof data.passwordConfirm === "string" ? data.passwordConfirm : "";
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (isEmailTaken(email)) {
+  if (await isEmailTaken(email)) {
     return NextResponse.json(
       { ok: false, message: "이미 사용 중인 이메일입니다." },
       { status: 409 },
@@ -67,10 +70,26 @@ export async function POST(request: Request) {
     );
   }
 
-  registerEmail(email);
-
-  return NextResponse.json({
-    ok: true,
-    message: "회원가입이 완료되었습니다.",
+  const passwordHash = await hashPassword(password);
+  await prisma.user.create({
+    data: {
+      email,
+      name,
+      passwordHash,
+    },
   });
+
+  await sendVerificationEmail(email, name);
+
+  const res = NextResponse.json({
+    ok: true,
+    message: "회원가입이 완료되었습니다. 이메일 인증을 진행해 주세요.",
+  });
+  res.cookies.set("faith.pending-email", email, {
+    httpOnly: true,
+    path: "/",
+    maxAge: 60 * 60 * 24,
+    sameSite: "lax",
+  });
+  return res;
 }

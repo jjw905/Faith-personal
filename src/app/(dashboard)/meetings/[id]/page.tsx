@@ -6,6 +6,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { LiveMaskingTranscript } from "@/components/meetings/live-masking-transcript";
 import { MeetingDetailBody } from "@/components/meetings/meeting-detail-body";
 import { Button } from "@/components/ui/button";
+import { requireAdmin } from "@/lib/admin";
 import { formatSeoulDateParts } from "@/lib/meeting-date";
 import { meetingTopicKeywords } from "@/lib/meeting-keywords";
 import {
@@ -22,6 +23,7 @@ export default async function MeetingDetailPage({
   const { id } = await params;
 
   if (id === "live-mask") {
+    await requireAdmin();
     return (
       <PageContainer>
         <LiveMaskingTranscript />

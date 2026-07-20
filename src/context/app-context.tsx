@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "next-auth/react";
 import {
   createContext,
   useCallback,
@@ -9,7 +10,6 @@ import {
   useState,
 } from "react";
 
-import usersData from "@/mocks/users.json";
 import { getNotifications } from "@/lib/mock-loader";
 import {
   WORKSPACES,
@@ -27,12 +27,37 @@ interface AppContextValue {
   workspaceId: WorkspaceId;
   workspace: Workspace;
   setWorkspaceId: (id: WorkspaceId) => void;
-  /** 회의(녹음) 시작 시 타임라인을 열린 상태로 시작 */
   autoOpenTimelineOnStart: boolean;
   setAutoOpenTimelineOnStart: (value: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
+
+function initialsFrom(name: string, email: string) {
+  const base = (name || email || "?").trim();
+  return base.slice(0, 1).toUpperCase() || "?";
+}
+
+function sessionToUser(sessionUser: {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  role?: string;
+}): User {
+  const email = sessionUser.email ?? "";
+  const name =
+    sessionUser.name?.trim() ||
+    (email.includes("@") ? email.split("@")[0]! : "사용자");
+  const roleLabel = sessionUser.role === "ADMIN" ? "관리자" : "사용자";
+  return {
+    id: sessionUser.id,
+    name,
+    email,
+    role: roleLabel,
+    rbacLevel: sessionUser.role === "ADMIN" ? 3 : 1,
+    avatarInitials: initialsFrom(name, email),
+  };
+}
 
 function readAutoTimelinePref(): boolean {
   if (typeof window === "undefined") return true;
@@ -57,6 +82,7 @@ function readWorkspaceId(): WorkspaceId {
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { data: session } = useSession();
   const unread = getNotifications().filter((n) => n.unread).length;
   const [workspaceId, setWorkspaceIdState] = useState<WorkspaceId>("team");
   const [autoOpenTimelineOnStart, setAutoOpenTimelineOnStartState] =
@@ -85,12 +111,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const currentUser = useMemo(() => {
+    if (session?.user?.id) {
+      return sessionToUser(session.user);
+    }
+    return {
+      id: "",
+      name: "게스트",
+      email: "",
+      role: "사용자",
+      rbacLevel: 0,
+      avatarInitials: "?",
+    } satisfies User;
+  }, [session?.user]);
+
   const value = useMemo<AppContextValue>(() => {
     const workspace =
       WORKSPACES.find((w) => w.id === workspaceId) ?? WORKSPACES[1];
 
     return {
-      currentUser: usersData.currentUser as User,
+      currentUser,
       notificationCount: unread,
       workspaceId,
       workspace,
@@ -99,6 +139,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setAutoOpenTimelineOnStart,
     };
   }, [
+    currentUser,
     unread,
     workspaceId,
     setWorkspaceId,

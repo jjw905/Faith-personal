@@ -30,6 +30,19 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     if (hideChrome) setMobileOpen(false);
   }, [hideChrome]);
 
+  // 로그인·라우트 이동 후 남는 포커스 링이 패널 테두리처럼 보이는 현상 방지
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => {
+      const el = document.activeElement;
+      if (!(el instanceof HTMLElement) || el === document.body) return;
+      if (el.matches("input, textarea, select, [contenteditable='true']")) {
+        return;
+      }
+      el.blur();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [pathname]);
+
   return (
     <div className="flex h-dvh min-w-0 overflow-hidden bg-background">
       {!hideChrome ? (

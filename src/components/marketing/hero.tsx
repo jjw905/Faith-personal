@@ -30,7 +30,7 @@ export function Hero() {
               variant="ghost"
               className="bg-[#ebe4d8] px-6 py-3 text-base text-foreground hover:bg-[#e0d8c8]"
             >
-              데모 둘러보기
+              둘러보기
             </CtaButton>
           </div>
         </div>

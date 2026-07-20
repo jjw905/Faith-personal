@@ -5,8 +5,8 @@ import {
   History,
   Mic,
   ScrollText,
-  Settings,
-  Users,
+  UserCog,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -19,7 +19,7 @@ export type NavItem = {
   badge?: number;
 };
 
-/** 공통 메뉴. 감사·사용자는 팀 워크스페이스 하위로만 노출. */
+/** 공통 메뉴. 감사·팀 관리는 팀 워크스페이스 하위로만 노출. */
 export const NAV_ITEMS: NavItem[] = [
   {
     title: "회의",
@@ -27,9 +27,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Mic,
   },
   {
-    title: "시스템 설정",
-    href: "/settings",
-    icon: Settings,
+    title: "보관함",
+    href: "/vault",
+    icon: Archive,
+  },
+  {
+    title: "Changelog",
+    href: "/changelog",
+    icon: History,
   },
   {
     title: "도움말",
@@ -46,22 +51,23 @@ export const TEAM_NAV_ITEMS: NavItem[] = [
     icon: ScrollText,
   },
   {
-    title: "사용자 관리",
-    href: "/users",
-    icon: Users,
+    title: "팀 관리",
+    href: "/team",
+    icon: UsersRound,
   },
 ];
 
+/** 관리자만 사이드바 개발전용에 노출. 공통 메뉴와 화면/경로를 섞지 않음. */
 export const DEV_NAV_ITEMS: NavItem[] = [
   {
     title: "Changelog",
-    href: "/changelog",
+    href: "/changelog/dev",
     icon: History,
   },
   {
-    title: "보관함",
-    href: "/vault",
-    icon: Archive,
+    title: "사용자 관리",
+    href: "/users",
+    icon: UserCog,
   },
   {
     title: "개인정보 마스킹",
@@ -98,10 +104,13 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
       description:
         "팀 워크스페이스, 접근 기록, 보안 이벤트, 회의, 보안 추이를 확인합니다.",
     },
+    "/team": {
+      title: "팀 관리",
+      description: "팀에 속한 멤버와 팀 운영 설정을 관리합니다.",
+    },
     "/users": {
       title: "사용자 관리",
-      description:
-        "팀 워크스페이스, 사용자 계정과 권한 레벨을 관리합니다.",
+      description: "서비스를 이용하는 계정, 역할, 활성 상태를 관리합니다.",
     },
     "/settings": {
       title: "시스템 설정",
@@ -117,11 +126,14 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
     },
     "/changelog": {
       title: "Changelog",
-      description: "개발전용, Faith 웹 앱 변경 이력을 확인합니다.",
+      description: "Faith 웹 앱 변경 이력을 확인합니다.",
+    },
+    "/changelog/dev": {
+      title: "Changelog",
+      description: "개발전용, 개발안건과 변경 이력을 확인합니다.",
     },
     "/vault": {
       title: "보관함",
-      description:
-        "개발전용, 자주 쓰는 파일을 올려 두고 첨부 UI에서 바로 고릅니다.",
+      description: "계정별 500MB 저장 공간, 회의 첨부에서도 사용합니다.",
     },
   };

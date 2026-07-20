@@ -1,20 +1,17 @@
 "use client";
 
-import { ShieldAlert, ShieldCheck, EyeOff } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
 import { PageContainer } from "@/components/layout/page-container";
-import { PageHeader } from "@/components/layout/page-header";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { useAppContext } from "@/context/app-context";
-import { getNotifications } from "@/lib/mock-loader";
-import type { NotificationType } from "@/types/notification";
 import { cn } from "@/lib/utils";
 
 function SettingRow({
@@ -27,223 +24,288 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">{label}</p>
+    <div className="flex items-center justify-between gap-4 py-3.5 first:pt-1 last:pb-1">
+      <div className="min-w-0 flex-1 pr-3">
+        <p className="text-sm font-medium leading-5 text-foreground">{label}</p>
         {description ? (
-          <p className="mt-0.5 text-xs text-muted">{description}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
         ) : null}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="flex shrink-0 items-center">{children}</div>
     </div>
   );
-}
-
-function Toggle({
-  on,
-  onChange,
-}: {
-  on: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      onClick={() => onChange(!on)}
-      className={cn(
-        "relative h-6 w-11 rounded-full transition-colors",
-        on ? "bg-primary" : "bg-surface-2",
-      )}
-    >
-      <span
-        className={cn(
-          "absolute top-0.5 h-5 w-5 rounded-full bg-card shadow-soft transition-transform",
-          on ? "translate-x-5" : "translate-x-0.5",
-        )}
-      />
-    </button>
-  );
-}
-
-function Segmented({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: string; label: string }[];
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-xl bg-surface p-1">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
-            value === o.value
-              ? "bg-card text-foreground shadow-soft"
-              : "text-muted hover:text-foreground",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function notificationIcon(type: NotificationType) {
-  if (type === "masking") return EyeOff;
-  if (type === "storage") return ShieldCheck;
-  return ShieldAlert;
 }
 
 export default function AccountPage() {
   const { currentUser } = useAppContext();
-  const notifications = getNotifications();
-  const [emailAlert, setEmailAlert] = useState(true);
-  const [pushAlert, setPushAlert] = useState(false);
-  const [weeklyReport, setWeeklyReport] = useState(true);
-  const [language, setLanguage] = useState("ko");
-  const [theme, setTheme] = useState("light");
+  const { data: session, update } = useSession();
+  const hasPassword = Boolean(session?.user?.hasPassword);
+
+  const [name, setName] = useState(currentUser.name);
+  const [nameMsg, setNameMsg] = useState("");
+  const [namePending, setNamePending] = useState(false);
 
   useEffect(() => {
-    if (window.location.hash !== "#notifications") return;
-    document
-      .getElementById("notifications")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
+    setName(currentUser.name);
+  }, [currentUser.name]);
+
+  const [newEmail, setNewEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [emailStep, setEmailStep] = useState<"idle" | "code">("idle");
+  const [emailMsg, setEmailMsg] = useState("");
+  const [emailPending, setEmailPending] = useState(false);
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwPending, setPwPending] = useState(false);
+
+  async function saveName() {
+    setNameMsg("");
+    setNamePending(true);
+    try {
+      const res = await fetch("/api/account/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        setNameMsg(data.message ?? "저장 실패");
+        return;
+      }
+      await update({ name });
+      setNameMsg("저장되었습니다.");
+    } finally {
+      setNamePending(false);
+    }
+  }
+
+  async function requestEmailOtp() {
+    setEmailMsg("");
+    setEmailPending(true);
+    try {
+      const res = await fetch("/api/account/email/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: newEmail.trim().toLowerCase() }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        setEmailMsg(data.message ?? "발송 실패");
+        return;
+      }
+      setEmailStep("code");
+      setEmailMsg("인증번호를 발송했습니다.");
+    } finally {
+      setEmailPending(false);
+    }
+  }
+
+  async function confirmEmail() {
+    setEmailMsg("");
+    setEmailPending(true);
+    try {
+      const res = await fetch("/api/account/email/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: newEmail.trim().toLowerCase(),
+          code: otp.trim(),
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        setEmailMsg(data.message ?? "인증 실패");
+        return;
+      }
+      await update();
+      setEmailStep("idle");
+      setNewEmail("");
+      setOtp("");
+      setEmailMsg("이메일이 변경되었습니다.");
+    } finally {
+      setEmailPending(false);
+    }
+  }
+
+  async function savePassword() {
+    setPwMsg("");
+    setPwPending(true);
+    try {
+      const res = await fetch("/api/account/password", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          newPasswordConfirm,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        setPwMsg(data.message ?? "변경 실패");
+        return;
+      }
+      await update();
+      setCurrentPassword("");
+      setNewPassword("");
+      setNewPasswordConfirm("");
+      setPwMsg("비밀번호가 변경되었습니다.");
+    } finally {
+      setPwPending(false);
+    }
+  }
 
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-3xl space-y-6">
-        <PageHeader
-          title="계정 설정"
-          description="프로필, 알림 센터, 언어 등 개인 계정 환경을 관리합니다."
-        />
+        <header className="min-w-0">
+          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+            계정 설정
+          </h1>
+        </header>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">프로필</CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center gap-4">
-            <Avatar className="h-14 w-14">
-              <AvatarFallback className="bg-primary text-base font-semibold text-primary-foreground">
-                {currentUser.avatarInitials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <p className="text-base font-semibold text-foreground">
-                {currentUser.name}
-              </p>
-              <p className="text-sm text-muted">{currentUser.role}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card id="notifications" className="scroll-mt-24">
-          <CardHeader>
-            <CardTitle className="text-base">알림 센터</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0">
-            <p className="text-xs text-muted">
-              마스킹, 접근, 저장 상태 등 보안·점검 알림을 여기서 확인합니다.
+          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
+            <CardTitle className="text-lg">프로필</CardTitle>
+            <p className="text-sm leading-relaxed text-muted">
+              표시 이름을 변경합니다.
             </p>
-            <div className="divide-y divide-border rounded-xl border border-border">
-              {notifications.map((n) => {
-                const Icon = notificationIcon(n.type);
-                return (
-                  <div
-                    key={n.id}
-                    className="flex gap-3 px-4 py-3.5"
-                  >
-                    <div
-                      className={cn(
-                        "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
-                        n.unread ? "bg-primary-soft text-primary" : "bg-surface text-muted",
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-medium text-foreground">
-                          {n.title}
-                        </p>
-                        <span className="shrink-0 text-[11px] text-muted-2">
-                          {n.time}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs leading-relaxed text-muted">
-                        {n.body}
-                      </p>
-                    </div>
-                    {n.unread ? (
-                      <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                    ) : null}
-                  </div>
-                );
-              })}
+          </CardHeader>
+          <CardContent className="space-y-3 px-5 pb-5 sm:px-6">
+            <SettingRow label="이름">
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="h-10 w-48"
+              />
+            </SettingRow>
+            <div className="flex items-center justify-end gap-3">
+              {nameMsg ? (
+                <p className="text-xs text-muted">{nameMsg}</p>
+              ) : null}
+              <button
+                type="button"
+                disabled={namePending}
+                onClick={() => void saveName()}
+                className="h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+              >
+                저장
+              </button>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">알림 수신</CardTitle>
+          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
+            <CardTitle className="text-lg">계정 정보</CardTitle>
+            <p className="text-sm leading-relaxed text-muted">
+              역할은 변경할 수 없습니다. 이메일은 인증번호 확인 후 변경됩니다.
+            </p>
           </CardHeader>
-          <CardContent className="divide-y divide-border py-0">
+          <CardContent className="divide-y divide-border px-5 pb-4 pt-0 sm:px-6">
             <SettingRow
-              label="이메일 알림"
-              description="중요 보안 이벤트를 메일로 받습니다."
+              label="역할"
+              description="서비스 역할은 관리자만 사용자 관리에서 변경합니다."
             >
-              <Toggle on={emailAlert} onChange={setEmailAlert} />
+              <span className="text-sm font-medium text-foreground">
+                {currentUser.role}
+              </span>
             </SettingRow>
-            <SettingRow
-              label="푸시 알림"
-              description="브라우저 푸시로 실시간 알림을 받습니다."
-            >
-              <Toggle on={pushAlert} onChange={setPushAlert} />
+            <SettingRow label="현재 이메일">
+              <span className="max-w-[220px] truncate text-sm text-foreground">
+                {session?.user?.email || currentUser.email}
+              </span>
             </SettingRow>
-            <SettingRow
-              label="주간 리포트"
-              description="매주 마스킹, 보안 요약을 받습니다."
-            >
-              <Toggle on={weeklyReport} onChange={setWeeklyReport} />
-            </SettingRow>
+            <div className="space-y-3 py-3.5">
+              <p className="text-sm font-medium text-foreground">이메일 변경</p>
+              <Input
+                type="email"
+                placeholder="새 이메일"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                className="h-10"
+              />
+              {emailStep === "code" ? (
+                <Input
+                  inputMode="numeric"
+                  placeholder="인증번호 6자리"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  className="h-10"
+                />
+              ) : null}
+              <div className="flex items-center justify-end gap-3">
+                {emailMsg ? (
+                  <p className="text-xs text-muted">{emailMsg}</p>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={emailPending}
+                  onClick={() =>
+                    void (emailStep === "code" ? confirmEmail() : requestEmailOtp())
+                  }
+                  className={cn(
+                    "h-10 rounded-xl px-4 text-sm font-semibold",
+                    "bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-60",
+                  )}
+                >
+                  {emailStep === "code" ? "인증 확인" : "인증번호 받기"}
+                </button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">환경</CardTitle>
+          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
+            <CardTitle className="text-lg">비밀번호</CardTitle>
+            <p className="text-sm leading-relaxed text-muted">
+              {hasPassword
+                ? "현재 비밀번호 확인 후 변경합니다."
+                : "소셜 가입 계정입니다. 비밀번호를 새로 설정할 수 있습니다."}
+            </p>
           </CardHeader>
-          <CardContent className="divide-y divide-border py-0">
-            <SettingRow label="언어" description="화면 표시 언어를 선택합니다.">
-              <Segmented
-                value={language}
-                onChange={setLanguage}
-                options={[
-                  { value: "ko", label: "한국어" },
-                  { value: "en", label: "English" },
-                ]}
+          <CardContent className="space-y-3 px-5 pb-5 sm:px-6">
+            {hasPassword ? (
+              <Input
+                type="password"
+                placeholder="현재 비밀번호"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="h-10"
               />
-            </SettingRow>
-            <SettingRow label="테마" description="밝은/어두운 화면 모드입니다.">
-              <Segmented
-                value={theme}
-                onChange={setTheme}
-                options={[
-                  { value: "light", label: "라이트" },
-                  { value: "dark", label: "다크" },
-                ]}
-              />
-            </SettingRow>
+            ) : null}
+            <Input
+              type="password"
+              placeholder="새 비밀번호"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="h-10"
+            />
+            <Input
+              type="password"
+              placeholder="새 비밀번호 확인"
+              autoComplete="new-password"
+              value={newPasswordConfirm}
+              onChange={(e) => setNewPasswordConfirm(e.target.value)}
+              className="h-10"
+            />
+            <div className="flex items-center justify-end gap-3">
+              {pwMsg ? <p className="text-xs text-muted">{pwMsg}</p> : null}
+              <button
+                type="button"
+                disabled={pwPending}
+                onClick={() => void savePassword()}
+                className="h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+              >
+                {hasPassword ? "비밀번호 변경" : "비밀번호 설정"}
+              </button>
+            </div>
           </CardContent>
         </Card>
       </div>

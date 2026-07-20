@@ -6,12 +6,10 @@ import { useState, type FormEvent } from "react";
 
 import { Input } from "@/components/ui/input";
 import { isValidEmail } from "@/lib/auth-validation";
-import { cn } from "@/lib/utils";
 
 const fieldInputClass =
   "h-11 border-border-strong bg-white focus-visible:ring-primary/30";
 
-/** 비밀번호 찾기 — 이메일 입력 후 재설정 안내 (UI 플로우). */
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -22,7 +20,7 @@ export function ForgotPasswordForm() {
     e.preventDefault();
     setError("");
 
-    const trimmed = email.trim();
+    const trimmed = email.trim().toLowerCase();
     if (!trimmed) {
       setError("이메일을 입력해 주세요.");
       return;
@@ -34,8 +32,16 @@ export function ForgotPasswordForm() {
 
     setSubmitting(true);
     try {
-      // 실제 메일 발송 연동 전 — UI 확인용 지연
-      await new Promise((r) => window.setTimeout(r, 600));
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !data.ok) {
+        setError(data.message ?? "요청에 실패했습니다.");
+        return;
+      }
       setSent(true);
     } finally {
       setSubmitting(false);
@@ -58,7 +64,7 @@ export function ForgotPasswordForm() {
             메일을 확인하세요
           </h1>
           <p className="mt-2 text-sm text-muted">
-            입력하신 주소로 비밀번호 재설정 안내를 보냈습니다.
+            가입된 주소라면 비밀번호 재설정 안내를 보냈습니다.
           </p>
         </div>
 
@@ -78,14 +84,6 @@ export function ForgotPasswordForm() {
           >
             로그인으로 돌아가기
           </Link>
-
-          <button
-            type="button"
-            onClick={() => setSent(false)}
-            className="mt-3 flex h-11 w-full items-center justify-center rounded-xl border border-border-strong bg-white text-[15px] font-semibold text-foreground transition-colors hover:bg-surface"
-          >
-            다른 이메일로 다시 시도
-          </button>
         </div>
       </div>
     );
@@ -98,7 +96,7 @@ export function ForgotPasswordForm() {
         className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" strokeWidth={2} />
-        뒤로가기
+        로그인으로
       </Link>
 
       <div className="text-center">
@@ -106,66 +104,45 @@ export function ForgotPasswordForm() {
           비밀번호 찾기
         </h1>
         <p className="mt-2 text-sm text-muted">
-          가입한 이메일로 재설정 링크를 보내드립니다.
+          가입한 이메일로 재설정 안내를 보냅니다.
         </p>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="mt-4 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong"
-        noValidate
-      >
-        <div>
-          <label
-            htmlFor="email"
-            className="mb-1.5 block text-sm font-medium text-foreground"
+      <div className="mt-4 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong">
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          {error ? (
+            <p className="rounded-xl bg-masked-soft px-3 py-2 text-sm text-masked">
+              {error}
+            </p>
+          ) : null}
+          <div>
+            <label
+              htmlFor="email"
+              className="mb-1.5 block text-sm font-medium text-foreground"
+            >
+              이메일
+            </label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="you@company.com"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={fieldInputClass}
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
           >
-            이메일
-          </label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="you@company.com"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              setError("");
-            }}
-            className={fieldInputClass}
-            required
-          />
-        </div>
-
-        {error && (
-          <p
-            className={cn(
-              "mt-4 rounded-lg bg-masked-soft px-3 py-2 text-sm text-masked",
-            )}
-          >
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
-        >
-          {submitting ? "전송 중..." : "재설정 메일 보내기"}
-        </button>
-      </form>
-
-      <p className="mt-5 text-center text-sm text-muted">
-        비밀번호가 기억나셨나요?{" "}
-        <Link
-          href="/login"
-          className="font-semibold text-foreground hover:underline"
-        >
-          로그인
-        </Link>
-      </p>
+            {submitting ? "보내는 중…" : "재설정 메일 받기"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
