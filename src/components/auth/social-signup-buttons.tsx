@@ -89,10 +89,8 @@ export function SocialSignupButtons({
     startTransition(() => {
       // 서버 액션 signIn은 DO/Next에서 Configuration으로 실패하는 경우가 있음.
       // 브라우저 CSRF POST 경로(next-auth/react)를 사용.
-      void signIn(id, { callbackUrl: "/dashboard" }).then((res) => {
-        if (res?.error) {
-          setError("소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.");
-        }
+      void signIn(id, { callbackUrl: "/dashboard" }).catch(() => {
+        setError("소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.");
       });
     });
   }
