@@ -57,9 +57,16 @@ export async function POST(request: Request) {
   await storeOtp(identifier, code);
   const sent = await sendEmailChangeOtp(newEmail, code);
   if (!sent.ok) {
+    await prisma.verificationToken.deleteMany({ where: { identifier } }).catch(() => undefined);
     return NextResponse.json(
-      { ok: false, message: "인증번호 발송에 실패했습니다." },
-      { status: 500 },
+      {
+        ok: false,
+        message:
+          sent.reason === "missing_key"
+            ? "메일 서비스가 비활성화되어 있습니다. 이메일 변경은 나중에 이용해 주세요."
+            : "인증번호 발송에 실패했습니다.",
+      },
+      { status: sent.reason === "missing_key" ? 503 : 500 },
     );
   }
 

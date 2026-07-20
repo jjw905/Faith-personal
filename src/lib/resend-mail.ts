@@ -12,6 +12,11 @@ function fromAddress() {
   return process.env.AUTH_EMAIL_FROM || "Faith <onboarding@resend.dev>";
 }
 
+/** Resend 키 여부. 없으면 메일 기능 비활성(가입은 즉시 인증). */
+export function isResendConfigured() {
+  return Boolean(process.env.AUTH_RESEND_KEY?.trim());
+}
+
 async function send(params: {
   to: string;
   subject: string;
@@ -19,8 +24,7 @@ async function send(params: {
 }) {
   const key = process.env.AUTH_RESEND_KEY;
   if (!key) {
-    console.error("[resend] AUTH_RESEND_KEY가 없습니다.");
-    return { ok: false as const, reason: "missing_key" };
+    return { ok: false as const, reason: "missing_key" as const };
   }
   const resend = new Resend(key);
   const { error } = await resend.emails.send({

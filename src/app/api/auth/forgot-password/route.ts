@@ -41,6 +41,13 @@ export async function POST(request: Request) {
   });
 
   if (user && !user.disabled && user.passwordHash) {
+    if (!process.env.AUTH_RESEND_KEY?.trim()) {
+      // 메일 비활성: 토큰만 만들지 않고 동일 응답
+      return NextResponse.json({
+        ok: true,
+        message: "가입된 이메일이면 재설정 안내를 보냈습니다.",
+      });
+    }
     const raw = randomBytes(32).toString("base64url");
     await storeResetToken(email, raw);
     await sendPasswordResetEmail(email, raw);

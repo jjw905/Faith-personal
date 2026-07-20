@@ -32,7 +32,6 @@ export async function GET() {
     SETUP_SECRET: Boolean(process.env.SETUP_SECRET?.trim()),
     ADMIN_EMAILS: Boolean(process.env.ADMIN_EMAILS?.trim()),
     ADMIN_SEED_PASSWORD: Boolean(process.env.ADMIN_SEED_PASSWORD?.trim()),
-    ALLOW_UNVERIFIED_SIGNUP: process.env.ALLOW_UNVERIFIED_SIGNUP === "1",
     ALLOW_LOCAL_VAULT: process.env.ALLOW_LOCAL_VAULT === "1",
   };
 

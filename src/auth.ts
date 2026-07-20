@@ -12,7 +12,7 @@ import { isValidEmail } from "@/lib/auth-validation";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
-import { sendVerificationEmail } from "@/lib/resend-mail";
+import { isResendConfigured, sendVerificationEmail } from "@/lib/resend-mail";
 
 function adminEmails() {
   return (process.env.ADMIN_EMAILS ?? "")
@@ -310,6 +310,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       });
       const email = dbUser?.email?.trim().toLowerCase();
       if (!email || dbUser?.emailVerified) return;
+
+      if (!isResendConfigured()) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: new Date() },
+        });
+        return;
+      }
       await sendVerificationEmail(email, dbUser?.name ?? user.name);
     },
   },

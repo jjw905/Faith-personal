@@ -8,7 +8,7 @@ import { auth, signIn } from "@/auth";
 import { isEmailVerified } from "@/lib/auth-store";
 import { isValidEmail } from "@/lib/auth-validation";
 import { prisma } from "@/lib/prisma";
-import { sendVerificationEmail } from "@/lib/resend-mail";
+import { isResendConfigured, sendVerificationEmail } from "@/lib/resend-mail";
 
 export type SocialProvider = "naver" | "google" | "twitter";
 
@@ -59,6 +59,13 @@ export async function submitSignupEmail(formData: FormData) {
   });
 
   if (!(await isEmailVerified(email))) {
+    if (!isResendConfigured() && session.user.id) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { emailVerified: new Date() },
+      });
+      redirect("/dashboard");
+    }
     await sendVerificationEmail(email, session.user.name);
   }
   redirect("/signup/verify");
@@ -83,6 +90,15 @@ export async function resendVerificationEmail() {
     redirect("/signup/email");
   }
   if (await isEmailVerified(email)) {
+    redirect("/dashboard");
+  }
+  if (!isResendConfigured()) {
+    if (session?.user?.id) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { emailVerified: new Date() },
+      });
+    }
     redirect("/dashboard");
   }
   await sendVerificationEmail(email, session?.user?.name);
