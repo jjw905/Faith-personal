@@ -202,7 +202,8 @@ export default function AccountPage() {
           <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
             <CardTitle className="text-lg">계정 정보</CardTitle>
             <p className="text-sm leading-relaxed text-muted">
-              역할은 변경할 수 없습니다. 이메일은 인증번호 확인 후 변경됩니다.
+              역할은 변경할 수 없습니다. 이메일 변경은 메일 서비스 연결 후
+              이용할 수 있습니다.
             </p>
           </CardHeader>
           <CardContent className="divide-y divide-border px-5 pb-4 pt-0 sm:px-6">

@@ -149,7 +149,18 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
           name: name.trim(),
         }),
       });
-      const data = (await res.json()) as { ok?: boolean; message?: string };
+      const raw = await res.text();
+      let data: { ok?: boolean; message?: string } = {};
+      try {
+        data = JSON.parse(raw) as { ok?: boolean; message?: string };
+      } catch {
+        setFormError(
+          res.status >= 500
+            ? "서버가 일시적으로 응답하지 않습니다. 잠시 후 다시 시도해 주세요."
+            : "회원가입 응답을 처리할 수 없습니다.",
+        );
+        return;
+      }
       if (!res.ok || !data.ok) {
         setFormError(data.message ?? "회원가입에 실패했습니다.");
         if (res.status === 409) {
@@ -158,7 +169,7 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
         }
         return;
       }
-      router.push("/login");
+      router.push("/login?registered=1");
     } catch {
       setFormError("회원가입 요청에 실패했습니다. 다시 시도해 주세요.");
     } finally {

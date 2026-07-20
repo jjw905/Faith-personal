@@ -1,6 +1,6 @@
 import { Role } from "@prisma/client";
-import bcrypt from "bcryptjs";
 
+import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
 /** ADMIN_EMAILS 첫 이메일 + ADMIN_SEED_PASSWORD로 슈퍼계정 upsert. */
@@ -18,7 +18,7 @@ export async function ensureAdminUser() {
     };
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const passwordHash = await hashPassword(password);
   const user = await prisma.user.upsert({
     where: { email },
     create: {

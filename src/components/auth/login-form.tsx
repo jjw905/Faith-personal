@@ -31,9 +31,13 @@ export function LoginForm() {
   const [pending, setPending] = useState(false);
 
   const urlError = searchParams.get("error");
+  const registered = searchParams.get("registered") === "1";
   const displayError =
     error ||
     (urlError ? ERROR_MESSAGES[urlError] || "로그인에 실패했습니다." : "");
+  const displayInfo = registered
+    ? "회원가입이 완료되었습니다. 로그인해 주세요."
+    : "";
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -79,6 +83,11 @@ export function LoginForm() {
         </div>
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+          {displayInfo ? (
+            <p className="rounded-xl bg-surface px-3 py-2 text-sm text-foreground">
+              {displayInfo}
+            </p>
+          ) : null}
           {displayError ? (
             <p className="rounded-xl bg-masked-soft px-3 py-2 text-sm text-masked">
               {displayError}
