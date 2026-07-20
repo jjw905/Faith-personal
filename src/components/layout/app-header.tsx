@@ -3,7 +3,6 @@
 import { Bell, Menu, Plus } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useCallback, useState } from "react";
 
 import { NotificationPanel } from "@/components/layout/notification-panel";
@@ -18,8 +17,6 @@ function isHeaderVisible(pathname: string) {
 
 export function AppHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
   const { notificationCount } = useAppContext();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const closeNotifications = useCallback(() => setNotificationsOpen(false), []);
@@ -43,14 +40,12 @@ export function AppHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           </Button>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {isAdmin ? (
-              <Button asChild className="h-10 px-4">
-                <Link href="/meetings/new">
-                  <Plus className="h-4 w-4" />
-                  새 회의
-                </Link>
-              </Button>
-            ) : null}
+            <Button asChild className="h-10 px-4">
+              <Link href="/meetings/new">
+                <Plus className="h-4 w-4" />
+                새 회의
+              </Link>
+            </Button>
 
             <Button
               type="button"

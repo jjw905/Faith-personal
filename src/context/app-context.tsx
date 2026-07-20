@@ -43,18 +43,22 @@ function sessionToUser(sessionUser: {
   name?: string | null;
   email?: string | null;
   role?: string;
+  plan?: string;
 }): User {
   const email = sessionUser.email ?? "";
   const name =
     sessionUser.name?.trim() ||
     (email.includes("@") ? email.split("@")[0]! : "사용자");
-  const roleLabel = sessionUser.role === "ADMIN" ? "관리자" : "사용자";
+  const isAdmin = sessionUser.role === "ADMIN";
+  const roleLabel = isAdmin ? "관리자" : "사용자";
+  const tier = isAdmin ? "ADMIN" : sessionUser.plan === "PRO" ? "PRO" : "FREE";
   return {
     id: sessionUser.id,
     name,
     email,
     role: roleLabel,
-    rbacLevel: sessionUser.role === "ADMIN" ? 3 : 1,
+    tier,
+    rbacLevel: isAdmin ? 3 : 1,
     avatarInitials: initialsFrom(name, email),
   };
 }
@@ -120,6 +124,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       name: "게스트",
       email: "",
       role: "사용자",
+      tier: "FREE",
       rbacLevel: 0,
       avatarInitials: "?",
     } satisfies User;

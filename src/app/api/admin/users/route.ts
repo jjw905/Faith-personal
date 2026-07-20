@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Role } from "@prisma/client";
+import type { Plan, Role } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { countAdmins, listUsers } from "@/lib/admin";
@@ -70,9 +70,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, message: "사용자 없음" }, { status: 404 });
   }
 
-  const patch: { role?: Role; disabled?: boolean } = {};
+  const patch: { role?: Role; plan?: Plan; disabled?: boolean } = {};
   if (data.role === "USER" || data.role === "ADMIN") {
     patch.role = data.role;
+  }
+  if (data.plan === "FREE" || data.plan === "PRO") {
+    patch.plan = data.plan;
   }
   if (typeof data.disabled === "boolean") {
     patch.disabled = data.disabled;
@@ -102,6 +105,7 @@ export async function PATCH(request: Request) {
       name: true,
       email: true,
       role: true,
+      plan: true,
       disabled: true,
       emailVerified: true,
     },

@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { Plan, Role } from "@prisma/client";
 import "next-auth";
 import "next-auth/jwt";
 
@@ -12,6 +12,7 @@ declare module "next-auth" {
       /** Faith: 이메일 인증 완료 여부 (Date가 아닌 boolean) */
       emailVerified: boolean;
       role: Role;
+      plan: Plan;
       provider?: string;
       disabled?: boolean;
       hasPassword?: boolean;
@@ -20,6 +21,7 @@ declare module "next-auth" {
 
   interface User {
     role?: Role;
+    plan?: Plan;
     disabled?: boolean;
   }
 }
@@ -28,6 +30,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     emailVerified?: boolean;
     role?: Role;
+    plan?: Plan;
     provider?: string;
     providerAccountId?: string;
     picture?: string;

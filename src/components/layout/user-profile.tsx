@@ -8,7 +8,15 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAppContext } from "@/context/app-context";
+import type { AccountTier } from "@/types/user";
 import { cn } from "@/lib/utils";
+
+/** 계정 권한 등급 배지. 자극적이지 않은 톤으로 등급만 구분. */
+const TIER_BADGE: Record<AccountTier, string> = {
+  FREE: "bg-surface-2 text-muted",
+  PRO: "bg-primary-soft text-primary",
+  ADMIN: "bg-foreground/10 text-foreground",
+};
 
 const MENU_ITEMS = [
   {
@@ -135,9 +143,14 @@ export function UserProfile({ onNavigate }: { onNavigate?: () => void }) {
           <p className="truncate text-sm font-medium text-foreground">
             {currentUser.name}
           </p>
-          <p className="truncate text-[11px] text-muted-2 group-hover:text-muted">
-            계정 설정
-          </p>
+          <span
+            className={cn(
+              "mt-0.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tracking-wide",
+              TIER_BADGE[currentUser.tier],
+            )}
+          >
+            {currentUser.tier}
+          </span>
         </div>
         <Settings className="h-4 w-4 shrink-0 text-muted-2 transition-colors group-hover:text-foreground" />
       </button>

@@ -4,7 +4,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import Naver from "next-auth/providers/naver";
 import Twitter from "next-auth/providers/twitter";
-import type { Role } from "@prisma/client";
+import type { Plan, Role } from "@prisma/client";
 import type { Provider } from "next-auth/providers";
 import { cookies, headers } from "next/headers";
 
@@ -97,6 +97,7 @@ async function syncUserFromToken(userId: string) {
       name: true,
       image: true,
       role: true,
+      plan: true,
       disabled: true,
       emailVerified: true,
       passwordHash: true,
@@ -313,6 +314,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.name = dbUser.name ?? token.name;
           token.picture = dbUser.image ?? token.picture;
           token.role = dbUser.role;
+          token.plan = dbUser.plan;
           token.disabled = dbUser.disabled;
           token.hasPassword = Boolean(dbUser.passwordHash);
 
@@ -341,10 +343,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         } else {
           token.emailVerified = oauthWithEmail;
           token.role = (token.role as Role | undefined) ?? ("USER" as Role);
+          token.plan = (token.plan as Plan | undefined) ?? ("FREE" as Plan);
         }
       } else {
         token.emailVerified = oauthWithEmail;
         token.role = "USER" as Role;
+        token.plan = "FREE" as Plan;
       }
 
       // 로그인 상태 유지 쿠키에 따라 JWT 수명 조절
@@ -368,6 +372,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (token.picture as string | undefined) ?? session.user?.image ?? null,
         emailVerified: Boolean(token.emailVerified),
         role: ((token.role as Role | undefined) ?? "USER") as Role,
+        plan: ((token.plan as Plan | undefined) ?? "FREE") as Plan,
         provider: token.provider as string | undefined,
         disabled: Boolean(token.disabled),
         hasPassword: Boolean(token.hasPassword),

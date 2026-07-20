@@ -129,7 +129,7 @@ export const DEV_AGENDA: {
   date: string;
   items: DevAgendaItem[];
 } = {
-  date: "2026-07-20",
+  date: "2026-07-21",
   items: [
     { label: "로그인 / 회원가입 실제 서비스 연동 및 테스트" },
     { label: "유저권한 설정 구현 및 테스트" },

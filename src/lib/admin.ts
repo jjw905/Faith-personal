@@ -27,6 +27,7 @@ export async function listUsers() {
       name: true,
       email: true,
       role: true,
+      plan: true,
       disabled: true,
       emailVerified: true,
       image: true,

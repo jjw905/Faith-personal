@@ -12,6 +12,11 @@ enum Role {
   ADMIN
 }
 
+enum Plan {
+  FREE
+  PRO
+}
+
 enum VaultPurpose {
   VAULT
   MEETING
@@ -25,6 +30,7 @@ model User {
   image         String?
   passwordHash  String?     @map("password_hash")
   role          Role        @default(USER)
+  plan          Plan        @default(FREE)
   disabled      Boolean     @default(false)
   accounts      Account[]
   sessions      Session[]

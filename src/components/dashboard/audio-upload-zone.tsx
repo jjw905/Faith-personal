@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Archive, CheckCircle2, Mic, Upload, X } from "lucide-react";
-import { useSession } from "next-auth/react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -30,8 +29,6 @@ export function AudioUploadZone({
 }) {
   const [mode, setMode] = useState<Mode>("idle");
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
 
   const {
     isDragging,
@@ -58,25 +55,18 @@ export function AudioUploadZone({
 
   return (
     <div className="w-full space-y-3">
-      <div
-        className={cn(
-          "grid gap-3",
-          isAdmin ? "sm:grid-cols-2" : "sm:grid-cols-1",
-        )}
-      >
-        {isAdmin ? (
-          <Link
-            href="/meetings/new"
-            className="flex h-24 cursor-pointer items-center gap-4 rounded-2xl bg-primary px-6 text-left text-primary-foreground shadow-soft transition-colors hover:bg-primary-hover"
-          >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary">
-              <Mic className="h-5 w-5" strokeWidth={1.75} />
-            </span>
-            <span className="text-lg font-semibold tracking-tight">
-              {ctaStart}
-            </span>
-          </Link>
-        ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/meetings/new"
+          className="flex h-24 cursor-pointer items-center gap-4 rounded-2xl bg-primary px-6 text-left text-primary-foreground shadow-soft transition-colors hover:bg-primary-hover"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary">
+            <Mic className="h-5 w-5" strokeWidth={1.75} />
+          </span>
+          <span className="text-lg font-semibold tracking-tight">
+            {ctaStart}
+          </span>
+        </Link>
 
         <button
           type="button"
