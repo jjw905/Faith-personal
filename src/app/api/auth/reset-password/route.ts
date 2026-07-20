@@ -4,8 +4,12 @@ import { isValidEmail, isValidPassword } from "@/lib/auth-validation";
 import { consumeResetToken } from "@/lib/otp";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { enforceAuthRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const limited = enforceAuthRateLimit(request, "reset-password", 10, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();

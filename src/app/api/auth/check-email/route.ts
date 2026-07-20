@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 
 import { isEmailTaken } from "@/lib/auth-store";
 import { isValidEmail } from "@/lib/auth-validation";
+import { enforceAuthRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const limited = enforceAuthRateLimit(request, "check-email", 30, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();

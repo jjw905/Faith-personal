@@ -24,6 +24,19 @@ export function spacesConfigured() {
   return keys.every((name) => Boolean(process.env[name]?.trim()));
 }
 
+/** 프로덕션에서는 Spaces 또는 ALLOW_LOCAL_VAULT=1만 허용. */
+export function localVaultAllowed() {
+  if (spacesConfigured()) return false;
+  if (process.env.ALLOW_LOCAL_VAULT === "1") return true;
+  return process.env.NODE_ENV !== "production";
+}
+
+export function assertVaultBackendReady() {
+  if (spacesConfigured()) return;
+  if (localVaultAllowed()) return;
+  throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
+}
+
 function client() {
   const endpoint = required("DO_SPACES_ENDPOINT");
   return new S3Client({

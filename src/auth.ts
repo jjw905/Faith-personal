@@ -6,11 +6,12 @@ import Naver from "next-auth/providers/naver";
 import Twitter from "next-auth/providers/twitter";
 import type { Role } from "@prisma/client";
 import type { Provider } from "next-auth/providers";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { isValidEmail } from "@/lib/auth-validation";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
+import { rateLimit } from "@/lib/rate-limit";
 import { sendVerificationEmail } from "@/lib/resend-mail";
 
 function adminEmails() {
@@ -91,6 +92,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
           if (!process.env.DATABASE_URL?.trim()) {
             console.error("[auth] DATABASE_URL missing");
+            return null;
+          }
+
+          const h = await headers();
+          const ip =
+            h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+            h.get("x-real-ip")?.trim() ||
+            "unknown";
+          const limited = rateLimit({
+            key: `login:${ip}`,
+            limit: 20,
+            windowMs: 60_000,
+          });
+          if (!limited.ok) {
+            console.warn("[auth] login rate limited", ip);
             return null;
           }
 

@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
 
+import { spacesConfigured } from "@/lib/storage/spaces";
+
+const REQUIRED_TABLES = [
+  "users",
+  "accounts",
+  "sessions",
+  "verification_tokens",
+  "vault_files",
+] as const;
+
 /**
  * 배포 진단용. 비밀값은 노출하지 않고 존재 여부만 반환.
  */
@@ -19,30 +29,62 @@ export async function GET() {
     AUTH_TWITTER_ID: Boolean(process.env.AUTH_TWITTER_ID?.trim()),
     AUTH_TWITTER_SECRET: Boolean(process.env.AUTH_TWITTER_SECRET?.trim()),
     DO_SPACES_BUCKET: Boolean(process.env.DO_SPACES_BUCKET?.trim()),
+    SETUP_SECRET: Boolean(process.env.SETUP_SECRET?.trim()),
+    ADMIN_EMAILS: Boolean(process.env.ADMIN_EMAILS?.trim()),
+    ADMIN_SEED_PASSWORD: Boolean(process.env.ADMIN_SEED_PASSWORD?.trim()),
+    ALLOW_UNVERIFIED_SIGNUP: process.env.ALLOW_UNVERIFIED_SIGNUP === "1",
+    ALLOW_LOCAL_VAULT: process.env.ALLOW_LOCAL_VAULT === "1",
   };
 
   const missingRequired = Object.entries(required)
     .filter(([, ok]) => !ok)
     .map(([key]) => key);
 
+  const spacesOk = spacesConfigured();
+  const resendConfigured = Boolean(process.env.AUTH_RESEND_KEY?.trim());
+  const adminEnvConfigured = Boolean(
+    process.env.ADMIN_EMAILS?.trim() && process.env.ADMIN_SEED_PASSWORD?.trim(),
+  );
+
   let databaseOk: boolean | null = null;
   let schemaOk: boolean | null = null;
   let databaseError: string | null = null;
+  const tables: Record<(typeof REQUIRED_TABLES)[number], boolean> = {
+    users: false,
+    accounts: false,
+    sessions: false,
+    verification_tokens: false,
+    vault_files: false,
+  };
+
   if (required.DATABASE_URL) {
     try {
       const { prisma } = await import("@/lib/prisma");
       await prisma.$queryRaw`SELECT 1`;
       databaseOk = true;
-      try {
-        await prisma.user.count();
-        schemaOk = true;
-      } catch (err) {
-        schemaOk = false;
-        databaseError =
-          err instanceof Error ? err.message.slice(0, 200) : "schema_error";
+
+      const rows = await prisma.$queryRaw<Array<{ tablename: string }>>`
+        SELECT tablename
+        FROM pg_catalog.pg_tables
+        WHERE schemaname = 'public'
+          AND tablename IN (
+            'users',
+            'accounts',
+            'sessions',
+            'verification_tokens',
+            'vault_files'
+          )
+      `;
+      const found = new Set(rows.map((r) => r.tablename));
+      for (const name of REQUIRED_TABLES) {
+        tables[name] = found.has(name);
+      }
+      schemaOk = REQUIRED_TABLES.every((name) => tables[name]);
+      if (!schemaOk) {
+        databaseError = "missing_tables";
       }
     } catch (err) {
-      databaseOk = false;
+      databaseOk = databaseOk ?? false;
       schemaOk = false;
       databaseError =
         err instanceof Error ? err.message.slice(0, 200) : "db_error";
@@ -62,6 +104,10 @@ export async function GET() {
       optional,
       databaseOk,
       schemaOk,
+      tables,
+      spacesConfigured: spacesOk,
+      resendConfigured,
+      adminEnvConfigured,
       databaseError,
       authUrlHost: (() => {
         try {

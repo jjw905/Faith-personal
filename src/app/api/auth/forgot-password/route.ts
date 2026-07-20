@@ -5,9 +5,13 @@ import { NextResponse } from "next/server";
 import { isValidEmail } from "@/lib/auth-validation";
 import { storeResetToken } from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
+import { enforceAuthRateLimit } from "@/lib/rate-limit";
 import { sendPasswordResetEmail } from "@/lib/resend-mail";
 
 export async function POST(request: Request) {
+  const limited = enforceAuthRateLimit(request, "forgot-password", 10, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();

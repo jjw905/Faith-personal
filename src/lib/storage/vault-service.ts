@@ -15,11 +15,13 @@ import {
   formatBytes,
 } from "@/lib/storage/quota";
 import {
+  assertVaultBackendReady,
   buildObjectKey,
   deleteObject,
   getDownloadUrl,
   getUploadUrl,
   headObject,
+  localVaultAllowed,
   spacesConfigured,
 } from "@/lib/storage/spaces";
 
@@ -30,12 +32,17 @@ export async function getUserStorageUsage(userId: string) {
     _count: true,
   });
   const used = agg._sum.size ?? 0;
+  const backend = spacesConfigured()
+    ? ("spaces" as const)
+    : localVaultAllowed()
+      ? ("local" as const)
+      : ("unavailable" as const);
   return {
     used,
     quota: STORAGE_QUOTA_BYTES,
     remaining: Math.max(0, STORAGE_QUOTA_BYTES - used),
     count: agg._count,
-    backend: spacesConfigured() ? ("spaces" as const) : ("local" as const),
+    backend,
   };
 }
 
@@ -76,6 +83,7 @@ export async function prepareUserUpload(params: {
   size: number;
   purpose?: VaultPurpose;
 }) {
+  assertVaultBackendReady();
   const usage = await getUserStorageUsage(params.userId);
   assertUploadSize(params.size, usage.used);
 
@@ -85,6 +93,9 @@ export async function prepareUserUpload(params: {
   const purpose = params.purpose ?? ("VAULT" as VaultPurpose);
 
   if (!spacesConfigured()) {
+    if (!localVaultAllowed()) {
+      throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
+    }
     return {
       mode: "local" as const,
       id,
@@ -117,6 +128,10 @@ export async function completeLocalUpload(params: {
   purpose?: VaultPurpose;
   body: Buffer;
 }) {
+  assertVaultBackendReady();
+  if (spacesConfigured() || !localVaultAllowed()) {
+    throw new Error("로컬 업로드를 사용할 수 없습니다.");
+  }
   if (!params.key.startsWith(`users/${params.userId}/${params.id}/`)) {
     throw new Error("잘못된 저장 경로입니다.");
   }
@@ -200,21 +215,25 @@ export async function getUserFileDownloadUrl(userId: string, fileId: string) {
   });
   if (!row) return null;
 
-  if (!spacesConfigured()) {
-    // 로컬 파일이 실제로 있는지 확인
-    try {
-      await localHeadObject(row.key);
-    } catch {
-      throw new Error("로컬 저장 파일을 찾을 수 없습니다.");
-    }
-    return { row, url: `/api/vault/${row.id}/content` };
+  if (spacesConfigured()) {
+    const url = await getDownloadUrl(row.key);
+    return { row, url };
   }
 
-  const url = await getDownloadUrl(row.key);
-  return { row, url };
+  assertVaultBackendReady();
+  try {
+    await localHeadObject(row.key);
+  } catch {
+    throw new Error("로컬 저장 파일을 찾을 수 없습니다.");
+  }
+  return { row, url: `/api/vault/${row.id}/content` };
 }
 
 export async function readUserFileContent(userId: string, fileId: string) {
+  assertVaultBackendReady();
+  if (spacesConfigured() || !localVaultAllowed()) {
+    throw new Error("로컬 파일 읽기를 사용할 수 없습니다.");
+  }
   const row = await prisma.vaultFile.findFirst({
     where: { id: fileId, userId },
   });
@@ -231,6 +250,7 @@ export async function deleteUserFile(userId: string, fileId: string) {
   if (spacesConfigured()) {
     await deleteObject(row.key).catch(() => undefined);
   } else {
+    assertVaultBackendReady();
     await localDeleteObject(row.key);
   }
   await prisma.vaultFile.delete({ where: { id: fileId } });
@@ -246,6 +266,7 @@ export async function clearUserVault(userId: string) {
     if (spacesConfigured()) {
       await deleteObject(row.key).catch(() => undefined);
     } else {
+      assertVaultBackendReady();
       await localDeleteObject(row.key);
     }
   }

@@ -8,9 +8,13 @@ import {
 } from "@/lib/auth-validation";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { enforceAuthRateLimit } from "@/lib/rate-limit";
 import { sendVerificationEmail } from "@/lib/resend-mail";
 
 export async function POST(request: Request) {
+  const limited = enforceAuthRateLimit(request, "signup", 10, 60_000);
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -110,15 +114,33 @@ export async function POST(request: Request) {
 
   const mailed = await sendVerificationEmail(email, name);
   if (!mailed.ok && mailed.reason === "missing_key") {
-    // Resend 미설정 시 바로 로그인 가능하도록 인증 처리
-    await prisma.user.update({
-      where: { email },
-      data: { emailVerified: new Date() },
-    });
+    if (process.env.ALLOW_UNVERIFIED_SIGNUP === "1") {
+      await prisma.user.update({
+        where: { email },
+        data: { emailVerified: new Date() },
+      });
+      return NextResponse.json({
+        ok: true,
+        message: "회원가입이 완료되었습니다. 바로 로그인할 수 있습니다.",
+        emailVerified: true,
+      });
+    }
+    await prisma.user.delete({ where: { email } }).catch(() => undefined);
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          "이메일 발송 설정이 없습니다. 관리자에게 문의하거나 잠시 후 다시 시도해 주세요.",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (!mailed.ok) {
     return NextResponse.json({
       ok: true,
-      message: "회원가입이 완료되었습니다. 바로 로그인할 수 있습니다.",
-      emailVerified: true,
+      message:
+        "회원가입은 완료되었으나 인증 메일 발송에 실패했습니다. 로그인 후 재발송을 이용해 주세요.",
     });
   }
 
