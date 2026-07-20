@@ -12,15 +12,14 @@ export function isValidKoreanName(value: string): boolean {
 }
 
 /**
- * 비밀번호 규칙:
- * - 영문 대문자 1자 이상
- * - 영문 소문자 1자 이상
- * - 특수문자 1자 이상
- * - 8자 이상
+ * 비밀번호 규칙 (OWASP ASVS + bcrypt 72바이트 제한):
+ * - 8자 이상, 72자 이하
+ * - 영문 대문자 / 소문자 / 특수문자 각 1자 이상
  */
 export function getPasswordErrors(password: string): string[] {
   const errors: string[] = [];
   if (password.length < 8) errors.push("8자 이상");
+  if (password.length > 72) errors.push("72자 이하");
   if (!/[A-Z]/.test(password)) errors.push("영문 대문자 1자 이상");
   if (!/[a-z]/.test(password)) errors.push("영문 소문자 1자 이상");
   if (!/[!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]/.test(password)) {

@@ -67,7 +67,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         message:
-          "비밀번호는 8자 이상, 영문 대소문자와 특수문자를 각각 1자 이상 포함해야 합니다.",
+          "비밀번호는 8~72자, 영문 대소문자와 특수문자를 각각 1자 이상 포함해야 합니다.",
       },
       { status: 400 },
     );

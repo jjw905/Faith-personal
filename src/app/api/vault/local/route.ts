@@ -53,12 +53,11 @@ export async function POST(request: Request) {
       },
     });
   } catch (err) {
+    const message = err instanceof Error ? err.message : "업로드 실패";
+    const storageMissing = /Spaces|스토리지|로컬 업로드/i.test(message);
     return NextResponse.json(
-      {
-        ok: false,
-        message: err instanceof Error ? err.message : "업로드 실패",
-      },
-      { status: 400 },
+      { ok: false, message },
+      { status: storageMissing ? 503 : 400 },
     );
   }
 }

@@ -7,29 +7,38 @@ import { prisma } from "@/lib/prisma";
 
 async function assertAdmin() {
   const session = await auth();
-  if (!session?.user?.id) return null;
+  if (!session?.user?.id) return { status: 401 as const, session: null };
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { role: true, disabled: true },
   });
-  if (!dbUser || dbUser.disabled || dbUser.role !== "ADMIN") return null;
-  return session;
+  if (!dbUser || dbUser.disabled || dbUser.role !== "ADMIN") {
+    return { status: 403 as const, session: null };
+  }
+  return { status: 200 as const, session };
 }
 
 export async function GET() {
-  const session = await assertAdmin();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "권한 없음" }, { status: 403 });
+  const gate = await assertAdmin();
+  if (!gate.session) {
+    return NextResponse.json(
+      { ok: false, message: gate.status === 401 ? "로그인이 필요합니다." : "권한 없음" },
+      { status: gate.status },
+    );
   }
   const users = await listUsers();
   return NextResponse.json({ ok: true, users });
 }
 
 export async function PATCH(request: Request) {
-  const session = await assertAdmin();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "권한 없음" }, { status: 403 });
+  const gate = await assertAdmin();
+  if (!gate.session) {
+    return NextResponse.json(
+      { ok: false, message: gate.status === 401 ? "로그인이 필요합니다." : "권한 없음" },
+      { status: gate.status },
+    );
   }
+  const session = gate.session;
 
   let body: unknown;
   try {
