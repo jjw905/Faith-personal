@@ -1,11 +1,11 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AuthShell } from "@/components/auth/auth-shell";
+import { ResendVerificationButton } from "@/components/auth/resend-verification-button";
 import { auth } from "@/auth";
-import { resendVerificationEmail } from "@/lib/auth-actions";
 import { isEmailVerified } from "@/lib/auth-store";
-import { cookies } from "next/headers";
 
 export const metadata = {
   title: "이메일 인증 · Faith",
@@ -86,14 +86,7 @@ export default async function SignupVerifyPage({
 
               <div className="flex flex-col gap-3">
                 {email ? (
-                  <form action={resendVerificationEmail}>
-                    <button
-                      type="submit"
-                      className="flex h-11 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground"
-                    >
-                      인증 메일 다시 보내기
-                    </button>
-                  </form>
+                  <ResendVerificationButton />
                 ) : (
                   <Link
                     href="/signup/email"
