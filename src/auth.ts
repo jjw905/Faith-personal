@@ -50,6 +50,23 @@ function oauthProviders(): Provider[] {
         clientSecret: process.env.AUTH_NAVER_SECRET,
         // 네이버도 이메일 검증 제공자 → 같은 이메일 계정에 안전 연결.
         allowDangerousEmailAccountLinking: true,
+        profile(profile) {
+          const r = (profile as { response?: {
+            id?: string;
+            nickname?: string;
+            email?: string;
+            profile_image?: string;
+          } }).response;
+          if (!r?.id) {
+            throw new Error("네이버 프로필을 가져오지 못했습니다.");
+          }
+          return {
+            id: r.id,
+            name: r.nickname ?? null,
+            email: r.email ?? null,
+            image: r.profile_image ?? null,
+          };
+        },
       }),
     );
   }
@@ -231,60 +248,69 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async signIn({ user, account }) {
-      const email = (user.email || "").trim().toLowerCase();
+      try {
+        const email = (user.email || "").trim().toLowerCase();
 
-      // 이메일 검증 제공자는 같은 이메일 기존 계정에 자동 연결 (본인 소유 보장).
-      const TRUSTED_LINK_PROVIDERS = new Set(["google", "naver"]);
+        // 이메일 검증 제공자는 같은 이메일 기존 계정에 자동 연결 (본인 소유 보장).
+        const TRUSTED_LINK_PROVIDERS = new Set(["google", "naver"]);
 
-      // 동일 이메일이 이미 있으면, 신뢰 제공자만 연결 허용 (그 외는 중복 가입 차단)
-      if (account?.type === "oauth" && email) {
-        const existing = await prisma.user.findUnique({
-          where: { email },
-          select: {
-            id: true,
-            passwordHash: true,
-            accounts: {
-              select: { provider: true, providerAccountId: true },
+        // 동일 이메일이 이미 있으면, 신뢰 제공자만 연결 허용 (그 외는 중복 가입 차단)
+        if (account?.type === "oauth" && email) {
+          const existing = await prisma.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              passwordHash: true,
+              accounts: {
+                select: { provider: true, providerAccountId: true },
+              },
             },
-          },
-        });
-        if (existing) {
-          const alreadyLinked = existing.accounts.some(
-            (a) =>
-              a.provider === account.provider &&
-              a.providerAccountId === account.providerAccountId,
-          );
-          if (!alreadyLinked && !TRUSTED_LINK_PROVIDERS.has(account.provider)) {
-            return existing.passwordHash
-              ? "/login?error=EmailConflict"
-              : "/login?error=OAuthAccountNotLinked";
+          });
+          if (existing) {
+            const alreadyLinked = existing.accounts.some(
+              (a) =>
+                a.provider === account.provider &&
+                a.providerAccountId === account.providerAccountId,
+            );
+            if (!alreadyLinked && !TRUSTED_LINK_PROVIDERS.has(account.provider)) {
+              return existing.passwordHash
+                ? "/login?error=EmailConflict"
+                : "/login?error=OAuthAccountNotLinked";
+            }
           }
         }
-      }
 
-      if (user.id) {
-        const dbUser = await prisma.user.findUnique({
-          where: { id: user.id },
-          select: { disabled: true, email: true, role: true },
-        });
-        if (dbUser?.disabled) return false;
-
-        const e = (user.email || dbUser?.email || "").toLowerCase();
-        if (e && adminEmails().includes(e) && dbUser?.role !== "ADMIN") {
-          await prisma.user.update({
+        // 신규 OAuth는 이 시점에 user.id가 제공자 ID(아직 DB cuid 아님).
+        // DB에 없는 id로 update하면 예외 → Auth.js가 AccessDenied로 바꾼다.
+        if (user.id) {
+          const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
-            data: { role: "ADMIN" },
+            select: { disabled: true, email: true, role: true },
           });
+          if (dbUser) {
+            if (dbUser.disabled) return false;
+
+            const e = (user.email || dbUser.email || "").toLowerCase();
+            if (e && adminEmails().includes(e) && dbUser.role !== "ADMIN") {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { role: "ADMIN" },
+              });
+            }
+          }
         }
-      }
 
-      if (account?.type === "oauth" && !user.email) {
-        return "/signup/email";
-      }
+        if (account?.type === "oauth" && !user.email) {
+          return "/signup/email";
+        }
 
-      // 소셜+이메일은 즉시 verified. 신규 계정 생성은 adapter/createUser가 처리하고,
-      // 기존 계정은 아래 jwt 콜백에서 보정한다.
-      return true;
+        // 소셜+이메일은 즉시 verified. 신규 계정 생성은 adapter/createUser가 처리하고,
+        // 기존 계정은 아래 jwt 콜백에서 보정한다.
+        return true;
+      } catch (err) {
+        console.error("[auth] signIn callback failed", err);
+        return "/login?error=Callback";
+      }
     },
     async jwt({ token, user, account, profile }) {
       if (user?.id) token.sub = user.id;
