@@ -38,6 +38,8 @@ function oauthProviders(): Provider[] {
       Google({
         clientId: process.env.AUTH_GOOGLE_ID,
         clientSecret: process.env.AUTH_GOOGLE_SECRET,
+        // Google은 이메일 소유를 검증하므로 같은 이메일 기존 계정에 안전하게 연결.
+        allowDangerousEmailAccountLinking: true,
       }),
     );
   }
@@ -46,6 +48,8 @@ function oauthProviders(): Provider[] {
       Naver({
         clientId: process.env.AUTH_NAVER_ID,
         clientSecret: process.env.AUTH_NAVER_SECRET,
+        // 네이버도 이메일 검증 제공자 → 같은 이메일 계정에 안전 연결.
+        allowDangerousEmailAccountLinking: true,
       }),
     );
   }
@@ -229,7 +233,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       const email = (user.email || "").trim().toLowerCase();
 
-      // 동일 이메일이 이미 있으면, 그 계정에 연결된 소셜만 허용 (중복 가입 차단)
+      // 이메일 검증 제공자는 같은 이메일 기존 계정에 자동 연결 (본인 소유 보장).
+      const TRUSTED_LINK_PROVIDERS = new Set(["google", "naver"]);
+
+      // 동일 이메일이 이미 있으면, 신뢰 제공자만 연결 허용 (그 외는 중복 가입 차단)
       if (account?.type === "oauth" && email) {
         const existing = await prisma.user.findUnique({
           where: { email },
@@ -247,7 +254,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               a.provider === account.provider &&
               a.providerAccountId === account.providerAccountId,
           );
-          if (!alreadyLinked) {
+          if (!alreadyLinked && !TRUSTED_LINK_PROVIDERS.has(account.provider)) {
             return existing.passwordHash
               ? "/login?error=EmailConflict"
               : "/login?error=OAuthAccountNotLinked";
