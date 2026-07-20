@@ -1,11 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
-
-import {
-  signInWithProvider,
-  type SocialProvider,
-} from "@/lib/auth-actions";
+import { signIn } from "next-auth/react";
+import { useState, useTransition } from "react";
 
 /** 소셜 회원가입 — SaaS/국내 서비스형 풀폭 스택 버튼. */
 
@@ -86,6 +82,20 @@ export function SocialSignupButtons({
   showPrivacyNote?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+
+  function handleSocial(id: (typeof PROVIDERS)[number]["id"]) {
+    setError("");
+    startTransition(() => {
+      // 서버 액션 signIn은 DO/Next에서 Configuration으로 실패하는 경우가 있음.
+      // 브라우저 CSRF POST 경로(next-auth/react)를 사용.
+      void signIn(id, { callbackUrl: "/dashboard" }).then((res) => {
+        if (res?.error) {
+          setError("소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.");
+        }
+      });
+    });
+  }
 
   return (
     <div>
@@ -104,16 +114,11 @@ export function SocialSignupButtons({
             key={id}
             type="button"
             disabled={pending}
-            onClick={() =>
-              startTransition(() => {
-                void signInWithProvider(id);
-              })
-            }
+            onClick={() => handleSocial(id)}
             className={`flex w-full items-center justify-center rounded-xl text-[15px] font-semibold transition-colors disabled:opacity-60 ${
               dense ? "h-11" : "h-12"
             } ${className}`}
           >
-            {/* 고정 폭 블록을 가운데 배치 → 로고 세로선 정렬 + 글자 가운데 */}
             <span className="grid w-[7.25rem] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-3">
               <span className="flex h-5 w-5 items-center justify-center">
                 <Icon />
@@ -123,6 +128,9 @@ export function SocialSignupButtons({
           </button>
         ))}
       </div>
+      {error ? (
+        <p className="mt-3 text-center text-[12px] text-destructive">{error}</p>
+      ) : null}
       {showPrivacyNote && (
         <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-2">
           이름과 이메일만 제공받으며, 동의 없이 게시하지 않습니다.
