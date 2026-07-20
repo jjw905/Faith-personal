@@ -54,6 +54,34 @@ function oauthProviders(): Provider[] {
       Twitter({
         clientId: process.env.AUTH_TWITTER_ID,
         clientSecret: process.env.AUTH_TWITTER_SECRET,
+        // OAuth 2.0 + 이메일(가능하면). 없으면 /signup/email로 이어짐.
+        authorization: {
+          url: "https://x.com/i/oauth2/authorize",
+          params: {
+            scope: "users.read tweet.read offline.access users.email",
+          },
+        },
+        userinfo: {
+          url: "https://api.x.com/2/users/me",
+          params: {
+            "user.fields": "profile_image_url,confirmed_email",
+          },
+        },
+        profile({ data }) {
+          const d = data as {
+            id: string;
+            name?: string;
+            username?: string;
+            profile_image_url?: string;
+            confirmed_email?: string | null;
+          };
+          return {
+            id: d.id,
+            name: d.name ?? d.username ?? null,
+            email: d.confirmed_email ?? null,
+            image: d.profile_image_url ?? null,
+          };
+        },
       }),
     );
   }
@@ -303,6 +331,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.emailVerified = true;
           } else {
             token.emailVerified = oauthWithEmail || Boolean(dbUser.emailVerified);
+          }
+
+          // ADMIN_EMAILS에 있으면 매 요청 승격 (Google/네이버 기존 USER도 치유)
+          const adminMail = (token.email as string | undefined)?.toLowerCase();
+          if (
+            adminMail &&
+            adminEmails().includes(adminMail) &&
+            dbUser.role !== "ADMIN"
+          ) {
+            await prisma.user.update({
+              where: { id: token.sub },
+              data: { role: "ADMIN" },
+            });
+            token.role = "ADMIN";
           }
         } else {
           token.emailVerified = oauthWithEmail;

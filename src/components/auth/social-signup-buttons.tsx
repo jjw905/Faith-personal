@@ -94,14 +94,30 @@ export function SocialSignupButtons({
             window.location.assign(res.url);
             return;
           }
+          if (id === "twitter") {
+            setError(
+              "X 로그인에 실패했습니다. Developer Portal의 OAuth 2.0 Client ID/Secret과 콜백 URL을 확인해 주세요.",
+            );
+            return;
+          }
+          if (id === "google") {
+            setError(
+              "Google 로그인에 실패했습니다. 리디렉션 URI와 테스트 사용자를 확인해 주세요.",
+            );
+            return;
+          }
           setError(
             res?.error
-              ? "소셜 로그인에 실패했습니다. Google 콘솔의 리디렉션 URI·테스트 사용자를 확인해 주세요."
+              ? "소셜 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요."
               : "소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.",
           );
         })
         .catch(() => {
-          setError("소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.");
+          setError(
+            id === "twitter"
+              ? "X 로그인 설정에 문제가 있습니다. OAuth 2.0 키를 확인해 주세요."
+              : "소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.",
+          );
         });
     });
   }
