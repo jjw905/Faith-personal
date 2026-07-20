@@ -5,6 +5,7 @@ import Google from "next-auth/providers/google";
 import Naver from "next-auth/providers/naver";
 import Twitter from "next-auth/providers/twitter";
 import type { Role } from "@prisma/client";
+import type { Provider } from "next-auth/providers";
 import { cookies } from "next/headers";
 
 import { isValidEmail } from "@/lib/auth-validation";
@@ -17,6 +18,35 @@ function adminEmails() {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
+}
+
+function oauthProviders(): Provider[] {
+  const list: Provider[] = [];
+  if (process.env.AUTH_GOOGLE_ID?.trim() && process.env.AUTH_GOOGLE_SECRET?.trim()) {
+    list.push(
+      Google({
+        clientId: process.env.AUTH_GOOGLE_ID,
+        clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      }),
+    );
+  }
+  if (process.env.AUTH_NAVER_ID?.trim() && process.env.AUTH_NAVER_SECRET?.trim()) {
+    list.push(
+      Naver({
+        clientId: process.env.AUTH_NAVER_ID,
+        clientSecret: process.env.AUTH_NAVER_SECRET,
+      }),
+    );
+  }
+  if (process.env.AUTH_TWITTER_ID?.trim() && process.env.AUTH_TWITTER_SECRET?.trim()) {
+    list.push(
+      Twitter({
+        clientId: process.env.AUTH_TWITTER_ID,
+        clientSecret: process.env.AUTH_TWITTER_SECRET,
+      }),
+    );
+  }
+  return list;
 }
 
 async function syncUserFromToken(userId: string) {
@@ -39,6 +69,8 @@ async function syncUserFromToken(userId: string) {
  * Faith 인증 — Credentials + 소셜, Prisma, Resend 이메일 인증, Admin.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET,
+  trustHost: true,
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
@@ -84,18 +116,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-    }),
-    Naver({
-      clientId: process.env.AUTH_NAVER_ID,
-      clientSecret: process.env.AUTH_NAVER_SECRET,
-    }),
-    Twitter({
-      clientId: process.env.AUTH_TWITTER_ID,
-      clientSecret: process.env.AUTH_TWITTER_SECRET,
-    }),
+    ...oauthProviders(),
   ],
   pages: {
     signIn: "/login",
@@ -262,5 +283,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       await sendVerificationEmail(email, dbUser?.name ?? user.name);
     },
   },
-  trustHost: true,
 });
