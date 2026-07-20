@@ -2,11 +2,17 @@
   "name": "secure-meeting-minutes",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "cacheDirectories": [
+    ".next/cache",
+    "node_modules"
+  ],
   "scripts": {
     "dev:stop": "bash scripts/stop-dev.sh",
     "dev": "npm run dev:stop && next dev --hostname 0.0.0.0 --port 3000",
     "build": "prisma generate && next build",
-    "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
@@ -34,6 +40,7 @@
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
     "next-auth": "^5.0.0-beta.31",
+    "prisma": "^6.19.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.17.2",
@@ -50,7 +57,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
-    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

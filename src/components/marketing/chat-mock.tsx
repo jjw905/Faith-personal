@@ -379,11 +379,10 @@ function MockBubble({
 function ChatDateDivider({ label }: { label: string }) {
   if (!label) return null;
   return (
-    <div className="flex flex-col items-center gap-3 py-2">
+    <div className="flex shrink-0 justify-center pb-3 pt-0.5">
       <span className="rounded-full bg-surface-2 px-3 py-1 text-[13px] font-semibold tabular-nums tracking-tight text-foreground">
         {label}
       </span>
-      <span className="h-24 w-px bg-border-strong xl:h-28" aria-hidden />
     </div>
   );
 }
@@ -391,11 +390,11 @@ function ChatDateDivider({ label }: { label: string }) {
 /** 히어로 우측 — 양방향 회의 채팅 목업. 뷰포트에 보일 때만 재생. */
 export function ChatMock() {
   const rootRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(true);
   const [visible, setVisible] = useState<VisibleMessage[]>([]);
   const [cycle, setCycle] = useState(0);
   const [dateLabel, setDateLabel] = useState("");
-  const [spawned, setSpawned] = useState(0);
 
   useEffect(() => {
     setDateLabel(
@@ -421,6 +420,19 @@ export function ChatMock() {
     return () => io.disconnect();
   }, []);
 
+  // 새 메시지 → 아래로 쌓인 뒤, 넘치면 컨테이너만 스크롤해 최신 말풍선이 보이게
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scroller.scrollTo({
+      top: scroller.scrollHeight,
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [visible]);
+
   useEffect(() => {
     if (!inView) return;
 
@@ -436,7 +448,6 @@ export function ChatMock() {
           pending: false,
         })),
       );
-      setSpawned(4);
       return;
     }
 
@@ -448,7 +459,6 @@ export function ChatMock() {
 
     let cursor = 600;
     let lastStart = 0;
-    setSpawned(0);
     setVisible([]);
 
     SCRIPT.forEach((line, i) => {
@@ -458,12 +468,7 @@ export function ChatMock() {
 
       timers.push(
         window.setTimeout(() => {
-          setSpawned((n) => n + 1);
-          setVisible((prev) => {
-            // 화면에 안 보이는 오래된 버블은 잘라 렌더 비용 제한
-            const next = [...prev, { ...line, key, pending: true }];
-            return next.length > 8 ? next.slice(-8) : next;
-          });
+          setVisible((prev) => [...prev, { ...line, key, pending: true }]);
         }, start),
       );
 
@@ -498,11 +503,8 @@ export function ChatMock() {
   useEffect(() => {
     if (!inView) {
       setVisible([]);
-      setSpawned(0);
     }
   }, [inView]);
-
-  const showDate = spawned < 5;
 
   return (
     <div
@@ -515,19 +517,24 @@ export function ChatMock() {
         containIntrinsicSize: "0 440px",
       }}
     >
-      <div className="relative h-[400px] xl:h-[440px]">
-        <div className="absolute inset-0 flex flex-col justify-end gap-3.5 overflow-hidden pb-1">
-          {showDate && <ChatDateDivider label={dateLabel} />}
-          {visible.map((msg) => (
-            <MockBubble
-              key={msg.key}
-              side={msg.side}
-              name={msg.name}
-              initial={msg.initial}
-            >
-              {msg.pending ? <TypingDots /> : msg.content}
-            </MockBubble>
-          ))}
+      <div className="flex h-[400px] flex-col xl:h-[440px]">
+        <ChatDateDivider label={dateLabel} />
+        <div
+          ref={scrollRef}
+          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <div className="flex flex-col justify-start gap-3.5 pb-1">
+            {visible.map((msg) => (
+              <MockBubble
+                key={msg.key}
+                side={msg.side}
+                name={msg.name}
+                initial={msg.initial}
+              >
+                {msg.pending ? <TypingDots /> : msg.content}
+              </MockBubble>
+            ))}
+          </div>
         </div>
       </div>
     </div>

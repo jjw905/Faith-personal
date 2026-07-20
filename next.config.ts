@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
     process.env.GITHUB_SHA ||
     undefined,
   experimental: {
+    // lucide 전체 번들 스캔 줄여 빌드 시간 단축
+    optimizePackageImports: ["lucide-react"],
     proxyClientMaxBodySize: "12mb",
     serverActions: {
       bodySizeLimit: "12mb",

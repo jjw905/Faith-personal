@@ -87,11 +87,22 @@ export function SocialSignupButtons({
   function handleSocial(id: (typeof PROVIDERS)[number]["id"]) {
     setError("");
     startTransition(() => {
-      // 서버 액션 signIn은 DO/Next에서 Configuration으로 실패하는 경우가 있음.
-      // 브라우저 CSRF POST 경로(next-auth/react)를 사용.
-      void signIn(id, { callbackUrl: "/dashboard" }).catch(() => {
-        setError("소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.");
-      });
+      // redirect:true가 환경에 따라 무반응일 수 있어 URL을 받아 직접 이동.
+      void signIn(id, { callbackUrl: "/dashboard", redirect: false })
+        .then((res) => {
+          if (res?.url) {
+            window.location.assign(res.url);
+            return;
+          }
+          setError(
+            res?.error
+              ? "소셜 로그인에 실패했습니다. Google 콘솔의 리디렉션 URI·테스트 사용자를 확인해 주세요."
+              : "소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.",
+          );
+        })
+        .catch(() => {
+          setError("소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.");
+        });
     });
   }
 

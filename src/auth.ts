@@ -12,7 +12,6 @@ import { isValidEmail } from "@/lib/auth-validation";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
-import { isResendConfigured, sendVerificationEmail } from "@/lib/resend-mail";
 
 class InvalidCredentials extends CredentialsSignin {
   code = "invalid_credentials";
@@ -228,6 +227,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account?.type === "oauth" && !user.email) {
         return "/signup/email";
       }
+
+      // Google/Naver 등은 제공자가 이메일을 확인함 → 인증 메일 없이 즉시 verified
+      if (account?.type === "oauth" && email && user.id) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: new Date() },
+        });
+      }
       return true;
     },
     async jwt({ token, user, account, profile, trigger }) {
@@ -235,6 +242,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account) {
         token.provider = account.provider;
         token.providerAccountId = account.providerAccountId;
+      }
+      // OAuth+이메일: JWT에도 즉시 verified (events/DB 갱신 전 레이스 방지)
+      if (account?.type === "oauth" && (user?.email || token.email)) {
+        token.emailVerified = true;
       }
       if (profile) {
         const p = profile as {
@@ -321,33 +332,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async createUser({ user }) {
+      // Adapter createUser는 OAuth 전용(이메일 가입은 API에서 직접 생성).
+      // 제공자 이메일이 있으면 인증 메일 없이 verified.
       const email = user.email?.trim().toLowerCase();
-      if (email && adminEmails().includes(email)) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { role: "ADMIN" },
-        });
-      }
+      if (!email || !user.id) return;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          emailVerified: new Date(),
+          ...(adminEmails().includes(email) ? { role: "ADMIN" as const } : {}),
+        },
+      });
     },
     async signIn({ user, account }) {
-      if (!account || account.type !== "oauth") return;
-      if (!user.id) return;
-
-      const dbUser = await prisma.user.findUnique({
+      // OAuth는 인증 메일 발송하지 않음. 이메일 있으면 verified만 보정.
+      if (!account || account.type !== "oauth" || !user.id) return;
+      const email = user.email?.trim().toLowerCase();
+      if (!email) return;
+      await prisma.user.update({
         where: { id: user.id },
-        select: { email: true, emailVerified: true, name: true },
+        data: { emailVerified: new Date() },
       });
-      const email = dbUser?.email?.trim().toLowerCase();
-      if (!email || dbUser?.emailVerified) return;
-
-      if (!isResendConfigured()) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { emailVerified: new Date() },
-        });
-        return;
-      }
-      await sendVerificationEmail(email, dbUser?.name ?? user.name);
     },
   },
 });
