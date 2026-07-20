@@ -1,3 +1,12 @@
+"use client";
+
+import { useTransition } from "react";
+
+import {
+  signInWithProvider,
+  type SocialProvider,
+} from "@/lib/auth-actions";
+
 /** 소셜 회원가입 — SaaS/국내 서비스형 풀폭 스택 버튼. */
 
 function NaverIcon() {
@@ -60,7 +69,7 @@ const PROVIDERS = [
     Icon: GoogleIcon,
   },
   {
-    id: "x",
+    id: "twitter",
     label: "X",
     className: "bg-black text-white hover:bg-[#141414]",
     Icon: XIcon,
@@ -76,6 +85,8 @@ export function SocialSignupButtons({
   dense?: boolean;
   showPrivacyNote?: boolean;
 }) {
+  const [pending, startTransition] = useTransition();
+
   return (
     <div>
       <p className="text-left text-[13px] font-semibold tracking-tight text-foreground">
@@ -92,7 +103,13 @@ export function SocialSignupButtons({
           <button
             key={id}
             type="button"
-            className={`flex w-full items-center justify-center rounded-xl text-[15px] font-semibold transition-colors ${
+            disabled={pending}
+            onClick={() =>
+              startTransition(() => {
+                void signInWithProvider(id);
+              })
+            }
+            className={`flex w-full items-center justify-center rounded-xl text-[15px] font-semibold transition-colors disabled:opacity-60 ${
               dense ? "h-11" : "h-12"
             } ${className}`}
           >
