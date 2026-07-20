@@ -6,6 +6,8 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { ResendVerificationButton } from "@/components/auth/resend-verification-button";
 import { auth } from "@/auth";
 import { isEmailVerified } from "@/lib/auth-store";
+import { prisma } from "@/lib/prisma";
+import { isResendConfigured } from "@/lib/resend-mail";
 
 export const metadata = {
   title: "이메일 인증 · Faith",
@@ -21,6 +23,18 @@ export default async function SignupVerifyPage({
   const jar = await cookies();
   const pending = jar.get("faith.pending-email")?.value;
   const email = (session?.user?.email || pending || "").trim().toLowerCase();
+  const oauth =
+    Boolean(session?.user?.provider) &&
+    session?.user?.provider !== "credentials";
+
+  // 소셜+이메일은 인증 메일 없이 즉시 통과
+  if (session?.user?.id && oauth && email) {
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { emailVerified: new Date() },
+    });
+    redirect("/dashboard");
+  }
 
   if (email && (await isEmailVerified(email))) {
     redirect("/dashboard");
@@ -33,6 +47,7 @@ export default async function SignupVerifyPage({
   const verifiedOk = params.ok === "1";
   const resent = params.resent === "1";
   const error = params.error;
+  const mailOn = isResendConfigured();
 
   return (
     <AuthShell>
@@ -42,7 +57,9 @@ export default async function SignupVerifyPage({
             이메일 인증
           </h1>
           <p className="mt-2 text-sm text-muted">
-            소셜 가입 후 이메일 인증이 필요합니다
+            {mailOn
+              ? "이메일 가입 후 인증이 필요합니다"
+              : "이메일 확인 후 시작할 수 있습니다"}
           </p>
         </div>
 
@@ -63,10 +80,18 @@ export default async function SignupVerifyPage({
             <div className="space-y-5">
               <p className="text-sm leading-relaxed text-muted">
                 {email ? (
-                  <>
-                    <span className="font-medium text-foreground">{email}</span>
-                    으로 인증 메일을 보냈습니다. 메일함의 링크를 눌러 주세요.
-                  </>
+                  mailOn ? (
+                    <>
+                      <span className="font-medium text-foreground">{email}</span>
+                      으로 인증 메일을 보냈습니다. 메일함의 링크를 눌러 주세요.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-foreground">{email}</span>
+                      계정 확인이 필요합니다. 아래 버튼으로 바로 시작할 수
+                      있습니다.
+                    </>
+                  )
                 ) : (
                   <>인증에 사용할 이메일이 없습니다. 이메일을 먼저 입력해 주세요.</>
                 )}
@@ -99,7 +124,7 @@ export default async function SignupVerifyPage({
                   href="/signup"
                   className="text-center text-[13px] text-muted hover:text-foreground"
                 >
-                  회원가입으로 돌아가기
+                  돌아가기
                 </Link>
               </div>
             </div>

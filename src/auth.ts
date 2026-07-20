@@ -75,13 +75,41 @@ async function syncUserFromToken(userId: string) {
   });
 }
 
+/** Auth.js OAuth는 emailVerified:null로 생성함 → 이메일이 있으면 즉시 verified. */
+function createAuthAdapter() {
+  const base = PrismaAdapter(prisma);
+  return {
+    ...base,
+    async createUser(data) {
+      const email = data.email?.trim().toLowerCase();
+      return base.createUser!({
+        ...data,
+        ...(email
+          ? { email, emailVerified: new Date() }
+          : { emailVerified: null }),
+      });
+    },
+  };
+}
+
+async function markEmailVerified(userId: string) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { emailVerified: new Date() },
+  });
+}
+
+function isOAuthProvider(provider?: string | null) {
+  return Boolean(provider && provider !== "credentials");
+}
+
 /**
  * Faith 인증 — Credentials + 소셜, Prisma, Resend 이메일 인증, Admin.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
   trustHost: true,
-  adapter: PrismaAdapter(prisma),
+  adapter: createAuthAdapter(),
   session: {
     strategy: "jwt",
     maxAge: 60 * 60 * 24 * 30,
@@ -228,12 +256,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return "/signup/email";
       }
 
-      // Google/Naver 등은 제공자가 이메일을 확인함 → 인증 메일 없이 즉시 verified
-      if (account?.type === "oauth" && email && user.id) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { emailVerified: new Date() },
-        });
+      // 신규 OAuth는 signIn 시점에 user.id가 없을 수 있음 → 이메일로도 보정
+      if (account?.type === "oauth" && email) {
+        if (user.id) {
+          await markEmailVerified(user.id);
+        } else {
+          await prisma.user.updateMany({
+            where: { email },
+            data: { emailVerified: new Date() },
+          });
+        }
       }
       return true;
     },
@@ -242,10 +274,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account) {
         token.provider = account.provider;
         token.providerAccountId = account.providerAccountId;
-      }
-      // OAuth+이메일: JWT에도 즉시 verified (events/DB 갱신 전 레이스 방지)
-      if (account?.type === "oauth" && (user?.email || token.email)) {
-        token.emailVerified = true;
       }
       if (profile) {
         const p = profile as {
@@ -259,6 +287,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email = naver?.email ?? p.email ?? token.email;
         token.picture = naver?.profile_image ?? p.picture ?? token.picture;
       }
+      if (user?.email) {
+        token.email = user.email.trim().toLowerCase();
+      }
 
       try {
         const pending = (await cookies()).get("faith.pending-email")?.value;
@@ -269,31 +300,37 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         /* ignore */
       }
 
-      if (token.sub && (trigger === "update" || trigger === "signIn" || !token.role)) {
+      const oauthWithEmail =
+        (account?.type === "oauth" ||
+          isOAuthProvider(token.provider as string | undefined)) &&
+        Boolean(token.email || user?.email);
+
+      if (token.sub) {
         const dbUser = await syncUserFromToken(token.sub);
         if (dbUser) {
           token.email = dbUser.email ?? token.email;
           token.name = dbUser.name ?? token.name;
           token.picture = dbUser.image ?? token.picture;
           token.role = dbUser.role;
-          token.emailVerified = Boolean(dbUser.emailVerified);
           token.disabled = dbUser.disabled;
           token.hasPassword = Boolean(dbUser.passwordHash);
-        }
-      } else if (token.sub) {
-        // 매 요청 DB 동기화 (이메일/역할 변경 반영)
-        const dbUser = await syncUserFromToken(token.sub);
-        if (dbUser) {
-          token.email = dbUser.email ?? token.email;
-          token.name = dbUser.name ?? token.name;
-          token.picture = dbUser.image ?? token.picture;
-          token.role = dbUser.role;
-          token.emailVerified = Boolean(dbUser.emailVerified);
-          token.disabled = dbUser.disabled;
-          token.hasPassword = Boolean(dbUser.passwordHash);
+
+          if (oauthWithEmail) {
+            // Auth.js가 null로 만들어도 JWT/DB 모두 verified로 고정
+            token.emailVerified = true;
+            if (!dbUser.emailVerified) {
+              await markEmailVerified(token.sub);
+            }
+          } else {
+            token.emailVerified = Boolean(dbUser.emailVerified);
+          }
+        } else if (oauthWithEmail) {
+          token.emailVerified = true;
+        } else if (trigger === "signUp" || trigger === "signIn") {
+          token.role = (token.role as Role | undefined) ?? ("USER" as Role);
         }
       } else {
-        token.emailVerified = false;
+        token.emailVerified = oauthWithEmail;
         token.role = "USER" as Role;
       }
 
