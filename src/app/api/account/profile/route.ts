@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { isValidKoreanName } from "@/lib/auth-validation";
 import { requireUser } from "@/lib/require-user";
 import { prisma } from "@/lib/prisma";
 
@@ -24,9 +25,9 @@ export async function PATCH(request: Request) {
       ? (body as { name: string }).name.trim()
       : "";
 
-  if (!name || name.length > 40) {
+  if (!isValidKoreanName(name)) {
     return NextResponse.json(
-      { ok: false, message: "이름은 1~40자로 입력해 주세요." },
+      { ok: false, message: "이름은 정확한 한글 이름(2~5자)으로 입력해 주세요." },
       { status: 400 },
     );
   }

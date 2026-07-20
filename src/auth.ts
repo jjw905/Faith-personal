@@ -8,6 +8,7 @@ import type { Role } from "@prisma/client";
 import type { Provider } from "next-auth/providers";
 import { cookies, headers } from "next/headers";
 
+import { ensureVerified, shouldAutoVerify } from "@/lib/account-verification";
 import { isValidEmail } from "@/lib/auth-validation";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
@@ -90,17 +91,6 @@ function createAuthAdapter() {
       });
     },
   };
-}
-
-async function markEmailVerified(userId: string) {
-  await prisma.user.update({
-    where: { id: userId },
-    data: { emailVerified: new Date() },
-  });
-}
-
-function isOAuthProvider(provider?: string | null) {
-  return Boolean(provider && provider !== "credentials");
 }
 
 /**
@@ -256,20 +246,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return "/signup/email";
       }
 
-      // 신규 OAuth는 signIn 시점에 user.id가 없을 수 있음 → 이메일로도 보정
-      if (account?.type === "oauth" && email) {
-        if (user.id) {
-          await markEmailVerified(user.id);
-        } else {
-          await prisma.user.updateMany({
-            where: { email },
-            data: { emailVerified: new Date() },
-          });
-        }
-      }
+      // 소셜+이메일은 즉시 verified. 신규 계정 생성은 adapter/createUser가 처리하고,
+      // 기존 계정은 아래 jwt 콜백에서 보정한다.
       return true;
     },
-    async jwt({ token, user, account, profile, trigger }) {
+    async jwt({ token, user, account, profile }) {
       if (user?.id) token.sub = user.id;
       if (account) {
         token.provider = account.provider;
@@ -300,11 +281,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         /* ignore */
       }
 
-      const oauthWithEmail =
-        (account?.type === "oauth" ||
-          isOAuthProvider(token.provider as string | undefined)) &&
-        Boolean(token.email || user?.email);
+      const oauthWithEmail = shouldAutoVerify(
+        (account?.provider ?? token.provider) as string | undefined,
+        (token.email ?? user?.email) as string | undefined,
+      );
 
+      // 매 요청 DB 동기화: 비활성화, 역할, 이메일 변경을 즉시 반영 (보안 목적).
       if (token.sub) {
         const dbUser = await syncUserFromToken(token.sub);
         if (dbUser) {
@@ -315,18 +297,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.disabled = dbUser.disabled;
           token.hasPassword = Boolean(dbUser.passwordHash);
 
-          if (oauthWithEmail) {
-            // Auth.js가 null로 만들어도 JWT/DB 모두 verified로 고정
+          if (oauthWithEmail && !dbUser.emailVerified) {
+            // Auth.js는 OAuth 유저를 null로 만들 수 있어 여기서 한 번 보정
+            await ensureVerified(token.sub, false);
             token.emailVerified = true;
-            if (!dbUser.emailVerified) {
-              await markEmailVerified(token.sub);
-            }
           } else {
-            token.emailVerified = Boolean(dbUser.emailVerified);
+            token.emailVerified = oauthWithEmail || Boolean(dbUser.emailVerified);
           }
-        } else if (oauthWithEmail) {
-          token.emailVerified = true;
-        } else if (trigger === "signUp" || trigger === "signIn") {
+        } else {
+          token.emailVerified = oauthWithEmail;
           token.role = (token.role as Role | undefined) ?? ("USER" as Role);
         }
       } else {
@@ -368,27 +347,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   events: {
+    // adapter.createUser는 OAuth 신규 가입에서만 호출됨 (이메일 가입은 API 직접 생성).
+    // 관리자 이메일이면 승격. verified는 adapter/jwt에서 처리.
     async createUser({ user }) {
-      // Adapter createUser는 OAuth 전용(이메일 가입은 API에서 직접 생성).
-      // 제공자 이메일이 있으면 인증 메일 없이 verified.
       const email = user.email?.trim().toLowerCase();
-      if (!email || !user.id) return;
+      if (!email || !user.id || !adminEmails().includes(email)) return;
       await prisma.user.update({
         where: { id: user.id },
-        data: {
-          emailVerified: new Date(),
-          ...(adminEmails().includes(email) ? { role: "ADMIN" as const } : {}),
-        },
-      });
-    },
-    async signIn({ user, account }) {
-      // OAuth는 인증 메일 발송하지 않음. 이메일 있으면 verified만 보정.
-      if (!account || account.type !== "oauth" || !user.id) return;
-      const email = user.email?.trim().toLowerCase();
-      if (!email) return;
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { emailVerified: new Date() },
+        data: { role: "ADMIN" },
       });
     },
   },

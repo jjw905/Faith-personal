@@ -3,9 +3,13 @@ import { NextResponse } from "next/server";
 import { isValidEmail } from "@/lib/auth-validation";
 import { consumeOtp } from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
+import { enforceAuthRateLimit } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/require-user";
 
 export async function POST(request: Request) {
+  const limited = enforceAuthRateLimit(request, "email-change-confirm", 10, 60_000);
+  if (limited) return limited;
+
   const session = await requireUser();
   if (!session) {
     return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });

@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { ensureVerified, shouldAutoVerify } from "@/lib/account-verification";
 import { isEmailVerified } from "@/lib/auth-store";
-import { prisma } from "@/lib/prisma";
 
 export default async function DashboardLayout({
   children,
@@ -22,19 +22,14 @@ export default async function DashboardLayout({
   const jar = await cookies();
   const pending = jar.get("faith.pending-email")?.value;
   const email = (session.user.email || pending || "").trim().toLowerCase();
-  const oauth =
-    Boolean(session.user.provider) && session.user.provider !== "credentials";
 
   let verified =
     session.user.emailVerified ||
     (email ? await isEmailVerified(email) : false);
 
   // Google/Naver 등: 제공자 이메일이 있으면 인증 메일 없이 통과
-  if (!verified && oauth && email && session.user.id) {
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { emailVerified: new Date() },
-    });
+  if (!verified && session.user.id && shouldAutoVerify(session.user.provider, email)) {
+    await ensureVerified(session.user.id, false);
     verified = true;
   }
 

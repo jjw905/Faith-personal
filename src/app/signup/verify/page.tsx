@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { ResendVerificationButton } from "@/components/auth/resend-verification-button";
 import { auth } from "@/auth";
+import { ensureVerified, shouldAutoVerify } from "@/lib/account-verification";
 import { isEmailVerified } from "@/lib/auth-store";
-import { prisma } from "@/lib/prisma";
 import { isResendConfigured } from "@/lib/resend-mail";
 
 export const metadata = {
@@ -23,16 +23,10 @@ export default async function SignupVerifyPage({
   const jar = await cookies();
   const pending = jar.get("faith.pending-email")?.value;
   const email = (session?.user?.email || pending || "").trim().toLowerCase();
-  const oauth =
-    Boolean(session?.user?.provider) &&
-    session?.user?.provider !== "credentials";
 
   // 소셜+이메일은 인증 메일 없이 즉시 통과
-  if (session?.user?.id && oauth && email) {
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { emailVerified: new Date() },
-    });
+  if (session?.user?.id && shouldAutoVerify(session.user.provider, email)) {
+    await ensureVerified(session.user.id, false);
     redirect("/dashboard");
   }
 

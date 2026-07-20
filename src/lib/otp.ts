@@ -1,8 +1,11 @@
 import { createHash, randomInt } from "crypto";
 
 import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 
 const OTP_TTL_MS = 1000 * 60 * 10;
+/** identifier당 검증 시도 상한 (무차별 방지). 초과 시 OTP 폐기. */
+const OTP_MAX_ATTEMPTS = 5;
 
 function hashCode(code: string) {
   return createHash("sha256").update(code).digest("hex");
@@ -23,6 +26,17 @@ export async function storeOtp(identifier: string, code: string) {
 }
 
 export async function consumeOtp(identifier: string, code: string) {
+  // TTL 내 시도 횟수 제한. 초과하면 현재 OTP 무효화.
+  const attempt = rateLimit({
+    key: `otp:${identifier}`,
+    limit: OTP_MAX_ATTEMPTS,
+    windowMs: OTP_TTL_MS,
+  });
+  if (!attempt.ok) {
+    await prisma.verificationToken.deleteMany({ where: { identifier } });
+    return false;
+  }
+
   const row = await prisma.verificationToken.findFirst({
     where: { identifier, token: hashCode(code) },
   });
