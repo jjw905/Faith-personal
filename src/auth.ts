@@ -80,7 +80,7 @@ function createAuthAdapter() {
   const base = PrismaAdapter(prisma);
   return {
     ...base,
-    async createUser(data) {
+    createUser: async (data: Parameters<NonNullable<typeof base.createUser>>[0]) => {
       const email = data.email?.trim().toLowerCase();
       return base.createUser!({
         ...data,
