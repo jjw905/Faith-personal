@@ -33,6 +33,16 @@ export async function repairAdminIdentity() {
     data: { role: Role.USER },
   });
 
+  // 어드민 이메일 행에 붙은 소셜 연결 해제 (소셜 계정의 어드민 도용 방지).
+  // 이후 각 소셜은 본인 이메일로 재로그인 시 별도/정상 연결됨.
+  const adminRows = await prisma.user.findMany({
+    where: { email: { in: emails } },
+    select: { id: true },
+  });
+  const detached = await prisma.account.deleteMany({
+    where: { userId: { in: adminRows.map((r) => r.id) } },
+  });
+
   const admins = await prisma.user.findMany({
     where: { email: { in: emails } },
     select: {
@@ -47,6 +57,7 @@ export async function repairAdminIdentity() {
     ok: true as const,
     seededAdmin: seed.ok ? seed.email : null,
     demotedCount: demoted.count,
+    detachedAccounts: detached.count,
     adminAccounts: admins.map((a) => ({
       email: a.email,
       role: a.role,
