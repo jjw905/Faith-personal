@@ -5,6 +5,10 @@ import { requireUser } from "@/lib/require-user";
 
 const LINKABLE = ["google", "naver", "twitter"] as const;
 
+function isLinkable(provider: string): provider is (typeof LINKABLE)[number] {
+  return (LINKABLE as readonly string[]).includes(provider);
+}
+
 /** 연결된 소셜 목록. */
 export async function GET() {
   const session = await requireUser();
@@ -16,20 +20,27 @@ export async function GET() {
     prisma.account.findMany({
       where: { userId: session.user.id },
       select: { provider: true, providerAccountId: true },
+      orderBy: { id: "asc" },
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { passwordHash: true },
+      select: { passwordHash: true, signupProvider: true },
     }),
   ]);
 
   const linked = accounts
-    .filter((a) => (LINKABLE as readonly string[]).includes(a.provider))
+    .filter((a) => isLinkable(a.provider))
     .map((a) => a.provider);
+
+  const primary =
+    user?.signupProvider && isLinkable(user.signupProvider)
+      ? user.signupProvider
+      : null;
 
   return NextResponse.json({
     ok: true,
     linked,
+    primary,
     hasPassword: Boolean(user?.passwordHash),
     available: LINKABLE.filter((p) => {
       if (p === "google") {
@@ -74,7 +85,7 @@ export async function DELETE(request: Request) {
       ? (body as { provider: string }).provider
       : "";
 
-  if (!(LINKABLE as readonly string[]).includes(provider)) {
+  if (!isLinkable(provider)) {
     return NextResponse.json({ ok: false, message: "지원하지 않는 제공자" }, { status: 400 });
   }
 
@@ -85,13 +96,20 @@ export async function DELETE(request: Request) {
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { passwordHash: true },
+      select: { passwordHash: true, signupProvider: true },
     }),
   ]);
 
   const target = accounts.find((a) => a.provider === provider);
   if (!target) {
     return NextResponse.json({ ok: false, message: "연동되지 않은 계정" }, { status: 404 });
+  }
+
+  if (user?.signupProvider === provider) {
+    return NextResponse.json(
+      { ok: false, message: "최초 가입에 사용한 계정은 해제할 수 없습니다." },
+      { status: 400 },
+    );
   }
 
   const remainingSocial = accounts.filter((a) => a.provider !== provider).length;

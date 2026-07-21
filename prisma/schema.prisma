@@ -28,15 +28,17 @@ model User {
   email         String?     @unique
   emailVerified DateTime?   @map("email_verified")
   image         String?
-  passwordHash  String?     @map("password_hash")
-  role          Role        @default(USER)
-  plan          Plan        @default(FREE)
-  disabled      Boolean     @default(false)
-  accounts      Account[]
-  sessions      Session[]
-  vaultFiles    VaultFile[]
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  passwordHash    String?     @map("password_hash")
+  /** 최초 가입 수단: credentials | google | naver | twitter */
+  signupProvider  String?     @map("signup_provider")
+  role            Role        @default(USER)
+  plan            Plan        @default(FREE)
+  disabled        Boolean     @default(false)
+  accounts        Account[]
+  sessions        Session[]
+  vaultFiles      VaultFile[]
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
   @@index([role, disabled])
   @@map("users")

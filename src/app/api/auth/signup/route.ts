@@ -117,6 +117,7 @@ export async function POST(request: Request) {
           email,
           name,
           passwordHash,
+          signupProvider: "credentials",
           ...(skipMail ? { emailVerified: new Date() } : {}),
         },
       });

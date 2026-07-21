@@ -454,6 +454,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         data: { role: "ADMIN" },
       });
     },
+    // 최초 소셜 연결 시 가입 기반 제공자 기록 (이후 연동은 덮어쓰지 않음).
+    async linkAccount({ user, account }) {
+      if (!user.id || !account?.provider) return;
+      if (!["google", "naver", "twitter"].includes(account.provider)) return;
+      await prisma.user.updateMany({
+        where: { id: user.id, signupProvider: null },
+        data: { signupProvider: account.provider },
+      });
+    },
   },
 });
 

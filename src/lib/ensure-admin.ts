@@ -27,6 +27,7 @@ export async function ensureAdminUser() {
       role: Role.ADMIN,
       emailVerified: new Date(),
       passwordHash,
+      signupProvider: "credentials",
       disabled: false,
     },
     update: {

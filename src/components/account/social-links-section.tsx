@@ -48,10 +48,11 @@ export async function SocialLinksSection({
     prisma.account.findMany({
       where: { userId: session.user.id },
       select: { provider: true },
+      orderBy: { id: "asc" },
     }),
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { passwordHash: true },
+      select: { passwordHash: true, signupProvider: true },
     }),
   ]);
 
@@ -59,12 +60,19 @@ export async function SocialLinksSection({
     .filter((a) => (LINKABLE as readonly string[]).includes(a.provider))
     .map((a) => a.provider);
 
+  const primary =
+    user?.signupProvider &&
+    (LINKABLE as readonly string[]).includes(user.signupProvider)
+      ? user.signupProvider
+      : null;
+
   return (
     <SocialLinksCard
-      key={linkedProviders.slice().sort().join(",") || "none"}
+      key={`${linkedProviders.slice().sort().join(",")}|${primary ?? ""}`}
       initial={{
         linked: linkedProviders,
         available: [...availableProviders()],
+        primary,
         hasPassword: Boolean(user?.passwordHash),
         notice: noticeFromSearch(linked, error),
       }}
