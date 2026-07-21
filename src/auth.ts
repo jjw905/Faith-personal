@@ -48,22 +48,28 @@ function oauthProviders(): Provider[] {
       Naver({
         clientId: process.env.AUTH_NAVER_ID,
         clientSecret: process.env.AUTH_NAVER_SECRET,
-        // 네이버도 이메일 검증 제공자 → 같은 이메일 계정에 안전 연결.
-        allowDangerousEmailAccountLinking: true,
+        // 네이버 email은 '연락처 이메일'이라 Gmail 등이 올 수 있음.
+        // 외부 메일로 구글 계정과 자동 병합되지 않게 연결 끔.
+        allowDangerousEmailAccountLinking: false,
         profile(profile) {
           const r = (profile as { response?: {
             id?: string;
             nickname?: string;
+            name?: string;
             email?: string;
             profile_image?: string;
           } }).response;
           if (!r?.id) {
             throw new Error("네이버 프로필을 가져오지 못했습니다.");
           }
+          // @naver.com 만 계정 키로 사용. 그 외(연락처 Gmail 등)는 이메일 미제공 취급
+          // → /signup/email 에서 Faith용 이메일을 따로 받음.
+          const raw = r.email?.trim().toLowerCase() ?? "";
+          const naverMail = raw.endsWith("@naver.com") ? raw : null;
           return {
             id: r.id,
-            name: r.nickname ?? null,
-            email: r.email ?? null,
+            name: r.name ?? r.nickname ?? null,
+            email: naverMail,
             image: r.profile_image ?? null,
           };
         },
@@ -251,8 +257,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       try {
         const email = (user.email || "").trim().toLowerCase();
 
-        // 이메일 검증 제공자는 같은 이메일 기존 계정에 자동 연결 (본인 소유 보장).
-        const TRUSTED_LINK_PROVIDERS = new Set(["google", "naver"]);
+        // Google만 이메일 자동 연결. 네이버는 연락처 메일이라 병합하지 않음.
+        const TRUSTED_LINK_PROVIDERS = new Set(["google"]);
 
         // 동일 이메일이 이미 있으면, 신뢰 제공자만 연결 허용 (그 외는 중복 가입 차단)
         if (account?.type === "oauth" && email) {

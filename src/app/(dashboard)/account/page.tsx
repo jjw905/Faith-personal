@@ -201,20 +201,8 @@ export default function AccountPage() {
         <Card>
           <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
             <CardTitle className="text-lg">계정 정보</CardTitle>
-            <p className="text-sm leading-relaxed text-muted">
-              역할은 변경할 수 없습니다. 이메일 변경은 메일 서비스 연결 후
-              이용할 수 있습니다.
-            </p>
           </CardHeader>
           <CardContent className="divide-y divide-border px-5 pb-4 pt-0 sm:px-6">
-            <SettingRow
-              label="역할"
-              description="서비스 역할은 관리자만 사용자 관리에서 변경합니다."
-            >
-              <span className="text-sm font-medium text-foreground">
-                {currentUser.role}
-              </span>
-            </SettingRow>
             <SettingRow label="현재 이메일">
               <span className="max-w-[220px] truncate text-sm text-foreground">
                 {session?.user?.email || currentUser.email}
