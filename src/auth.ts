@@ -38,8 +38,8 @@ function oauthProviders(): Provider[] {
       Google({
         clientId: process.env.AUTH_GOOGLE_ID,
         clientSecret: process.env.AUTH_GOOGLE_SECRET,
-        // Google은 이메일 소유를 검증하므로 같은 이메일 기존 계정에 안전하게 연결.
-        allowDangerousEmailAccountLinking: true,
+        // 이메일이 같아도 자동 병합하지 않음. 연동은 로그인 상태에서만.
+        allowDangerousEmailAccountLinking: false,
       }),
     );
   }
@@ -81,6 +81,7 @@ function oauthProviders(): Provider[] {
       Twitter({
         clientId: process.env.AUTH_TWITTER_ID,
         clientSecret: process.env.AUTH_TWITTER_SECRET,
+        allowDangerousEmailAccountLinking: false,
         // OAuth 2.0 + 이메일(가능하면). 없으면 /signup/email로 이어짐.
         authorization: {
           url: "https://x.com/i/oauth2/authorize",
@@ -149,8 +150,13 @@ function createAuthAdapter() {
   };
 }
 
+/** signIn 콜백에서 세션 조회용 (NextAuth 초기화 후 주입). */
+let getAuth: (() => Promise<{ user?: { id?: string } } | null>) | null =
+  null;
+
 /**
  * Faith 인증 — Credentials + 소셜, Prisma, Resend 이메일 인증, Admin.
+ * 소셜은 제공자 ID로 식별. 이메일은 별도 등록. 추가 소셜은 로그인 후 연동.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.AUTH_SECRET,
@@ -257,10 +263,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       try {
         const email = (user.email || "").trim().toLowerCase();
 
-        // Google만 이메일 자동 연결. 네이버는 연락처 메일이라 병합하지 않음.
-        const TRUSTED_LINK_PROVIDERS = new Set(["google"]);
-
-        // 동일 이메일이 이미 있으면, 신뢰 제공자만 연결 허용 (그 외는 중복 가입 차단)
+        // 이메일이 이미 다른 계정에 있으면 자동 병합하지 않음.
+        // 예외: 이미 이 소셜 ID가 연결된 경우(재로그인), 또는 로그인 상태에서 본인 계정에 연동.
         if (account?.type === "oauth" && email) {
           const existing = await prisma.user.findUnique({
             where: { email },
@@ -278,10 +282,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 a.provider === account.provider &&
                 a.providerAccountId === account.providerAccountId,
             );
-            if (!alreadyLinked && !TRUSTED_LINK_PROVIDERS.has(account.provider)) {
-              return existing.passwordHash
-                ? "/login?error=EmailConflict"
-                : "/login?error=OAuthAccountNotLinked";
+            if (!alreadyLinked) {
+              const session = getAuth ? await getAuth() : null;
+              const sessionUserId = session?.user?.id;
+              // 로그인 상태에서 본인 이메일과 같으면 연동 허용.
+              if (sessionUserId === existing.id) {
+                // ok — Auth.js가 현재 세션 유저에 provider 연결
+              } else if (sessionUserId) {
+                // 다른 계정의 이메일이면 연동 거부 (계정 탈취 방지)
+                return "/account?error=EmailConflict";
+              } else {
+                return existing.passwordHash
+                  ? "/login?error=EmailConflict"
+                  : "/login?error=OAuthAccountNotLinked";
+              }
             }
           }
         }
@@ -306,12 +320,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        if (account?.type === "oauth" && !user.email) {
-          return "/signup/email";
-        }
-
-        // 소셜+이메일은 즉시 verified. 신규 계정 생성은 adapter/createUser가 처리하고,
-        // 기존 계정은 아래 jwt 콜백에서 보정한다.
+        // 이메일 없는 소셜(네이버 연락처 Gmail 등)도 계정 생성 허용.
+        // 이메일은 /signup/email 에서 등록 (layout이 유도).
         return true;
       } catch (err) {
         console.error("[auth] signIn callback failed", err);
@@ -446,3 +456,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+getAuth = auth;
