@@ -5,6 +5,10 @@ import {
 } from "@/lib/changelog";
 import { cn } from "@/lib/utils";
 
+type ChangelogListProps = {
+  entries?: ChangelogEntry[];
+};
+
 function EntryBlock({
   entry,
   isLast,
@@ -67,15 +71,15 @@ function EntryBlock({
   );
 }
 
-/** 공개 Changelog 목록. 역할과 무관하게 동일. */
-export function ChangelogList() {
+/** 기본은 사용자용 Changelog. 개발전용은 entries로 DEV_CHANGELOG 전달. */
+export function ChangelogList({ entries = CHANGELOG }: ChangelogListProps) {
   return (
     <div className="space-y-12 sm:space-y-14">
-      {CHANGELOG.map((entry, index) => (
+      {entries.map((entry, index) => (
         <EntryBlock
           key={entry.date}
           entry={entry}
-          isLast={index === CHANGELOG.length - 1}
+          isLast={index === entries.length - 1}
         />
       ))}
     </div>

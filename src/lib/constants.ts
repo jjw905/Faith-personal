@@ -132,11 +132,11 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
     },
     "/changelog": {
       title: "Changelog",
-      description: "Faith 웹 앱 변경 이력을 확인합니다.",
+      description: "새로 쓸 수 있게 된 Faith 기능을 확인합니다.",
     },
     "/changelog/dev": {
       title: "Changelog",
-      description: "개발전용, 개발안건과 변경 이력을 확인합니다.",
+      description: "개발전용, 개발안건과 내부 변경 이력을 확인합니다.",
     },
     "/design": {
       title: "디자인",

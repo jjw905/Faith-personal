@@ -1,3 +1,5 @@
+import { docsTextMatches } from "@/lib/docs-search";
+
 export type HelpNavGroup = {
   title: string;
   items: { id: string; title: string }[];
@@ -144,12 +146,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
 ];
 
 export function searchHelpArticles(query: string): HelpArticle[] {
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   if (!q) return HELP_ARTICLES;
-  return HELP_ARTICLES.filter((article) => {
-    const hay = [article.title, article.summary, ...article.body]
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
-  });
+  return HELP_ARTICLES.filter((article) =>
+    docsTextMatches(
+      [article.title, article.summary, ...article.body].join(" "),
+      q,
+    ),
+  );
 }

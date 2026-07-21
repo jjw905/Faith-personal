@@ -1,7 +1,11 @@
 import { ChangelogList } from "@/components/changelog/changelog-list";
 import { PageContainer } from "@/components/layout/page-container";
 import { requireAdmin } from "@/lib/admin";
-import { DEV_AGENDA, getChangelogDateLabel } from "@/lib/changelog";
+import {
+  DEV_AGENDA,
+  DEV_CHANGELOG,
+  getChangelogDateLabel,
+} from "@/lib/changelog";
 
 /** 개발전용. 개발안건 + Changelog. */
 export default async function DevChangelogPage() {
@@ -56,7 +60,7 @@ export default async function DevChangelogPage() {
           </ol>
         </section>
 
-        <ChangelogList />
+        <ChangelogList entries={DEV_CHANGELOG} />
       </div>
     </PageContainer>
   );

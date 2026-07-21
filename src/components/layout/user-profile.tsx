@@ -3,10 +3,10 @@
 import { LogOut, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useEffect, useId, useRef, useState } from "react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAppContext } from "@/context/app-context";
 import type { AccountTier } from "@/types/user";
 import { cn } from "@/lib/utils";
@@ -33,10 +33,12 @@ const MENU_ITEMS = [
 
 export function UserProfile({ onNavigate }: { onNavigate?: () => void }) {
   const { currentUser } = useAppContext();
+  const { data: session } = useSession();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+  const avatarSrc = session?.user?.image?.trim() || null;
   const active =
     pathname === "/account" ||
     pathname.startsWith("/account/") ||
@@ -135,7 +137,10 @@ export function UserProfile({ onNavigate }: { onNavigate?: () => void }) {
         )}
       >
         <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary text-xs font-medium text-primary-foreground">
+          {avatarSrc ? (
+            <AvatarImage src={avatarSrc} alt="" className="object-cover" />
+          ) : null}
+          <AvatarFallback className="bg-primary-soft text-xs font-semibold text-primary">
             {currentUser.avatarInitials}
           </AvatarFallback>
         </Avatar>

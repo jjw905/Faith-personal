@@ -118,6 +118,21 @@ body {
   color: var(--foreground);
 }
 
+/* 도움말 목차 이동 시 해당 섹션 짧은 강조 (배경 대비 유지) */
+@keyframes help-section-flash {
+  0%,
+  45% {
+    background-color: #e9ebf0;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.help-section-flash {
+  animation: help-section-flash 3s ease-out forwards;
+}
+
 @keyframes mask-chip-in {
   from {
     opacity: 0;

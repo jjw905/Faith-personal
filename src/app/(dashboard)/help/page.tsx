@@ -1,9 +1,23 @@
 "use client";
 
-import { ArrowLeft, Search, X } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 
+import {
+  DocsFloatChrome,
+  DocsScrollTopFab,
+  useDocsChromeGone,
+  useDocsFloatBox,
+} from "@/components/docs/docs-float-tools";
+import { DocsSearchInput } from "@/components/docs/docs-search-input";
 import { ContactMailPanel } from "@/components/help/contact-mail-panel";
 import { PageContainer } from "@/components/layout/page-container";
 import {
@@ -12,49 +26,27 @@ import {
   searchHelpArticles,
   type HelpArticle,
 } from "@/lib/help";
+import {
+  getScrollParent,
+  scrollElementToCenter,
+} from "@/lib/scroll-in-container";
 import { cn } from "@/lib/utils";
 
-function DocsSearch({
-  value,
-  onChange,
+function ArticleBlock({
+  article,
+  flashing,
 }: {
-  value: string;
-  onChange: (value: string) => void;
+  article: HelpArticle;
+  flashing: boolean;
 }) {
   return (
-    <label className="relative flex h-11 w-full items-center rounded-xl border border-border bg-card px-3 transition-colors focus-within:border-border-strong focus-within:bg-surface">
-      <span className="sr-only">문서 검색</span>
-      <Search
-        className="h-4 w-4 shrink-0 text-muted"
-        strokeWidth={1.75}
-        aria-hidden
-      />
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="문서 검색..."
-        className="min-w-0 flex-1 bg-transparent px-2.5 text-sm text-foreground outline-none placeholder:text-muted-2 [&::-webkit-search-cancel-button]:hidden"
-        autoComplete="off"
-        enterKeyHint="search"
-      />
-      {value ? (
-        <button
-          type="button"
-          onClick={() => onChange("")}
-          className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground"
-          aria-label="검색어 지우기"
-        >
-          <X className="h-3.5 w-3.5" strokeWidth={2} />
-        </button>
-      ) : null}
-    </label>
-  );
-}
-
-function ArticleBlock({ article }: { article: HelpArticle }) {
-  return (
-    <article id={article.id} className="scroll-mt-24">
+    <article
+      id={article.id}
+      className={cn(
+        "-mx-2 rounded-xl px-2 py-2 sm:-mx-3 sm:px-3",
+        flashing && "help-section-flash",
+      )}
+    >
       <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
         {article.title}
       </h2>
@@ -80,6 +72,14 @@ export default function HelpPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState(HELP_ARTICLES[0]?.id ?? "welcome");
+  const [flashId, setFlashId] = useState<string | null>(null);
+
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const flashTimerRef = useRef<number | null>(null);
+
+  const showFloatChrome = useDocsChromeGone(chromeRef);
+  const floatBox = useDocsFloatBox(pageRef, showFloatChrome);
 
   const results = useMemo(() => searchHelpArticles(query), [query]);
   const searching = query.trim().length > 0;
@@ -92,6 +92,50 @@ export default function HelpPage() {
     router.push("/dashboard");
   }
 
+  const focusArticle = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    setActiveId(id);
+    scrollElementToCenter(el);
+    window.history.replaceState(null, "", `#${id}`);
+
+    if (flashTimerRef.current !== null) {
+      window.clearTimeout(flashTimerRef.current);
+    }
+    setFlashId(null);
+    window.requestAnimationFrame(() => {
+      setFlashId(id);
+      flashTimerRef.current = window.setTimeout(() => {
+        setFlashId(null);
+        flashTimerRef.current = null;
+      }, 3000);
+    });
+  }, []);
+
+  const onNavClick = useCallback(
+    (e: MouseEvent<HTMLAnchorElement>, id: string) => {
+      e.preventDefault();
+      focusArticle(id);
+    },
+    [focusArticle],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current !== null) {
+        window.clearTimeout(flashTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, "");
+    if (!hash || !HELP_ARTICLES.some((a) => a.id === hash)) return;
+    const id = window.setTimeout(() => focusArticle(hash), 40);
+    return () => window.clearTimeout(id);
+  }, [focusArticle]);
+
   useEffect(() => {
     if (searching) return;
 
@@ -101,6 +145,7 @@ export default function HelpPage() {
 
     if (nodes.length === 0) return;
 
+    const scrollRoot = getScrollParent(nodes[0]!);
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -113,7 +158,8 @@ export default function HelpPage() {
         if (top) setActiveId(top);
       },
       {
-        rootMargin: "-20% 0px -65% 0px",
+        root: scrollRoot,
+        rootMargin: "-35% 0px -35% 0px",
         threshold: [0, 1],
       },
     );
@@ -124,31 +170,48 @@ export default function HelpPage() {
 
   return (
     <PageContainer className="!pb-12">
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="mb-6">
-          <button
-            type="button"
-            onClick={goBack}
-            className="-ml-1 inline-flex cursor-pointer items-center gap-1.5 px-1 py-1 text-sm font-semibold text-foreground transition-opacity hover:opacity-70"
-          >
-            <ArrowLeft className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-            돌아가기
-          </button>
+      <div ref={pageRef} className="relative mx-auto w-full max-w-5xl">
+        <div ref={chromeRef} className="mb-8 sm:mb-10">
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={goBack}
+              className="-ml-1 inline-flex cursor-pointer items-center gap-1.5 px-1 py-1 text-sm font-semibold text-foreground transition-opacity hover:opacity-70"
+            >
+              <ArrowLeft className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+              돌아가기
+            </button>
+          </div>
+
+          <header className="max-w-2xl">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              도움말
+            </h1>
+            <div className="mt-5 max-w-md">
+              <DocsSearchInput value={query} onChange={setQuery} id="help-search" />
+            </div>
+          </header>
         </div>
 
-        <header className="mb-8 max-w-2xl sm:mb-10">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            도움말
-          </h1>
-          <div className="mt-5 max-w-md">
-            <DocsSearch value={query} onChange={setQuery} />
-          </div>
-        </header>
+        {showFloatChrome && floatBox ? (
+          <DocsFloatChrome
+            left={floatBox.left}
+            top={floatBox.top}
+            query={query}
+            onQueryChange={setQuery}
+            onBack={goBack}
+          />
+        ) : null}
+
+        <DocsScrollTopFab visible={showFloatChrome} pageRef={pageRef} />
 
         <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
           <aside className="lg:w-52 lg:shrink-0">
             <nav
-              className="lg:sticky lg:top-4"
+              className={cn(
+                "lg:sticky",
+                showFloatChrome ? "lg:top-20" : "lg:top-4",
+              )}
               aria-label="도움말 목차"
             >
               {searching ? (
@@ -165,6 +228,7 @@ export default function HelpPage() {
                       <a
                         key={article.id}
                         href={`#${article.id}`}
+                        onClick={(e) => onNavClick(e, article.id)}
                         className="block rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-surface hover:text-foreground"
                       >
                         {article.title}
@@ -184,7 +248,7 @@ export default function HelpPage() {
                           <li key={item.id}>
                             <a
                               href={`#${item.id}`}
-                              onClick={() => setActiveId(item.id)}
+                              onClick={(e) => onNavClick(e, item.id)}
                               className={cn(
                                 "block rounded-lg px-2 py-1.5 text-sm transition-colors",
                                 activeId === item.id
@@ -211,17 +275,22 @@ export default function HelpPage() {
               </p>
             ) : (
               <div className="space-y-12 sm:space-y-14">
-                {(searching ? results : HELP_ARTICLES).map((article, index, list) => (
-                  <div
-                    key={article.id}
-                    className={cn(
-                      index < list.length - 1 &&
-                        "border-b border-border pb-12 sm:pb-14",
-                    )}
-                  >
-                    <ArticleBlock article={article} />
-                  </div>
-                ))}
+                {(searching ? results : HELP_ARTICLES).map(
+                  (article, index, list) => (
+                    <div
+                      key={article.id}
+                      className={cn(
+                        index < list.length - 1 &&
+                          "border-b border-border pb-12 sm:pb-14",
+                      )}
+                    >
+                      <ArticleBlock
+                        article={article}
+                        flashing={flashId === article.id}
+                      />
+                    </div>
+                  ),
+                )}
               </div>
             )}
           </div>

@@ -445,7 +445,9 @@ export function UsersAdminPanel({
 
                   <div className="flex flex-wrap items-center gap-2 md:contents">
                     <div>
-                      {isSelf ? (
+                      {u.role === "ADMIN" ? (
+                        <StaticValue>—</StaticValue>
+                      ) : isSelf ? (
                         <StaticValue>{u.plan}</StaticValue>
                       ) : (
                         <MenuSelect
@@ -474,13 +476,8 @@ export function UsersAdminPanel({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "text-xs font-semibold",
-                          u.disabled ? "text-amber-700" : "text-muted",
-                        )}
-                      >
+                    <div className="flex h-10 items-center gap-2">
+                      <span className="inline-flex h-10 items-center text-xs font-semibold text-muted">
                         {u.disabled ? "중지됨" : "사용 중"}
                       </span>
                       {isSelf ? null : (
@@ -494,7 +491,7 @@ export function UsersAdminPanel({
                             "h-10 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50",
                             u.disabled
                               ? "border-transparent bg-primary text-primary-foreground"
-                              : "border-border-strong bg-card text-foreground shadow-soft hover:bg-surface",
+                              : "border-[#f0c4cb] bg-[#fde8ec] text-[#b54a5a] shadow-soft hover:bg-[#f9d5dc]",
                           )}
                         >
                           {u.disabled ? "다시 사용" : "중지"}

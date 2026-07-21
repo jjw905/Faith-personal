@@ -19,9 +19,6 @@ export default async function UsersPage() {
           <h1 className="text-xl font-bold tracking-tight text-foreground">
             사용자 관리
           </h1>
-          <p className="mt-1 text-sm text-muted">
-            계정, 등급, 역할, 가입 수단을 관리합니다.
-          </p>
         </div>
       </div>
 
