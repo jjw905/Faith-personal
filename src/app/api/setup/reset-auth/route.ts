@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { resetAuthDatabase } from "@/lib/auth-reset";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
+import { assertSetupSecret } from "@/lib/setup-auth";
 
 /**
  * 인증 DB 초기화 (유저/계정/세션/보관함 메타/인증토큰) + 어드민 재시드.
@@ -12,18 +13,12 @@ export async function POST(request: Request) {
   const limited = enforceAuthRateLimit(request, "setup-reset-auth", 3, 60_000);
   if (limited) return limited;
 
-  const setupSecret = process.env.SETUP_SECRET?.trim();
-  if (!setupSecret) {
+  const gate = assertSetupSecret(request);
+  if (!gate.ok) {
     return NextResponse.json(
-      { ok: false, message: "SETUP_SECRET이 설정되지 않았습니다." },
-      { status: 403 },
+      { ok: false, message: gate.message },
+      { status: gate.status },
     );
-  }
-
-  const auth = request.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-  if (token !== setupSecret) {
-    return NextResponse.json({ ok: false, message: "권한이 없습니다." }, { status: 401 });
   }
 
   let body: unknown;

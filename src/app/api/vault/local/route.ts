@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { enforceAuthRateLimit } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/require-user";
 import { completeLocalUpload } from "@/lib/storage/vault-service";
 
 /** Spaces 미설정 시 서버 로컬 디스크 업로드. */
 export async function POST(request: Request) {
+  const limited = enforceAuthRateLimit(request, "vault-local", 20, 60_000);
+  if (limited) return limited;
+
   const session = await requireUser();
   if (!session) {
     return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
