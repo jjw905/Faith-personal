@@ -36,5 +36,7 @@ declare module "next-auth/jwt" {
     picture?: string;
     disabled?: boolean;
     hasPassword?: boolean;
+    /** 마지막 DB 동기화 epoch ms */
+    lastDbSync?: number;
   }
 }

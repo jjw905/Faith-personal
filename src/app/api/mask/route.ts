@@ -8,6 +8,9 @@ import { requireUser } from "@/lib/require-user";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** 마스킹 요청 본문 상한 (DoS 완화). */
+const MASK_TEXT_MAX_CHARS = 50_000;
+
 export async function GET() {
   const session = await requireUser();
   if (!session) {
@@ -33,6 +36,15 @@ export async function POST(req: Request) {
       style?: MaskStyle;
     };
     const text = body.text ?? "";
+    if (text.length > MASK_TEXT_MAX_CHARS) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `텍스트는 ${MASK_TEXT_MAX_CHARS.toLocaleString("ko-KR")}자 이하만 처리할 수 있습니다.`,
+        },
+        { status: 413 },
+      );
+    }
     const useNer = body.useNer !== false;
 
     let nerSpans: Awaited<ReturnType<typeof detectNerSpans>>["spans"] = [];

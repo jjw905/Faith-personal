@@ -339,9 +339,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         (token.email ?? user?.email) as string | undefined,
       );
 
-      // 매 요청 DB 동기화: 비활성화, 역할, 이메일 변경을 즉시 반영 (보안 목적).
-      if (token.sub) {
+      // DB 동기화: 로그인 직후 또는 30초마다 (역할/비활성 반영, 매 요청 부하 완화)
+      const DB_SYNC_TTL_MS = 30_000;
+      const nowMs = Date.now();
+      const forceSync = Boolean(user || account);
+      const dueSync =
+        forceSync ||
+        !token.lastDbSync ||
+        nowMs - Number(token.lastDbSync) >= DB_SYNC_TTL_MS;
+
+      if (token.sub && dueSync) {
         const dbUser = await syncUserFromToken(token.sub);
+        token.lastDbSync = nowMs;
         if (dbUser) {
           token.email = dbUser.email ?? token.email;
           token.name = dbUser.name ?? token.name;
@@ -352,7 +361,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.hasPassword = Boolean(dbUser.passwordHash);
 
           if (oauthWithEmail && !dbUser.emailVerified) {
-            // Auth.js는 OAuth 유저를 null로 만들 수 있어 여기서 한 번 보정
             await ensureVerified(token.sub, false);
             token.emailVerified = true;
           } else {
@@ -360,7 +368,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
 
           // ADMIN_EMAILS 승격은 계정 DB 이메일만 근거로 판단한다.
-          // (토큰 이메일은 다른 흐름의 쿠키/프로필로 오염될 수 있어 신원 근거로 쓰지 않음)
           const adminMail = dbUser.email?.trim().toLowerCase();
           if (
             adminMail &&
@@ -378,10 +385,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.role = (token.role as Role | undefined) ?? ("USER" as Role);
           token.plan = (token.plan as Plan | undefined) ?? ("FREE" as Plan);
         }
-      } else {
+      } else if (!token.sub) {
         token.emailVerified = oauthWithEmail;
         token.role = "USER" as Role;
         token.plan = "FREE" as Plan;
+      } else if (oauthWithEmail && token.emailVerified !== true) {
+        token.emailVerified = true;
       }
 
       // 로그인 상태 유지 쿠키에 따라 JWT 수명 조절

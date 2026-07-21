@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { assertSetupSecret } from "@/lib/setup-auth";
 import { spacesConfigured } from "@/lib/storage/spaces";
 
 const REQUIRED_TABLES = [
@@ -11,39 +12,17 @@ const REQUIRED_TABLES = [
 ] as const;
 
 /**
- * 배포 진단용. 비밀값은 노출하지 않고 존재 여부만 반환.
+ * 공개: ok / databaseOk / schemaOk 만.
+ * 상세(환경변수 유무 등): Authorization: Bearer <SETUP_SECRET>
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const detailed = assertSetupSecret(request).ok;
+
   const required = {
     AUTH_SECRET: Boolean(process.env.AUTH_SECRET?.trim()),
     AUTH_URL: Boolean(process.env.AUTH_URL?.trim()),
     DATABASE_URL: Boolean(process.env.DATABASE_URL?.trim()),
   };
-  const optional = {
-    AUTH_RESEND_KEY: Boolean(process.env.AUTH_RESEND_KEY?.trim()),
-    AUTH_EMAIL_FROM: Boolean(process.env.AUTH_EMAIL_FROM?.trim()),
-    AUTH_GOOGLE_ID: Boolean(process.env.AUTH_GOOGLE_ID?.trim()),
-    AUTH_GOOGLE_SECRET: Boolean(process.env.AUTH_GOOGLE_SECRET?.trim()),
-    AUTH_NAVER_ID: Boolean(process.env.AUTH_NAVER_ID?.trim()),
-    AUTH_NAVER_SECRET: Boolean(process.env.AUTH_NAVER_SECRET?.trim()),
-    AUTH_TWITTER_ID: Boolean(process.env.AUTH_TWITTER_ID?.trim()),
-    AUTH_TWITTER_SECRET: Boolean(process.env.AUTH_TWITTER_SECRET?.trim()),
-    DO_SPACES_BUCKET: Boolean(process.env.DO_SPACES_BUCKET?.trim()),
-    SETUP_SECRET: Boolean(process.env.SETUP_SECRET?.trim()),
-    ADMIN_EMAILS: Boolean(process.env.ADMIN_EMAILS?.trim()),
-    ADMIN_SEED_PASSWORD: Boolean(process.env.ADMIN_SEED_PASSWORD?.trim()),
-    ALLOW_LOCAL_VAULT: process.env.ALLOW_LOCAL_VAULT === "1",
-  };
-
-  const missingRequired = Object.entries(required)
-    .filter(([, ok]) => !ok)
-    .map(([key]) => key);
-
-  const spacesOk = spacesConfigured();
-  const resendConfigured = Boolean(process.env.AUTH_RESEND_KEY?.trim());
-  const adminEnvConfigured = Boolean(
-    process.env.ADMIN_EMAILS?.trim() && process.env.ADMIN_SEED_PASSWORD?.trim(),
-  );
 
   let databaseOk: boolean | null = null;
   let schemaOk: boolean | null = null;
@@ -90,10 +69,37 @@ export async function GET() {
     }
   }
 
+  const missingRequired = Object.entries(required)
+    .filter(([, ok]) => !ok)
+    .map(([key]) => key);
+
   const ok =
     missingRequired.length === 0 &&
     databaseOk !== false &&
     schemaOk !== false;
+
+  if (!detailed) {
+    return NextResponse.json(
+      { ok, databaseOk, schemaOk },
+      { status: ok ? 200 : 503 },
+    );
+  }
+
+  const optional = {
+    AUTH_RESEND_KEY: Boolean(process.env.AUTH_RESEND_KEY?.trim()),
+    AUTH_EMAIL_FROM: Boolean(process.env.AUTH_EMAIL_FROM?.trim()),
+    AUTH_GOOGLE_ID: Boolean(process.env.AUTH_GOOGLE_ID?.trim()),
+    AUTH_GOOGLE_SECRET: Boolean(process.env.AUTH_GOOGLE_SECRET?.trim()),
+    AUTH_NAVER_ID: Boolean(process.env.AUTH_NAVER_ID?.trim()),
+    AUTH_NAVER_SECRET: Boolean(process.env.AUTH_NAVER_SECRET?.trim()),
+    AUTH_TWITTER_ID: Boolean(process.env.AUTH_TWITTER_ID?.trim()),
+    AUTH_TWITTER_SECRET: Boolean(process.env.AUTH_TWITTER_SECRET?.trim()),
+    DO_SPACES_BUCKET: Boolean(process.env.DO_SPACES_BUCKET?.trim()),
+    SETUP_SECRET: Boolean(process.env.SETUP_SECRET?.trim()),
+    ADMIN_EMAILS: Boolean(process.env.ADMIN_EMAILS?.trim()),
+    ADMIN_SEED_PASSWORD: Boolean(process.env.ADMIN_SEED_PASSWORD?.trim()),
+    ALLOW_LOCAL_VAULT: process.env.ALLOW_LOCAL_VAULT === "1",
+  };
 
   return NextResponse.json(
     {
@@ -104,9 +110,12 @@ export async function GET() {
       databaseOk,
       schemaOk,
       tables,
-      spacesConfigured: spacesOk,
-      resendConfigured,
-      adminEnvConfigured,
+      spacesConfigured: spacesConfigured(),
+      resendConfigured: Boolean(process.env.AUTH_RESEND_KEY?.trim()),
+      adminEnvConfigured: Boolean(
+        process.env.ADMIN_EMAILS?.trim() &&
+          process.env.ADMIN_SEED_PASSWORD?.trim(),
+      ),
       databaseError,
       authUrlHost: (() => {
         try {

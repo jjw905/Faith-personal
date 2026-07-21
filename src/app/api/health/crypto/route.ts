@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+import { assertSetupSecret } from "@/lib/setup-auth";
 
-/** 가입 장애 진단용. 비밀값 없음. */
-export async function GET() {
+/** 공개: ok만. 상세: Authorization Bearer SETUP_SECRET */
+export async function GET(request: Request) {
+  const detailed = assertSetupSecret(request).ok;
   const out: Record<string, unknown> = {};
+
   try {
     const t0 = Date.now();
     const hash = await hashPassword("DiagPass1!");
@@ -28,7 +31,6 @@ export async function GET() {
   }
 
   try {
-    // 쓰기 가능 여부만 확인 (실제 유저 생성 없음)
     await prisma.$executeRaw`SELECT 1`;
     out.writeProbe = "ok";
   } catch (err) {
@@ -37,5 +39,10 @@ export async function GET() {
   }
 
   const ok = out.bcryptOk === true && out.userCountError == null;
+
+  if (!detailed) {
+    return NextResponse.json({ ok }, { status: ok ? 200 : 503 });
+  }
+
   return NextResponse.json({ ok, ...out }, { status: ok ? 200 : 503 });
 }
