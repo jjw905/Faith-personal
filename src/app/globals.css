@@ -5,15 +5,15 @@
   --background: #fbfbfd;
   --foreground: #1d1d1f;
 
-  /* 30% — 표면/보조 */
+  /* 30% — 표면/보조 (본문 대비 ≥4.5:1 목표) */
   --card: #ffffff;
   --card-foreground: #1d1d1f;
-  --surface: #f5f5f7;
-  --surface-2: #eef0f3;
-  --muted: #6e6e73;
-  --muted-2: #86868b;
-  --border: #ececee;
-  --border-strong: #d9d9de;
+  --surface: #f0f1f4;
+  --surface-2: #e4e6eb;
+  --muted: #515154;
+  --muted-2: #6e6e73;
+  --border: #e2e2e7;
+  --border-strong: #c7c7cc;
 
   /* 10% — 액센트 (딥 네이비, 레퍼런스 톤) */
   --primary: #11162e;

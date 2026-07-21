@@ -13,7 +13,7 @@ function isLinkable(provider: string): provider is (typeof LINKABLE)[number] {
 export async function GET() {
   const session = await requireUser();
   if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+    return NextResponse.json({ ok: false, message: "로그인이 필요해요." }, { status: 401 });
   }
 
   const [accounts, user] = await Promise.all([
@@ -67,7 +67,7 @@ export async function GET() {
 export async function DELETE(request: Request) {
   const session = await requireUser();
   if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+    return NextResponse.json({ ok: false, message: "로그인이 필요해요." }, { status: 401 });
   }
 
   let body: unknown;
@@ -107,7 +107,11 @@ export async function DELETE(request: Request) {
 
   if (user?.signupProvider === provider) {
     return NextResponse.json(
-      { ok: false, message: "최초 가입에 사용한 계정은 해제할 수 없습니다." },
+      {
+        ok: false,
+        message:
+          "이 방법으로 가입한 계정이에요. 다른 로그인 방법을 추가한 뒤에는 연결을 해제할 수 있어요.",
+      },
       { status: 400 },
     );
   }
@@ -118,7 +122,8 @@ export async function DELETE(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        message: "마지막 로그인 수단은 해제할 수 없습니다. 비밀번호를 먼저 설정해 주세요.",
+        message:
+          "지금 로그인할 수 있는 방법이 이것뿐이에요. 비밀번호를 먼저 설정해 주세요.",
       },
       { status: 400 },
     );

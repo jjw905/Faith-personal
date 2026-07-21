@@ -4,6 +4,7 @@ import {
   EyeOff,
   History,
   Mic,
+  Palette,
   ScrollText,
   UserCog,
   UsersRound,
@@ -63,6 +64,11 @@ export const DEV_NAV_ITEMS: NavItem[] = [
     title: "Changelog",
     href: "/changelog/dev",
     icon: History,
+  },
+  {
+    title: "디자인",
+    href: "/design",
+    icon: Palette,
   },
   {
     title: "사용자 관리",
@@ -131,6 +137,10 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
     "/changelog/dev": {
       title: "Changelog",
       description: "개발전용, 개발안건과 변경 이력을 확인합니다.",
+    },
+    "/design": {
+      title: "디자인",
+      description: "개발전용, 화면 패턴을 미리봅니다.",
     },
     "/vault": {
       title: "보관함",

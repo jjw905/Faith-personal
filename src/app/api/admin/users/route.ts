@@ -108,8 +108,19 @@ export async function PATCH(request: Request) {
       plan: true,
       disabled: true,
       emailVerified: true,
+      signupProvider: true,
+      image: true,
+      createdAt: true,
+      accounts: { select: { provider: true } },
     },
   });
 
-  return NextResponse.json({ ok: true, user: updated });
+  return NextResponse.json({
+    ok: true,
+    user: {
+      ...updated,
+      emailVerified: updated.emailVerified?.toISOString() ?? null,
+      createdAt: updated.createdAt.toISOString(),
+    },
+  });
 }

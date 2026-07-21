@@ -3,6 +3,8 @@ import { UserCog } from "lucide-react";
 import { UsersAdminPanel } from "@/components/admin/users-admin-panel";
 import { requireAdmin, listUsers } from "@/lib/admin";
 
+export const dynamic = "force-dynamic";
+
 export default async function UsersPage() {
   const session = await requireAdmin();
   const users = await listUsers();
@@ -18,7 +20,7 @@ export default async function UsersPage() {
             사용자 관리
           </h1>
           <p className="mt-1 text-sm text-muted">
-            서비스를 이용하는 계정, 역할, 인증, 활성 상태를 관리합니다.
+            계정, 등급, 역할, 가입 수단을 관리합니다.
           </p>
         </div>
       </div>

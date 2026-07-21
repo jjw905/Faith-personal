@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useState } from "react";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Card,
   CardContent,
@@ -14,24 +15,68 @@ import { Input } from "@/components/ui/input";
 import { useAppContext } from "@/context/app-context";
 import { cn } from "@/lib/utils";
 
-function SettingRow({
+type Panel = "name" | "email" | "password" | null;
+
+function TextBtn({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="h-10 shrink-0 rounded-full border border-border-strong bg-surface px-3.5 text-sm font-semibold text-foreground hover:bg-surface-2 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function FilledBtn({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "h-10 shrink-0 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground",
+        "hover:bg-primary-hover disabled:opacity-60",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FieldLine({
   label,
-  description,
   children,
 }: {
   label: string;
-  description?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5 first:pt-1 last:pb-1">
-      <div className="min-w-0 flex-1 pr-3">
-        <p className="text-sm font-medium leading-5 text-foreground">{label}</p>
-        {description ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
-        ) : null}
+    <div className="flex min-h-12 flex-wrap items-center gap-x-4 gap-y-2">
+      <p className="w-20 shrink-0 text-sm font-semibold text-foreground">
+        {label}
+      </p>
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
+        {children}
       </div>
-      <div className="flex shrink-0 items-center">{children}</div>
     </div>
   );
 }
@@ -40,15 +85,18 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
   const { currentUser } = useAppContext();
   const { data: session, update } = useSession();
   const hasPassword = Boolean(session?.user?.hasPassword);
+  const email = session?.user?.email || currentUser.email;
+  const image = session?.user?.image ?? undefined;
 
-  const [nameDraft, setNameDraft] = useState<string | null>(null);
-  const name = nameDraft ?? currentUser.name;
+  const [panel, setPanel] = useState<Panel>(null);
+
+  const [nameDraft, setNameDraft] = useState("");
   const [nameMsg, setNameMsg] = useState("");
   const [namePending, setNamePending] = useState(false);
 
   const [newEmail, setNewEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [emailStep, setEmailStep] = useState<"idle" | "code">("idle");
+  const [emailStep, setEmailStep] = useState<"form" | "code">("form");
   const [emailMsg, setEmailMsg] = useState("");
   const [emailPending, setEmailPending] = useState(false);
 
@@ -58,6 +106,30 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
   const [pwMsg, setPwMsg] = useState("");
   const [pwPending, setPwPending] = useState(false);
 
+  function openPanel(next: Panel) {
+    if (panel === next) {
+      setPanel(null);
+      return;
+    }
+    if (next === "name") {
+      setNameDraft(currentUser.name);
+      setNameMsg("");
+    }
+    if (next === "email") {
+      setNewEmail("");
+      setOtp("");
+      setEmailStep("form");
+      setEmailMsg("");
+    }
+    if (next === "password") {
+      setCurrentPassword("");
+      setNewPassword("");
+      setNewPasswordConfirm("");
+      setPwMsg("");
+    }
+    setPanel(next);
+  }
+
   async function saveName() {
     setNameMsg("");
     setNamePending(true);
@@ -65,16 +137,15 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
       const res = await fetch("/api/account/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name: nameDraft }),
       });
       const data = (await res.json()) as { ok?: boolean; message?: string };
       if (!res.ok || !data.ok) {
         setNameMsg(data.message ?? "저장 실패");
         return;
       }
-      await update({ name });
-      setNameDraft(null);
-      setNameMsg("저장되었습니다.");
+      await update({ name: nameDraft });
+      setPanel(null);
     } finally {
       setNamePending(false);
     }
@@ -119,10 +190,10 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
         return;
       }
       await update();
-      setEmailStep("idle");
+      setPanel(null);
       setNewEmail("");
       setOtp("");
-      setEmailMsg("이메일이 변경되었습니다.");
+      setEmailStep("form");
     } finally {
       setEmailPending(false);
     }
@@ -150,7 +221,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
       setCurrentPassword("");
       setNewPassword("");
       setNewPasswordConfirm("");
-      setPwMsg("비밀번호가 변경되었습니다.");
+      setPanel(null);
     } finally {
       setPwPending(false);
     }
@@ -158,145 +229,208 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
 
   return (
     <PageContainer>
-      <div className="mx-auto w-full max-w-3xl space-y-6">
+      <div className="mx-auto w-full max-w-5xl space-y-8">
         <header className="min-w-0">
           <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
             계정 설정
           </h1>
         </header>
 
-        <Card>
-          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
-            <CardTitle className="text-lg">프로필</CardTitle>
-            <p className="text-sm leading-relaxed text-muted">
-              표시 이름을 변경합니다.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3 px-5 pb-5 sm:px-6">
-            <SettingRow label="이름">
-              <Input
-                value={name}
-                onChange={(e) => setNameDraft(e.target.value)}
-                className="h-10 w-48"
-              />
-            </SettingRow>
-            <div className="flex items-center justify-end gap-3">
-              {nameMsg ? (
-                <p className="text-xs text-muted">{nameMsg}</p>
-              ) : null}
-              <button
-                type="button"
-                disabled={namePending}
-                onClick={() => void saveName()}
-                className="h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
-              >
-                저장
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
-            <CardTitle className="text-lg">계정 정보</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border px-5 pb-4 pt-0 sm:px-6">
-            <SettingRow label="현재 이메일">
-              <span className="max-w-[220px] truncate text-sm text-foreground">
-                {session?.user?.email || currentUser.email}
-              </span>
-            </SettingRow>
-            <div className="space-y-3 py-3.5">
-              <p className="text-sm font-medium text-foreground">이메일 변경</p>
-              <Input
-                type="email"
-                placeholder="새 이메일"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                className="h-10"
-              />
-              {emailStep === "code" ? (
-                <Input
-                  inputMode="numeric"
-                  placeholder="인증번호 6자리"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  className="h-10"
-                />
-              ) : null}
-              <div className="flex items-center justify-end gap-3">
-                {emailMsg ? (
-                  <p className="text-xs text-muted">{emailMsg}</p>
-                ) : null}
-                <button
-                  type="button"
-                  disabled={emailPending}
-                  onClick={() =>
-                    void (emailStep === "code" ? confirmEmail() : requestEmailOtp())
-                  }
-                  className={cn(
-                    "h-10 rounded-xl px-4 text-sm font-semibold",
-                    "bg-primary text-primary-foreground hover:bg-primary-hover disabled:opacity-60",
-                  )}
-                >
-                  {emailStep === "code" ? "인증 확인" : "인증번호 받기"}
-                </button>
+        <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
+          <Card className="flex h-full flex-col rounded-3xl shadow-soft">
+            <CardHeader className="flex flex-row items-center gap-4 space-y-0 px-6 pb-6 pt-6">
+              <Avatar className="h-16 w-16 shrink-0">
+                {image ? <AvatarImage src={image} alt="" /> : null}
+                <AvatarFallback className="bg-primary-soft text-lg font-semibold text-primary">
+                  {currentUser.avatarInitials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-muted">기본 정보</p>
+                <CardTitle className="mt-1 text-lg font-semibold tracking-tight">
+                  {currentUser.name || "이름 없음"}
+                </CardTitle>
+                <p className="mt-1 truncate text-sm font-medium text-muted">
+                  {email || "이메일 없음"}
+                </p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="flex flex-1 flex-col px-6 pb-6">
+              <div className="space-y-2 rounded-2xl bg-surface p-4">
+                <FieldLine label="이름">
+                  {panel === "name" ? (
+                    <>
+                      <Input
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        placeholder="표시 이름"
+                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        autoComplete="name"
+                      />
+                      <FilledBtn
+                        disabled={namePending || !nameDraft.trim()}
+                        onClick={() => void saveName()}
+                      >
+                        저장
+                      </FilledBtn>
+                      <TextBtn onClick={() => setPanel(null)}>취소</TextBtn>
+                    </>
+                  ) : (
+                    <>
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/85">
+                        {currentUser.name || "없음"}
+                      </p>
+                      <TextBtn onClick={() => openPanel("name")}>변경</TextBtn>
+                    </>
+                  )}
+                </FieldLine>
+                {nameMsg ? (
+                  <p className="pl-24 text-xs font-medium text-muted">
+                    {nameMsg}
+                  </p>
+                ) : null}
 
-        {children}
+                <FieldLine label="이메일">
+                  {panel === "email" ? (
+                    <>
+                      <Input
+                        type="email"
+                        placeholder="새 이메일"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        autoComplete="email"
+                      />
+                      <FilledBtn
+                        disabled={
+                          emailPending ||
+                          !newEmail.trim() ||
+                          (emailStep === "code" && !otp.trim())
+                        }
+                        onClick={() =>
+                          void (emailStep === "code"
+                            ? confirmEmail()
+                            : requestEmailOtp())
+                        }
+                      >
+                        {emailStep === "code" ? "확인" : "인증"}
+                      </FilledBtn>
+                      <TextBtn onClick={() => setPanel(null)}>취소</TextBtn>
+                    </>
+                  ) : (
+                    <>
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/85">
+                        {email || "없음"}
+                      </p>
+                      <TextBtn onClick={() => openPanel("email")}>변경</TextBtn>
+                    </>
+                  )}
+                </FieldLine>
+                {panel === "email" && emailStep === "code" ? (
+                  <div className="pl-24 pt-1">
+                    <Input
+                      inputMode="numeric"
+                      placeholder="인증번호 6자리"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      className="h-10 rounded-xl bg-card"
+                      autoComplete="one-time-code"
+                    />
+                  </div>
+                ) : null}
+                {emailMsg ? (
+                  <p className="pl-24 text-xs font-medium text-muted">
+                    {emailMsg}
+                  </p>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
-            <CardTitle className="text-lg">비밀번호</CardTitle>
-            <p className="text-sm leading-relaxed text-muted">
-              {hasPassword
-                ? "현재 비밀번호 확인 후 변경합니다."
-                : "소셜 가입 계정입니다. 비밀번호를 새로 설정할 수 있습니다."}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-3 px-5 pb-5 sm:px-6">
-            {hasPassword ? (
-              <Input
-                type="password"
-                placeholder="현재 비밀번호"
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="h-10"
-              />
-            ) : null}
-            <Input
-              type="password"
-              placeholder="새 비밀번호"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="h-10"
-            />
-            <Input
-              type="password"
-              placeholder="새 비밀번호 확인"
-              autoComplete="new-password"
-              value={newPasswordConfirm}
-              onChange={(e) => setNewPasswordConfirm(e.target.value)}
-              className="h-10"
-            />
-            <div className="flex items-center justify-end gap-3">
-              {pwMsg ? <p className="text-xs text-muted">{pwMsg}</p> : null}
-              <button
-                type="button"
-                disabled={pwPending}
-                onClick={() => void savePassword()}
-                className="h-10 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
-              >
-                {hasPassword ? "비밀번호 변경" : "비밀번호 설정"}
-              </button>
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="flex h-full flex-col rounded-3xl shadow-soft">
+            <CardHeader className="space-y-1 px-6 pb-6 pt-6">
+              <CardTitle className="text-lg font-semibold tracking-tight">
+                로그인 방법
+              </CardTitle>
+              <p className="text-sm font-medium text-muted">
+                비밀번호와 연결된 계정
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-1 flex-col gap-5 px-6 pb-6">
+              <div className="rounded-2xl bg-surface p-4">
+                <FieldLine label="비밀번호">
+                  {panel === "password" ? (
+                    <div className="flex w-full min-w-0 flex-col gap-2">
+                      {hasPassword ? (
+                        <Input
+                          type="password"
+                          placeholder="현재 비밀번호"
+                          autoComplete="current-password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          className="h-10 rounded-xl bg-card"
+                        />
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Input
+                          type="password"
+                          placeholder="새 비밀번호"
+                          autoComplete="new-password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        />
+                        <Input
+                          type="password"
+                          placeholder="확인"
+                          autoComplete="new-password"
+                          value={newPasswordConfirm}
+                          onChange={(e) =>
+                            setNewPasswordConfirm(e.target.value)
+                          }
+                          className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        />
+                        <FilledBtn
+                          disabled={
+                            pwPending ||
+                            !newPassword ||
+                            !newPasswordConfirm ||
+                            (hasPassword && !currentPassword)
+                          }
+                          onClick={() => void savePassword()}
+                        >
+                          {hasPassword ? "변경" : "만들기"}
+                        </FilledBtn>
+                        <TextBtn onClick={() => setPanel(null)}>취소</TextBtn>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/85">
+                        {hasPassword ? "사용 중" : "없음"}
+                      </p>
+                      <TextBtn onClick={() => openPanel("password")}>
+                        {hasPassword ? "변경" : "만들기"}
+                      </TextBtn>
+                    </>
+                  )}
+                </FieldLine>
+                {pwMsg ? (
+                  <p className="pl-24 pt-1 text-xs font-medium text-muted">
+                    {pwMsg}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
+                <p className="text-sm font-semibold text-foreground">
+                  연결된 계정
+                </p>
+                {children}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </PageContainer>
   );

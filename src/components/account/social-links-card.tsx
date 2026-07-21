@@ -9,12 +9,6 @@ import {
   NaverIcon,
   XIcon,
 } from "@/components/auth/social-icons";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 const LABELS: Record<string, string> = {
@@ -30,7 +24,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
 };
 
 const CIRCLE: Record<string, string> = {
-  google: "bg-white text-[#3c4043] ring-1 ring-[#dadce0]",
+  google: "bg-white text-[#3c4043] ring-1 ring-[#c7c7cc]",
   naver: "bg-[#03C75A] text-white",
   twitter: "bg-black text-white",
 };
@@ -38,19 +32,19 @@ const CIRCLE: Record<string, string> = {
 export type SocialLinksInitial = {
   linked: string[];
   available: string[];
-  /** 최초 가입 소셜. credentials면 null */
   primary: string | null;
   hasPassword: boolean;
   notice?: string;
 };
 
-/** 계정 설정: 소셜 로그인 연동/해제 (원형 아이콘). */
+/** 소셜 연동 목록. */
 export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
   const router = useRouter();
   const [linked, setLinked] = useState(initial.linked);
   const [msg, setMsg] = useState(initial.notice ?? "");
   const [pending, setPending] = useState<string | null>(null);
   const primary = initial.primary;
+  const providers = initial.available;
 
   async function link(provider: string) {
     setMsg("");
@@ -58,14 +52,16 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
     try {
       await signIn(provider, { callbackUrl: "/account?linked=1" });
     } catch {
-      setMsg("연동을 시작하지 못했습니다.");
+      setMsg("연결을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
       setPending(null);
     }
   }
 
   async function unlink(provider: string) {
     if (provider === primary) {
-      setMsg("최초 가입에 사용한 계정은 해제할 수 없습니다.");
+      setMsg(
+        "이 방법으로 가입한 계정이에요. 다른 로그인 방법을 추가한 뒤에는 연결을 해제할 수 있어요.",
+      );
       return;
     }
     setMsg("");
@@ -78,86 +74,88 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
       });
       const json = (await res.json()) as { ok?: boolean; message?: string };
       if (!res.ok || !json.ok) {
-        setMsg(json.message ?? "연동 해제에 실패했습니다.");
+        setMsg(json.message ?? "연결을 해제하지 못했어요.");
         return;
       }
       setLinked((prev) => prev.filter((p) => p !== provider));
-      setMsg("연동을 해제했습니다.");
+      setMsg("연결을 해제했어요.");
       router.refresh();
     } finally {
       setPending(null);
     }
   }
 
-  const providers = initial.available;
+  if (providers.length === 0) {
+    return (
+      <p className="text-sm font-medium text-muted">
+        연결할 수 있는 계정이 없어요.
+      </p>
+    );
+  }
 
   return (
-    <Card>
-      <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
-        <CardTitle className="text-lg">소셜 로그인</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 px-5 pb-5 sm:px-6">
-        {providers.length === 0 ? (
-          <p className="text-sm text-muted">연결 가능한 소셜이 없습니다.</p>
-        ) : (
-          <div className="flex flex-wrap items-start gap-5">
-            {providers.map((provider) => {
-              const isLinked = linked.includes(provider);
-              const isPrimary = primary === provider;
-              const label = LABELS[provider] ?? provider;
-              const Icon = ICONS[provider] ?? GoogleIcon;
-              const busy = pending === provider;
+    <div className="space-y-3">
+      <div className="overflow-hidden rounded-2xl bg-surface px-2 py-1">
+        {providers.map((provider) => {
+          const isLinked = linked.includes(provider);
+          const isSignupMethod = primary === provider && isLinked;
+          const label = LABELS[provider] ?? provider;
+          const Icon = ICONS[provider] ?? GoogleIcon;
+          const busy = pending === provider;
 
-              const title = isPrimary
-                ? `${label} (가입 계정)`
-                : isLinked
-                  ? `${label} 연결 해제`
-                  : `${label} 연결`;
-
-              return (
-                <div
-                  key={provider}
-                  className="flex w-14 flex-col items-center gap-1.5"
+          return (
+            <div
+              key={provider}
+              className="flex items-center justify-between gap-3 px-2.5 py-3.5"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+                    CIRCLE[provider] ?? "bg-surface-2",
+                    !isLinked && "opacity-70",
+                  )}
+                  aria-hidden
                 >
-                  <button
-                    type="button"
-                    disabled={busy || isPrimary}
-                    title={title}
-                    aria-label={title}
-                    onClick={() =>
-                      void (isLinked ? unlink(provider) : link(provider))
-                    }
-                    className={cn(
-                      "relative flex h-12 w-12 items-center justify-center rounded-full transition",
-                      CIRCLE[provider] ?? "bg-surface-2",
-                      isLinked ? "opacity-100" : "opacity-40 hover:opacity-70",
-                      isPrimary
-                        ? "cursor-default ring-2 ring-primary ring-offset-2 ring-offset-background"
-                        : "hover:brightness-[0.97] active:scale-[0.97]",
-                      busy && "opacity-60",
-                      "disabled:pointer-events-none",
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {isPrimary ? (
-                      <span
-                        className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground"
-                        aria-hidden
-                      >
-                        ✓
-                      </span>
-                    ) : null}
-                  </button>
-                  <span className="text-[11px] font-medium text-muted">
-                    {isPrimary ? "가입" : isLinked ? "연결" : "미연결"}
-                  </span>
+                  <Icon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {label}
+                  </p>
+                  <p className="mt-0.5 text-sm font-medium text-muted">
+                    {isSignupMethod
+                      ? "가입할 때 사용한 계정"
+                      : isLinked
+                        ? "연결됨"
+                        : "연결되지 않음"}
+                  </p>
                 </div>
-              );
-            })}
-          </div>
-        )}
-        {msg ? <p className="pt-1 text-xs text-muted">{msg}</p> : null}
-      </CardContent>
-    </Card>
+              </div>
+              {isSignupMethod ? null : (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void (isLinked ? unlink(provider) : link(provider))
+                  }
+                  className={cn(
+                    "h-9 shrink-0 rounded-full border px-3.5 text-sm font-semibold transition-colors disabled:opacity-60",
+                    isLinked
+                      ? "border-border-strong bg-card text-foreground hover:bg-card/80"
+                      : "border-transparent bg-primary text-primary-foreground hover:bg-primary-hover",
+                  )}
+                >
+                  {isLinked ? "연결 해제" : "연결"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {msg ? (
+        <p className="text-xs font-medium text-muted">{msg}</p>
+      ) : null}
+    </div>
   );
 }

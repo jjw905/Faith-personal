@@ -1,10 +1,29 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ComponentType,
+  type ReactNode,
+} from "react";
+import { Check, ChevronDown, Mail } from "lucide-react";
+
+import {
+  GoogleIcon,
+  NaverIcon,
+  XIcon,
+} from "@/components/auth/social-icons";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
 type Role = "USER" | "ADMIN";
 type Plan = "FREE" | "PRO";
+type Filter = "all" | "admin" | "pro" | "paused";
 
 type UserRow = {
   id: string;
@@ -14,21 +33,214 @@ type UserRow = {
   plan: Plan;
   disabled: boolean;
   emailVerified: string | Date | null;
+  signupProvider: string | null;
   image: string | null;
   createdAt: string | Date;
   accounts: { provider: string }[];
 };
 
-/** ADMIN이면 등급 대신 ADMIN 표기. */
-function tierLabel(role: Role, plan: Plan): string {
-  return role === "ADMIN" ? "ADMIN" : plan;
+const PROVIDER_LABEL: Record<string, string> = {
+  google: "Google",
+  naver: "네이버",
+  twitter: "X",
+  credentials: "이메일",
+};
+
+const PROVIDER_ICON: Record<string, ComponentType<{ className?: string }>> = {
+  google: GoogleIcon,
+  naver: NaverIcon,
+  twitter: XIcon,
+};
+
+const PROVIDER_CIRCLE: Record<string, string> = {
+  google: "bg-white text-[#3c4043] ring-1 ring-[#c7c7cc]",
+  naver: "bg-[#03C75A] text-white",
+  twitter: "bg-black text-white",
+  credentials: "bg-white text-primary ring-1 ring-border-strong",
+};
+
+const PLAN_OPTIONS: { value: Plan; label: string }[] = [
+  { value: "FREE", label: "FREE" },
+  { value: "PRO", label: "PRO" },
+];
+
+const ROLE_OPTIONS: { value: Role; label: string }[] = [
+  { value: "USER", label: "사용자" },
+  { value: "ADMIN", label: "관리자" },
+];
+
+function initialsOf(name: string | null, email: string | null) {
+  const fromName = name?.trim().slice(0, 1);
+  if (fromName) return fromName;
+  return email?.trim().slice(0, 1)?.toUpperCase() || "?";
 }
 
-const TIER_STYLE: Record<string, string> = {
-  FREE: "bg-surface-2 text-muted",
-  PRO: "bg-primary-soft text-primary",
-  ADMIN: "bg-foreground/10 text-foreground",
-};
+/** 가입 수단 + 연동 계정. 가입 수단을 앞에 둔다. */
+function providerList(u: UserRow): string[] {
+  const linked = u.accounts.map((a) => a.provider);
+  const signup = u.signupProvider;
+  const ordered: string[] = [];
+  if (signup) ordered.push(signup);
+  for (const p of linked) {
+    if (!ordered.includes(p)) ordered.push(p);
+  }
+  if (ordered.length === 0) ordered.push("credentials");
+  return ordered;
+}
+
+function ProviderIcons({
+  providers,
+  signupProvider,
+}: {
+  providers: string[];
+  signupProvider: string | null;
+}) {
+  return (
+    <ul className="flex items-center gap-1.5" aria-label="가입·연동 수단">
+      {providers.map((provider) => {
+        const Icon = PROVIDER_ICON[provider];
+        const label = PROVIDER_LABEL[provider] ?? provider;
+        const isSignup =
+          signupProvider === provider ||
+          (!signupProvider && provider === providers[0]);
+        return (
+          <li key={provider}>
+            <span
+              title={isSignup ? `${label}, 가입` : `${label}, 연동`}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full",
+                PROVIDER_CIRCLE[provider] ?? "bg-surface-2 text-muted",
+                !isSignup && "opacity-65",
+              )}
+            >
+              {Icon ? (
+                <Icon className="h-4 w-4" />
+              ) : (
+                <Mail className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+              )}
+              <span className="sr-only">{label}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** MD3 exposed menu 느낌의 커스텀 선택. */
+function MenuSelect<T extends string>({
+  value,
+  options,
+  onChange,
+  disabled,
+  "aria-label": ariaLabel,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  disabled?: boolean;
+  "aria-label": string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const current = options.find((o) => o.value === value)?.label ?? value;
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    // click보다 먼저 닫히지 않도록 pointerdown + 메뉴 밖만 처리
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  function choose(next: T) {
+    setOpen(false);
+    if (next !== value) onChange(next);
+  }
+
+  return (
+    <div ref={rootRef} className="relative w-[7.25rem]">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "flex h-10 w-full items-center justify-between gap-1.5 rounded-xl border px-3 text-left text-sm font-semibold transition-colors",
+          "border-border-strong bg-card text-foreground shadow-soft",
+          "hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50",
+          open && "border-primary bg-primary-soft/40",
+        )}
+      >
+        <span className="truncate">{current}</span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-muted transition-transform",
+            open && "rotate-180 text-primary",
+          )}
+          aria-hidden
+        />
+      </button>
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={ariaLabel}
+          className="absolute left-0 right-0 z-30 mt-1.5 overflow-hidden rounded-xl border border-border-strong bg-card py-1 shadow-soft"
+        >
+          {options.map((opt) => {
+            const selected = opt.value === value;
+            return (
+              <li key={opt.value} role="option" aria-selected={selected}>
+                <button
+                  type="button"
+                  onPointerDown={(e) => {
+                    // 바깥 pointerdown보다 먼저 확정 (클릭 유실 방지)
+                    e.preventDefault();
+                    e.stopPropagation();
+                    choose(opt.value);
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm font-semibold",
+                    selected
+                      ? "bg-primary-soft text-primary"
+                      : "text-foreground hover:bg-surface",
+                  )}
+                >
+                  <span>{opt.label}</span>
+                  {selected ? (
+                    <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function StaticValue({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex h-10 min-w-[7.25rem] items-center rounded-xl bg-surface px-3 text-sm font-semibold text-muted">
+      {children}
+    </span>
+  );
+}
 
 export function UsersAdminPanel({
   initialUsers,
@@ -42,191 +254,266 @@ export function UsersAdminPanel({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
 
   const stats = useMemo(() => {
     return {
       total: users.length,
       admins: users.filter((u) => u.role === "ADMIN").length,
       pro: users.filter((u) => u.role !== "ADMIN" && u.plan === "PRO").length,
-      disabled: users.filter((u) => u.disabled).length,
+      paused: users.filter((u) => u.disabled).length,
     };
   }, [users]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter(
-      (u) =>
+    return users.filter((u) => {
+      if (filter === "admin" && u.role !== "ADMIN") return false;
+      if (filter === "pro" && (u.role === "ADMIN" || u.plan !== "PRO")) {
+        return false;
+      }
+      if (filter === "paused" && !u.disabled) return false;
+      if (!q) return true;
+      return (
         (u.name ?? "").toLowerCase().includes(q) ||
-        (u.email ?? "").toLowerCase().includes(q),
-    );
-  }, [users, query]);
+        (u.email ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [users, query, filter]);
 
   async function patchUser(
     userId: string,
     body: { role?: Role; plan?: Plan; disabled?: boolean },
   ) {
     setError("");
-    const res = await fetch("/api/admin/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, ...body }),
-    });
-    const data = (await res.json()) as {
-      ok: boolean;
-      message?: string;
-      user?: UserRow;
-    };
-    if (!data.ok || !data.user) {
-      setError(data.message ?? "변경에 실패했습니다.");
-      return;
+    const prevSnapshot = users.find((u) => u.id === userId);
+    // 낙관적 반영 후 실패 시 롤백
+    if (prevSnapshot) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, ...body } : u)),
+      );
     }
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, ...data.user } : u)),
-    );
-    startTransition(() => router.refresh());
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, ...body }),
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        message?: string;
+        user?: Partial<UserRow> & { id: string };
+      };
+      if (!data.ok || !data.user) {
+        if (prevSnapshot) {
+          setUsers((prev) =>
+            prev.map((u) => (u.id === userId ? prevSnapshot : u)),
+          );
+        }
+        setError(data.message ?? "변경에 실패했습니다.");
+        return;
+      }
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                role: data.user!.role ?? u.role,
+                plan: data.user!.plan ?? u.plan,
+                disabled: data.user!.disabled ?? u.disabled,
+                emailVerified:
+                  data.user!.emailVerified !== undefined
+                    ? data.user!.emailVerified
+                    : u.emailVerified,
+              }
+            : u,
+        ),
+      );
+      // 목록 캐시만 갱신. 로컬 state를 덮어쓰지 않음.
+      startTransition(() => router.refresh());
+    } catch {
+      if (prevSnapshot) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? prevSnapshot : u)),
+        );
+      }
+      setError("변경에 실패했습니다.");
+    }
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-[13px]">
-        <StatChip label="전체" value={stats.total} />
-        <StatChip label="관리자" value={stats.admins} />
-        <StatChip label="PRO" value={stats.pro} />
-        <StatChip label="비활성" value={stats.disabled} muted={stats.disabled === 0} />
+      <div className="flex flex-wrap items-center gap-2">
+        <StatChip
+          label="전체"
+          value={stats.total}
+          active={filter === "all"}
+          onClick={() => setFilter("all")}
+        />
+        <StatChip
+          label="관리자"
+          value={stats.admins}
+          active={filter === "admin"}
+          onClick={() => setFilter("admin")}
+        />
+        <StatChip
+          label="PRO"
+          value={stats.pro}
+          active={filter === "pro"}
+          onClick={() => setFilter("pro")}
+        />
+        <StatChip
+          label="중지"
+          value={stats.paused}
+          muted={stats.paused === 0}
+          active={filter === "paused"}
+          onClick={() => setFilter("paused")}
+        />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="이름, 이메일 검색"
-          className="ml-auto h-9 w-full max-w-[220px] rounded-lg border border-border-strong bg-white px-3 text-[13px] outline-none focus:border-primary"
+          placeholder="이름, 이메일"
+          className="ml-auto h-10 w-full max-w-[240px] rounded-full border border-border-strong bg-card px-4 text-sm outline-none focus:border-primary"
         />
       </div>
 
-      {error && (
-        <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+      {error ? (
+        <p className="rounded-2xl bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">
           {error}
         </p>
-      )}
+      ) : null}
 
-      <div className="overflow-x-auto rounded-2xl ring-1 ring-border-strong">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-primary-soft/60 text-[12px] font-semibold text-muted">
-            <tr>
-              <th className="px-4 py-3">사용자</th>
-              <th className="px-4 py-3">등급</th>
-              <th className="px-4 py-3">역할</th>
-              <th className="px-4 py-3">인증</th>
-              <th className="px-4 py-3">상태</th>
-              <th className="px-4 py-3">가입</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((u) => {
-              const isSelf = u.id === currentUserId;
-              const providers = u.accounts.map((a) => a.provider).join(", ");
-              const tier = tierLabel(u.role, u.plan);
-              return (
-                <tr
-                  key={u.id}
-                  className="border-t border-border-strong/70 align-middle"
-                >
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-foreground">
-                      {u.name || "(이름 없음)"}
-                      {isSelf && (
-                        <span className="ml-2 text-[11px] text-muted">나</span>
+      <div className="rounded-3xl border border-border bg-card shadow-soft">
+        <div className="hidden grid-cols-[minmax(0,1fr)_7.5rem_7.5rem_8rem] gap-3 rounded-t-3xl bg-card px-5 py-3 text-xs font-semibold text-muted md:grid">
+          <p>사용자</p>
+          <p>등급</p>
+          <p>역할</p>
+          <p>상태</p>
+        </div>
+
+        <ul>
+          {filtered.map((u) => {
+            const isSelf = u.id === currentUserId;
+            const providers = providerList(u);
+            const showEmailHint =
+              !u.emailVerified &&
+              (u.signupProvider === "credentials" || !u.signupProvider);
+            const joined = new Date(u.createdAt).toLocaleDateString("ko-KR");
+
+            return (
+              <li
+                key={u.id}
+                className="border-t border-border px-5 py-4 first:border-t-0"
+              >
+                <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[minmax(0,1fr)_7.5rem_7.5rem_8rem] md:items-center md:gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Avatar className="mt-0.5 h-10 w-10 shrink-0">
+                      {u.image ? <AvatarImage src={u.image} alt="" /> : null}
+                      <AvatarFallback className="bg-primary-soft text-sm font-semibold text-primary">
+                        {initialsOf(u.name, u.email)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {u.name || "이름 없음"}
+                          {isSelf ? (
+                            <span className="ml-1.5 text-xs font-medium text-muted">
+                              나
+                            </span>
+                          ) : null}
+                        </p>
+                        <ProviderIcons
+                          providers={providers}
+                          signupProvider={u.signupProvider}
+                        />
+                      </div>
+                      <p className="line-clamp-2 break-all text-sm font-medium leading-snug text-muted">
+                        {u.email || "이메일 없음"}
+                      </p>
+                      <p className="text-xs font-medium text-muted-2">
+                        가입 {joined}
+                      </p>
+                      {showEmailHint ? (
+                        <p className="text-xs font-medium text-amber-700">
+                          이메일 미확인
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 md:contents">
+                    <div>
+                      {isSelf ? (
+                        <StaticValue>{u.plan}</StaticValue>
+                      ) : (
+                        <MenuSelect
+                          aria-label={`${u.name || u.email} 등급`}
+                          value={u.plan}
+                          options={PLAN_OPTIONS}
+                          disabled={pending}
+                          onChange={(plan) => void patchUser(u.id, { plan })}
+                        />
                       )}
                     </div>
-                    <div className="text-[12px] text-muted">{u.email || "—"}</div>
-                    {providers && (
-                      <div className="mt-0.5 text-[11px] text-muted-2">
-                        {providers}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
+
+                    <div>
+                      {isSelf ? (
+                        <StaticValue>
+                          {u.role === "ADMIN" ? "관리자" : "사용자"}
+                        </StaticValue>
+                      ) : (
+                        <MenuSelect
+                          aria-label={`${u.name || u.email} 역할`}
+                          value={u.role}
+                          options={ROLE_OPTIONS}
+                          disabled={pending}
+                          onChange={(role) => void patchUser(u.id, { role })}
+                        />
+                      )}
+                    </div>
+
                     <div className="flex items-center gap-2">
                       <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${TIER_STYLE[tier]}`}
+                        className={cn(
+                          "text-xs font-semibold",
+                          u.disabled ? "text-amber-700" : "text-muted",
+                        )}
                       >
-                        {tier}
+                        {u.disabled ? "중지됨" : "사용 중"}
                       </span>
-                      {u.role !== "ADMIN" && (
-                        <select
-                          className="h-9 rounded-lg border border-border-strong bg-white px-2 text-[13px] disabled:opacity-50"
+                      {isSelf ? null : (
+                        <button
+                          type="button"
                           disabled={pending}
-                          value={u.plan}
-                          onChange={(e) =>
-                            void patchUser(u.id, {
-                              plan: e.target.value as Plan,
-                            })
+                          onClick={() =>
+                            void patchUser(u.id, { disabled: !u.disabled })
                           }
+                          className={cn(
+                            "h-10 rounded-xl border px-3 text-xs font-semibold disabled:opacity-50",
+                            u.disabled
+                              ? "border-transparent bg-primary text-primary-foreground"
+                              : "border-border-strong bg-card text-foreground shadow-soft hover:bg-surface",
+                          )}
                         >
-                          <option value="FREE">FREE</option>
-                          <option value="PRO">PRO</option>
-                        </select>
+                          {u.disabled ? "다시 사용" : "중지"}
+                        </button>
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      className="h-9 rounded-lg border border-border-strong bg-white px-2 text-[13px] disabled:opacity-50"
-                      disabled={pending || isSelf}
-                      value={u.role}
-                      onChange={(e) =>
-                        void patchUser(u.id, {
-                          role: e.target.value as Role,
-                        })
-                      }
-                    >
-                      <option value="USER">USER</option>
-                      <option value="ADMIN">ADMIN</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-[13px]">
-                    {u.emailVerified ? (
-                      <span className="text-emerald-700">완료</span>
-                    ) : (
-                      <span className="text-amber-700">미인증</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      disabled={pending || isSelf}
-                      onClick={() =>
-                        void patchUser(u.id, { disabled: !u.disabled })
-                      }
-                      className={`rounded-lg px-2.5 py-1.5 text-[12px] font-medium disabled:opacity-50 ${
-                        u.disabled
-                          ? "bg-primary-soft text-foreground"
-                          : "bg-red-50 text-red-700"
-                      }`}
-                    >
-                      {u.disabled ? "활성화" : "비활성"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-muted">
-                    {new Date(u.createdAt).toLocaleDateString("ko-KR")}
-                  </td>
-                </tr>
-              );
-            })}
-            {filtered.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-4 py-10 text-center text-sm text-muted"
-                >
-                  {query.trim()
-                    ? "검색 결과가 없습니다."
-                    : "등록된 사용자가 없습니다."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+          {filtered.length === 0 ? (
+            <li className="border-t border-border px-5 py-12 text-center text-sm font-medium text-muted">
+              {query.trim() || filter !== "all"
+                ? "조건에 맞는 사용자가 없습니다."
+                : "등록된 사용자가 없습니다."}
+            </li>
+          ) : null}
+        </ul>
       </div>
     </div>
   );
@@ -236,19 +523,36 @@ function StatChip({
   label,
   value,
   muted,
+  active,
+  onClick,
 }: {
   label: string;
   value: number;
   muted?: boolean;
+  active?: boolean;
+  onClick: () => void;
 }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 ring-1 ring-border-strong ${
-        muted ? "text-muted-2" : "text-foreground"
-      }`}
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-surface text-foreground hover:bg-surface-2",
+        muted && !active && "text-muted",
+      )}
     >
-      <span className="text-muted">{label}</span>
+      <span
+        className={cn(
+          "font-medium",
+          active ? "text-primary-foreground/85" : "text-muted",
+        )}
+      >
+        {label}
+      </span>
       <span className="font-semibold tabular-nums">{value}</span>
-    </span>
+    </button>
   );
 }

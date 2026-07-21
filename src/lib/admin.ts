@@ -30,6 +30,7 @@ export async function listUsers() {
       plan: true,
       disabled: true,
       emailVerified: true,
+      signupProvider: true,
       image: true,
       createdAt: true,
       accounts: { select: { provider: true } },

@@ -14,16 +14,15 @@ import { Input } from "@/components/ui/input";
 const ERROR_MESSAGES: Record<string, string> = {
   CredentialsSignin: "이메일 또는 비밀번호가 올바르지 않습니다.",
   EmailConflict:
-    "이미 가입된 계정입니다. 기존에 사용한 방식으로 로그인한 뒤, 계정 설정에서 소셜을 연동해 주세요.",
-  Disabled: "비활성화된 계정입니다.",
-  Configuration:
-    "서버 로그인 설정이 불완전합니다. 잠시 후 다시 시도해 주세요.",
+    "이미 있는 계정이에요. 예전에 쓰던 방식으로 로그인한 뒤, 계정 설정에서 연결해 주세요.",
+  Disabled: "사용할 수 없는 계정이에요.",
+  Configuration: "로그인 준비가 아직 끝나지 않았어요. 잠시 후 다시 시도해 주세요.",
   OAuthAccountNotLinked:
-    "이미 가입된 계정입니다. 기존에 사용한 방식으로 로그인한 뒤, 계정 설정에서 소셜을 연동해 주세요.",
-  AccessDenied: "로그인이 거부되었습니다.",
-  OAuthCallback: "소셜 로그인 중 오류가 발생했습니다. 다시 시도해 주세요.",
-  Callback: "로그인 처리 중 오류가 발생했습니다. 다시 시도해 주세요.",
-  Verification: "인증 링크가 만료되었거나 올바르지 않습니다.",
+    "이미 있는 계정이에요. 예전에 쓰던 방식으로 로그인한 뒤, 계정 설정에서 연결해 주세요.",
+  AccessDenied: "로그인을 완료하지 못했어요.",
+  OAuthCallback: "소셜 로그인 중 문제가 생겼어요. 다시 시도해 주세요.",
+  Callback: "로그인 처리 중 문제가 생겼어요. 다시 시도해 주세요.",
+  Verification: "인증 링크가 만료되었거나 올바르지 않아요.",
 };
 
 const CODE_MESSAGES: Record<string, string> = {
