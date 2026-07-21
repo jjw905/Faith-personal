@@ -154,61 +154,96 @@ export async function addVaultFile(
     throw new Error(prepared.message ?? "업로드 준비에 실패했습니다.");
   }
 
+  const preparedMeta = {
+    id: prepared.id,
+    key: prepared.key,
+    mime: prepared.mime,
+  };
+
   if (prepared.mode === "local" || !prepared.uploadUrl) {
-    const form = new FormData();
-    form.set("file", file);
-    form.set("id", prepared.id);
-    form.set("key", prepared.key);
-    form.set("name", file.name);
-    form.set("mime", prepared.mime || mime);
-    form.set("purpose", purpose);
-    const localRes = await fetch("/api/vault/local", {
+    return uploadViaServer(
+      "/api/vault/local",
+      file,
+      preparedMeta,
+      purpose,
+      mime,
+    );
+  }
+
+  const uploadUrl = prepared.uploadUrl;
+
+  // 브라우저 → Spaces 직접 업로드. CORS/Load failed면 서버 경유로 재시도.
+  try {
+    const putRes = await fetch(uploadUrl, {
+      method: "PUT",
+      body: file,
+      headers: {
+        "Content-Type": preparedMeta.mime || mime,
+      },
+    });
+    if (!putRes.ok) {
+      throw new Error(`spaces_put_${putRes.status}`);
+    }
+
+    const completeRes = await fetch("/api/vault/complete", {
       method: "POST",
-      body: form,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: preparedMeta.id,
+        key: preparedMeta.key,
+        name: file.name,
+        size: file.size,
+        mime: preparedMeta.mime || mime,
+        purpose,
+      }),
     });
     const data = await readJson<{
       ok: boolean;
       item?: VaultItemMeta;
       message?: string;
-    }>(localRes);
-    if (!localRes.ok || !data.ok || !data.item) {
-      throw new Error(data.message ?? "업로드에 실패했습니다.");
+    }>(completeRes);
+    if (!completeRes.ok || !data.ok || !data.item) {
+      throw new Error(data.message ?? "업로드 완료 처리에 실패했습니다.");
     }
     notifyVaultChanged();
     return data.item;
-  }
-
-  const putRes = await fetch(prepared.uploadUrl, {
-    method: "PUT",
-    body: file,
-    headers: {
-      "Content-Type": prepared.mime || mime,
-      "x-amz-acl": "private",
-    },
-  });
-  if (!putRes.ok) {
-    throw new Error("스토리지 업로드에 실패했습니다. Spaces CORS를 확인해 주세요.");
-  }
-
-  const completeRes = await fetch("/api/vault/complete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id: prepared.id,
-      key: prepared.key,
-      name: file.name,
-      size: file.size,
-      mime: prepared.mime || mime,
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const networkFail =
+      /load failed|failed to fetch|networkerror|spaces_put_/i.test(msg);
+    if (!networkFail) throw err;
+    return uploadViaServer(
+      "/api/vault/proxy",
+      file,
+      preparedMeta,
       purpose,
-    }),
-  });
+      mime,
+    );
+  }
+}
+
+async function uploadViaServer(
+  path: "/api/vault/local" | "/api/vault/proxy",
+  file: File,
+  prepared: { id: string; key: string; mime?: string },
+  purpose: "VAULT" | "MEETING",
+  mime: string,
+): Promise<VaultItemMeta> {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("id", prepared.id);
+  form.set("key", prepared.key);
+  form.set("name", file.name);
+  form.set("mime", prepared.mime || mime);
+  form.set("purpose", purpose);
+  const res = await fetch(path, { method: "POST", body: form });
   const data = await readJson<{
     ok: boolean;
     item?: VaultItemMeta;
     message?: string;
-  }>(completeRes);
-  if (!completeRes.ok || !data.ok || !data.item) {
-    throw new Error(data.message ?? "업로드 완료 처리에 실패했습니다.");
+  }>(res);
+  if (!res.ok || !data.ok || !data.item) {
+    throw new Error(data.message ?? "업로드에 실패했습니다.");
   }
   notifyVaultChanged();
   return data.item;

@@ -59,6 +59,21 @@ export function buildObjectKey(userId: string, fileId: string, name: string) {
   return `users/${userId}/${fileId}/${safe}`;
 }
 
+export async function putObject(params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+}) {
+  await client().send(
+    new PutObjectCommand({
+      Bucket: bucket(),
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+    }),
+  );
+}
+
 export async function deleteObject(key: string) {
   await client().send(
     new DeleteObjectCommand({
@@ -84,13 +99,13 @@ export async function getUploadUrl(params: {
   contentType: string;
   expiresIn?: number;
 }) {
+  // ACL 헤더는 브라우저 CORS preflight를 유발하므로 서명에 넣지 않음 (기본 private).
   return getSignedUrl(
     client(),
     new PutObjectCommand({
       Bucket: bucket(),
       Key: params.key,
       ContentType: params.contentType,
-      ACL: "private",
     }),
     { expiresIn: params.expiresIn ?? 60 * 10 },
   );

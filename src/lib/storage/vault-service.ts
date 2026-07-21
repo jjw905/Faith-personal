@@ -22,6 +22,7 @@ import {
   getUploadUrl,
   headObject,
   localVaultAllowed,
+  putObject,
   spacesConfigured,
 } from "@/lib/storage/spaces";
 
@@ -199,6 +200,54 @@ export async function completeUserUpload(params: {
         name: params.fileName,
         size: params.size,
         mime: params.mime || head.contentType || "application/octet-stream",
+        key: params.key,
+        purpose: params.purpose ?? "VAULT",
+      },
+    });
+  } catch (err) {
+    await deleteObject(params.key).catch(() => undefined);
+    throw err;
+  }
+}
+
+/** CORS 실패 시 서버가 Spaces로 대신 업로드. */
+export async function completeSpacesProxyUpload(params: {
+  userId: string;
+  id: string;
+  key: string;
+  fileName: string;
+  mime: string;
+  size: number;
+  purpose?: VaultPurpose;
+  body: Buffer;
+}) {
+  if (!spacesConfigured()) {
+    throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
+  }
+  if (!params.key.startsWith(`users/${params.userId}/${params.id}/`)) {
+    throw new Error("잘못된 저장 경로입니다.");
+  }
+  const usage = await getUserStorageUsage(params.userId);
+  assertUploadSize(params.size, usage.used);
+  if (params.body.length !== params.size) {
+    throw new Error("업로드 파일 크기가 일치하지 않습니다.");
+  }
+
+  const mime = params.mime || "application/octet-stream";
+  await putObject({
+    key: params.key,
+    body: params.body,
+    contentType: mime,
+  });
+
+  try {
+    return await prisma.vaultFile.create({
+      data: {
+        id: params.id,
+        userId: params.userId,
+        name: params.fileName,
+        size: params.size,
+        mime,
         key: params.key,
         purpose: params.purpose ?? "VAULT",
       },

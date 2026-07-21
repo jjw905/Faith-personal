@@ -17,9 +17,10 @@ const nextConfig: NextConfig = {
   experimental: {
     // lucide 전체 번들 스캔 줄여 빌드 시간 단축
     optimizePackageImports: ["lucide-react"],
-    proxyClientMaxBodySize: "12mb",
+    // 보관함 서버 경유(CORS 폴백) 업로드 여유
+    proxyClientMaxBodySize: "32mb",
     serverActions: {
-      bodySizeLimit: "12mb",
+      bodySizeLimit: "32mb",
       allowedOrigins: [
         "faith-web-r9q5i.ondigitalocean.app",
         "localhost:3000",
