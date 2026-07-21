@@ -131,8 +131,8 @@ export const DEV_AGENDA: {
 } = {
   date: "2026-07-21",
   items: [
-    { label: "로그인 / 회원가입 실제 서비스 연동 및 테스트" },
-    { label: "유저권한 설정 구현 및 테스트" },
+    { label: "로그인 / 회원가입 실제 서비스 연동 및 테스트", done: true },
+    { label: "유저권한 설정 구현 및 테스트", done: true },
     { label: "보관함 기능 스토리지 연결", done: true },
     { label: "STT AI 연결 및 테스트" },
   ],
