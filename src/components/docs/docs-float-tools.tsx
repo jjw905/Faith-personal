@@ -11,7 +11,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { useDocsImePlaceholder } from "@/components/docs/docs-search-input";
 import { getScrollParent } from "@/lib/scroll-in-container";
 import { cn } from "@/lib/utils";
 
@@ -133,9 +132,12 @@ export function useDocsFloatBox(
   return box;
 }
 
+const SEARCH_PANEL_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+const SEARCH_PANEL_MS = 320;
+
 /**
  * 돌아가기 + 검색 아이콘.
- * 검색은 필요할 때만 오른쪽으로 펼침 (본문 가림 최소화).
+ * 검색은 필요할 때만 오른쪽으로 부드럽게 펼침 (본문 가림 최소화).
  */
 export function DocsFloatChrome({
   left,
@@ -155,15 +157,19 @@ export function DocsFloatChrome({
   const rootRef = useRef<HTMLDivElement>(null);
   const inputId = useId();
   const [expanded, setExpanded] = useState(() => query.trim().length > 0);
-  const ime = useDocsImePlaceholder(query);
 
   useEffect(() => {
     if (query.trim().length > 0) setExpanded(true);
   }, [query]);
 
   useEffect(() => {
-    if (!expanded) return;
-    const id = window.requestAnimationFrame(() => inputRef.current?.focus());
+    if (!expanded) {
+      inputRef.current?.blur();
+      return;
+    }
+    const id = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+    });
     return () => window.cancelAnimationFrame(id);
   }, [expanded]);
 
@@ -188,6 +194,11 @@ export function DocsFloatChrome({
     };
   }, [expanded, query, onQueryChange]);
 
+  function closeSearch() {
+    onQueryChange("");
+    setExpanded(false);
+  }
+
   if (!mounted) return null;
 
   return createPortal(
@@ -198,9 +209,7 @@ export function DocsFloatChrome({
     >
       <div
         className={cn(
-          "pointer-events-auto flex h-11 items-center rounded-2xl border border-border bg-card/95 shadow-float backdrop-blur-md",
-          "transition-[width,box-shadow] duration-200 ease-out",
-          expanded ? "w-[min(22rem,calc(100vw-2rem))]" : "w-auto",
+          "pointer-events-auto flex h-11 items-center overflow-hidden rounded-2xl border border-border bg-card/95 shadow-float backdrop-blur-md",
         )}
       >
         <button
@@ -214,8 +223,41 @@ export function DocsFloatChrome({
 
         <span className="h-5 w-px shrink-0 bg-border" aria-hidden />
 
-        {expanded ? (
-          <label className="flex min-w-0 flex-1 items-center gap-1.5 px-2.5">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-label="문서 검색"
+          aria-expanded={expanded}
+          tabIndex={expanded ? -1 : 0}
+          className={cn(
+            "inline-flex h-full shrink-0 cursor-pointer items-center justify-center overflow-hidden text-muted transition-[width,padding,opacity,transform] hover:bg-surface hover:text-foreground",
+            expanded
+              ? "pointer-events-none w-0 px-0 opacity-0"
+              : "w-11 rounded-r-2xl px-3 opacity-100",
+          )}
+          style={{
+            transitionDuration: `${SEARCH_PANEL_MS}ms`,
+            transitionTimingFunction: SEARCH_PANEL_EASE,
+          }}
+        >
+          <Search className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+        </button>
+
+        <div
+          className={cn(
+            "flex min-w-0 items-stretch overflow-hidden",
+            "transition-[max-width,opacity,transform]",
+            expanded
+              ? "max-w-[min(18rem,calc(100vw-8rem))] translate-x-0 opacity-100"
+              : "pointer-events-none max-w-0 translate-x-4 opacity-0",
+          )}
+          style={{
+            transitionDuration: `${SEARCH_PANEL_MS}ms`,
+            transitionTimingFunction: SEARCH_PANEL_EASE,
+          }}
+          aria-hidden={!expanded}
+        >
+          <label className="flex w-[min(18rem,calc(100vw-8rem))] min-w-0 items-center gap-1.5 px-2.5">
             <span className="sr-only">문서 검색</span>
             <Search
               className="h-4 w-4 shrink-0 text-muted"
@@ -223,31 +265,24 @@ export function DocsFloatChrome({
               aria-hidden
             />
             <span className="relative min-w-0 flex-1">
-              {ime.showImeHint ? (
-                <span
-                  className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-sm text-muted-2"
-                  aria-hidden
-                >
-                  {ime.imeLabel}
-                </span>
-              ) : null}
               <input
                 ref={inputRef}
                 id={inputId}
                 type="search"
                 value={query}
                 onChange={(e) => onQueryChange(e.target.value)}
-                placeholder={ime.placeholder}
+                placeholder="검색..."
+                tabIndex={expanded ? 0 : -1}
                 className="w-full bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-2 [&::-webkit-search-cancel-button]:hidden"
                 autoComplete="off"
                 enterKeyHint="search"
-                {...ime.inputProps}
               />
             </span>
             {query ? (
               <button
                 type="button"
                 onClick={() => onQueryChange("")}
+                tabIndex={expanded ? 0 : -1}
                 className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground"
                 aria-label="검색어 지우기"
               >
@@ -256,7 +291,8 @@ export function DocsFloatChrome({
             ) : (
               <button
                 type="button"
-                onClick={() => setExpanded(false)}
+                onClick={closeSearch}
+                tabIndex={expanded ? 0 : -1}
                 className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground"
                 aria-label="검색 닫기"
               >
@@ -264,16 +300,7 @@ export function DocsFloatChrome({
               </button>
             )}
           </label>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className="inline-flex h-full shrink-0 cursor-pointer items-center justify-center rounded-r-2xl px-3 text-muted transition-colors hover:bg-surface hover:text-foreground"
-            aria-label="문서 검색"
-          >
-            <Search className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        )}
+        </div>
       </div>
     </div>,
     document.body,

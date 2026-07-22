@@ -277,12 +277,13 @@ export const DEV_AGENDA: {
   date: string;
   items: DevAgendaItem[];
 } = {
-  date: "2026-07-21",
+  date: "2026-07-22",
   items: [
-    { label: "로그인 / 회원가입 실제 서비스 연동 및 테스트", done: true },
-    { label: "유저권한 설정 구현 및 테스트", done: true },
-    { label: "보관함 기능 스토리지 연결", done: true },
-    { label: "STT AI 연결 및 테스트", done: true },
+    { label: "STT 모델 선정" },
+    { label: "기능에 따른 비용 타산추정" },
+    { label: "모델 도입에 따른 UI/UX 수정" },
+    { label: "요금제 도입" },
+    { label: "테스트 및 보완" },
   ],
 };
 
