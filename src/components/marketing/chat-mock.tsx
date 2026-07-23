@@ -300,7 +300,7 @@ type VisibleMessage = ScriptLine & { key: number; pending: boolean };
 
 function TypingDots() {
   return (
-    <span className="running-dots inline-flex items-center gap-1 py-1.5 text-muted-2">
+    <span className="running-dots inline-flex h-[1.625em] items-center gap-1 align-middle text-[14px] text-muted-2 xl:text-[15px]">
       <span />
       <span />
       <span />
@@ -449,7 +449,7 @@ export function ChatMock() {
     return () => io.disconnect();
   }, []);
 
-  // 위에서 쌓이되, 넘치면 위로 밀어 최신이 보이게 (스크롤 API/휠 가로채기 없음)
+  // 위에서 쌓이되, 넘치면 위로 밀어 최신이 보이게 (부드럽게 스크롤)
   useLayoutEffect(() => {
     const feed = feedRef.current;
     const list = listRef.current;
@@ -543,7 +543,10 @@ export function ChatMock() {
       <div className="flex h-[400px] flex-col xl:h-[440px]">
         <ChatDateDivider label={dateLabel} />
         <div ref={feedRef} className="min-h-0 flex-1 overflow-hidden">
-          <div ref={listRef} className="flex flex-col gap-3.5 pb-1">
+          <div
+            ref={listRef}
+            className="flex flex-col gap-3.5 pb-1 transition-transform duration-300 ease-out will-change-transform"
+          >
             {visible.map((msg) => (
               <MockBubble
                 key={msg.key}

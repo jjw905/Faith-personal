@@ -1,19 +1,13 @@
 "use client";
 
 import { CtaButton } from "@/components/marketing/cta-button";
-
-const LINE1 = "안전한 회의진행,";
-const LINE2 = "음성 텍스트 추출도 알아서.";
+import { HeroTypingTitle } from "@/components/marketing/hero-typing-title";
 
 /** 히어로 좌측 카피 + CTA. */
 export function HeroIntro() {
   return (
     <div className="max-w-2xl">
-      <h1 className="text-hero text-5xl font-bold text-foreground xl:text-7xl">
-        {LINE1}
-        <br />
-        {LINE2}
-      </h1>
+      <HeroTypingTitle />
 
       <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted xl:mt-8 xl:text-xl">
         개인정보 누출 걱정없이 회의를 진행해보세요.

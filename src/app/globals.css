@@ -327,6 +327,32 @@ body {
   }
 }
 
+/* 히어로 타이틀 타이핑 캐럿 */
+.hero-caret {
+  display: inline-block;
+  margin-left: 0.04em;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--foreground) 45%, transparent);
+  animation: hero-caret-blink 0.9s steps(1) infinite;
+}
+
+@keyframes hero-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-caret {
+    display: none;
+  }
+}
+
 /* 히어로 유리 말풍선 PNG */
 .hero-chat-glass {
   display: block;
