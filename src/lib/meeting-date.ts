@@ -64,6 +64,57 @@ function parseMeetingDate(dateString: string) {
   );
 }
 
+/** Asia/Seoul 캘린더일 YYYY-MM-DD. */
+export function seoulDateKey(input: Date | string | number = new Date()) {
+  const date =
+    input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) return "invalid";
+  const parts = seoulParts(date);
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
+}
+
+/** Asia/Seoul 기준 오늘에서 n일 전 YYYY-MM-DD. */
+export function seoulDateKeyDaysAgo(n: number, now: Date = new Date()) {
+  const parts = seoulDayOffset(now, -Math.max(0, Math.floor(n)));
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
+}
+
+/** datetime-local 값용 Asia/Seoul YYYY-MM-DDTHH:mm */
+export function toSeoulDateTimeLocal(dateString: string) {
+  const date = parseMeetingDate(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  const p = seoulParts(date);
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
+}
+
+/**
+ * datetime-local(서울 벽시계) → UTC ISO.
+ * 한국은 DST 없음, +09:00 고정.
+ */
+export function fromSeoulDateTimeLocal(local: string): string | null {
+  const m = local
+    .trim()
+    .match(
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/,
+    );
+  if (!m) return null;
+  const iso = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6] ?? "00"}+09:00`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+/** 회의 date 필드 검증. ISO 또는 서울 로컬 문자열. */
+export function normalizeMeetingDateIso(raw: string): string | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const fromLocal = fromSeoulDateTimeLocal(t);
+  if (fromLocal) return fromLocal;
+  const d = parseMeetingDate(t);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 /** 캘린더 일 기준 경과 일수 (오늘=0, 어제=1). Asia/Seoul 기준. */
 export function getCalendarDaysAgo(
   dateString: string,
@@ -154,6 +205,72 @@ export function listUpcomingDays(
   });
 }
 
+export type MonthDayCell = {
+  iso: string;
+  day: number;
+  inMonth: boolean;
+};
+
+/** YYYY-MM-DD → { year, month, day } */
+export function parseIsoDateParts(iso: string) {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return {
+    year: Number(m[1]),
+    month: Number(m[2]),
+    day: Number(m[3]),
+  };
+}
+
+/** M3 월 달력용 그리드 (일요일 시작, 6주). month는 1–12. */
+export function listMonthDayCells(
+  year: number,
+  month: number,
+): MonthDayCell[] {
+  const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevDays = new Date(Date.UTC(prevYear, prevMonth, 0)).getUTCDate();
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+
+  const cells: MonthDayCell[] = [];
+  for (let i = 0; i < firstWeekday; i++) {
+    const day = prevDays - firstWeekday + 1 + i;
+    cells.push({
+      iso: `${prevYear}-${pad(prevMonth)}-${pad(day)}`,
+      day,
+      inMonth: false,
+    });
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({
+      iso: `${year}-${pad(month)}-${pad(day)}`,
+      day,
+      inMonth: true,
+    });
+  }
+  let nextDay = 1;
+  while (cells.length < 42) {
+    cells.push({
+      iso: `${nextYear}-${pad(nextMonth)}-${pad(nextDay)}`,
+      day: nextDay,
+      inMonth: false,
+    });
+    nextDay += 1;
+  }
+  return cells;
+}
+
+export function shiftMonth(year: number, month: number, delta: number) {
+  const idx = year * 12 + (month - 1) + delta;
+  return {
+    year: Math.floor(idx / 12),
+    month: (idx % 12) + 1,
+  };
+}
+
 /** dateLabel → YYYY-MM-DD (서울 기준). 파싱 실패 시 null. */
 export function dateLabelToIso(
   dateLabel: string,
@@ -182,6 +299,59 @@ export function isoToUpcomingDateLabel(
   const offset = Math.round((targetMs - todayMs) / (24 * 60 * 60 * 1000));
   if (offset < 0) return `${month}월 ${day}일`;
   return formatUpcomingDateLabel(offset, now);
+}
+
+/**
+ * dateLabel → 확정 일정용 절대 날짜 표기.
+ * 예: 7월 23일 (목). 올해가 아니면 연도 포함.
+ */
+export function formatUpcomingAbsoluteDate(
+  dateLabel: string,
+  now: Date = new Date(),
+): string | null {
+  const iso = dateLabelToIso(dateLabel, now);
+  if (!iso) return null;
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const weekday = new Date(toUtcDay(year, month, day)).getUTCDay();
+  const weekdayShort = WEEKDAY_SHORT[weekday] ?? "";
+  const nowParts = seoulParts(now);
+  if (year !== nowParts.year) {
+    return `${year}년 ${month}월 ${day}일 (${weekdayShort})`;
+  }
+  return `${month}월 ${day}일 (${weekdayShort})`;
+}
+
+/** 오늘/내일/모레만. 확정 일정의 보조 힌트용. */
+export function relativeUpcomingHint(
+  dateLabel: string,
+  now: Date = new Date(),
+): string | null {
+  const days = daysUntilFromDateLabel(dateLabel, now);
+  if (days === 0) return "오늘";
+  if (days === 1) return "내일";
+  if (days === 2) return "모레";
+  return null;
+}
+
+/**
+ * 확정 일정 요약. 예: 7월 23일 (목) 16:00, 소요 30분
+ * dateLabel 저장값은 상대표기여도 표시는 항상 절대.
+ */
+export function formatUpcomingScheduleSummary(
+  dateLabel: string,
+  timeLabel: string,
+  duration: string,
+  now: Date = new Date(),
+): string {
+  const datePart = formatUpcomingAbsoluteDate(dateLabel, now) ?? dateLabel.trim();
+  const time = timeLabel.trim() || "--:--";
+  const dur = duration.trim();
+  if (dur) return `${datePart} ${time}, 소요 ${dur}`;
+  return `${datePart} ${time}`;
 }
 
 /** 예정 회의 dateLabel → 오늘부터 남은 일수 (오늘=0). Asia/Seoul 기준. */
@@ -221,15 +391,33 @@ export function daysUntilFromDateLabel(
   return delta;
 }
 
-/** 예: D-Day, D-1 … D-9. 0~9일만, 그 외·파싱 불가면 null. */
+/** 예: 오늘, 내일, D-2 … D-9. 0~9일만, 그 외·파싱 불가면 null. */
 export function formatDdayLabel(
   dateLabel: string,
   now: Date = new Date(),
 ): string | null {
   const days = daysUntilFromDateLabel(dateLabel, now);
   if (days === null || days < 0 || days > 9) return null;
-  if (days === 0) return "D-Day";
+  if (days === 0) return "오늘";
+  if (days === 1) return "내일";
   return `D-${days}`;
+}
+
+/**
+ * 예정 목록/카드용 날짜 표기.
+ * 저장값이 "금요일"/"내일"처럼 달라도 같은 날은 같은 라벨로 맞춤.
+ * 배지는 D-N만 (오늘/내일/모레는 본문에 이미 포함).
+ */
+export function resolveUpcomingListDate(
+  dateLabel: string,
+  now: Date = new Date(),
+): { label: string; ddayBadge: string | null; days: number | null } {
+  const days = daysUntilFromDateLabel(dateLabel, now);
+  const label =
+    days !== null ? formatUpcomingDateLabel(days, now) : dateLabel.trim();
+  const dday = formatDdayLabel(dateLabel, now);
+  const ddayBadge = dday && dday.startsWith("D-") ? dday : null;
+  return { label, ddayBadge, days };
 }
 
 /**
@@ -266,20 +454,22 @@ export function resolveDateFromDaysAgo(
   });
 }
 
+/** 회의 상세 메타: 2026.07.22 (수), 오전 11:33 */
 export function formatSeoulDateParts(dateString: string) {
   const date = parseMeetingDate(dateString);
-  const day = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: SEOUL,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-  const time = new Intl.DateTimeFormat("ko-KR", {
-    timeZone: SEOUL,
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-  return { day, time };
+  const parts = seoulParts(date);
+  const weekday = new Date(
+    toUtcDay(parts.year, parts.month, parts.day),
+  ).getUTCDay();
+  const weekdayShort = WEEKDAY_SHORT[weekday] ?? "";
+
+  const day = `${parts.year}.${pad(parts.month)}.${pad(parts.day)} (${weekdayShort})`;
+
+  const period = parts.hour < 12 ? "오전" : "오후";
+  const hour12 = parts.hour % 12 === 0 ? 12 : parts.hour % 12;
+  const time = `${period} ${hour12}:${pad(parts.minute)}`;
+
+  return { day, time, iso: date.toISOString() };
 }
 
 /** 리스트 leading용 짧은 날짜 + 시간 (M3 list leading / overline 관례). */

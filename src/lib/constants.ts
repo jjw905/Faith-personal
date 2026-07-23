@@ -2,6 +2,7 @@ import {
   Archive,
   CircleHelp,
   EyeOff,
+  Gauge,
   History,
   Mic,
   Palette,
@@ -64,6 +65,11 @@ export const DEV_NAV_ITEMS: NavItem[] = [
     title: "Changelog",
     href: "/changelog/dev",
     icon: History,
+  },
+  {
+    title: "AI 사용량",
+    href: "/ai-usage",
+    icon: Gauge,
   },
   {
     title: "디자인",
@@ -140,7 +146,11 @@ export const PAGE_TITLES: Record<string, { title: string; description: string }>
     },
     "/design": {
       title: "디자인",
-      description: "개발전용, 화면 패턴을 미리봅니다.",
+      description: "개발전용, 트리거·조건부 UI를 재현합니다.",
+    },
+    "/ai-usage": {
+      title: "AI 사용량",
+      description: "개발전용, 받아쓰기, 정리 비용과 토큰을 확인합니다.",
     },
     "/vault": {
       title: "보관함",

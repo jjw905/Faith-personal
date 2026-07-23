@@ -8,28 +8,22 @@ const LINKS = [
 /** 앱 페이지 하단 법적 고지. */
 export function AppLegalFooter() {
   return (
-    <footer className="mt-10 border-t border-border pt-5 pb-1">
+    <footer className="mt-10 border-t border-border/60 pt-4 pb-1">
       <nav
-        className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-muted"
+        className="flex flex-wrap items-center justify-center gap-1"
         aria-label="법적 고지"
       >
-        {LINKS.map((link, i) => (
-          <span key={link.href} className="inline-flex items-center gap-x-3">
-            {i > 0 ? (
-              <span className="text-border-strong" aria-hidden>
-                |
-              </span>
-            ) : null}
-            <Link
-              href={link.href}
-              className="transition-colors hover:text-foreground"
-            >
-              {link.label}
-            </Link>
-          </span>
+        {LINKS.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface hover:text-foreground"
+          >
+            {link.label}
+          </Link>
         ))}
       </nav>
-      <p className="mt-2 text-center text-xs text-muted-2">© 2026 Faith</p>
+      <p className="mt-1.5 text-center text-sm text-muted-2">© 2026 Faith</p>
     </footer>
   );
 }

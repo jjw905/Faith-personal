@@ -53,7 +53,7 @@ function SectionBlock({
         {section.items.map((item) => (
           <li
             key={item}
-            className="relative pl-5 text-[15px] leading-relaxed text-muted before:absolute before:left-0 before:top-2.5 before:h-1.5 before:w-1.5 before:rounded-full before:bg-border-strong"
+            className="relative pl-5 text-base leading-relaxed text-muted before:absolute before:left-0 before:top-2.5 before:h-1.5 before:w-1.5 before:rounded-full before:bg-border-strong"
           >
             {item}
           </li>
@@ -202,7 +202,7 @@ export function LegalDocsView() {
                   <button
                     type="button"
                     onClick={goBack}
-                    className="-ml-1 inline-flex cursor-pointer items-center gap-1.5 px-1 py-1 text-sm font-semibold text-foreground transition-opacity hover:opacity-70"
+                    className="-ml-1 inline-flex cursor-pointer items-center gap-1.5 px-1 py-1 text-base font-semibold text-foreground transition-opacity hover:opacity-70"
                   >
                     <ArrowLeft
                       className="h-4 w-4"
@@ -217,7 +217,7 @@ export function LegalDocsView() {
                   <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
                     개인정보 처리방침, 이용약관
                   </h1>
-                  <p className="mt-2 text-sm text-muted">
+                  <p className="mt-2 text-base text-muted">
                     시행일: 2026년 1월 1일
                   </p>
                   <div className="mt-5 max-w-md">
@@ -253,11 +253,11 @@ export function LegalDocsView() {
                   >
                     {searching ? (
                       <div className="space-y-1">
-                        <p className="px-2 text-xs font-semibold tracking-wide text-muted-2">
+                        <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
                           검색 결과
                         </p>
                         {results.length === 0 ? (
-                          <p className="px-2 py-2 text-sm text-muted">
+                          <p className="px-2 py-2 text-base text-muted">
                             일치하는 내용이 없습니다.
                           </p>
                         ) : (
@@ -266,7 +266,7 @@ export function LegalDocsView() {
                               key={section.id}
                               href={`#${section.id}`}
                               onClick={(e) => onNavClick(e, section.id)}
-                              className="block rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-surface hover:text-foreground"
+                              className="block rounded-lg px-2 py-1.5 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
                             >
                               {section.title}
                             </a>
@@ -277,7 +277,7 @@ export function LegalDocsView() {
                       <div className="space-y-5">
                         {LEGAL_NAV.map((group) => (
                           <div key={group.title}>
-                            <p className="px-2 text-xs font-semibold tracking-wide text-muted-2">
+                            <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
                               {group.title}
                             </p>
                             <ul className="mt-1.5 space-y-0.5">
@@ -287,7 +287,7 @@ export function LegalDocsView() {
                                     href={`#${item.id}`}
                                     onClick={(e) => onNavClick(e, item.id)}
                                     className={cn(
-                                      "block rounded-lg px-2 py-1.5 text-sm transition-colors",
+                                      "block rounded-lg px-2 py-1.5 text-base transition-colors",
                                       activeId === item.id
                                         ? "bg-surface font-medium text-foreground"
                                         : "text-muted hover:bg-surface/70 hover:text-foreground",
@@ -318,7 +318,7 @@ export function LegalDocsView() {
                             key={section.id}
                             className={cn(
                               index < list.length - 1 &&
-                                "border-b border-border pb-12 sm:pb-14",
+                                "border-b border-border/60 pb-12 sm:pb-14",
                             )}
                           >
                             <SectionBlock

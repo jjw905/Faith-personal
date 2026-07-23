@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -9,6 +9,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  parseDataRetentionDays,
+  readDataRetentionDaysFromStorage,
+  writeDataRetentionDaysToStorage,
+  type DataRetentionDays,
+} from "@/lib/data-retention";
 import { WORKSPACE_PEOPLE } from "@/lib/workspace-data";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +114,24 @@ function Segmented({
 export function TeamManagePanel() {
   const [teamAutoMask, setTeamAutoMask] = useState(true);
   const [enforceMask, setEnforceMask] = useState(true);
-  const [retention, setRetention] = useState("90");
+  const [retention, setRetention] = useState<DataRetentionDays>(90);
+
+  useEffect(() => {
+    setRetention(readDataRetentionDaysFromStorage());
+  }, []);
+
+  function updateRetention(next: string) {
+    const days = parseDataRetentionDays(next);
+    setRetention(days);
+    writeDataRetentionDaysToStorage(days);
+    void fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ retentionDays: days }),
+    }).catch(() => {
+      // ignore
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -175,13 +198,13 @@ export function TeamManagePanel() {
             />
           </SettingRow>
           <SettingRow
-            label="회의록 보존 기간"
-            description="기간이 지나면 아카이브 또는 삭제 정책을 적용합니다."
+            label="데이터 보존 기간"
+            description="회의록·알림 등 보관 데이터에 적용합니다. 확인한 알림은 최근 내역에 7일만 보이고, 실제 삭제는 이 기간을 따릅니다."
           >
             <Segmented
-              ariaLabel="회의록 보존 기간"
-              value={retention}
-              onChange={setRetention}
+              ariaLabel="데이터 보존 기간"
+              value={String(retention)}
+              onChange={updateRetention}
               options={[
                 { value: "30", label: "30일" },
                 { value: "90", label: "90일" },

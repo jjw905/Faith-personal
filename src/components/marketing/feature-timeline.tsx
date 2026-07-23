@@ -1,6 +1,7 @@
 import { FileText, Lock, Mic, Shield, type LucideIcon } from "lucide-react";
 
 import { Container } from "@/components/marketing/container";
+import { HeroChatShapesHost } from "@/components/marketing/hero-chat-shapes-host";
 import { cn } from "@/lib/utils";
 
 type Step = {
@@ -98,18 +99,31 @@ export function FeatureTimeline() {
   return (
     <section
       id="features"
-      className="scroll-mt-20 bg-surface pt-12 pb-24 lg:pt-16 lg:pb-32"
+      className="scroll-mt-20 bg-surface pb-20 pt-0 lg:pb-28"
     >
       <Container>
-        <div className="max-w-2xl">
-          <h2 className="text-4xl font-bold tracking-tight text-foreground lg:text-5xl">
-            회의 전 과정을
-            <br />
-            하나의 흐름으로.
-          </h2>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted">
-            기록까지 안전하게, Faith가 자동으로 이어줍니다.
-          </p>
+        <div className="flex flex-col items-center">
+          {/* 히어로에서 내려온 세로선 — 헤드라인 바로 위에서 끊김 */}
+          <div
+            aria-hidden
+            className="mb-8 h-12 w-px bg-[color-mix(in_srgb,var(--foreground)_16%,transparent)] sm:mb-10 sm:h-14 lg:mb-12"
+          />
+
+          <div className="mx-auto flex w-fit max-w-full flex-col items-center justify-center gap-[50px] text-center xl:flex-row xl:items-center xl:text-left">
+            <div className="max-w-xl shrink-0">
+              <h2 className="text-4xl font-bold tracking-tight text-foreground lg:text-5xl">
+                회의 전 과정을
+                <br />
+                하나의 흐름으로.
+              </h2>
+              <p className="mt-6 text-lg leading-relaxed text-muted">
+                기록까지 안전하게, Faith가 자동으로 이어줍니다.
+              </p>
+            </div>
+            <div className="flex shrink-0 justify-center">
+              <HeroChatShapesHost />
+            </div>
+          </div>
         </div>
 
         <ol className="relative mt-16 space-y-12 sm:mt-20 sm:space-y-0">

@@ -151,7 +151,7 @@ export function TranscriptAttachmentCard({
   const ext = (attachment.name.split(".").pop() ?? "file").toUpperCase();
 
   return (
-    <div className="w-full max-w-[15.75rem] shrink-0 overflow-hidden rounded-2xl bg-card text-left text-foreground shadow-soft ring-1 ring-border">
+    <div className="w-full max-w-[15.75rem] shrink-0 overflow-hidden rounded-2xl bg-surface text-left text-foreground">
       <div className="flex items-center gap-3 px-3 py-2.5">
         <div
           className={cn(
@@ -168,7 +168,7 @@ export function TranscriptAttachmentCard({
           <p className="truncate text-[13px] font-semibold leading-snug">
             {attachment.name}
           </p>
-          <p className="mt-1 text-[11px] font-medium tabular-nums text-muted">
+          <p className="mt-1 text-xs font-medium tabular-nums text-muted">
             {kindLabel(kind)} {attachment.sizeLabel}
           </p>
         </div>
@@ -205,7 +205,7 @@ export function MeetingAttachmentsList({
       <p className="mb-3 text-xs font-medium tabular-nums text-muted-2">
         {files.length}개
       </p>
-      <ul className="divide-y divide-border overflow-hidden rounded-2xl bg-card shadow-soft">
+      <ul className="space-y-1 overflow-hidden rounded-2xl bg-surface p-1">
         {files.map((item) => {
           const kind = resolveAttachmentKind(item.attachment);
           const ext = (
@@ -216,7 +216,7 @@ export function MeetingAttachmentsList({
               <button
                 type="button"
                 onClick={() => onSelectLine?.(item.lineId)}
-                className="flex w-full min-w-0 items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-surface sm:px-4"
+                className="flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-card sm:px-4"
               >
                 <div
                   className={cn(
@@ -247,7 +247,7 @@ export function MeetingAttachmentsList({
         })}
       </ul>
       {onSelectLine ? (
-        <p className="mt-2 text-[11px] font-medium text-muted-2">
+        <p className="mt-2 text-xs font-medium text-muted-2">
           파일을 누르면 해당 대화 위치로 이동합니다.
         </p>
       ) : null}

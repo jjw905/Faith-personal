@@ -1,6 +1,228 @@
 {
   "meetings": [
     {
+      "id": "mtg-stt-assembly",
+      "title": "제424회 국회 환노위 (STT 화자분리)",
+      "tags": [
+        "STT",
+        "국회",
+        "화자분리"
+      ],
+      "summaryTags": [
+        "AI",
+        "diarize",
+        "환노위"
+      ],
+      "daysAgo": 0,
+      "time": "11:33:00",
+      "duration": "18분 34초",
+      "participants": [
+        {
+          "id": "spk-A",
+          "name": "화자 A",
+          "initials": "A",
+          "color": "bg-blue-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "위원회 개의·안건 상정·예산안 의결 진행",
+          "tags": [
+            "진행",
+            "의결"
+          ]
+        },
+        {
+          "id": "spk-B",
+          "name": "화자 B",
+          "initials": "B",
+          "color": "bg-emerald-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "소위 심사 결과·증액 내역 보고",
+          "tags": [
+            "보고",
+            "예산"
+          ]
+        },
+        {
+          "id": "spk-C",
+          "name": "화자 C",
+          "initials": "C",
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "심사 과정 보완 발언",
+          "tags": [
+            "질의"
+          ]
+        },
+        {
+          "id": "spk-D",
+          "name": "화자 D",
+          "initials": "D",
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "환경부 추경·재난 대응 예산 설명",
+          "tags": [
+            "예산",
+            "환경"
+          ]
+        },
+        {
+          "id": "spk-E",
+          "name": "화자 E",
+          "initials": "E",
+          "color": "bg-rose-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "노동자 폭력·경찰 대응 문제 지적",
+          "tags": [
+            "노동",
+            "지적"
+          ]
+        },
+        {
+          "id": "spk-F",
+          "name": "화자 F",
+          "initials": "F",
+          "color": "bg-cyan-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "관련 질의·보충 발언",
+          "tags": [
+            "질의"
+          ]
+        },
+        {
+          "id": "spk-G",
+          "name": "화자 G",
+          "initials": "G",
+          "color": "bg-orange-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "고용·진상조사 등 후속 조치 요청",
+          "tags": [
+            "고용",
+            "후속"
+          ]
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "personal",
+      "capture": "upload"
+    },
+    {
+      "id": "mtg-stt-ktv",
+      "title": "KTV 브리핑 (STT 화자분리)",
+      "tags": [
+        "STT",
+        "KTV",
+        "화자분리"
+      ],
+      "summaryTags": [
+        "AI",
+        "diarize",
+        "브리핑"
+      ],
+      "daysAgo": 0,
+      "time": "14:00:00",
+      "duration": "11분 44초",
+      "participants": [
+        {
+          "id": "spk-A",
+          "name": "화자 A",
+          "initials": "A",
+          "color": "bg-blue-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "정부 국정운영 생중계·부처 개방 브리핑",
+          "tags": [
+            "브리핑",
+            "홍보"
+          ]
+        },
+        {
+          "id": "spk-B",
+          "name": "화자 B",
+          "initials": "B",
+          "color": "bg-emerald-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "브리핑 내용 보완·질의 응답",
+          "tags": [
+            "질의"
+          ]
+        },
+        {
+          "id": "spk-C",
+          "name": "화자 C",
+          "initials": "C",
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "정책 세부 설명 참여",
+          "tags": [
+            "설명"
+          ]
+        },
+        {
+          "id": "spk-D",
+          "name": "화자 D",
+          "initials": "D",
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "후속 일정·운영 방안 정리",
+          "tags": [
+            "일정",
+            "운영"
+          ]
+        },
+        {
+          "id": "spk-E",
+          "name": "화자 E",
+          "initials": "E",
+          "color": "bg-rose-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "관련 질의 참여",
+          "tags": [
+            "질의"
+          ]
+        },
+        {
+          "id": "spk-F",
+          "name": "화자 F",
+          "initials": "F",
+          "color": "bg-cyan-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "마무리·추가 의견",
+          "tags": [
+            "정리"
+          ]
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "personal",
+      "capture": "upload"
+    },
+    {
       "id": "mtg-001",
       "title": "Q3 보안 정책 검토",
       "tags": [
@@ -26,7 +248,12 @@
           "isMember": true,
           "isHost": true,
           "recognition": "member",
-          "recognitionNote": "계정 프로필과 매칭"
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "안건 확인·자동 마스킹 결정 주도",
+          "tags": [
+            "진행",
+            "결정"
+          ]
         },
         {
           "id": "p2",
@@ -35,7 +262,12 @@
           "color": "bg-emerald-500",
           "isMember": true,
           "recognition": "member",
-          "recognitionNote": "계정 프로필과 매칭"
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "마스킹 규칙 PR·통합 테스트 담당",
+          "tags": [
+            "마스킹",
+            "개발"
+          ]
         },
         {
           "id": "p3",
@@ -44,7 +276,12 @@
           "color": "bg-violet-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "낮은 톤, '민수'로 호칭됨"
+          "recognitionNote": "낮은 톤, '민수'로 호칭됨",
+          "summary": "NER 보조·노이즈 환경 STT 리스크 점검",
+          "tags": [
+            "STT",
+            "리스크"
+          ]
         },
         {
           "id": "p4",
@@ -53,7 +290,12 @@
           "color": "bg-amber-500",
           "isMember": false,
           "recognition": "guest",
-          "recognitionNote": "외부 게스트, 입장명으로 표시"
+          "recognitionNote": "외부 게스트, 입장명으로 표시",
+          "summary": "배포 체크리스트·검수 큐 분리",
+          "tags": [
+            "배포",
+            "검수"
+          ]
         },
         {
           "id": "p5",
@@ -62,7 +304,11 @@
           "color": "bg-rose-500",
           "isMember": true,
           "recognition": "voice",
-          "recognitionNote": "빠른 말투, 높은 톤"
+          "recognitionNote": "빠른 말투, 높은 톤",
+          "summary": "정책 범위 논의 참여",
+          "tags": [
+            "논의"
+          ]
         },
         {
           "id": "p6",
@@ -71,12 +317,17 @@
           "color": "bg-cyan-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "조용한 톤, 질문 위주"
+          "recognitionNote": "조용한 톤, 질문 위주",
+          "summary": "일정·후속 확인 질문",
+          "tags": [
+            "질의"
+          ]
         }
       ],
       "status": "completed",
       "security": "protected",
-      "workspace": "team"
+      "workspace": "team",
+      "capture": "live"
     },
     {
       "id": "mtg-002",
@@ -103,7 +354,8 @@
       ],
       "status": "completed",
       "security": "protected",
-      "workspace": "personal"
+      "workspace": "personal",
+      "capture": "live"
     },
     {
       "id": "mtg-003",
@@ -142,7 +394,8 @@
       ],
       "status": "in_progress",
       "security": "protected",
-      "workspace": "team"
+      "workspace": "team",
+      "capture": "live"
     },
     {
       "id": "mtg-004",
@@ -181,7 +434,8 @@
       ],
       "status": "completed",
       "security": "protected",
-      "workspace": "team"
+      "workspace": "team",
+      "capture": "live"
     },
     {
       "id": "mtg-005",
@@ -208,7 +462,8 @@
       ],
       "status": "completed",
       "security": "protected",
-      "workspace": "personal"
+      "workspace": "personal",
+      "capture": "live"
     },
     {
       "id": "mtg-006",
@@ -234,7 +489,8 @@
       ],
       "status": "completed",
       "security": "protected",
-      "workspace": "personal"
+      "workspace": "personal",
+      "capture": "live"
     },
     {
       "id": "mtg-007",
@@ -273,7 +529,8 @@
       ],
       "status": "scheduled",
       "security": "protected",
-      "workspace": "team"
+      "workspace": "team",
+      "capture": "live"
     },
     {
       "id": "mtg-008",
@@ -312,7 +569,8 @@
       ],
       "status": "completed",
       "security": "protected",
-      "workspace": "team"
+      "workspace": "team",
+      "capture": "live"
     },
     {
       "id": "mtg-009",
@@ -345,7 +603,8 @@
       ],
       "status": "completed",
       "security": "protected",
-      "workspace": "team"
+      "workspace": "team",
+      "capture": "live"
     }
   ]
 }

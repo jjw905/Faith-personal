@@ -7,7 +7,11 @@ import { UpcomingDetailPanel } from "@/components/dashboard/upcoming-detail-pane
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/context/app-context";
-import { formatDdayLabel } from "@/lib/meeting-date";
+import {
+  daysUntilFromDateLabel,
+  resolveUpcomingListDate,
+} from "@/lib/meeting-date";
+import { matchesSearchText } from "@/lib/search-text";
 import {
   getMeetingPlatform,
   inferMeetingPlatform,
@@ -24,7 +28,39 @@ import { getWorkspaceProfile } from "@/lib/workspaces";
 import { cn } from "@/lib/utils";
 
 const LAYOUT_KEY = "faith.upcoming.layout";
+const UPCOMING_STORE_KEY = "faith.upcoming.items";
+
 type UpcomingLayout = "list" | "grid";
+
+function upcomingStoreKey(workspaceId: string) {
+  return `${UPCOMING_STORE_KEY}.${workspaceId}`;
+}
+
+function readStoredUpcoming(
+  workspaceId: string,
+  seed: UpcomingItem[],
+): UpcomingItem[] {
+  if (typeof window === "undefined") return seed;
+  try {
+    const raw = window.localStorage.getItem(upcomingStoreKey(workspaceId));
+    if (!raw) return seed;
+    const parsed = JSON.parse(raw) as UpcomingItem[];
+    return Array.isArray(parsed) ? parsed : seed;
+  } catch {
+    return seed;
+  }
+}
+
+function writeStoredUpcoming(workspaceId: string, items: UpcomingItem[]) {
+  try {
+    window.localStorage.setItem(
+      upcomingStoreKey(workspaceId),
+      JSON.stringify(items),
+    );
+  } catch {
+    // ignore quota
+  }
+}
 
 function readLayout(): UpcomingLayout {
   if (typeof window === "undefined") return "list";
@@ -45,6 +81,20 @@ function locationCaption(item: UpcomingItem) {
     return getMeetingPlatform(platform).label.replace("Google ", "");
   }
   return item.location;
+}
+
+function parseTimeMinutes(timeLabel: string) {
+  const m = timeLabel.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return 0;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/** 날짜(상대/요일) → 시각 순. */
+function compareUpcoming(a: UpcomingItem, b: UpcomingItem) {
+  const da = daysUntilFromDateLabel(a.dateLabel) ?? 9999;
+  const db = daysUntilFromDateLabel(b.dateLabel) ?? 9999;
+  if (da !== db) return da - db;
+  return parseTimeMinutes(a.timeLabel) - parseTimeMinutes(b.timeLabel);
 }
 
 function showUpcomingPeople(
@@ -69,22 +119,22 @@ function ParticipantAvatars({
 
   return (
     <div
-      className="flex items-center gap-2"
+      className="flex items-center gap-2.5"
       title={participants.join(", ")}
       aria-label={`참석자 ${participants.length}명`}
     >
-      <div className="flex -space-x-1.5">
+      <div className="flex -space-x-2">
         {visible.map((name, index) => {
           const person = resolveWorkspacePerson(name);
           return (
             <Avatar
               key={`${name}-${index}`}
-              className="h-7 w-7 border-2 border-card"
+              className="h-9 w-9 border-2 border-card"
               style={{ zIndex: index + 1 }}
             >
               <AvatarFallback
                 className={cn(
-                  "text-[10px] font-semibold text-white",
+                  "text-xs font-semibold text-white/95",
                   person.color,
                 )}
               >
@@ -95,14 +145,14 @@ function ParticipantAvatars({
         })}
         {overflow > 0 ? (
           <span
-            className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-card bg-surface-2 text-[10px] font-semibold text-foreground"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full border-2 border-card bg-surface-2 text-xs font-semibold text-muted"
             style={{ zIndex: visible.length + 1 }}
           >
             +{overflow}
           </span>
         ) : null}
       </div>
-      <span className="hidden text-xs font-medium text-muted sm:inline">
+      <span className="hidden text-base font-medium text-muted sm:inline">
         {participants.length}명
       </span>
     </div>
@@ -110,8 +160,12 @@ function ParticipantAvatars({
 }
 
 /**
- * M3 three-line list item
- * leading: 날짜·시간 / headline: 제목 / supporting: 장소·참석 / trailing: 소요·화살표
+ * M3 list
+ * leading: 날짜 시간 · 소요시간
+ * headline: 제목
+ * supporting: 장소(Zoom 등)
+ * trailing: 화살표
+ * 참고: m3.material.io/components/lists
  */
 function UpcomingListItem({
   item,
@@ -122,7 +176,10 @@ function UpcomingListItem({
   onOpen: (item: UpcomingItem) => void;
   showPeopleDensity: boolean;
 }) {
-  const dday = formatDdayLabel(item.dateLabel);
+  const { label: dateLabel, ddayBadge, days } = resolveUpcomingListDate(
+    item.dateLabel,
+  );
+  const isToday = days === 0;
   const place = locationCaption(item);
   const peopleVisible = showUpcomingPeople(
     item.participants,
@@ -133,53 +190,53 @@ function UpcomingListItem({
     <button
       type="button"
       onClick={() => onOpen(item)}
-      className="group flex min-h-[5.5rem] w-full gap-3 px-3 py-3.5 text-left transition-colors hover:bg-surface/70 sm:gap-4 sm:px-4"
+      className={cn(
+        "group flex w-full items-center gap-3 border-l-[3px] px-3.5 py-4 text-left transition-colors sm:gap-4 sm:px-5",
+        isToday
+          ? "border-l-primary bg-primary-soft hover:bg-primary-soft/80"
+          : "border-l-transparent hover:bg-surface/70",
+      )}
     >
-      {/* leadingContent */}
-      <div className="flex w-[4.25rem] shrink-0 flex-col items-start pt-0.5 sm:w-[5rem]">
-        <p className="text-[11px] font-medium leading-4 tracking-tight text-muted">
-          {item.dateLabel}
+      <div className="flex min-w-[8.5rem] shrink-0 flex-col justify-center sm:min-w-[10rem]">
+        <p className="whitespace-nowrap text-lg font-semibold leading-6 tracking-tight text-foreground">
+          <span className="font-medium text-muted">{dateLabel}</span>{" "}
+          <span className="tabular-nums">{item.timeLabel}</span>
+          <span className="mx-1.5 font-medium text-muted-2" aria-hidden>
+            ·
+          </span>
+          <span className="font-medium tabular-nums text-muted">
+            {item.duration}
+          </span>
         </p>
-        <p className="mt-1 text-[1.25rem] font-semibold leading-7 tabular-nums tracking-tight text-foreground">
-          {item.timeLabel}
-        </p>
-        {dday ? (
-          <p className="mt-1 text-[11px] font-semibold leading-4 text-primary">
-            {dday}
+        {ddayBadge ? (
+          <p className="mt-1 text-base font-medium leading-5 text-muted-2">
+            {ddayBadge}
           </p>
         ) : null}
       </div>
 
-      {/* headline + supporting */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-2">
-          <p className="min-w-0 flex-1 truncate text-base font-medium leading-6 text-foreground group-hover:text-primary">
-            {item.title}
-          </p>
-          {/* trailingSupportingText */}
-          <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-            <span className="text-xs font-medium tabular-nums text-muted">
-              {item.duration}
-            </span>
-            <ArrowRight
-              className="h-4 w-4 text-foreground/40"
-              strokeWidth={2}
-              absoluteStrokeWidth
-              aria-hidden
-            />
-          </div>
-        </div>
-
-        <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+        <p className="truncate text-lg font-semibold leading-6 text-foreground group-hover:text-primary">
+          {item.title}
+        </p>
+        <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-base font-medium text-muted">
           <MeetingPlatformIcon platform={platformOf(item)} size="sm" />
           <span className="truncate">{place}</span>
         </p>
-
         {peopleVisible ? (
-          <div className="mt-2">
+          <div className="mt-2.5">
             <ParticipantAvatars participants={item.participants} max={3} />
           </div>
         ) : null}
+      </div>
+
+      <div className="flex shrink-0 items-center self-stretch pl-1">
+        <ArrowRight
+          className="h-4 w-4 text-foreground/35"
+          strokeWidth={2}
+          absoluteStrokeWidth
+          aria-hidden
+        />
       </div>
     </button>
   );
@@ -194,7 +251,10 @@ function UpcomingGridItem({
   onOpen: (item: UpcomingItem) => void;
   showPeopleDensity: boolean;
 }) {
-  const dday = formatDdayLabel(item.dateLabel);
+  const { label: dateLabel, ddayBadge, days } = resolveUpcomingListDate(
+    item.dateLabel,
+  );
+  const isToday = days === 0;
   const place = locationCaption(item);
   const peopleVisible = showUpcomingPeople(
     item.participants,
@@ -206,46 +266,54 @@ function UpcomingGridItem({
     <button
       type="button"
       onClick={() => onOpen(item)}
-      className="group flex h-full min-h-[10.5rem] w-full flex-col rounded-xl bg-surface p-3.5 text-left transition-colors hover:bg-surface-2"
+      className={cn(
+        "group flex h-full min-h-[11rem] w-full flex-col rounded-xl bg-card p-4 text-left transition-colors",
+        isToday
+          ? "border-2 border-primary shadow-soft hover:bg-primary-soft/40"
+          : "border border-border hover:border-border-strong hover:bg-surface/50",
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium text-muted">{item.dateLabel}</p>
-          <p className="mt-0.5 text-lg font-semibold tabular-nums tracking-tight text-foreground">
-            {item.timeLabel}
+          <p className="whitespace-nowrap text-lg font-semibold tracking-tight text-foreground">
+            <span className="font-medium text-muted">{dateLabel}</span>{" "}
+            <span className="tabular-nums">{item.timeLabel}</span>
+            <span className="mx-1.5 font-medium text-muted-2" aria-hidden>
+              ·
+            </span>
+            <span className="font-medium tabular-nums text-muted">
+              {item.duration}
+            </span>
           </p>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {dday ? (
-            <span className="text-[11px] font-semibold text-primary">{dday}</span>
-          ) : null}
-          <span className="text-xs font-medium tabular-nums text-muted">
-            {item.duration}
+        {ddayBadge ? (
+          <span className="shrink-0 text-base font-medium text-muted-2">
+            {ddayBadge}
           </span>
-        </div>
+        ) : null}
       </div>
 
-      <p className="mt-2.5 line-clamp-2 text-base font-medium leading-snug text-foreground group-hover:text-primary">
+      <p className="mt-3 line-clamp-2 text-lg font-semibold leading-snug text-foreground group-hover:text-primary">
         {item.title}
       </p>
 
-      <p className="mt-2 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+      <p className="mt-2 flex min-w-0 items-center gap-1.5 text-base font-medium text-muted">
         <MeetingPlatformIcon platform={platformOf(item)} size="sm" />
         <span className="truncate">{place}</span>
       </p>
 
       {peopleVisible ? (
-        <div className="mt-2.5">
+        <div className="mt-3">
           <ParticipantAvatars participants={item.participants} max={3} />
         </div>
       ) : null}
 
       {agendaPreview.length > 0 ? (
-        <ul className="mt-auto space-y-0.5 pt-3">
+        <ul className="mt-auto space-y-1 pt-3.5">
           {agendaPreview.map((line, index) => (
             <li
               key={`${item.id}-preview-${index}`}
-              className="truncate text-xs font-medium text-muted-2"
+              className="truncate text-base font-medium leading-5 text-muted-2"
             >
               {line}
             </li>
@@ -277,31 +345,32 @@ export function MeetingMidPanel({
   const [detailMode, setDetailMode] = useState<"view" | "create">("view");
 
   useEffect(() => {
-    setItems(seed);
+    setItems(readStoredUpcoming(workspaceId, seed));
     setDetailOpen(false);
     setSelected(null);
     setDetailMode("view");
-  }, [seed]);
+  }, [seed, workspaceId]);
 
   useEffect(() => {
     setLayout(readLayout());
   }, []);
 
   const visibleItems = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => {
-      const hay = [
-        item.title,
-        item.location,
-        item.organizer,
-        ...item.participants,
-        ...item.agenda,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
+    const filtered = !searchQuery.trim()
+      ? items
+      : items.filter((item) =>
+          matchesSearchText(
+            [
+              item.title,
+              item.location,
+              item.organizer,
+              ...item.participants,
+              ...item.agenda,
+            ],
+            searchQuery,
+          ),
+        );
+    return [...filtered].sort(compareUpcoming);
   }, [items, searchQuery]);
 
   const setLayoutPersist = useCallback((next: UpcomingLayout) => {
@@ -326,27 +395,45 @@ export function MeetingMidPanel({
     setDetailMode("view");
   }, []);
 
-  const saveItem = useCallback((next: UpcomingItem) => {
-    setItems((prev) => {
-      const exists = prev.some((item) => item.id === next.id);
-      return exists
-        ? prev.map((item) => (item.id === next.id ? next : item))
-        : [...prev, next];
-    });
-    setSelected(next);
-    setDetailMode("view");
-  }, []);
+  const saveItem = useCallback(
+    (next: UpcomingItem) => {
+      setItems((prev) => {
+        const exists = prev.some((item) => item.id === next.id);
+        const list = exists
+          ? prev.map((item) => (item.id === next.id ? next : item))
+          : [...prev, next];
+        writeStoredUpcoming(workspaceId, list);
+        return list;
+      });
+      setSelected(next);
+      setDetailMode("view");
+    },
+    [workspaceId],
+  );
+
+  const deleteItem = useCallback(
+    (target: UpcomingItem) => {
+      setItems((prev) => {
+        const list = prev.filter((item) => item.id !== target.id);
+        writeStoredUpcoming(workspaceId, list);
+        return list;
+      });
+      setSelected(null);
+      setDetailMode("view");
+    },
+    [workspaceId],
+  );
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft outline-none">
-        <div className="flex items-center justify-between gap-2 px-4 py-3.5">
+      <section className="overflow-hidden rounded-2xl bg-card shadow-soft outline-none">
+        <div className="flex items-center justify-between gap-2 px-4 py-4 sm:px-5">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-sm font-semibold text-foreground">
+            <h2 className="text-xl font-semibold text-foreground">
               {profile.upcomingTitle}
             </h2>
             {visibleItems.length > 0 ? (
-              <span className="inline-flex min-w-7 items-center justify-center rounded-lg bg-surface px-2 py-1 text-sm font-semibold tabular-nums text-foreground">
+              <span className="inline-flex min-w-8 items-center justify-center rounded-lg bg-surface px-2.5 py-1 text-base font-semibold tabular-nums text-foreground">
                 {visibleItems.length}
               </span>
             ) : null}
@@ -401,8 +488,8 @@ export function MeetingMidPanel({
         </div>
 
         {visibleItems.length === 0 ? (
-          <div className="border-t border-border px-4 py-8 text-center">
-            <p className="text-sm text-muted">
+          <div className="px-4 pb-8 pt-2 text-center">
+            <p className="text-base text-muted">
               {searchQuery.trim()
                 ? "검색 결과가 없습니다."
                 : profile.upcomingEmpty}
@@ -421,7 +508,7 @@ export function MeetingMidPanel({
             ) : null}
           </div>
         ) : layout === "list" ? (
-          <ul className="divide-y divide-border border-t border-border">
+          <ul className="divide-y divide-border/60">
             {visibleItems.map((item) => (
               <li key={item.id}>
                 <UpcomingListItem
@@ -435,7 +522,7 @@ export function MeetingMidPanel({
               <button
                 type="button"
                 onClick={openCreate}
-                className="flex w-full cursor-pointer items-center justify-center gap-1.5 px-4 py-3.5 text-sm font-medium text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
+                className="flex w-full cursor-pointer items-center justify-center gap-1.5 px-4 py-3.5 text-base font-medium text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
                 aria-label={profile.upcomingAddLabel}
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
@@ -446,7 +533,7 @@ export function MeetingMidPanel({
         ) : (
           <ul
             className={cn(
-              "grid gap-3 border-t border-border p-4 sm:grid-cols-2",
+              "grid gap-3 bg-surface/55 px-4 pb-4 pt-3 sm:grid-cols-2",
               visibleItems.length >= 5 && "xl:grid-cols-3",
             )}
           >
@@ -469,6 +556,7 @@ export function MeetingMidPanel({
         mode={detailMode}
         onClose={closeDetail}
         onSave={saveItem}
+        onDelete={deleteItem}
       />
     </>
   );

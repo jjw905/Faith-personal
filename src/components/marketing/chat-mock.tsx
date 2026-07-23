@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -387,14 +388,38 @@ function ChatDateDivider({ label }: { label: string }) {
   );
 }
 
-/** 히어로 우측 — 양방향 회의 채팅 목업. 뷰포트에 보일 때만 재생. */
+/** 히어로 우측 — 양방향 회의 채팅 목업.
+ *
+ * 시나리오:
+ * - 마운트당 1회만 재생(루프/초기화 없음)
+ * - 메시지는 위에서부터 쌓임, 넘치면 transform으로 최신만 보이게
+ * - 채팅 영역 스크롤/휠 가로채기 없음(페이지 스크롤 버벅임 방지)
+ * - 화면 밖에서는 DOM 갱신 보류, 다시 보이면 일괄 반영
+ * - 페이지를 나갔다 다시 오면(재마운트)만 처음부터 재생
+ */
 export function ChatMock() {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(true);
+  const timersRef = useRef<number[]>([]);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<VisibleMessage[]>([]);
+  const inViewRef = useRef(true);
+  const rafRef = useRef(0);
   const [visible, setVisible] = useState<VisibleMessage[]>([]);
-  const [cycle, setCycle] = useState(0);
   const [dateLabel, setDateLabel] = useState("");
+
+  function clearTimers() {
+    timersRef.current.forEach((t) => window.clearTimeout(t));
+    timersRef.current = [];
+  }
+
+  function flushVisible() {
+    if (rafRef.current) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = 0;
+      if (!inViewRef.current) return;
+      setVisible(messagesRef.current);
+    });
+  }
 
   useEffect(() => {
     setDateLabel(
@@ -407,81 +432,88 @@ export function ChatMock() {
     );
   }, []);
 
+  // 화면 밖이면 setState 생략 — 스크롤 중 메인 스레드 부담 감소
   useEffect(() => {
-    const el = rootRef.current;
+    const el = feedRef.current?.closest("[data-chat-mock]") ?? feedRef.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
+
     const io = new IntersectionObserver(
       ([entry]) => {
-        setInView(Boolean(entry?.isIntersecting));
+        const nowIn = Boolean(entry?.isIntersecting);
+        inViewRef.current = nowIn;
+        if (nowIn) setVisible(messagesRef.current);
       },
-      { rootMargin: "80px 0px", threshold: 0.12 },
+      { rootMargin: "120px 0px", threshold: 0 },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
-  // 새 메시지 → 아래로 쌓인 뒤, 넘치면 컨테이너만 스크롤해 최신 말풍선이 보이게
-  useEffect(() => {
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-    const reduceMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    scroller.scrollTo({
-      top: scroller.scrollHeight,
-      behavior: reduceMotion ? "auto" : "smooth",
-    });
+  // 위에서 쌓이되, 넘치면 위로 밀어 최신이 보이게 (스크롤 API/휠 가로채기 없음)
+  useLayoutEffect(() => {
+    const feed = feedRef.current;
+    const list = listRef.current;
+    if (!feed || !list) return;
+    const overflow = list.scrollHeight - feed.clientHeight;
+    list.style.transform =
+      overflow > 0 ? `translate3d(0, ${-overflow}px, 0)` : "translate3d(0, 0, 0)";
   }, [visible]);
 
   useEffect(() => {
-    if (!inView) return;
+    let cancelled = false;
 
     const reduceMotion =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (reduceMotion) {
-      setVisible(
-        SCRIPT.slice(0, 4).map((line, i) => ({
-          ...line,
-          key: i,
-          pending: false,
-        })),
-      );
+      const initial = SCRIPT.slice(0, 4).map((line, i) => ({
+        ...line,
+        key: i,
+        pending: false,
+      }));
+      messagesRef.current = initial;
+      setVisible(initial);
       return;
     }
+
+    clearTimers();
+    messagesRef.current = [];
+    setVisible([]);
 
     const GAP = 160;
     const TYPING = 1400;
     const READ = 900;
     const OVERLAP = 380;
-    const timers: number[] = [];
 
     let cursor = 600;
     let lastStart = 0;
-    setVisible([]);
 
     SCRIPT.forEach((line, i) => {
-      const key = cycle * 1000 + i;
+      const key = i;
       const start =
         line.concurrent && i > 0 ? lastStart + OVERLAP : cursor + GAP;
 
-      timers.push(
+      timersRef.current.push(
         window.setTimeout(() => {
-          setVisible((prev) => [...prev, { ...line, key, pending: true }]);
+          if (cancelled) return;
+          const prev = messagesRef.current;
+          if (prev.some((m) => m.key === key)) return;
+          messagesRef.current = [...prev, { ...line, key, pending: true }];
+          flushVisible();
         }, start),
       );
 
-      timers.push(
+      timersRef.current.push(
         window.setTimeout(() => {
-          setVisible((prev) => {
-            const idx = prev.findIndex((m) => m.key === key);
-            if (idx < 0) return prev;
-            if (!prev[idx]!.pending) return prev;
-            const copy = prev.slice();
-            copy[idx] = { ...copy[idx]!, pending: false };
-            return copy;
-          });
+          if (cancelled) return;
+          const prev = messagesRef.current;
+          const idx = prev.findIndex((m) => m.key === key);
+          if (idx < 0 || !prev[idx]!.pending) return;
+          const copy = prev.slice();
+          copy[idx] = { ...copy[idx]!, pending: false };
+          messagesRef.current = copy;
+          flushVisible();
         }, start + TYPING),
       );
 
@@ -489,41 +521,29 @@ export function ChatMock() {
       cursor = Math.max(cursor, start + TYPING + READ);
     });
 
-    timers.push(
-      window.setTimeout(() => {
-        setVisible([]);
-        setCycle((c) => c + 1);
-      }, cursor + 700),
-    );
-
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [cycle, inView]);
-
-  // 화면 밖으로 나가면 타이머만 멈추고, 다시 들어오면 cycle로 재시작
-  useEffect(() => {
-    if (!inView) {
-      setVisible([]);
-    }
-  }, [inView]);
+    return () => {
+      cancelled = true;
+      clearTimers();
+      if (rafRef.current) {
+        window.cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    };
+  }, []);
 
   return (
     <div
-      ref={rootRef}
-      className="w-full rounded-3xl border border-transparent bg-card p-5 xl:p-6"
+      data-chat-mock
+      className="w-full rounded-3xl bg-card p-5 xl:p-6"
       style={{
-        boxShadow:
-          "0 4px 12px rgba(17, 24, 39, 0.06), 0 24px 56px rgba(17, 24, 39, 0.14)",
-        contentVisibility: "auto",
-        containIntrinsicSize: "0 440px",
+        boxShadow: "0 12px 40px rgba(17, 24, 39, 0.1)",
+        contain: "layout paint",
       }}
     >
       <div className="flex h-[400px] flex-col xl:h-[440px]">
         <ChatDateDivider label={dateLabel} />
-        <div
-          ref={scrollRef}
-          className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          <div className="flex flex-col justify-start gap-3.5 pb-1">
+        <div ref={feedRef} className="min-h-0 flex-1 overflow-hidden">
+          <div ref={listRef} className="flex flex-col gap-3.5 pb-1">
             {visible.map((msg) => (
               <MockBubble
                 key={msg.key}

@@ -19,12 +19,14 @@ export type UpcomingItem = {
   workspace: WorkspaceId;
 };
 
-export type ProcessStatus = "masking" | "transcribing" | "done";
+export type ProcessStatus = "masking" | "transcribing" | "structuring" | "done" | "error";
 
 export type ProcessItem = {
   id: string;
   title: string;
   status: ProcessStatus;
+  phase?: string;
+  progressPercent?: number;
   detail: string;
   time: string;
   href: string;
@@ -35,10 +37,10 @@ const UPCOMING: UpcomingItem[] = [
   {
     id: "up-1",
     title: "주간 보안 싱크",
-    when: "오늘 16:00, 40분",
+    when: "오늘 16:00, 45분",
     dateLabel: "오늘",
     timeLabel: "16:00",
-    duration: "40분",
+    duration: "45분",
     location: "Google Meet",
     platform: "meet",
     organizer: "김보안",
@@ -147,10 +149,10 @@ const UPCOMING: UpcomingItem[] = [
   {
     id: "up-7",
     title: "주간 개인 리뷰",
-    when: "목요일 18:30, 25분",
+    when: "목요일 18:30, 30분",
     dateLabel: "목요일",
     timeLabel: "18:30",
-    duration: "25분",
+    duration: "30분",
     location: "Google Meet",
     platform: "meet",
     organizer: "나",
@@ -165,9 +167,9 @@ const UPCOMING: UpcomingItem[] = [
 const PROCESSING: ProcessItem[] = [
   {
     id: "pr-1",
-    title: "Q3 보안 정책 검토.wav",
+    title: "Q3 보안 정책 검토",
     status: "masking",
-    detail: "안건, 개인정보 후보 검수",
+    detail: "개인정보 검수",
     time: "방금",
     href: "/meetings/mtg-001",
     workspace: "team",
@@ -176,7 +178,9 @@ const PROCESSING: ProcessItem[] = [
     id: "pr-2",
     title: "RBAC 개편 회의 녹음",
     status: "transcribing",
-    detail: "논의 구간 받아쓰기 62%",
+    phase: "transcribing",
+    progressPercent: 36,
+    detail: "받아쓰는 중",
     time: "3분 전",
     href: "/meetings/mtg-003",
     workspace: "team",
@@ -185,7 +189,7 @@ const PROCESSING: ProcessItem[] = [
     id: "pr-3",
     title: "발표 연습 녹음",
     status: "masking",
-    detail: "피드백, 개인정보 후보 검수",
+    detail: "개인정보 검수",
     time: "방금",
     href: "/meetings/mtg-006",
     workspace: "personal",
@@ -272,10 +276,10 @@ export function createUpcomingDraft(
   return {
     id: `up-${Date.now()}`,
     title: "",
-    when: "오늘 16:00, 40분",
+    when: "오늘 16:00, 30분",
     dateLabel: "오늘",
     timeLabel: "16:00",
-    duration: "40분",
+    duration: "30분",
     location: "Google Meet",
     platform: "meet",
     organizer: host,

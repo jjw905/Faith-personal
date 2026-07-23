@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { ContactInquiryProvider } from "@/components/marketing/contact-inquiry-provider";
 import { FeatureTimeline } from "@/components/marketing/feature-timeline";
 import { Hero } from "@/components/marketing/hero";
 import { SiteFooter } from "@/components/marketing/site-footer";
@@ -25,13 +26,15 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteNav />
-      <main>
-        <Hero />
-        <FeatureTimeline />
-      </main>
-      <SiteFooter />
-    </div>
+    <ContactInquiryProvider>
+      <div className="min-h-screen bg-background">
+        <SiteNav />
+        <main>
+          <Hero />
+          <FeatureTimeline />
+        </main>
+        <SiteFooter />
+      </div>
+    </ContactInquiryProvider>
   );
 }

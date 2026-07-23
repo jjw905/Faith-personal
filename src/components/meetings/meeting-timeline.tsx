@@ -5,8 +5,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  FileBarChart,
   ListChecks,
   MessageSquare,
+  Scale,
   Search,
   X,
 } from "lucide-react";
@@ -20,7 +22,7 @@ import type {
 } from "@/types/timeline";
 import { cn } from "@/lib/utils";
 
-/** 아이콘 획만 색 구분. 채운 배경은 쓰지 않음(눈 피로 방지). */
+/** 종류별 아이콘 + 짧은 한글 라벨(한눈에 의미). */
 const KIND_META: Record<
   TimelineSegmentKind,
   {
@@ -45,14 +47,24 @@ const KIND_META: Record<
     iconTone: "text-[#2f6b45]",
   },
   action: {
-    label: "후속 조치",
+    label: "후속",
     icon: ListChecks,
     iconTone: "text-[#2f6f9f]",
   },
   risk: {
-    label: "리스크",
+    label: "주의",
     icon: AlertTriangle,
     iconTone: "text-[#8a6a28]",
+  },
+  report: {
+    label: "보고",
+    icon: FileBarChart,
+    iconTone: "text-[#5b4a8a]",
+  },
+  vote: {
+    label: "표결",
+    icon: Scale,
+    iconTone: "text-[#6a4a2f]",
   },
 };
 
@@ -167,24 +179,24 @@ function SpeakerChips({
         return (
           <li
             key={s.key}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card py-0.5 pl-0.5 pr-2"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface py-0.5 pl-0.5 pr-2"
           >
             <Avatar className="h-7 w-7 shrink-0">
               <AvatarFallback
                 className={cn(
-                  "text-[11px] font-semibold leading-none text-white",
+                  "text-xs font-semibold leading-none text-white",
                   s.color,
                 )}
               >
                 {s.initials}
               </AvatarFallback>
             </Avatar>
-            <span className="max-w-[4.5rem] truncate text-xs font-semibold leading-none text-foreground">
+            <span className="max-w-[7.5rem] truncate text-xs font-semibold leading-4 text-foreground">
               {s.name}
             </span>
             <span
               className={cn(
-                "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-bold leading-none",
+                "shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold leading-4",
                 s.roleClass,
               )}
             >
@@ -201,7 +213,7 @@ function segmentMatches(seg: TimelineSegment, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
 
-  const kindLabel = KIND_META[seg.kind].label;
+  const kindLabel = (KIND_META[seg.kind] ?? KIND_META.discussion).label;
   const haystack = [
     seg.title,
     seg.summary,
@@ -217,6 +229,21 @@ function segmentMatches(seg: TimelineSegment, query: string): boolean {
   return haystack.includes(q);
 }
 
+function speakerInSegment(seg: TimelineSegment, speaker: string): boolean {
+  const target = speaker.trim().toLowerCase();
+  if (!target) return true;
+  const names = seg.speakers ?? [];
+  if (names.some((n) => n.trim().toLowerCase() === target)) return true;
+  // "화자 위원장" ↔ summary/title 포함 매칭
+  const hay = `${seg.title} ${seg.summary}`.toLowerCase();
+  if (hay.includes(target)) return true;
+  const short = target.replace(/^화자\s*/, "");
+  if (short && short !== target) {
+    if (names.some((n) => n.toLowerCase().includes(short))) return true;
+  }
+  return false;
+}
+
 /**
  * 녹음 00:00부터 시간 순으로 흐르는 세로 타임라인.
  * 말한 길이가 아니라, 구간이 언제 시작·끝나는지만 표시.
@@ -224,28 +251,46 @@ function segmentMatches(seg: TimelineSegment, query: string): boolean {
 export function MeetingTimelineView({
   timeline,
   participants = [],
+  speakerFilter = null,
+  onClearSpeakerFilter,
   onSegmentSelect,
 }: {
   timeline: MeetingTimeline;
   participants?: Participant[];
+  /** 참석에서 고른 화자 — 해당 구간만 표시 */
+  speakerFilter?: string | null;
+  onClearSpeakerFilter?: () => void;
   /** 구간 선택 시 대화기록 점프용 */
   onSegmentSelect?: (segmentId: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const filtered = timeline.segments.filter((seg) =>
-    segmentMatches(seg, deferredQuery),
+  const filtered = timeline.segments.filter(
+    (seg) =>
+      segmentMatches(seg, deferredQuery) &&
+      (!speakerFilter || speakerInSegment(seg, speakerFilter)),
   );
   const searching = deferredQuery.trim().length > 0;
 
   return (
     <section>
-      <div className="mb-5 flex items-center gap-2">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
         <span className="shrink-0 text-xs font-medium text-muted-2">
-          {searching
+          {searching || speakerFilter
             ? `${filtered.length}/${timeline.segments.length}`
             : timeline.durationLabel}
         </span>
+
+        {speakerFilter ? (
+          <button
+            type="button"
+            onClick={onClearSpeakerFilter}
+            className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-full bg-primary-soft px-2.5 text-xs font-semibold text-primary"
+          >
+            {speakerFilter}
+            <X className="h-3 w-3" strokeWidth={2} />
+          </button>
+        ) : null}
 
         <label className="ml-auto flex h-8 min-w-0 max-w-[11rem] flex-1 items-center rounded-lg bg-surface-2 px-2 sm:max-w-[13rem]">
           <span className="sr-only">타임라인 검색</span>
@@ -278,12 +323,14 @@ export function MeetingTimelineView({
 
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-sm text-muted">
-          검색 결과가 없습니다.
+          {speakerFilter
+            ? `${speakerFilter}이(가) 표시된 구간이 없습니다.`
+            : "검색 결과가 없습니다."}
         </p>
       ) : (
         <ol className="relative">
           {filtered.map((seg, index) => {
-            const meta = KIND_META[seg.kind];
+            const meta = KIND_META[seg.kind] ?? KIND_META.discussion;
             const Icon = meta.icon;
             const isLast = index === filtered.length - 1;
 
@@ -302,8 +349,8 @@ export function MeetingTimelineView({
                   </time>
                 </div>
 
-                {/* 흐르는 축 */}
-                <div className="relative flex w-9 shrink-0 justify-center">
+                {/* 흐르는 축 + 종류 라벨 */}
+                <div className="relative flex w-11 shrink-0 flex-col items-center">
                   {!isLast ? (
                     <span
                       aria-hidden
@@ -311,7 +358,7 @@ export function MeetingTimelineView({
                     />
                   ) : null}
                   <div
-                    className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card"
+                    className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full bg-surface"
                     aria-label={meta.label}
                     title={meta.label}
                   >
@@ -321,6 +368,14 @@ export function MeetingTimelineView({
                       aria-hidden
                     />
                   </div>
+                  <span
+                    className={cn(
+                      "relative z-10 mt-1 text-xs font-semibold leading-none",
+                      meta.iconTone,
+                    )}
+                  >
+                    {meta.label}
+                  </span>
                 </div>
 
                 <div className="min-w-0 flex-1 pt-1">

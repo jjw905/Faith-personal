@@ -91,6 +91,15 @@ model Session {
   @@map("sessions")
 }
 
+model ChangelogState {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("changelog_state")
+}
+
 model VerificationToken {
   identifier String
   token      String   @unique

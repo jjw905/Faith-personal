@@ -20,6 +20,46 @@ import {
 } from "@/lib/vault";
 import { cn } from "@/lib/utils";
 
+/** 파일 목록을 업로드 날짜별로 묶는다(최신순). */
+function groupVaultByDay(
+  items: VaultItemMeta[],
+): { key: string; label: string; items: VaultItemMeta[] }[] {
+  const dayKey = (iso: string) =>
+    new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+  const todayKey = dayKey(new Date().toISOString());
+  const yesterdayKey = dayKey(
+    new Date(Date.now() - 86400000).toISOString(),
+  );
+
+  const labelOf = (iso: string, key: string) => {
+    if (key === todayKey) return "오늘";
+    if (key === yesterdayKey) return "어제";
+    return new Date(iso).toLocaleDateString("ko-KR", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "short",
+    });
+  };
+
+  const sorted = [...items].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  const groups: { key: string; label: string; items: VaultItemMeta[] }[] = [];
+  for (const item of sorted) {
+    const key = dayKey(item.createdAt);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.items.push(item);
+    } else {
+      groups.push({ key, label: labelOf(item.createdAt, key), items: [item] });
+    }
+  }
+  return groups;
+}
+
 /** 유저별 스토리지 보관함 (한도 500MB). */
 export default function VaultPage() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,6 +97,8 @@ export default function VaultPage() {
     if (!q) return items;
     return items.filter((item) => item.name.toLowerCase().includes(q));
   }, [items, query]);
+
+  const grouped = useMemo(() => groupVaultByDay(filtered), [filtered]);
 
   async function ingestFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
@@ -155,11 +197,11 @@ export default function VaultPage() {
             void ingestFiles(event.dataTransfer.files);
           }}
           className={cn(
-            "flex min-h-[28rem] flex-col overflow-hidden rounded-xl bg-card ring-1 ring-border transition-[box-shadow,background-color] sm:min-h-[32rem]",
+            "flex min-h-[28rem] flex-col overflow-hidden rounded-xl bg-card shadow-soft transition-[box-shadow,background-color] sm:min-h-[32rem]",
             dragOver && "bg-primary-soft ring-2 ring-primary",
           )}
         >
-          <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
+          <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4">
             <h2
               id="vault-list-heading"
               className="truncate text-sm font-medium text-foreground"
@@ -173,7 +215,7 @@ export default function VaultPage() {
                   : null}
               </span>
             </h2>
-            <p className="shrink-0 text-[11px] tabular-nums text-muted-2">
+            <p className="shrink-0 text-xs tabular-nums text-muted-2">
               {dragOver
                 ? "여기에 놓기"
                 : `최대 ${formatVaultSize(VAULT_MAX_BYTES)}`}
@@ -190,18 +232,28 @@ export default function VaultPage() {
                 검색 결과가 없습니다.
               </p>
             ) : (
-              <ul className="divide-y divide-border">
-                {filtered.map((item) => (
-                  <VaultListItem
-                    key={item.id}
-                    item={item}
-                    busy={busy}
-                    onRemove={() => {
-                      void removeVaultItem(item.id).then(refresh);
-                    }}
-                  />
-                ))}
-              </ul>
+              grouped.map((group) => (
+                <div key={group.key}>
+                  <p className="sticky top-0 z-10 bg-card px-4 pb-1 pt-3 text-xs font-semibold tracking-wide text-muted-2">
+                    {group.label}
+                    <span className="ml-1.5 font-normal tabular-nums text-muted-2">
+                      {group.items.length}
+                    </span>
+                  </p>
+                  <ul className="divide-y divide-border/60">
+                    {group.items.map((item) => (
+                      <VaultListItem
+                        key={item.id}
+                        item={item}
+                        busy={busy}
+                        onRemove={() => {
+                          void removeVaultItem(item.id).then(refresh);
+                        }}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ))
             )}
           </div>
         </section>
@@ -262,10 +314,8 @@ function VaultListItem({
   busy: boolean;
   onRemove: () => void;
 }) {
-  const when = new Date(item.createdAt).toLocaleString("ko-KR", {
+  const when = new Date(item.createdAt).toLocaleTimeString("ko-KR", {
     timeZone: "Asia/Seoul",
-    month: "numeric",
-    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -290,12 +340,12 @@ function VaultListItem({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-10 w-10 shrink-0 cursor-pointer rounded-full text-muted hover:text-foreground"
+        className="h-10 w-10 shrink-0 cursor-pointer rounded-full text-masked hover:bg-masked-soft hover:text-masked"
         aria-label={`${item.name} 삭제`}
         disabled={busy}
         onClick={onRemove}
       >
-        <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+        <Trash2 className="h-5 w-5" strokeWidth={1.75} />
       </Button>
     </li>
   );

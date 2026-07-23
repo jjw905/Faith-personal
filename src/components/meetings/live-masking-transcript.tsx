@@ -371,12 +371,12 @@ function MessageBubble({
         )}
       >
         <div className="flex items-center gap-2">
-          <p className="text-[11px] font-semibold text-muted-2">
+          <p className="text-xs font-semibold text-muted-2">
             {label}
             {typing ? <span className="ml-1.5 text-primary">입력 중</span> : null}
           </p>
           {maskedCount && maskedCount > 0 ? (
-            <span className="rounded-md bg-masked-soft px-1.5 py-0.5 text-[10px] font-semibold text-masked">
+            <span className="rounded-md bg-masked-soft px-1.5 py-0.5 text-xs font-semibold text-masked">
               가림 {maskedCount}
             </span>
           ) : null}
@@ -387,7 +387,7 @@ function MessageBubble({
   );
 }
 
-function RunningDots() {
+export function RunningDots() {
   return (
     <span className="running-dots ml-0.5 inline-flex items-center gap-0.5" aria-hidden>
       <span />

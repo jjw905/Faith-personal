@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  ChevronLeft,
+  ChevronRight,
   Link2,
   MapPin,
   Pencil,
@@ -9,17 +11,21 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   dateLabelToIso,
-  formatUpcomingDateLabel,
+  formatUpcomingScheduleSummary,
   isoToUpcomingDateLabel,
-  listUpcomingDays,
+  listMonthDayCells,
+  parseIsoDateParts,
+  relativeUpcomingHint,
+  seoulDateKey,
+  shiftMonth,
 } from "@/lib/meeting-date";
 import {
   inferMeetingPlatform,
@@ -41,6 +47,7 @@ interface UpcomingDetailPanelProps {
   open: boolean;
   onClose: () => void;
   onSave: (item: UpcomingItem) => void;
+  onDelete?: (item: UpcomingItem) => void;
   /** 추가 모드면 처음부터 편집 폼을 연다. */
   mode?: "view" | "create";
 }
@@ -67,7 +74,7 @@ function toForm(item: UpcomingItem): FormState {
     title: item.title,
     dateLabel: item.dateLabel,
     timeLabel: item.timeLabel,
-    duration: item.duration,
+    duration: canonicalizeDuration(item.duration),
     location: item.location,
     platform: resolvePlatform(item),
     organizer: item.organizer,
@@ -82,6 +89,36 @@ function hasExtraLocation(platform: MeetingPlatform, location: string) {
   return (
     Boolean(location.trim()) &&
     location.trim() !== platformDefaultLocation(platform)
+  );
+}
+
+/** M3 list/form row: muted section label + content. */
+function DetailRow({
+  label,
+  align = "start",
+  children,
+}: {
+  label: string;
+  align?: "start" | "center";
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex gap-4",
+        align === "start" ? "items-start" : "items-center",
+      )}
+    >
+      <p
+        className={cn(
+          "w-14 shrink-0 text-xs font-medium leading-5 text-muted",
+          align === "start" && "pt-0.5",
+        )}
+      >
+        {label}
+      </p>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   );
 }
 
@@ -112,7 +149,7 @@ function PersonAvatar({
   );
 }
 
-function AddIconButton({
+function AddAction({
   label,
   onClick,
   children,
@@ -126,7 +163,7 @@ function AddIconButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border bg-card px-3 text-xs font-semibold text-muted transition-colors hover:border-foreground/30 hover:bg-surface-2 hover:text-foreground"
+      className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs font-medium text-muted transition-colors hover:border-foreground/25 hover:bg-surface hover:text-foreground"
     >
       {children}
       <span>{label}</span>
@@ -141,35 +178,265 @@ function fromForm(item: UpcomingItem, form: FormState): UpcomingItem {
     form.platform === "custom"
       ? form.location.trim() || "직접 입력"
       : form.location.trim() || platformDefaultLocation(form.platform);
+  const dateLabel = form.dateLabel.trim() || item.dateLabel;
+  const timeLabel = form.timeLabel.trim() || item.timeLabel;
+  const duration = canonicalizeDuration(form.duration.trim() || item.duration);
 
   return {
     ...item,
     title: form.title.trim() || item.title || "새 예정 회의",
-    dateLabel: form.dateLabel.trim() || item.dateLabel,
-    timeLabel: form.timeLabel.trim() || item.timeLabel,
-    duration: form.duration.trim() || item.duration,
+    dateLabel,
+    timeLabel,
+    duration,
     location,
     platform: form.platform,
     organizer: form.organizer.trim() || item.organizer,
     participants: participants.length ? participants : item.participants,
     agenda,
     notes: form.notes.trim(),
-    when: `${form.dateLabel.trim()} ${form.timeLabel.trim()}, ${form.duration.trim()}`,
+    when: formatUpcomingScheduleSummary(dateLabel, timeLabel, duration),
   };
 }
 
-const QUICK_DATE_OFFSETS = [0, 1, 2] as const;
 const DURATION_PRESETS = [
   "15분",
   "30분",
-  "40분",
   "45분",
   "1시간",
   "1시간 30분",
+  "2시간",
 ] as const;
 
-const fieldClass =
-  "flex h-10 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const DURATION_MIN = 5;
+const DURATION_MAX = 480;
+
+function clampDurationMinutes(mins: number) {
+  if (!Number.isFinite(mins)) return 30;
+  return Math.min(DURATION_MAX, Math.max(DURATION_MIN, Math.round(mins)));
+}
+
+/** 분 → 표시 라벨 (30분, 1시간, 1시간 30분) */
+function formatMinutesLabel(mins: number): string {
+  const m = clampDurationMinutes(mins);
+  if (m < 60) return `${m}분`;
+  const hours = Math.floor(m / 60);
+  const rest = m % 60;
+  if (rest === 0) return `${hours}시간`;
+  return `${hours}시간 ${rest}분`;
+}
+
+function durationPartToMinutes(label: string): number | null {
+  const trimmed = label.trim();
+  if (!trimmed) return null;
+  const hourMin = trimmed.match(/^(\d+)\s*시간(?:\s*(\d+)\s*분)?$/);
+  if (hourMin) {
+    return Number(hourMin[1]) * 60 + Number(hourMin[2] ?? 0);
+  }
+  const minOnly = trimmed.match(/^(\d+)\s*분$/);
+  if (minOnly) return Number(minOnly[1]);
+  const bare = trimmed.match(/^(\d+)$/);
+  if (bare) return Number(bare[1]);
+  return null;
+}
+
+/** 정확히(30분) 또는 구간(30분~45분) 파싱 */
+function parseDurationValue(value: string): { min: number; max: number | null } {
+  const trimmed = value
+    .trim()
+    .replace(/\s*[~～\-–—]\s*/g, "~");
+  if (trimmed.includes("~")) {
+    const [left, right] = trimmed.split("~");
+    const a = durationPartToMinutes(left ?? "");
+    const b = durationPartToMinutes(right ?? "");
+    const min = clampDurationMinutes(a ?? 30);
+    const max = clampDurationMinutes(b ?? min + 15);
+    return {
+      min: Math.min(min, max),
+      max: Math.max(min, max),
+    };
+  }
+  const only = durationPartToMinutes(trimmed);
+  return { min: clampDurationMinutes(only ?? 30), max: null };
+}
+
+function formatDurationValue(min: number, max: number | null): string {
+  const lo = formatMinutesLabel(min);
+  if (max === null || max === min) return lo;
+  return `${lo}~${formatMinutesLabel(max)}`;
+}
+
+function canonicalizeDuration(value: string): string {
+  const { min, max } = parseDurationValue(value);
+  return formatDurationValue(min, max);
+}
+
+function MinuteInput({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: number;
+  onChange: (mins: number) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <input
+        type="number"
+        inputMode="numeric"
+        min={DURATION_MIN}
+        max={DURATION_MAX}
+        step={5}
+        value={value}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          if (!Number.isFinite(next)) return;
+          onChange(clampDurationMinutes(next));
+        }}
+        className={cn(
+          outlinedFieldClass,
+          "w-[4.75rem] px-2 text-center text-base font-semibold tabular-nums",
+        )}
+        aria-label={ariaLabel}
+      />
+      <span className="shrink-0 text-sm text-muted">분</span>
+    </div>
+  );
+}
+
+/** 빠른 프리셋 + 정확히/구간 분 단위 입력 */
+function DurationFields({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const parsed = parseDurationValue(value);
+  const isRange = parsed.max !== null && parsed.max !== parsed.min;
+  const [mode, setMode] = useState<"exact" | "range">(
+    isRange ? "range" : "exact",
+  );
+
+  useEffect(() => {
+    const next = parseDurationValue(value);
+    if (next.max !== null && next.max !== next.min) {
+      setMode("range");
+    }
+  }, [value]);
+
+  const minMins = parsed.min;
+  const maxMins = parsed.max ?? Math.min(DURATION_MAX, parsed.min + 15);
+  const label = canonicalizeDuration(value);
+
+  function applyExact(mins: number) {
+    setMode("exact");
+    onChange(formatDurationValue(mins, null));
+  }
+
+  function applyRange(min: number, max: number) {
+    setMode("range");
+    const a = clampDurationMinutes(min);
+    const b = clampDurationMinutes(max);
+    onChange(formatDurationValue(Math.min(a, b), Math.max(a, b)));
+  }
+
+  return (
+    <div className="min-w-0 space-y-3">
+      <p className="text-xs font-medium text-muted">소요</p>
+
+      <div
+        className="inline-flex rounded-lg border border-border p-0.5"
+        role="radiogroup"
+        aria-label="소요 입력 방식"
+      >
+        {(
+          [
+            ["exact", "지정"],
+            ["range", "구간"],
+          ] as const
+        ).map(([id, text]) => {
+          const active = mode === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => {
+                if (id === "exact") {
+                  applyExact(minMins);
+                  return;
+                }
+                applyRange(minMins, Math.max(maxMins, minMins + 15));
+              }}
+              className={cn(
+                "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors",
+                active
+                  ? "bg-primary-soft text-primary"
+                  : "text-muted hover:text-foreground",
+              )}
+            >
+              {text}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        className="flex flex-wrap gap-2"
+        role="group"
+        aria-label="빠른 소요"
+      >
+        {DURATION_PRESETS.map((preset) => {
+          const mins = durationPartToMinutes(preset) ?? 30;
+          const active = mode === "exact" && minMins === mins && !isRange;
+          return (
+            <Chip
+              key={preset}
+              active={active}
+              onClick={() => applyExact(mins)}
+            >
+              {preset}
+            </Chip>
+          );
+        })}
+      </div>
+
+      {mode === "exact" ? (
+        <MinuteInput
+          value={minMins}
+          onChange={applyExact}
+          ariaLabel="소요 분"
+        />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <MinuteInput
+            value={minMins}
+            onChange={(mins) => applyRange(mins, maxMins)}
+            ariaLabel="최소 소요 분"
+          />
+          <span className="text-sm text-muted" aria-hidden>
+            ~
+          </span>
+          <MinuteInput
+            value={maxMins}
+            onChange={(mins) => applyRange(minMins, mins)}
+            ariaLabel="최대 소요 분"
+          />
+        </div>
+      )}
+
+      <p className="text-xs font-medium tabular-nums text-foreground">
+        {label}
+      </p>
+    </div>
+  );
+}
+
+/** M3 outlined text field */
+const outlinedFieldClass =
+  "flex h-12 w-full rounded-md border border-border bg-transparent px-3.5 text-sm text-foreground placeholder:text-muted-2 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
 
 function Chip({
   active,
@@ -187,10 +454,10 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 cursor-pointer items-center rounded-lg px-2.5 text-xs font-semibold transition-colors",
+        "inline-flex h-8 cursor-pointer items-center rounded-lg px-2.5 text-xs font-medium transition-colors",
         active
-          ? "bg-foreground text-background"
-          : "bg-card text-foreground hover:bg-surface-2",
+          ? "bg-primary-soft text-primary"
+          : "border border-border bg-transparent text-foreground hover:bg-surface",
         className,
       )}
     >
@@ -199,129 +466,194 @@ function Chip({
   );
 }
 
-function DatePickerField({
-  value,
-  onChange,
+function ScheduleSummary({
+  dateLabel,
+  timeLabel,
+  duration,
+  className,
 }: {
-  value: string;
-  onChange: (next: string) => void;
+  dateLabel: string;
+  timeLabel: string;
+  duration: string;
+  className?: string;
 }) {
-  const stripRef = useRef<HTMLDivElement>(null);
-  const days = listUpcomingDays(14);
-  const selectedIso = dateLabelToIso(value) ?? days[0]?.iso ?? "";
-  const selectedDay = days.find((d) => d.iso === selectedIso) ?? null;
-  const headline = value || selectedDay?.label || "날짜 선택";
-  const detail = selectedDay
-    ? `${selectedDay.month}월 ${selectedDay.day}일, ${selectedDay.weekdayShort}요일`
-    : null;
-
-  useEffect(() => {
-    const root = stripRef.current;
-    if (!root) return;
-    const active = root.querySelector<HTMLElement>('[aria-selected="true"]');
-    active?.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
-  }, [selectedIso]);
+  const summary = formatUpcomingScheduleSummary(
+    dateLabel,
+    timeLabel,
+    canonicalizeDuration(duration),
+  );
+  const hint = relativeUpcomingHint(dateLabel);
 
   return (
-    <div className="min-w-0 space-y-3">
-      <div className="rounded-xl border border-border bg-card px-3 py-2.5">
-        <p className="text-[11px] font-semibold text-muted">선택한 날짜</p>
-        <p className="mt-0.5 text-lg font-semibold tracking-tight text-foreground">
-          {headline}
+    <div className={cn("min-w-0", className)}>
+      <p className="text-sm font-medium tabular-nums tracking-tight text-foreground">
+        {summary}
+      </p>
+      {hint ? (
+        <p className="mt-0.5 text-xs text-muted">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+/** M3 docked month calendar — 큰 날짜 셀, 월 이동 */
+function MonthCalendar({
+  selectedIso,
+  minIso,
+  onSelect,
+}: {
+  selectedIso: string;
+  minIso: string;
+  onSelect: (iso: string) => void;
+}) {
+  const selectedParts = parseIsoDateParts(selectedIso);
+  const minParts = parseIsoDateParts(minIso);
+  const [view, setView] = useState(() => ({
+    year: selectedParts?.year ?? minParts?.year ?? 2026,
+    month: selectedParts?.month ?? minParts?.month ?? 1,
+  }));
+
+  useEffect(() => {
+    const parts = parseIsoDateParts(selectedIso);
+    if (!parts) return;
+    setView({ year: parts.year, month: parts.month });
+  }, [selectedIso]);
+
+  const cells = listMonthDayCells(view.year, view.month);
+  const canGoPrev =
+    !minParts ||
+    view.year > minParts.year ||
+    (view.year === minParts.year && view.month > minParts.month);
+
+  return (
+    <div
+      className="min-w-0 rounded-xl border border-border bg-card px-2 pb-2 pt-3"
+      role="group"
+      aria-label="날짜 달력"
+    >
+      <div className="mb-2 flex items-center justify-between px-1">
+        <button
+          type="button"
+          onClick={() => setView((v) => shiftMonth(v.year, v.month, -1))}
+          disabled={!canGoPrev}
+          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface disabled:pointer-events-none disabled:opacity-30"
+          aria-label="이전 달"
+        >
+          <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
+        </button>
+        <p className="text-sm font-semibold tabular-nums text-foreground">
+          {view.year}년 {view.month}월
         </p>
-        {detail && detail !== headline ? (
-          <p className="mt-0.5 text-xs font-medium text-muted">{detail}</p>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => setView((v) => shiftMonth(v.year, v.month, 1))}
+          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface"
+          aria-label="다음 달"
+        >
+          <ChevronRight className="h-5 w-5" strokeWidth={1.75} />
+        </button>
       </div>
 
-      <div
-        className="flex gap-1.5"
-        role="group"
-        aria-label="빠른 날짜"
-      >
-        {QUICK_DATE_OFFSETS.map((offset) => {
-          const label = formatUpcomingDateLabel(offset);
-          const day = days[offset];
-          const active = selectedIso === day?.iso;
+      <div className="grid grid-cols-7">
+        {WEEKDAY_HEADERS.map((label) => (
+          <div
+            key={label}
+            className="flex h-9 items-center justify-center text-xs font-medium text-muted"
+          >
+            {label}
+          </div>
+        ))}
+        {cells.map((cell) => {
+          const disabled = cell.iso < minIso;
+          const selected = cell.iso === selectedIso;
+          const isToday = cell.iso === minIso;
           return (
-            <Chip
-              key={label}
-              active={active}
-              onClick={() => onChange(label)}
-              className="h-9 flex-1 justify-center text-sm"
+            <div
+              key={cell.iso}
+              className="flex items-center justify-center py-0.5"
             >
-              {label}
-            </Chip>
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={cell.iso}
+                aria-pressed={selected}
+                onClick={() => onSelect(cell.iso)}
+                className={cn(
+                  "inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-sm font-medium tabular-nums transition-colors",
+                  !cell.inMonth && !selected && "text-muted-2",
+                  cell.inMonth &&
+                    !selected &&
+                    "text-foreground hover:bg-surface",
+                  isToday && !selected && "font-semibold text-primary",
+                  selected &&
+                    "bg-primary font-semibold text-primary-foreground",
+                  disabled && "pointer-events-none opacity-30",
+                )}
+              >
+                {cell.day}
+              </button>
+            </div>
           );
         })}
       </div>
+    </div>
+  );
+}
 
-      <div>
-        <p className="mb-1.5 text-xs font-semibold text-muted">앞으로 2주</p>
-        <div
-          ref={stripRef}
-          className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]"
-          role="listbox"
-          aria-label="날짜 선택"
-        >
-          {days.map((day) => {
-            const active = selectedIso === day.iso;
-            return (
-              <button
-                key={day.iso}
-                type="button"
-                role="option"
-                aria-selected={active}
-                aria-label={`${day.label}, ${day.month}월 ${day.day}일`}
-                onClick={() => onChange(day.label)}
-                className={cn(
-                  "flex w-12 shrink-0 cursor-pointer flex-col items-center rounded-xl px-1 py-2 transition-colors",
-                  active
-                    ? "bg-foreground text-background"
-                    : "bg-card text-foreground hover:bg-surface-2",
-                )}
-              >
-                <span
-                  className={cn(
-                    "text-[11px] font-semibold",
-                    active ? "text-background/80" : "text-muted",
-                  )}
-                >
-                  {day.weekdayShort}
-                </span>
-                <span className="mt-0.5 text-base font-bold tabular-nums leading-none">
-                  {day.day}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+/** M3: 월 달력 + 시간/소요. 표시는 항상 절대 일정. */
+function ScheduleFields({
+  dateLabel,
+  timeLabel,
+  duration,
+  onDateChange,
+  onTimeChange,
+  onDurationChange,
+}: {
+  dateLabel: string;
+  timeLabel: string;
+  duration: string;
+  onDateChange: (next: string) => void;
+  onTimeChange: (next: string) => void;
+  onDurationChange: (next: string) => void;
+}) {
+  const todayIso = seoulDateKey();
+  const selectedIso = dateLabelToIso(dateLabel) ?? todayIso;
+
+  return (
+    <div className="min-w-0 space-y-4">
+      <ScheduleSummary
+        dateLabel={dateLabel}
+        timeLabel={timeLabel}
+        duration={duration}
+        className="rounded-md border border-border px-3 py-2.5"
+      />
+
+      <div className="min-w-0">
+        <p className="mb-1.5 text-xs font-medium text-muted">날짜</p>
+        <MonthCalendar
+          selectedIso={selectedIso}
+          minIso={todayIso}
+          onSelect={(iso) => onDateChange(isoToUpcomingDateLabel(iso))}
+        />
       </div>
 
       <label className="block min-w-0">
-        <span className="mb-1.5 block text-xs font-semibold text-muted">
-          달력에서 고르기
-        </span>
+        <span className="mb-1 block text-xs font-medium text-muted">시작</span>
         <input
-          type="date"
-          value={selectedIso}
-          min={days[0]?.iso}
-          onChange={(e) => {
-            const iso = e.target.value;
-            if (!iso) return;
-            onChange(isoToUpcomingDateLabel(iso));
-          }}
+          type="time"
+          value={toTimeInputValue(timeLabel)}
+          onChange={(e) => onTimeChange(fromTimeInputValue(e.target.value))}
           className={cn(
-            fieldClass,
-            "h-11 cursor-pointer text-sm font-semibold tabular-nums",
+            outlinedFieldClass,
+            "max-w-[10.5rem] cursor-pointer text-base font-semibold tabular-nums",
           )}
-          aria-label="달력에서 날짜 선택"
+          aria-label={`시작 시간 ${timeLabel}`}
         />
       </label>
+
+      <DurationFields value={duration} onChange={onDurationChange} />
     </div>
   );
 }
@@ -342,6 +674,7 @@ export function UpcomingDetailPanel({
   open,
   onClose,
   onSave,
+  onDelete,
   mode = "view",
 }: UpcomingDetailPanelProps) {
   const isCreate = mode === "create";
@@ -354,6 +687,11 @@ export function UpcomingDetailPanel({
   const [showParticipantAdd, setShowParticipantAdd] = useState(false);
   const [showOrganizerPick, setShowOrganizerPick] = useState(false);
   const [showCustomParticipant, setShowCustomParticipant] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   function resetEditors() {
     setParticipantDraft("");
@@ -451,8 +789,15 @@ export function UpcomingDetailPanel({
 
   const view = item;
   const data = editing ? form : view ? toForm(view) : null;
+  const sheetTitle = isCreate
+    ? "예정 회의 추가"
+    : editing
+      ? "예정 회의 수정"
+      : "예정 회의";
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       <div
         className={cn(
@@ -467,277 +812,232 @@ export function UpcomingDetailPanel({
         role="dialog"
         aria-modal={open}
         aria-hidden={!open}
-        aria-label={isCreate ? "예정 회의 추가" : "예정 회의 상세"}
+        aria-label={sheetTitle}
         inert={!open}
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-card shadow-[0_0_40px_rgba(17,24,46,0.12)] transition-transform duration-200 ease-out",
+          "fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-[min(100vw,28rem)] flex-col overflow-hidden bg-card shadow-[0_0_40px_rgba(17,24,46,0.12)] transition-transform duration-200 ease-out sm:max-w-md",
           open ? "translate-x-0" : "translate-x-full",
         )}
       >
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-5">
-          <div className="min-w-0 flex-1 pr-2">
-            <p className="text-xs text-muted">
-              {isCreate
-                ? "예정 회의 추가"
-                : editing
-                  ? "예정 회의 수정"
-                  : "예정 회의"}
+        {/* M3 side sheet header */}
+        <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2 sm:px-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
+            onClick={onClose}
+            aria-label="상세 닫기"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+          <div className="min-w-0 flex-1 px-1">
+            <p className="truncate text-base font-medium text-foreground">
+              {sheetTitle}
             </p>
-            {editing && form ? (
-              <Input
-                value={form.title}
-                onChange={(e) => update("title", e.target.value)}
-                className="mt-0.5 h-8 border-0 bg-transparent px-0 text-base font-semibold shadow-none focus-visible:ring-0"
-                placeholder="회의 제목"
-              />
-            ) : (
-              <h2 className="truncate text-base font-semibold text-foreground">
-                {view?.title ?? "상세"}
-              </h2>
-            )}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {!editing && view && !isCreate ? (
+          {!editing && view && !isCreate ? (
+            <div className="flex shrink-0 items-center">
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
+                className="h-10 w-10 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
                 onClick={startEdit}
                 aria-label="수정"
               >
-                <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                <Pencil className="h-5 w-5" strokeWidth={1.75} />
               </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
-              onClick={onClose}
-              aria-label="상세 닫기"
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
+              {onDelete ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-10 w-10 cursor-pointer text-masked hover:bg-masked-soft hover:text-masked"
+                  onClick={() => {
+                    if (!view) return;
+                    if (!window.confirm("이 일정을 삭제할까요?")) return;
+                    onDelete(view);
+                    onClose();
+                  }}
+                  aria-label="삭제"
+                >
+                  <Trash2 className="h-5 w-5" strokeWidth={1.75} />
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {view && data && form ? (
           <>
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-6 px-5 py-5">
-                <section className="grid grid-cols-[3.75rem_minmax(0,1fr)] items-start gap-x-3 gap-y-4">
-                  <p className="pt-0.5 text-sm font-semibold text-foreground">
-                    일정
-                  </p>
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+              <div className="min-w-0 space-y-0 px-4 py-2 sm:px-5">
+                {/* Title */}
+                <div className="border-b border-border py-4">
                   {editing ? (
-                    <div className="min-w-0 space-y-3 rounded-xl bg-surface p-3">
-                      <div>
-                        <p className="mb-1.5 text-xs font-semibold text-muted">
-                          날짜
-                        </p>
-                        <DatePickerField
-                          value={form.dateLabel}
-                          onChange={(next) => update("dateLabel", next)}
-                        />
-                      </div>
-
-                      <div>
-                        <p className="mb-1.5 text-xs font-semibold text-muted">
-                          시작 시간
-                        </p>
-                        <input
-                          type="time"
-                          value={toTimeInputValue(form.timeLabel)}
-                          onChange={(e) =>
-                            update(
-                              "timeLabel",
-                              fromTimeInputValue(e.target.value),
-                            )
-                          }
-                          className={cn(
-                            fieldClass,
-                            "h-11 max-w-[10rem] text-base font-semibold tabular-nums",
-                          )}
-                          aria-label="시작 시간"
-                        />
-                      </div>
-
-                      <div>
-                        <p className="mb-1.5 text-xs font-semibold text-muted">
-                          소요 시간
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {DURATION_PRESETS.map((preset) => (
-                            <Chip
-                              key={preset}
-                              active={form.duration === preset}
-                              onClick={() => update("duration", preset)}
-                            >
-                              {preset}
-                            </Chip>
-                          ))}
-                        </div>
-                        {!DURATION_PRESETS.includes(
-                          form.duration as (typeof DURATION_PRESETS)[number],
-                        ) ? (
-                          <Input
-                            value={form.duration}
-                            onChange={(e) =>
-                              update("duration", e.target.value)
-                            }
-                            className="mt-2"
-                            placeholder="예: 20분"
-                            aria-label="소요 시간 직접 입력"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className="mt-2 cursor-pointer text-xs font-medium text-muted hover:text-foreground"
-                            onClick={() => update("duration", "")}
-                          >
-                            다른 시간 직접 입력
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    <input
+                      value={form.title}
+                      onChange={(e) => update("title", e.target.value)}
+                      className="w-full bg-transparent text-xl font-medium leading-snug text-foreground outline-none placeholder:text-muted-2"
+                      placeholder="회의 제목"
+                      aria-label="회의 제목"
+                    />
                   ) : (
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm font-medium tabular-nums tracking-tight text-foreground">
-                        <span>{view.dateLabel}</span>
-                        <span className="font-semibold">{view.timeLabel}</span>
-                        <span className="text-muted">소요 {view.duration}</span>
-                      </p>
-                    </div>
+                    <h2 className="text-xl font-medium leading-snug text-foreground">
+                      {view.title}
+                    </h2>
                   )}
+                </div>
 
-                  <p className="pt-0.5 text-sm font-semibold text-foreground">
-                    장소
-                  </p>
-                  {editing ? (
-                    <div className="min-w-0 space-y-2.5">
-                      <div
-                        className="flex flex-wrap gap-2"
-                        role="group"
-                        aria-label="장소 플랫폼"
-                      >
-                        {MEETING_PLATFORMS.map((option) => {
-                          const selected = form.platform === option.id;
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              aria-pressed={selected}
-                              aria-label={option.label}
-                              title={option.label}
-                              onClick={() => {
-                                update("platform", option.id);
-                                setShowLinkEditor(false);
-                                setShowPlaceEditor(false);
-                                if (option.id === "custom") {
-                                  update("location", "");
-                                } else {
-                                  update(
-                                    "location",
-                                    platformDefaultLocation(option.id),
-                                  );
-                                }
-                              }}
-                              className={cn(
-                                "inline-flex cursor-pointer flex-col items-center gap-1 rounded-xl px-1.5 py-1 transition-colors",
-                                selected
-                                  ? "bg-primary-soft"
-                                  : "hover:bg-surface",
-                              )}
-                            >
-                              <MeetingPlatformIcon
-                                platform={option.id}
-                                className={cn(
-                                  selected &&
-                                    `ring-2 ring-offset-2 ring-offset-card ${option.ringClassName}`,
-                                )}
-                              />
-                              <span
-                                className={cn(
-                                  "text-[10px] font-medium",
-                                  selected ? "text-primary" : "text-muted",
-                                )}
-                              >
-                                {option.id === "custom"
-                                  ? "기타"
-                                  : option.label.replace("Google ", "")}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                <section className="divide-y divide-border">
+                  <div className="py-4">
+                    {editing ? (
+                      <ScheduleFields
+                        dateLabel={form.dateLabel}
+                        timeLabel={form.timeLabel}
+                        duration={form.duration}
+                        onDateChange={(next) => update("dateLabel", next)}
+                        onTimeChange={(next) => update("timeLabel", next)}
+                        onDurationChange={(next) => update("duration", next)}
+                      />
+                    ) : (
+                      <DetailRow label="일정" align="start">
+                        <ScheduleSummary
+                          dateLabel={view.dateLabel}
+                          timeLabel={view.timeLabel}
+                          duration={view.duration}
+                        />
+                      </DetailRow>
+                    )}
+                  </div>
 
-                      {form.platform === "custom" ? (
-                        <div className="space-y-2">
-                          {hasExtraLocation(form.platform, form.location) ? (
-                            <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-surface px-2.5 py-1.5">
-                              <MapPin className="h-3.5 w-3.5 shrink-0 text-muted" />
-                              <span className="truncate text-sm font-medium text-foreground">
-                                {form.location}
-                              </span>
-                              <button
-                                type="button"
-                                className="cursor-pointer text-muted hover:text-foreground"
-                                aria-label="장소 지우기"
-                                onClick={() => {
-                                  update("location", "");
-                                  setShowPlaceEditor(false);
-                                }}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          ) : showPlaceEditor ? (
-                            <div className="space-y-2 rounded-xl bg-surface p-2.5">
-                              <div className="flex flex-wrap gap-1.5">
-                                {PLACE_PRESETS.map((place) => (
-                                  <Chip
-                                    key={place}
-                                    active={form.location === place}
-                                    onClick={() => {
-                                      update("location", place);
-                                      setShowPlaceEditor(false);
-                                    }}
+                  <div className="py-4">
+                    <DetailRow
+                      label="장소"
+                      align={editing ? "start" : "center"}
+                    >
+                      {editing ? (
+                        <div className="min-w-0 space-y-3">
+                          <div
+                            className="flex flex-wrap gap-2"
+                            role="group"
+                            aria-label="장소 플랫폼"
+                          >
+                            {MEETING_PLATFORMS.map((option) => {
+                              const selected = form.platform === option.id;
+                              return (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  aria-pressed={selected}
+                                  aria-label={option.label}
+                                  title={option.label}
+                                  onClick={() => {
+                                    update("platform", option.id);
+                                    setShowLinkEditor(false);
+                                    setShowPlaceEditor(false);
+                                    if (option.id === "custom") {
+                                      update("location", "");
+                                    } else {
+                                      update(
+                                        "location",
+                                        platformDefaultLocation(option.id),
+                                      );
+                                    }
+                                  }}
+                                  className={cn(
+                                    "inline-flex cursor-pointer flex-col items-center gap-1 rounded-lg px-1.5 py-1 transition-colors",
+                                    selected
+                                      ? "bg-primary-soft"
+                                      : "hover:bg-surface",
+                                  )}
+                                >
+                                  <MeetingPlatformIcon
+                                    platform={option.id}
+                                    className={cn(
+                                      selected &&
+                                        `ring-2 ring-offset-2 ring-offset-card ${option.ringClassName}`,
+                                    )}
+                                  />
+                                  <span
+                                    className={cn(
+                                      "text-xs font-medium",
+                                      selected ? "text-primary" : "text-muted",
+                                    )}
                                   >
-                                    {place}
-                                  </Chip>
-                                ))}
+                                    {option.id === "custom"
+                                      ? "기타"
+                                      : option.label.replace("Google ", "")}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {form.platform === "custom" ? (
+                            hasExtraLocation(form.platform, form.location) ? (
+                              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border py-1 pl-2.5 pr-1.5">
+                                <MapPin className="h-3.5 w-3.5 shrink-0 text-muted" />
+                                <span className="truncate text-sm text-foreground">
+                                  {form.location}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
+                                  aria-label="장소 지우기"
+                                  onClick={() => {
+                                    update("location", "");
+                                    setShowPlaceEditor(false);
+                                  }}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
                               </div>
-                              <Input
-                                value={form.location}
-                                onChange={(e) =>
-                                  update("location", e.target.value)
-                                }
-                                placeholder="다른 장소 이름"
-                                aria-label="장소 이름"
-                                autoFocus
-                              />
-                            </div>
-                          ) : (
-                            <AddIconButton
-                              label="장소 추가"
-                              onClick={() => setShowPlaceEditor(true)}
-                            >
-                              <MapPin className="h-3.5 w-3.5" />
-                            </AddIconButton>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {hasExtraLocation(form.platform, form.location) ? (
-                            <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-surface px-2.5 py-1.5">
+                            ) : showPlaceEditor ? (
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                  {PLACE_PRESETS.map((place) => (
+                                    <Chip
+                                      key={place}
+                                      active={form.location === place}
+                                      onClick={() => {
+                                        update("location", place);
+                                        setShowPlaceEditor(false);
+                                      }}
+                                    >
+                                      {place}
+                                    </Chip>
+                                  ))}
+                                </div>
+                                <input
+                                  value={form.location}
+                                  onChange={(e) =>
+                                    update("location", e.target.value)
+                                  }
+                                  placeholder="다른 장소 이름"
+                                  aria-label="장소 이름"
+                                  autoFocus
+                                  className={outlinedFieldClass}
+                                />
+                              </div>
+                            ) : (
+                              <AddAction
+                                label="장소 추가"
+                                onClick={() => setShowPlaceEditor(true)}
+                              >
+                                <MapPin className="h-3.5 w-3.5" />
+                              </AddAction>
+                            )
+                          ) : hasExtraLocation(form.platform, form.location) ? (
+                            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border py-1 pl-2.5 pr-1.5">
                               <Link2 className="h-3.5 w-3.5 shrink-0 text-muted" />
-                              <span className="truncate text-sm font-medium text-foreground">
+                              <span className="truncate text-sm text-foreground">
                                 {form.location}
                               </span>
                               <button
                                 type="button"
-                                className="cursor-pointer text-muted hover:text-foreground"
+                                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
                                 aria-label="링크 지우기"
                                 onClick={() => {
                                   update(
@@ -751,7 +1051,7 @@ export function UpcomingDetailPanel({
                               </button>
                             </div>
                           ) : showLinkEditor ? (
-                            <Input
+                            <input
                               value={linkDraft}
                               onChange={(e) => setLinkDraft(e.target.value)}
                               onBlur={() => {
@@ -774,9 +1074,10 @@ export function UpcomingDetailPanel({
                               inputMode="url"
                               autoComplete="url"
                               autoFocus
+                              className={outlinedFieldClass}
                             />
                           ) : (
-                            <AddIconButton
+                            <AddAction
                               label="링크 추가"
                               onClick={() => {
                                 setLinkDraft("");
@@ -784,245 +1085,262 @@ export function UpcomingDetailPanel({
                               }}
                             >
                               <Link2 className="h-3.5 w-3.5" />
-                            </AddIconButton>
+                            </AddAction>
                           )}
+                        </div>
+                      ) : (
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <MeetingPlatformIcon
+                            platform={resolvePlatform(view)}
+                            size="sm"
+                          />
+                          <p className="min-w-0 text-sm text-foreground">
+                            {view.location}
+                          </p>
                         </div>
                       )}
-                    </div>
-                  ) : (
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <MeetingPlatformIcon
-                        platform={resolvePlatform(view)}
-                        size="sm"
-                      />
-                      <p className="min-w-0 text-sm font-medium text-foreground">
-                        {view.location}
-                      </p>
-                    </div>
-                  )}
+                    </DetailRow>
+                  </div>
 
-                  <p className="pt-0.5 text-sm font-semibold text-foreground">
-                    주최
-                  </p>
-                  {editing ? (
-                    <div className="min-w-0 space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowOrganizerPick((v) => !v)}
-                        className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-surface py-1 pl-1 pr-3 transition-colors hover:bg-surface-2"
-                        aria-expanded={showOrganizerPick}
-                        aria-label="주최자 변경"
-                      >
-                        <PersonAvatar name={form.organizer} size="sm" />
-                        <span className="text-sm font-medium text-foreground">
-                          {form.organizer}
-                        </span>
-                        <span className="text-[11px] font-semibold text-muted">
-                          변경
-                        </span>
-                      </button>
-                      {showOrganizerPick ? (
-                        <div
-                          className="flex flex-wrap gap-2 rounded-xl bg-surface p-2.5"
-                          role="listbox"
-                          aria-label="주최자 선택"
-                        >
-                          {WORKSPACE_PEOPLE.map((person) => {
-                            const active = form.organizer === person.name;
-                            return (
-                              <button
-                                key={person.name}
-                                type="button"
-                                role="option"
-                                aria-selected={active}
-                                onClick={() => {
-                                  update("organizer", person.name);
-                                  setShowOrganizerPick(false);
-                                  if (!form.participants.includes(person.name)) {
-                                    update("participants", [
-                                      person.name,
-                                      ...form.participants,
-                                    ]);
-                                  }
-                                }}
-                                className={cn(
-                                  "inline-flex cursor-pointer items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 transition-colors",
-                                  active
-                                    ? "bg-foreground text-background"
-                                    : "bg-card hover:bg-surface-2",
-                                )}
-                              >
-                                <PersonAvatar
-                                  name={person.name}
-                                  size="sm"
-                                  className="border-transparent"
-                                />
-                                <span className="text-xs font-semibold">
-                                  {person.name}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-2">
-                      <PersonAvatar name={view.organizer} size="sm" />
-                      <p className="text-sm font-medium text-foreground">
-                        {view.organizer}
-                      </p>
-                    </div>
-                  )}
-
-                  <p className="pt-0.5 text-sm font-semibold text-foreground">
-                    참석자
-                  </p>
-                  {editing ? (
-                    <div className="min-w-0 space-y-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {form.participants.map((name) => (
-                          <div
-                            key={name}
-                            className="group relative inline-flex"
+                  <div className="py-4">
+                    <DetailRow
+                      label="주최"
+                      align={editing ? "start" : "center"}
+                    >
+                      {editing ? (
+                        <div className="min-w-0 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowOrganizerPick((v) => !v)}
+                            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:bg-surface"
+                            aria-expanded={showOrganizerPick}
+                            aria-label="주최자 변경"
                           >
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-2">
+                            <PersonAvatar name={form.organizer} size="sm" />
+                            <span className="text-sm text-foreground">
+                              {form.organizer}
+                            </span>
+                            <span className="text-xs font-medium text-muted">
+                              변경
+                            </span>
+                          </button>
+                          {showOrganizerPick ? (
+                            <div
+                              className="flex flex-wrap gap-2"
+                              role="listbox"
+                              aria-label="주최자 선택"
+                            >
+                              {WORKSPACE_PEOPLE.map((person) => {
+                                const active = form.organizer === person.name;
+                                return (
+                                  <button
+                                    key={person.name}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={active}
+                                    onClick={() => {
+                                      update("organizer", person.name);
+                                      setShowOrganizerPick(false);
+                                      if (
+                                        !form.participants.includes(person.name)
+                                      ) {
+                                        update("participants", [
+                                          person.name,
+                                          ...form.participants,
+                                        ]);
+                                      }
+                                    }}
+                                    className={cn(
+                                      "inline-flex cursor-pointer items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 transition-colors",
+                                      active
+                                        ? "border-primary bg-primary-soft text-primary"
+                                        : "border-border hover:bg-surface",
+                                    )}
+                                  >
+                                    <PersonAvatar
+                                      name={person.name}
+                                      size="sm"
+                                      className="border-transparent"
+                                    />
+                                    <span className="text-xs font-medium">
+                                      {person.name}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-2">
+                          <PersonAvatar name={view.organizer} size="sm" />
+                          <p className="text-sm text-foreground">
+                            {view.organizer}
+                          </p>
+                        </div>
+                      )}
+                    </DetailRow>
+                  </div>
+
+                  <div className="py-4">
+                    <DetailRow
+                      label="참석자"
+                      align={editing ? "start" : "center"}
+                    >
+                      {editing ? (
+                        <div className="min-w-0 space-y-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {form.participants.map((name) => (
+                              <span
+                                key={name}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-border py-1 pl-1 pr-1.5"
+                              >
+                                <PersonAvatar name={name} size="sm" />
+                                <span className="max-w-[5.5rem] truncate text-xs font-medium text-foreground">
+                                  {name}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
+                                  aria-label={`${name} 제거`}
+                                  onClick={() =>
+                                    update(
+                                      "participants",
+                                      form.participants.filter(
+                                        (p) => p !== name,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                            <AddAction
+                              label="추가"
+                              onClick={() =>
+                                setShowParticipantAdd((v) => !v)
+                              }
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </AddAction>
+                          </div>
+
+                          {showParticipantAdd ? (
+                            <div className="space-y-2.5">
+                              <p className="text-xs font-medium text-muted">
+                                팀원 선택
+                              </p>
+                              <div
+                                className="flex flex-wrap gap-2"
+                                role="group"
+                                aria-label="참석자 후보"
+                              >
+                                {WORKSPACE_PEOPLE.map((person) => {
+                                  const selected = form.participants.includes(
+                                    person.name,
+                                  );
+                                  return (
+                                    <button
+                                      key={person.name}
+                                      type="button"
+                                      aria-pressed={selected}
+                                      onClick={() =>
+                                        toggleParticipant(person.name)
+                                      }
+                                      className={cn(
+                                        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 transition-colors",
+                                        selected
+                                          ? "border-primary bg-primary-soft text-primary"
+                                          : "border-border hover:bg-surface",
+                                      )}
+                                    >
+                                      <PersonAvatar
+                                        name={person.name}
+                                        size="sm"
+                                        className="border-transparent"
+                                      />
+                                      <span className="max-w-[4rem] truncate text-xs font-medium">
+                                        {person.name}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {showCustomParticipant ? (
+                                <div className="flex gap-2">
+                                  <input
+                                    value={participantDraft}
+                                    onChange={(e) =>
+                                      setParticipantDraft(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        addParticipant(participantDraft);
+                                      }
+                                    }}
+                                    placeholder="이름 입력"
+                                    aria-label="참석자 이름 직접 입력"
+                                    autoFocus
+                                    className={outlinedFieldClass}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    className="h-12 w-12 shrink-0"
+                                    onClick={() =>
+                                      addParticipant(participantDraft)
+                                    }
+                                    aria-label="직접 입력 추가"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="cursor-pointer text-xs font-medium text-muted hover:text-foreground"
+                                  onClick={() =>
+                                    setShowCustomParticipant(true)
+                                  }
+                                >
+                                  목록에 없는 사람 추가
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {view.participants.map((name) => (
+                            <span
+                              key={name}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-border py-1 pl-1 pr-2"
+                            >
                               <PersonAvatar name={name} size="sm" />
-                              <span className="max-w-[5.5rem] truncate text-xs font-semibold text-foreground">
+                              <span className="max-w-[6.5rem] truncate text-xs font-medium text-foreground">
                                 {name}
                               </span>
-                              <button
-                                type="button"
-                                className="cursor-pointer text-muted hover:text-foreground"
-                                aria-label={`${name} 제거`}
-                                onClick={() =>
-                                  update(
-                                    "participants",
-                                    form.participants.filter((p) => p !== name),
-                                  )
-                                }
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
                             </span>
-                          </div>
-                        ))}
-                        <AddIconButton
-                          label="추가"
-                          onClick={() =>
-                            setShowParticipantAdd((v) => !v)
-                          }
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </AddIconButton>
-                      </div>
-
-                      {showParticipantAdd ? (
-                        <div className="space-y-2.5 rounded-xl bg-surface p-2.5">
-                          <p className="text-[11px] font-semibold text-muted">
-                            팀원 선택
-                          </p>
-                          <div
-                            className="flex flex-wrap gap-2"
-                            role="group"
-                            aria-label="참석자 후보"
-                          >
-                            {WORKSPACE_PEOPLE.map((person) => {
-                              const selected = form.participants.includes(
-                                person.name,
-                              );
-                              return (
-                                <button
-                                  key={person.name}
-                                  type="button"
-                                  aria-pressed={selected}
-                                  onClick={() => toggleParticipant(person.name)}
-                                  className={cn(
-                                    "inline-flex cursor-pointer flex-col items-center gap-1 rounded-xl px-1.5 py-1.5 transition-colors",
-                                    selected
-                                      ? "bg-foreground text-background"
-                                      : "bg-card hover:bg-surface-2",
-                                  )}
-                                >
-                                  <PersonAvatar
-                                    name={person.name}
-                                    size="sm"
-                                    className="border-transparent"
-                                  />
-                                  <span className="max-w-[3.5rem] truncate text-[10px] font-semibold">
-                                    {person.name}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                          {showCustomParticipant ? (
-                            <div className="flex gap-2">
-                              <Input
-                                value={participantDraft}
-                                onChange={(e) =>
-                                  setParticipantDraft(e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault();
-                                    addParticipant(participantDraft);
-                                  }
-                                }}
-                                placeholder="이름 입력"
-                                aria-label="참석자 이름 직접 입력"
-                                autoFocus
-                              />
-                              <Button
-                                type="button"
-                                size="icon"
-                                className="h-10 w-10 shrink-0"
-                                onClick={() => addParticipant(participantDraft)}
-                                aria-label="직접 입력 추가"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="cursor-pointer text-xs font-semibold text-muted hover:text-foreground"
-                              onClick={() => setShowCustomParticipant(true)}
-                            >
-                              목록에 없는 사람 추가
-                            </button>
-                          )}
+                          ))}
                         </div>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {view.participants.map((name) => (
-                          <span
-                            key={name}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-surface py-1 pl-1 pr-2"
-                          >
-                            <PersonAvatar name={name} size="sm" />
-                            <span className="text-xs font-semibold text-foreground">
-                              {name}
-                            </span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                      )}
+                    </DetailRow>
+                  </div>
                 </section>
 
-                <section>
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-foreground">
-                      안건
-                    </h3>
+                <section className="border-t border-border py-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-medium text-muted">안건</h3>
                     {editing ? (
-                      <AddIconButton label="안건 추가" onClick={addAgendaRow}>
-                        <Plus className="h-3.5 w-3.5" />
-                      </AddIconButton>
+                      <button
+                        type="button"
+                        onClick={addAgendaRow}
+                        className="cursor-pointer text-xs font-medium text-primary hover:underline"
+                      >
+                        추가
+                      </button>
                     ) : null}
                   </div>
 
@@ -1036,9 +1354,9 @@ export function UpcomingDetailPanel({
                         {form.agenda.map((line, index) => (
                           <li
                             key={`agenda-edit-${index}`}
-                            className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2"
+                            className="flex items-center gap-2"
                           >
-                            <span className="w-4 shrink-0 text-sm font-medium text-muted-2">
+                            <span className="w-4 shrink-0 text-sm tabular-nums text-muted-2">
                               {index + 1}.
                             </span>
                             <input
@@ -1048,13 +1366,16 @@ export function UpcomingDetailPanel({
                                 next[index] = e.target.value;
                                 update("agenda", next);
                               }}
-                              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-2"
+                              className={cn(
+                                outlinedFieldClass,
+                                "min-w-0 flex-1",
+                              )}
                               placeholder="안건 내용"
                               aria-label={`안건 ${index + 1}`}
                             />
                             <button
                               type="button"
-                              className="shrink-0 cursor-pointer text-muted hover:text-foreground"
+                              className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-masked hover:bg-masked-soft"
                               aria-label={`안건 ${index + 1} 삭제`}
                               onClick={() =>
                                 update(
@@ -1063,79 +1384,103 @@ export function UpcomingDetailPanel({
                                 )
                               }
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
                             </button>
                           </li>
                         ))}
                       </ol>
                     )
-                  ) : (
+                  ) : view.agenda.length > 0 ? (
                     <ol className="space-y-2">
                       {view.agenda.map((line, index) => (
                         <li
                           key={`${view.id}-agenda-${index}`}
-                          className="flex gap-2 rounded-xl bg-surface px-3 py-2.5 text-sm text-foreground"
+                          className="flex gap-2 text-sm text-foreground"
                         >
-                          <span className="shrink-0 font-medium text-muted-2">
+                          <span className="shrink-0 tabular-nums text-muted-2">
                             {index + 1}.
                           </span>
                           <span>{line}</span>
                         </li>
                       ))}
                     </ol>
+                  ) : (
+                    <p className="text-sm text-muted">안건 없음</p>
                   )}
                 </section>
 
-                <section>
-                  <h3 className="mb-2 text-sm font-semibold text-foreground">
-                    메모
-                  </h3>
+                <section className="border-t border-border py-4">
+                  <h3 className="mb-3 text-xs font-medium text-muted">메모</h3>
                   {editing ? (
                     <textarea
                       value={form.notes}
                       onChange={(e) => update("notes", e.target.value)}
                       rows={4}
-                      className={cn(fieldClass, "h-auto min-h-[96px] resize-y")}
-                      placeholder="준비물, 주의사항 등"
+                      className={cn(
+                        outlinedFieldClass,
+                        "h-auto min-h-[96px] resize-y py-3",
+                      )}
+                      placeholder="참고할 내용, 링크 등"
                     />
                   ) : (
-                    <p className="rounded-xl bg-surface px-3 py-3 text-sm leading-relaxed text-muted">
-                      {view.notes || "메모 없음"}
+                    <p className="text-sm leading-relaxed text-foreground">
+                      {view.notes || (
+                        <span className="text-muted">메모 없음</span>
+                      )}
                     </p>
                   )}
                 </section>
               </div>
-            </ScrollArea>
+            </div>
 
-            <div className="flex shrink-0 gap-2 border-t border-border px-5 py-4">
+            {/* M3 action bar: text/outline left, filled primary right */}
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-3 sm:px-4">
               {editing ? (
                 <>
-                  <Button type="button" className="flex-1" onClick={handleSave}>
-                    {isCreate ? "추가" : "저장"}
-                  </Button>
                   <Button
                     type="button"
-                    variant="outline"
-                    className="flex-1"
+                    variant="ghost"
+                    className="min-w-[4.5rem] cursor-pointer"
                     onClick={cancelEdit}
                   >
                     취소
                   </Button>
+                  <Button
+                    type="button"
+                    className="min-w-[5rem] cursor-pointer"
+                    onClick={handleSave}
+                  >
+                    {isCreate ? "추가" : "저장"}
+                  </Button>
                 </>
               ) : (
                 <>
-                  <Button asChild className="flex-1">
-                    <Link href={view.href} onClick={onClose}>
-                      회의 시작
-                    </Link>
-                  </Button>
+                  {onDelete ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="mr-auto cursor-pointer text-masked hover:bg-masked-soft hover:text-masked"
+                      onClick={() => {
+                        if (!window.confirm("이 일정을 삭제할까요?")) return;
+                        onDelete(view);
+                        onClose();
+                      }}
+                    >
+                      삭제
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex-1"
+                    className="min-w-[4.5rem] cursor-pointer"
                     onClick={startEdit}
                   >
                     수정
+                  </Button>
+                  <Button asChild className="min-w-[5.5rem] cursor-pointer">
+                    <Link href={view.href} onClick={onClose}>
+                      회의 시작
+                    </Link>
                   </Button>
                 </>
               )}
@@ -1143,6 +1488,7 @@ export function UpcomingDetailPanel({
           </>
         ) : null}
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }

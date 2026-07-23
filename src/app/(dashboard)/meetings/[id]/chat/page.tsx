@@ -4,9 +4,10 @@ import { Suspense } from "react";
 import { PageContainer } from "@/components/layout/page-container";
 import { MeetingChatReplay } from "@/components/meetings/meeting-chat-replay";
 import {
+  getMeetingById,
   getMeetingTranscript,
-  getRecentMeetings,
-} from "@/lib/mock-loader";
+} from "@/lib/meetings-data";
+import { resolveMeetingReplayAudio } from "@/lib/meeting-replay-audio";
 
 export default async function MeetingChatPage({
   params,
@@ -14,15 +15,21 @@ export default async function MeetingChatPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const meeting = getRecentMeetings().find((m) => m.id === id);
+  const meeting = getMeetingById(id);
   if (!meeting) notFound();
 
   const transcript = getMeetingTranscript(id);
+  const audio = resolveMeetingReplayAudio({ meeting, transcript });
 
   return (
     <PageContainer>
       <Suspense fallback={null}>
-        <MeetingChatReplay meeting={meeting} transcript={transcript} />
+        <MeetingChatReplay
+          meeting={meeting}
+          transcript={transcript}
+          audioSrc={audio?.src}
+          audioLabel={audio?.label}
+        />
       </Suspense>
     </PageContainer>
   );

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { MessagesSquare } from "lucide-react";
 
-import { MeetingAttachmentsList } from "@/components/meetings/meeting-attachments";
+import { MeetingAttachmentsList, collectTranscriptFiles } from "@/components/meetings/meeting-attachments";
 import { MeetingParticipants } from "@/components/meetings/meeting-participants";
+import { MeetingSummaryCard } from "@/components/meetings/meeting-summary-card";
 import { MeetingTimelineView } from "@/components/meetings/meeting-timeline";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline } from "@/types/timeline";
@@ -25,56 +26,74 @@ export function MeetingDetailBody({
   meeting,
   timeline,
   transcript,
-  summary,
+  canEditParticipants = false,
 }: {
   meeting: Meeting;
   timeline: MeetingTimeline;
   transcript: MeetingTranscript;
-  summary?: string;
+  canEditParticipants?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<DetailTab>("timeline");
+  const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const chatHref = `/meetings/${meeting.id}/chat`;
+  const hasAttachments = collectTranscriptFiles(transcript).length > 0;
+
+  function toggleSpeaker(name: string) {
+    setSpeakerFilter((prev) => (prev === name ? null : name));
+    setTab("timeline");
+  }
 
   return (
     <>
-      {summary ? (
-        <section className="rounded-2xl bg-surface px-4 py-4 sm:px-5">
-          <p className="text-[11px] font-semibold tracking-wide text-muted-2">
-            요약
-          </p>
-          <p className="mt-1.5 text-sm font-medium leading-relaxed text-foreground">
-            {summary}
-          </p>
-        </section>
-      ) : null}
+      <MeetingSummaryCard timeline={timeline} />
 
-      <MeetingParticipants participants={meeting.participants} />
+      <MeetingParticipants
+        participants={meeting.participants}
+        selectedName={speakerFilter}
+        onSelectName={toggleSpeaker}
+        meetingId={meeting.id}
+        canEdit={canEditParticipants}
+        onParticipantRenamed={(from, to) => {
+          setSpeakerFilter((prev) => (prev === from ? to : prev));
+        }}
+      />
 
       <div>
-        <div className="flex items-end justify-between gap-3 border-b border-border">
+        <div className="flex items-end justify-between gap-3">
           <div
             role="tablist"
             aria-label="회의 기록 분류"
             className="flex min-w-0 flex-wrap gap-x-5 gap-y-1"
           >
-            {TABS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === item.id}
-                onClick={() => setTab(item.id)}
-                className={cn(
-                  "-mb-px shrink-0 border-b-2 pb-2.5 pt-0.5 text-sm font-semibold transition-colors",
-                  tab === item.id
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted hover:text-foreground",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
+            {TABS.map((item) => {
+              const isFilesEmpty = item.id === "files" && !hasAttachments;
+              const isSelected = tab === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  disabled={isFilesEmpty}
+                  onClick={() => {
+                    if (isFilesEmpty) return;
+                    setTab(item.id);
+                  }}
+                  className={cn(
+                    "shrink-0 border-b-2 pb-2 pt-0.5 text-sm transition-colors",
+                    isFilesEmpty
+                      ? "cursor-not-allowed border-transparent font-medium text-muted opacity-40"
+                      : isSelected
+                        ? "border-foreground font-semibold text-foreground"
+                        : "border-transparent font-semibold text-muted hover:text-foreground",
+                  )}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
 
           <Link
@@ -82,7 +101,7 @@ export function MeetingDetailBody({
             className="mb-1.5 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary-soft"
           >
             <MessagesSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
-            대화기록
+            대화, 다시듣기
           </Link>
         </div>
 
@@ -91,6 +110,8 @@ export function MeetingDetailBody({
             <MeetingTimelineView
               timeline={timeline}
               participants={meeting.participants}
+              speakerFilter={speakerFilter}
+              onClearSpeakerFilter={() => setSpeakerFilter(null)}
               onSegmentSelect={(segmentId) => {
                 router.push(`${chatHref}?segment=${segmentId}`);
               }}

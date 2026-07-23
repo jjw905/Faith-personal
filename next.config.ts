@@ -8,6 +8,8 @@ if (!process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY?.trim()) {
 }
 
 const nextConfig: NextConfig = {
+  // 불필요한 X-Powered-By 응답 헤더 제거(대역폭, 정보 노출 최소화)
+  poweredByHeader: false,
   // 롤링 배포 중 구버전 페이지가 새 서버를 치지 않도록 힌트
   deploymentId:
     process.env.DIGITALOCEAN_GIT_COMMIT_SHA ||

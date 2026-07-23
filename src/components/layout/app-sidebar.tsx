@@ -79,7 +79,7 @@ function NavLink({
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium outline-none transition-colors",
+        "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5 text-base font-medium outline-none transition-colors",
         "hover:bg-surface-2 hover:text-foreground",
         "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
         "active:bg-surface-2",
@@ -88,7 +88,7 @@ function NavLink({
     >
       <Icon
         className={cn(
-          "h-4 w-4 shrink-0 transition-colors",
+          "h-5 w-5 shrink-0 transition-colors",
           active ? "text-primary" : "text-muted-2 group-hover:text-foreground",
         )}
       />
@@ -97,7 +97,7 @@ function NavLink({
         <Badge
           variant="sidebar"
           className={cn(
-            "min-w-5 justify-center px-1.5 py-0 text-[10px]",
+            "min-w-5 justify-center px-1.5 py-0 text-xs",
             active && "bg-primary-soft text-primary",
           )}
         >
@@ -145,7 +145,7 @@ function MeetingsNav({
             onNavigate?.();
           }}
           className={cn(
-            "flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-2 text-sm font-medium outline-none transition-colors",
+            "flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-2 text-base font-medium outline-none transition-colors",
             "hover:text-foreground",
             "focus-visible:ring-2 focus-visible:ring-ring",
             sectionActive ? "text-foreground" : "text-muted",
@@ -153,7 +153,7 @@ function MeetingsNav({
         >
           <Icon
             className={cn(
-              "h-4 w-4 shrink-0",
+              "h-5 w-5 shrink-0",
               sectionActive
                 ? "text-primary"
                 : "text-muted-2 group-hover:text-foreground",
@@ -164,7 +164,7 @@ function MeetingsNav({
             <Badge
               variant="sidebar"
               className={cn(
-                "min-w-5 justify-center px-1.5 py-0 text-[10px]",
+                "min-w-5 justify-center px-1.5 py-0 text-xs",
                 sectionActive && "bg-primary-soft text-primary",
               )}
             >
@@ -209,7 +209,7 @@ function MeetingsNav({
                     onNavigate?.();
                   }}
                   className={cn(
-                    "flex cursor-pointer items-start gap-1.5 rounded-lg px-2 py-1.5 text-[13px] transition-colors",
+                    "flex cursor-pointer items-start gap-1.5 rounded-lg px-2 py-1.5 text-sm transition-colors",
                     "hover:bg-surface-2 hover:text-foreground",
                     wsActive
                       ? "bg-primary-soft font-medium text-primary"
@@ -218,7 +218,7 @@ function MeetingsNav({
                 >
                   <ChevronRight
                     className={cn(
-                      "mt-0.5 h-3 w-3 shrink-0",
+                      "mt-0.5 h-3.5 w-3.5 shrink-0",
                       wsActive ? "text-primary" : "text-muted-2/80",
                     )}
                     strokeWidth={2}
@@ -229,7 +229,7 @@ function MeetingsNav({
                     </span>
                     <span
                       className={cn(
-                        "mt-0.5 block truncate text-[11px] font-normal leading-snug",
+                        "mt-0.5 block truncate text-sm font-normal leading-snug",
                         wsActive ? "text-primary/75" : "text-muted-2/90",
                       )}
                     >
@@ -252,7 +252,7 @@ function MeetingsNav({
                               onNavigate?.();
                             }}
                             className={cn(
-                              "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] transition-colors",
+                              "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
                               "hover:bg-surface-2 hover:text-foreground",
                               subActive
                                 ? "bg-surface font-medium text-foreground"
@@ -261,7 +261,7 @@ function MeetingsNav({
                           >
                             <SubIcon
                               className={cn(
-                                "h-3.5 w-3.5 shrink-0",
+                                "h-4 w-4 shrink-0",
                                 subActive ? "text-primary" : "text-muted-2",
                               )}
                               strokeWidth={1.75}
@@ -324,7 +324,7 @@ export function AppSidebar({
           <Link
             href="/dashboard"
             onClick={onMobileClose}
-            className="cursor-pointer text-lg font-bold tracking-tight text-foreground transition-opacity hover:opacity-70"
+            className="cursor-pointer text-xl font-bold tracking-tight text-foreground transition-opacity hover:opacity-70"
           >
             {APP_NAME}
           </Link>
@@ -353,7 +353,7 @@ export function AppSidebar({
 
           {isAdmin ? (
             <div className="mt-5">
-              <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-muted-2">
+              <p className="px-3 pb-1.5 text-sm font-semibold tracking-wide text-muted-2">
                 개발전용
               </p>
               <div className="space-y-0.5">
@@ -370,7 +370,7 @@ export function AppSidebar({
           ) : null}
         </nav>
 
-        <div className="shrink-0 border-t border-border p-3">
+        <div className="shrink-0 p-3">
           <UserProfile onNavigate={onMobileClose} />
         </div>
       </aside>

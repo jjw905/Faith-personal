@@ -1,0 +1,137 @@
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
+
+import type { Meeting } from "@/types/meeting";
+import type { MeetingTimeline } from "@/types/timeline";
+import type { MeetingTranscript } from "@/types/transcript";
+import type { SemanticStructure } from "@/lib/stt/semantic-structure";
+import type { SttModel } from "@/lib/stt/models";
+import type { WorkspaceId } from "@/lib/workspaces";
+
+export type MeetingProcessPhase =
+  | "transcribing"
+  | "structuring"
+  | "done"
+  | "error";
+
+export type UserMeetingRecord = {
+  id: string;
+  userId: string;
+  vaultFileId: string;
+  model: SttModel;
+  phase: MeetingProcessPhase;
+  /** 0–100. 파이프라인 실제 단계·청크 진행과 동기. */
+  progressPercent?: number;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+  workspace: WorkspaceId;
+  meeting: Meeting;
+  transcript: MeetingTranscript;
+  timeline: MeetingTimeline;
+  rawText?: string;
+  semantic?: SemanticStructure;
+};
+
+const ROOT = join(process.cwd(), ".data", "user-meetings");
+
+function ensureRoot() {
+  mkdirSync(ROOT, { recursive: true });
+}
+
+function pathFor(id: string) {
+  return join(ROOT, `${id}.json`);
+}
+
+export function saveUserMeeting(record: UserMeetingRecord) {
+  ensureRoot();
+  writeFileSync(pathFor(record.id), JSON.stringify(record, null, 2), "utf8");
+}
+
+export function getUserMeeting(id: string): UserMeetingRecord | null {
+  const p = pathFor(id);
+  if (!existsSync(p)) return null;
+  try {
+    return JSON.parse(readFileSync(p, "utf8")) as UserMeetingRecord;
+  } catch {
+    return null;
+  }
+}
+
+export function listUserMeetings(userId?: string): UserMeetingRecord[] {
+  ensureRoot();
+  const files = readdirSync(ROOT).filter((f) => f.endsWith(".json"));
+  const rows: UserMeetingRecord[] = [];
+  for (const f of files) {
+    try {
+      const row = JSON.parse(
+        readFileSync(join(ROOT, f), "utf8"),
+      ) as UserMeetingRecord;
+      if (userId && row.userId !== userId) continue;
+      rows.push(row);
+    } catch {
+      // skip corrupt
+    }
+  }
+  return rows.sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
+
+export function updateUserMeeting(
+  id: string,
+  patch: Partial<UserMeetingRecord>,
+): UserMeetingRecord | null {
+  const cur = getUserMeeting(id);
+  if (!cur) return null;
+  const next: UserMeetingRecord = {
+    ...cur,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  saveUserMeeting(next);
+  return next;
+}
+
+/** 진행률은 감소하지 않음. phase도 같이 갱신 가능. */
+export function setMeetingProgress(
+  id: string,
+  percent: number,
+  patch: Partial<
+    Pick<UserMeetingRecord, "phase" | "errorMessage" | "rawText">
+  > = {},
+): UserMeetingRecord | null {
+  const cur = getUserMeeting(id);
+  if (!cur) return null;
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+  const prev = cur.progressPercent ?? 0;
+  return updateUserMeeting(id, {
+    ...patch,
+    progressPercent: Math.max(prev, clamped),
+  });
+}
+
+export function deleteUserMeeting(id: string): boolean {
+  const p = pathFor(id);
+  if (!existsSync(p)) return false;
+  try {
+    unlinkSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function workDirForMeeting(meetingId: string) {
+  const dir = join(process.cwd(), ".data", "stt-work", meetingId);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}

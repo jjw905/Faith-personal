@@ -123,3 +123,16 @@ export async function headObject(key: string) {
     contentType: res.ContentType ?? "application/octet-stream",
   };
 }
+
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const res = await client().send(
+    new GetObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+    }),
+  );
+  const body = res.Body;
+  if (!body) throw new Error("파일 본문이 비어 있습니다.");
+  const bytes = await body.transformToByteArray();
+  return Buffer.from(bytes);
+}

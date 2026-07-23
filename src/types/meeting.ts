@@ -2,6 +2,8 @@ import type { WorkspaceId } from "@/lib/workspaces";
 
 export type MeetingStatus = "completed" | "in_progress" | "scheduled";
 export type MeetingSecurity = "protected" | "unprotected";
+/** 기록 생성 경로. 실시간 회화 vs 파일 업로드. */
+export type MeetingCapture = "live" | "upload";
 
 /** 회의록 화자 인식 방식. 비회원도 음성 톤 등으로 구분 가능. */
 export type ParticipantRecognition = "member" | "guest" | "voice";
@@ -19,6 +21,10 @@ export interface Participant {
   recognition?: ParticipantRecognition;
   /** 톤/호칭 등 인식 힌트. */
   recognitionNote?: string;
+  /** 이 사람이 회의에서 한 일·발언 한 줄 요약. */
+  summary?: string;
+  /** 역할·담당·주제 태그. */
+  tags?: string[];
 }
 
 export interface Meeting {
@@ -35,4 +41,6 @@ export interface Meeting {
   security: MeetingSecurity;
   /** 팀 공유 또는 개인 전용. */
   workspace: WorkspaceId;
+  /** 실시간 회화 / 업로드. 없으면 id·태그로 추론. */
+  capture?: MeetingCapture;
 }

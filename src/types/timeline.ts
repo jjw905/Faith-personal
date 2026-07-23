@@ -3,7 +3,9 @@ export type TimelineSegmentKind =
   | "discussion"
   | "decision"
   | "action"
-  | "risk";
+  | "risk"
+  | "report"
+  | "vote";
 
 export type TimelineSegment = {
   id: string;
@@ -19,6 +21,15 @@ export type TimelineSegment = {
 export type MeetingTimeline = {
   meetingId: string;
   durationLabel: string;
+  /** 회의 한 줄 개요 (부드러운 문장). */
   overallSummary: string;
+  /** 결정·의결 목록. */
+  decisions?: string[];
+  /** 후속 액션. */
+  actions?: Array<{
+    owner: string;
+    task: string;
+    due?: string;
+  }>;
   segments: TimelineSegment[];
 };

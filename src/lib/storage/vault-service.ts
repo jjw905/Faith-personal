@@ -19,6 +19,7 @@ import {
   buildObjectKey,
   deleteObject,
   getDownloadUrl,
+  getObjectBuffer,
   getUploadUrl,
   headObject,
   localVaultAllowed,
@@ -287,6 +288,26 @@ export async function readUserFileContent(userId: string, fileId: string) {
     where: { id: fileId, userId },
   });
   if (!row) return null;
+  const body = await localReadObject(row.key);
+  return { row, body };
+}
+
+/** Spaces/로컬 공통: STT 등 서버 처리용 바이트 읽기. */
+export async function readUserFileBytes(userId: string, fileId: string) {
+  assertVaultBackendReady();
+  const row = await prisma.vaultFile.findFirst({
+    where: { id: fileId, userId },
+  });
+  if (!row) return null;
+
+  if (spacesConfigured()) {
+    const body = await getObjectBuffer(row.key);
+    return { row, body };
+  }
+
+  if (!localVaultAllowed()) {
+    throw new Error("스토리지에서 파일을 읽을 수 없습니다.");
+  }
   const body = await localReadObject(row.key);
   return { row, body };
 }

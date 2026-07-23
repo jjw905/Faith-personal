@@ -1,0 +1,157 @@
+"use client";
+
+import { useState } from "react";
+
+import { ParticipantsPopup, SortControl } from "@/components/dashboard/recent-meetings-table";
+import { FIXTURE_PARTICIPANTS } from "@/components/design/fixtures";
+import { UserProfile } from "@/components/layout/user-profile";
+import { ContactInquiryDialog } from "@/components/marketing/contact-inquiry-dialog";
+import {
+  AttachMenuPopup,
+  ResetConfirmDialog,
+} from "@/components/meetings/new-meeting-session";
+import { Button } from "@/components/ui/button";
+
+function PreviewStage({
+  hint,
+  open,
+  onReopen,
+  children,
+}: {
+  hint: string;
+  open: boolean;
+  onReopen: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative flex h-full min-h-full flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+        <p className="text-sm text-muted">{hint}</p>
+        {!open ? (
+          <Button type="button" size="sm" onClick={onReopen}>
+            다시 열기
+          </Button>
+        ) : null}
+      </div>
+      <div className="relative min-h-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+/** 최근 기록: 참석자 팝업 */
+export function SceneParticipantsPopup() {
+  const [open, setOpen] = useState(true);
+  return (
+    <PreviewStage
+      hint="목록에서 참석자 아바타를 눌렀을 때."
+      open={open}
+      onReopen={() => setOpen(true)}
+    >
+      <ParticipantsPopup
+        participants={FIXTURE_PARTICIPANTS}
+        open={open}
+        contained
+        onClose={() => setOpen(false)}
+      />
+    </PreviewStage>
+  );
+}
+
+/** 실시간 기록: 첨부 메뉴 (fab-item-up) */
+export function SceneAttachMenuPopup() {
+  const [open, setOpen] = useState(true);
+  const [play, setPlay] = useState(0);
+  return (
+    <div className="relative flex h-full min-h-full flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+        <p className="text-sm text-muted">첨부 버튼 메뉴. 열릴 때 위로 뜹니다.</p>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => {
+            setOpen(true);
+            setPlay((n) => n + 1);
+          }}
+        >
+          {open ? "재생" : "다시 열기"}
+        </Button>
+      </div>
+      <div className="flex flex-1 items-end justify-center pb-16 pt-24">
+        <div className="relative">
+          <AttachMenuPopup
+            key={play}
+            open={open}
+            onAttach={() => setOpen(false)}
+            onVault={() => setOpen(false)}
+            onRandomSend={() => setOpen(false)}
+          />
+          <div className="h-11 w-11 rounded-full bg-primary shadow-soft" aria-hidden />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 실시간 기록: 초기화 확인 */
+export function SceneResetConfirmDialog() {
+  const [open, setOpen] = useState(true);
+  return (
+    <PreviewStage
+      hint="세션 초기화할 때."
+      open={open}
+      onReopen={() => setOpen(true)}
+    >
+      <ResetConfirmDialog
+        open={open}
+        contained
+        onCancel={() => setOpen(false)}
+        onConfirm={() => setOpen(false)}
+      />
+    </PreviewStage>
+  );
+}
+
+/** 마케팅: 문의 팝업 */
+export function SceneContactInquiryDialog() {
+  const [open, setOpen] = useState(true);
+  return (
+    <PreviewStage
+      hint="푸터·문의 CTA에서."
+      open={open}
+      onReopen={() => setOpen(true)}
+    >
+      <ContactInquiryDialog
+        open={open}
+        contained
+        onClose={() => setOpen(false)}
+      />
+    </PreviewStage>
+  );
+}
+
+/** 사이드바: 계정 메뉴 */
+export function SceneUserProfileMenu() {
+  return (
+    <div className="h-full min-h-full overflow-hidden p-6 pr-60">
+      <p className="mb-4 text-sm text-muted">사이드바 프로필을 눌렀을 때.</p>
+      <div className="max-w-[14rem]">
+        <UserProfile forceOpen />
+      </div>
+    </div>
+  );
+}
+
+/** 최근 기록: 정렬 목록 */
+export function SceneSortControl() {
+  const [value, setValue] = useState<"date_desc" | "date_asc" | "title" | "duration">(
+    "date_desc",
+  );
+  return (
+    <div className="h-full min-h-full p-6">
+      <p className="mb-4 text-sm text-muted">목록 정렬 메뉴.</p>
+      <div className="flex justify-end">
+        <SortControl value={value} onChange={setValue} forceOpen />
+      </div>
+    </div>
+  );
+}

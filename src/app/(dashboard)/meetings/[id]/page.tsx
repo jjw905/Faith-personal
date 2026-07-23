@@ -5,15 +5,22 @@ import { ArrowLeft } from "lucide-react";
 import { PageContainer } from "@/components/layout/page-container";
 import { LiveMaskingTranscript } from "@/components/meetings/live-masking-transcript";
 import { MeetingDetailBody } from "@/components/meetings/meeting-detail-body";
+import { MeetingProcessBanner } from "@/components/meetings/meeting-process-banner";
+import {
+  MeetingDateTimeMeta,
+  MeetingRecordActions,
+  MeetingTitleHeading,
+} from "@/components/meetings/meeting-record-actions";
+import { MeetingCaptureChip } from "@/components/meetings/meeting-capture-label";
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/admin";
-import { formatSeoulDateParts } from "@/lib/meeting-date";
 import { meetingTopicKeywords } from "@/lib/meeting-keywords";
 import {
+  getMeetingById,
   getMeetingTimeline,
   getMeetingTranscript,
-  getRecentMeetings,
-} from "@/lib/mock-loader";
+} from "@/lib/meetings-data";
+import { getUserMeeting } from "@/lib/user-meetings-store";
 
 export default async function MeetingDetailPage({
   params,
@@ -31,22 +38,37 @@ export default async function MeetingDetailPage({
     );
   }
 
-  const meeting = getRecentMeetings().find((m) => m.id === id);
+  const meeting = getMeetingById(id);
   if (!meeting) notFound();
 
   const timeline = getMeetingTimeline(id);
   const transcript = getMeetingTranscript(id);
-  const { day, time } = formatSeoulDateParts(meeting.date);
+  const userRow = getUserMeeting(id);
   const keywords = meetingTopicKeywords(
     meeting.summaryTags,
     meeting.tags,
     4,
   );
+  const processing =
+    userRow &&
+    (userRow.phase === "transcribing" || userRow.phase === "structuring");
+  const failed = userRow?.phase === "error";
+  const showProcessBanner = Boolean(
+    userRow && userRow.phase !== "done",
+  );
+  const showDetailBody = !processing && !failed;
+  const canEditMeta = Boolean(userRow);
 
   return (
     <PageContainer>
-      <div className="mx-auto max-w-3xl space-y-5">
-        <div>
+      <div
+        className={
+          processing || failed
+            ? "mx-auto flex min-h-[calc(100dvh-7rem)] max-w-3xl flex-col"
+            : "mx-auto max-w-3xl space-y-5"
+        }
+      >
+        <div className={processing || failed ? "shrink-0" : undefined}>
           <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">
             <Link href="/dashboard">
               <ArrowLeft className="h-4 w-4" />
@@ -54,26 +76,37 @@ export default async function MeetingDetailPage({
             </Link>
           </Button>
 
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {meeting.title}
-          </h1>
-
-          {/* 가로 3칸 분산 대신 내용 너비로 촘촘히 */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <p className="text-sm font-semibold tabular-nums tracking-tight text-foreground">
-              {day}{" "}
-              <span className="font-medium text-muted">{time}</span>
-            </p>
-            <span className="text-sm font-semibold text-foreground">
-              {meeting.duration}
-            </span>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <MeetingCaptureChip meeting={meeting} className="mb-3" />
+              <MeetingTitleHeading
+                meetingId={id}
+                title={meeting.title}
+                canEdit={canEditMeta}
+              />
+            </div>
+            <MeetingRecordActions
+              meetingId={id}
+              tags={meeting.tags}
+              meeting={meeting}
+              timeline={timeline}
+              transcript={transcript}
+              summary={timeline.overallSummary}
+            />
           </div>
+
+          <MeetingDateTimeMeta
+            meetingId={id}
+            date={meeting.date}
+            duration={meeting.duration}
+            canEdit={canEditMeta}
+          />
           {keywords.length > 0 ? (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-2">
               {keywords.map((kw) => (
                 <span
                   key={kw}
-                  className="rounded-md bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted"
+                  className="rounded-md bg-surface px-2.5 py-1 text-base font-medium leading-5 text-muted"
                 >
                   {kw}
                 </span>
@@ -82,12 +115,24 @@ export default async function MeetingDetailPage({
           ) : null}
         </div>
 
-        <MeetingDetailBody
-          meeting={meeting}
-          timeline={timeline}
-          transcript={transcript}
-          summary={timeline.overallSummary}
-        />
+        {showProcessBanner ? (
+          <MeetingProcessBanner
+            meetingId={id}
+            initialPhase={userRow!.phase}
+            initialProgressPercent={userRow!.progressPercent}
+          />
+        ) : null}
+
+        {showDetailBody ? (
+          <div className="mt-5 space-y-5">
+            <MeetingDetailBody
+              meeting={meeting}
+              timeline={timeline}
+              transcript={transcript}
+              canEditParticipants={canEditMeta}
+            />
+          </div>
+        ) : null}
       </div>
     </PageContainer>
   );

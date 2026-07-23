@@ -50,14 +50,14 @@ function ArticleBlock({
       <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
         {article.title}
       </h2>
-      <p className="mt-1.5 text-sm leading-relaxed text-muted sm:text-[15px]">
+      <p className="mt-1.5 text-base leading-relaxed text-muted">
         {article.summary}
       </p>
       <div className="mt-4 space-y-2.5">
         {article.body.map((paragraph) => (
           <p
             key={paragraph}
-            className="text-sm leading-relaxed text-foreground/85 sm:text-[15px] sm:leading-[1.65]"
+            className="text-base leading-relaxed text-foreground/85"
           >
             {paragraph}
           </p>
@@ -176,7 +176,7 @@ export default function HelpPage() {
             <button
               type="button"
               onClick={goBack}
-              className="-ml-1 inline-flex cursor-pointer items-center gap-1.5 px-1 py-1 text-sm font-semibold text-foreground transition-opacity hover:opacity-70"
+              className="-ml-1 inline-flex cursor-pointer items-center gap-1.5 px-1 py-1 text-base font-semibold text-foreground transition-opacity hover:opacity-70"
             >
               <ArrowLeft className="h-4 w-4" strokeWidth={2.25} aria-hidden />
               돌아가기
@@ -216,11 +216,11 @@ export default function HelpPage() {
             >
               {searching ? (
                 <div className="space-y-1">
-                  <p className="px-2 text-xs font-semibold tracking-wide text-muted-2">
+                  <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
                     검색 결과
                   </p>
                   {results.length === 0 ? (
-                    <p className="px-2 py-2 text-sm text-muted">
+                    <p className="px-2 py-2 text-base text-muted">
                       일치하는 문서가 없습니다.
                     </p>
                   ) : (
@@ -229,7 +229,7 @@ export default function HelpPage() {
                         key={article.id}
                         href={`#${article.id}`}
                         onClick={(e) => onNavClick(e, article.id)}
-                        className="block rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-surface hover:text-foreground"
+                        className="block rounded-lg px-2 py-1.5 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
                       >
                         {article.title}
                       </a>
@@ -240,7 +240,7 @@ export default function HelpPage() {
                 <div className="space-y-5">
                   {HELP_NAV.map((group) => (
                     <div key={group.title}>
-                      <p className="px-2 text-xs font-semibold tracking-wide text-muted-2">
+                      <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
                         {group.title}
                       </p>
                       <ul className="mt-1.5 space-y-0.5">
@@ -250,7 +250,7 @@ export default function HelpPage() {
                               href={`#${item.id}`}
                               onClick={(e) => onNavClick(e, item.id)}
                               className={cn(
-                                "block rounded-lg px-2 py-1.5 text-sm transition-colors",
+                                "block rounded-lg px-2 py-1.5 text-base transition-colors",
                                 activeId === item.id
                                   ? "bg-surface font-medium text-foreground"
                                   : "text-muted hover:bg-surface/70 hover:text-foreground",
@@ -270,7 +270,7 @@ export default function HelpPage() {
 
           <div className="min-w-0 flex-1">
             {searching && results.length === 0 ? (
-              <p className="text-sm text-muted">
+              <p className="text-base text-muted">
                 다른 검색어로 다시 시도해 보세요.
               </p>
             ) : (

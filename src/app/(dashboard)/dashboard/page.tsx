@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AudioUploadZone } from "@/components/dashboard/audio-upload-zone";
 import { MeetingMidPanel } from "@/components/dashboard/meeting-mid-panel";
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
+import { ProcessingNowSection } from "@/components/dashboard/processing-now";
 import { RecentMeetingsTable } from "@/components/dashboard/recent-meetings-table";
 import { PageContainer } from "@/components/layout/page-container";
 import { useAppContext } from "@/context/app-context";
-import { getMeetingsByWorkspace } from "@/lib/mock-loader";
+import { getMeetingsByWorkspace } from "@/lib/meetings-mock";
 import { getWorkspaceProfile } from "@/lib/workspaces";
+import type { Meeting } from "@/types/meeting";
 
 function TodayHeading({ meetingHeadline }: { meetingHeadline: string }) {
   const now = new Date();
@@ -26,7 +28,7 @@ function TodayHeading({ meetingHeadline }: { meetingHeadline: string }) {
 
   return (
     <div className="min-w-0">
-      <p className="text-sm font-medium leading-none text-muted">
+      <p className="text-base font-medium leading-none text-muted">
         {dateLabel} {weekdayLabel}
       </p>
       <h1 className="mt-2 text-2xl font-bold leading-none tracking-tight text-foreground">
@@ -39,8 +41,77 @@ function TodayHeading({ meetingHeadline }: { meetingHeadline: string }) {
 export default function DashboardPage() {
   const { workspaceId } = useAppContext();
   const profile = getWorkspaceProfile(workspaceId);
-  const meetings = getMeetingsByWorkspace(workspaceId);
   const [searchQuery, setSearchQuery] = useState("");
+  const [meetings, setMeetings] = useState<Meeting[]>(() =>
+    getMeetingsByWorkspace(workspaceId),
+  );
+  const prevActiveIdsRef = useRef<string[]>([]);
+
+  const refreshMeetings = useCallback(async () => {
+    let hidden = new Set<string>();
+    try {
+      const raw = window.localStorage.getItem("faith.records.hidden");
+      if (raw) {
+        const ids = JSON.parse(raw) as string[];
+        if (Array.isArray(ids)) hidden = new Set(ids);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const res = await fetch(
+        `/api/meetings?workspace=${encodeURIComponent(workspaceId)}`,
+        { cache: "no-store" },
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        meetings?: Meeting[];
+      };
+      if (data.ok && Array.isArray(data.meetings)) {
+        setMeetings(
+          data.meetings.filter(
+            (m) => !hidden.has(m.id) && m.status !== "in_progress",
+          ),
+        );
+        return;
+      }
+    } catch {
+      // fall through to mock
+    }
+    setMeetings(
+      getMeetingsByWorkspace(workspaceId).filter(
+        (m) => !hidden.has(m.id) && m.status !== "in_progress",
+      ),
+    );
+  }, [workspaceId]);
+
+  const onProcessingActiveChange = useCallback(
+    (activeIds: string[]) => {
+      const prev = prevActiveIdsRef.current;
+      prevActiveIdsRef.current = activeIds;
+      if (prev.some((id) => !activeIds.includes(id))) {
+        void refreshMeetings();
+      }
+    },
+    [refreshMeetings],
+  );
+
+  useEffect(() => {
+    void refreshMeetings();
+  }, [refreshMeetings]);
+
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState === "visible") void refreshMeetings();
+    };
+    window.addEventListener("focus", onShow);
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      window.removeEventListener("focus", onShow);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+  }, [refreshMeetings]);
 
   return (
     <PageContainer className="!pb-10">
@@ -56,11 +127,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <section>
+        <section className="space-y-3">
           <AudioUploadZone
             ctaStart={profile.ctaStart}
             ctaUpload={profile.ctaUpload}
+            onMeetingStarted={() => void refreshMeetings()}
           />
+          <ProcessingNowSection onActiveChange={onProcessingActiveChange} />
         </section>
 
         <section>
@@ -68,7 +141,12 @@ export default function DashboardPage() {
         </section>
 
         <section id="meetings">
-          <RecentMeetingsTable meetings={meetings} searchQuery={searchQuery} />
+          <RecentMeetingsTable
+            meetings={meetings}
+            onMeetingRemoved={(id) =>
+              setMeetings((prev) => prev.filter((m) => m.id !== id))
+            }
+          />
         </section>
       </div>
     </PageContainer>

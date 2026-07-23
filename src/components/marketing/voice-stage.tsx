@@ -1,16 +1,9 @@
-/** 히어로 배경 — 정지된 점 메쉬 그리드, 절제된 그레이 톤. */
+/** 히어로 배경 — 부드러운 그라데이션만. 도형 장식 없음. */
 export function VoiceStage() {
   return (
-    <div className="absolute inset-0 isolate overflow-hidden bg-gradient-to-b from-[#f6f7f9] via-[#eef0f3] to-[#f6f7f9]">
-      {/* 은은한 앰비언트 */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -left-24 top-1/4 h-96 w-96 rounded-full bg-[#c7cbd3]/25 blur-3xl"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -right-16 bottom-1/4 h-96 w-96 rounded-full bg-[#b9bec8]/25 blur-3xl"
-      />
-    </div>
+    <div
+      aria-hidden
+      className="absolute inset-0 overflow-hidden bg-[radial-gradient(130%_90%_at_50%_-20%,#f5f6f9_0%,#eef0f3_38%,var(--surface)_72%)]"
+    />
   );
 }

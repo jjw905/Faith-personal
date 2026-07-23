@@ -374,9 +374,15 @@ export function UsersAdminPanel({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="이름, 이메일"
-          className="ml-auto h-10 w-full max-w-[240px] rounded-full border border-border-strong bg-card px-4 text-sm outline-none focus:border-primary"
+          className="ml-auto h-10 w-full max-w-[240px] rounded-full bg-surface-2 px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-2 focus:bg-[#dcdee4]"
         />
       </div>
+
+      {query.trim() || filter !== "all" ? (
+        <p className="px-1 text-xs font-medium text-muted-2">
+          {filtered.length}명 표시 중
+        </p>
+      ) : null}
 
       {error ? (
         <p className="rounded-2xl bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">
@@ -384,7 +390,7 @@ export function UsersAdminPanel({
         </p>
       ) : null}
 
-      <div className="rounded-3xl border border-border bg-card shadow-soft">
+      <div className="rounded-3xl bg-card shadow-soft">
         <div className="hidden grid-cols-[minmax(0,1fr)_7.5rem_7.5rem_8rem] gap-3 rounded-t-3xl bg-card px-5 py-3 text-xs font-semibold text-muted md:grid">
           <p>사용자</p>
           <p>등급</p>
@@ -404,7 +410,7 @@ export function UsersAdminPanel({
             return (
               <li
                 key={u.id}
-                className="border-t border-border px-5 py-4 first:border-t-0"
+                className="border-t border-border/60 px-5 py-4 first:border-t-0"
               >
                 <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[minmax(0,1fr)_7.5rem_7.5rem_8rem] md:items-center md:gap-3">
                   <div className="flex min-w-0 items-start gap-3">
@@ -504,7 +510,7 @@ export function UsersAdminPanel({
             );
           })}
           {filtered.length === 0 ? (
-            <li className="border-t border-border px-5 py-12 text-center text-sm font-medium text-muted">
+            <li className="border-t border-border/60 px-5 py-12 text-center text-sm font-medium text-muted">
               {query.trim() || filter !== "all"
                 ? "조건에 맞는 사용자가 없습니다."
                 : "등록된 사용자가 없습니다."}

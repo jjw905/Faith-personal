@@ -35,6 +35,33 @@ export function notifyVaultChanged() {
   window.dispatchEvent(new CustomEvent(VAULT_CHANGED_EVENT));
 }
 
+/** name.ext → base / .ext */
+export function splitFileName(name: string): { base: string; ext: string } {
+  const i = name.lastIndexOf(".");
+  if (i <= 0) return { base: name, ext: "" };
+  return { base: name.slice(0, i), ext: name.slice(i) };
+}
+
+/** 동일 이름이 있으면 `이름 (1).ext`, `이름 (2).ext` … */
+export function nextDuplicateFileName(
+  name: string,
+  existingNames: string[],
+): string {
+  const names = new Set(existingNames);
+  if (!names.has(name)) return name;
+  const { base, ext } = splitFileName(name);
+  let n = 1;
+  while (names.has(`${base} (${n})${ext}`)) n += 1;
+  return `${base} (${n})${ext}`;
+}
+
+export function renameFile(file: File, name: string): File {
+  return new File([file], name, {
+    type: file.type,
+    lastModified: file.lastModified,
+  });
+}
+
 /**
  * 응답을 JSON으로 안전 파싱. 서버가 HTML 오류 페이지(500/413/프록시)를 주면
  * "Unexpected token '<'" 대신 상태 코드 기반의 사람이 읽을 메시지로 변환.

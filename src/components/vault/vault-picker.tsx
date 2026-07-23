@@ -1,8 +1,9 @@
 "use client";
 
 import { Archive, FileIcon, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import { Button } from "@/components/ui/button";
 import {
   VAULT_CHANGED_EVENT,
@@ -17,18 +18,25 @@ export function VaultPickerDialog({
   open,
   onClose,
   onPick,
+  contained,
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (file: File, meta: VaultItemMeta) => void;
+  /** 디자인 랩: 프리뷰 영역 안에만 표시 */
+  contained?: boolean;
 }) {
   const [items, setItems] = useState<VaultItemMeta[]>([]);
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickingId, setPickingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setQuery("");
+      return;
+    }
 
     let alive = true;
     async function load() {
@@ -56,7 +64,7 @@ export function VaultPickerDialog({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || contained) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
     }
@@ -66,7 +74,13 @@ export function VaultPickerDialog({
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = "";
     };
-  }, [open, onClose]);
+  }, [open, onClose, contained]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => item.name.toLowerCase().includes(q));
+  }, [items, query]);
 
   async function pick(meta: VaultItemMeta) {
     setPickingId(meta.id);
@@ -94,7 +108,12 @@ export function VaultPickerDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className={cn(
+        "flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4",
+        contained
+          ? "absolute inset-0 z-10"
+          : "fixed inset-0 z-[80]",
+      )}
       role="presentation"
       onClick={onClose}
     >
@@ -102,10 +121,10 @@ export function VaultPickerDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="vault-picker-title"
-        className="flex max-h-[min(32rem,85vh)] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-card shadow-soft ring-1 ring-border"
+        className="flex max-h-[min(32rem,85vh)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-card shadow-float sm:rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3.5">
+        <div className="flex items-center justify-between gap-3 px-4 pt-4 pb-2">
           <div className="min-w-0">
             <h2
               id="vault-picker-title"
@@ -113,7 +132,9 @@ export function VaultPickerDialog({
             >
               보관함에서 선택
             </h2>
-            <p className="mt-0.5 text-xs text-muted">보관함 파일을 회의에 첨부합니다.</p>
+            <p className="mt-0.5 text-xs text-muted">
+              보관함 파일을 회의에 첨부합니다.
+            </p>
           </div>
           <button
             type="button"
@@ -125,22 +146,43 @@ export function VaultPickerDialog({
           </button>
         </div>
 
+        {items.length > 0 || query ? (
+          <div className="px-4 pb-2">
+            <MeetingSearch
+              value={query}
+              onChange={setQuery}
+              placeholder="파일 검색"
+              label="보관함 파일 검색"
+              className="max-w-none"
+            />
+          </div>
+        ) : null}
+
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {loading ? (
-            <p className="px-3 py-8 text-center text-sm text-muted">불러오는 중…</p>
+            <p className="px-3 py-8 text-center text-sm text-muted">
+              불러오는 중…
+            </p>
           ) : error ? (
-            <p className="px-3 py-8 text-center text-sm text-masked">{error}</p>
+            <p className="px-3 py-8 text-center text-sm text-muted">{error}</p>
           ) : items.length === 0 ? (
             <div className="px-3 py-10 text-center">
-              <Archive className="mx-auto h-8 w-8 text-muted-2" strokeWidth={1.5} />
+              <Archive
+                className="mx-auto h-8 w-8 text-muted-2"
+                strokeWidth={1.5}
+              />
               <p className="mt-3 text-sm text-muted">보관함이 비어 있습니다.</p>
               <p className="mt-1 text-xs text-muted-2">
                 보관함 메뉴에서 파일을 올려 주세요.
               </p>
             </div>
+          ) : filtered.length === 0 ? (
+            <p className="px-3 py-8 text-center text-sm text-muted">
+              검색 결과가 없습니다.
+            </p>
           ) : (
             <ul className="space-y-0.5">
-              {items.map((item) => (
+              {filtered.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
@@ -170,7 +212,7 @@ export function VaultPickerDialog({
           )}
         </div>
 
-        <div className="border-t border-border px-4 py-3">
+        <div className="px-4 py-3">
           <Button
             type="button"
             variant="outline"

@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 
-import { getNotifications } from "@/lib/mock-loader";
+import { readDataRetentionDaysFromStorage } from "@/lib/data-retention";
 import {
   WORKSPACES,
   type Workspace,
@@ -86,8 +86,8 @@ function readWorkspaceId(): WorkspaceId {
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const { data: session } = useSession();
-  const unread = getNotifications().filter((n) => n.unread).length;
+  const { data: session, status } = useSession();
+  const [notificationCount, setNotificationCount] = useState(0);
   const [workspaceId, setWorkspaceIdState] = useState<WorkspaceId>("team");
   const [autoOpenTimelineOnStart, setAutoOpenTimelineOnStartState] =
     useState(true);
@@ -96,6 +96,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setWorkspaceIdState(readWorkspaceId());
     setAutoOpenTimelineOnStartState(readAutoTimelinePref());
   }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.id) {
+      setNotificationCount(0);
+      return;
+    }
+
+    let cancelled = false;
+    async function refreshCount() {
+      try {
+        const retentionDays = readDataRetentionDaysFromStorage();
+        const q = new URLSearchParams({
+          countOnly: "1",
+          retentionDays: String(retentionDays),
+        });
+        const res = await fetch(`/api/notifications?${q}`, {
+          cache: "no-store",
+        });
+        const data = (await res.json()) as {
+          ok?: boolean;
+          unreadCount?: number;
+        };
+        if (!cancelled && res.ok && data.ok) {
+          setNotificationCount(data.unreadCount ?? 0);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void refreshCount();
+    const onChanged = (e: Event) => {
+      const detail = (e as CustomEvent<{ unreadCount?: number }>).detail;
+      if (typeof detail?.unreadCount === "number") {
+        setNotificationCount(detail.unreadCount);
+        return;
+      }
+      void refreshCount();
+    };
+    window.addEventListener("faith:notifications-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("faith:notifications-changed", onChanged);
+    };
+  }, [session?.user?.id, status]);
 
   const setWorkspaceId = useCallback((id: WorkspaceId) => {
     setWorkspaceIdState(id);
@@ -136,7 +181,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return {
       currentUser,
-      notificationCount: unread,
+      notificationCount,
       workspaceId,
       workspace,
       setWorkspaceId,
@@ -145,7 +190,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [
     currentUser,
-    unread,
+    notificationCount,
     workspaceId,
     setWorkspaceId,
     autoOpenTimelineOnStart,

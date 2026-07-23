@@ -274,10 +274,13 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                         저장
                       </FilledBtn>
                       <TextBtn onClick={() => setPanel(null)}>취소</TextBtn>
+                      <p className="w-full pl-24 text-xs text-muted-2">
+                        한글 2~5자
+                      </p>
                     </>
                   ) : (
                     <>
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/85">
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                         {currentUser.name || "없음"}
                       </p>
                       <TextBtn onClick={() => openPanel("name")}>변경</TextBtn>
@@ -319,7 +322,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                     </>
                   ) : (
                     <>
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/85">
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                         {email || "없음"}
                       </p>
                       <TextBtn onClick={() => openPanel("email")}>변경</TextBtn>
@@ -406,7 +409,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                     </div>
                   ) : (
                     <>
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground/85">
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                         {hasPassword ? "사용 중" : "없음"}
                       </p>
                       <TextBtn onClick={() => openPanel("password")}>

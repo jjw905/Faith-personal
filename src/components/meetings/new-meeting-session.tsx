@@ -247,7 +247,7 @@ function FileAttachmentCard({
           )}
         >
           <FileAudio className="h-4 w-4" strokeWidth={1.75} />
-          <span className="mt-0.5 text-[8px] font-bold leading-none tracking-wide opacity-80">
+          <span className="mt-0.5 text-[10px] font-bold leading-none tracking-wide opacity-80">
             {ext}
           </span>
         </div>
@@ -255,17 +255,17 @@ function FileAttachmentCard({
           <p className="truncate text-[13px] font-semibold leading-snug">{name}</p>
           <p
             className={cn(
-              "mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] font-medium",
+              "mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs font-medium",
               isMe ? "text-primary-foreground/75" : "text-muted",
             )}
           >
             <span>오디오</span>
-            <span aria-hidden>·</span>
+            <span aria-hidden>,</span>
             <span className="tabular-nums">{sizeLabel}</span>
             {isTest ? (
               <span
                 className={cn(
-                  "rounded px-1.5 py-0.5 text-[9px] font-bold leading-none",
+                  "rounded px-1.5 py-0.5 text-xs font-bold leading-none",
                   isMe
                     ? "bg-white/15 text-primary-foreground"
                     : "bg-primary-soft text-primary",
@@ -281,7 +281,7 @@ function FileAttachmentCard({
   );
 }
 
-function ChatBubble({
+export function ChatBubble({
   side,
   name,
   initial,
@@ -334,13 +334,13 @@ function ChatBubble({
       >
         <p
           className={cn(
-            "mb-1 flex min-w-0 items-baseline gap-1.5 text-[11px] font-semibold",
+            "mb-1 flex min-w-0 items-baseline gap-1.5 text-xs font-semibold",
             isMe ? "flex-row-reverse text-primary" : "text-foreground",
           )}
         >
           <span className="truncate">{name}</span>
           {!isMe && team ? (
-            <span className="shrink-0 rounded bg-surface-2 px-1.5 py-px text-[10px] font-medium text-muted">
+            <span className="shrink-0 rounded bg-surface-2 px-1.5 py-px text-xs font-medium text-muted">
               {team}
             </span>
           ) : null}
@@ -463,14 +463,14 @@ function MemoListSection({
   return (
     <section>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <h3 className="text-[11px] font-semibold tracking-wide text-muted">
+        <h3 className="text-xs font-semibold tracking-wide text-muted">
           {label}
         </h3>
         <button
           type="button"
           onClick={addItem}
           aria-label={`${label} 추가`}
-          className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-primary transition-colors hover:bg-primary-soft"
+          className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-lg px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary-soft"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
           {addLabel}
@@ -478,7 +478,7 @@ function MemoListSection({
       </div>
       <ul className="space-y-1.5">
         {items.length === 0 ? (
-          <li className="rounded-xl bg-surface px-3 py-2 text-[11px] text-muted">
+          <li className="rounded-xl bg-surface px-3 py-2 text-xs text-muted">
             항목이 없습니다. 추가로 입력하세요.
           </li>
         ) : (
@@ -496,9 +496,9 @@ function MemoListSection({
                 type="button"
                 onClick={() => removeItem(item.id)}
                 aria-label={`${label} 항목 삭제`}
-                className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-masked"
+                className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-masked transition-colors hover:bg-masked-soft"
               >
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                <Trash2 className="h-5 w-5" strokeWidth={1.75} />
               </button>
             </li>
           ))
@@ -554,7 +554,7 @@ function ToolAction({
       </button>
       <span
         className={cn(
-          "pointer-events-none absolute left-1/2 top-[calc(100%+4px)] w-max max-w-[4.5rem] -translate-x-1/2 text-center text-[10px] font-semibold leading-tight",
+          "pointer-events-none absolute left-1/2 top-[calc(100%+4px)] w-max max-w-[4.5rem] -translate-x-1/2 text-center text-xs font-semibold leading-tight",
           pressed ? "text-primary" : "text-foreground/65",
         )}
       >
@@ -564,7 +564,7 @@ function ToolAction({
   );
 }
 
-function RecordBeatBars() {
+export function RecordBeatBars() {
   return (
     <span className="record-beat-bars text-white" aria-hidden>
       <span />
@@ -576,7 +576,7 @@ function RecordBeatBars() {
   );
 }
 
-function AttachMenuPopup({
+export function AttachMenuPopup({
   open,
   onAttach,
   onVault,
@@ -619,7 +619,7 @@ function AttachMenuPopup({
           <Archive className="h-4 w-4" strokeWidth={1.75} />
         </span>
         <span className="min-w-0 flex-1 truncate">보관함에서</span>
-        <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold leading-none text-primary-foreground">
+        <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-xs font-bold leading-none text-primary-foreground">
           개발
         </span>
       </button>
@@ -633,7 +633,7 @@ function AttachMenuPopup({
           <Shuffle className="h-4 w-4" strokeWidth={1.75} />
         </span>
         <span className="min-w-0 flex-1 truncate">파일 임의전송</span>
-        <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-[9px] font-bold leading-none text-primary-foreground">
+        <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-xs font-bold leading-none text-primary-foreground">
           개발
         </span>
       </button>
@@ -641,17 +641,19 @@ function AttachMenuPopup({
   );
 }
 
-function ResetConfirmDialog({
+export function ResetConfirmDialog({
   open,
   onCancel,
   onConfirm,
+  contained,
 }: {
   open: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  contained?: boolean;
 }) {
   useEffect(() => {
-    if (!open) return;
+    if (!open || contained) return;
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") onCancel();
     }
@@ -661,13 +663,16 @@ function ResetConfirmDialog({
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = "";
     };
-  }, [open, onCancel]);
+  }, [open, onCancel, contained]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4"
+      className={cn(
+        "flex items-center justify-center bg-black/40 p-4",
+        contained ? "absolute inset-0 z-10" : "fixed inset-0 z-[70]",
+      )}
       role="presentation"
       onClick={onCancel}
     >
@@ -742,12 +747,12 @@ function ScenarioPanel({
       <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">타임라인</h2>
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
+          <p className="mt-0.5 text-xs leading-relaxed text-muted">
             위에서 아래로 순차 생성
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <span className="inline-flex items-center gap-1 font-mono text-[11px] tabular-nums text-muted">
+          <span className="inline-flex items-center gap-1 font-mono text-xs tabular-nums text-muted">
             <Clock3
               className={cn("h-3.5 w-3.5", running && "animate-spin")}
               strokeWidth={1.75}
@@ -805,17 +810,17 @@ function ScenarioPanel({
                   )}
                 >
                   <div className="mb-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                    <span className="font-mono text-[10px] tabular-nums text-muted">
+                    <span className="font-mono text-xs tabular-nums text-muted">
                       {beat.time}
                     </span>
-                    <span className="text-[11px] font-semibold text-foreground">
+                    <span className="text-xs font-semibold text-foreground">
                       {beat.title}
                     </span>
-                    <span className="text-[9px] font-medium text-muted">
+                    <span className="text-xs font-medium text-muted">
                       {beat.kind}
                     </span>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-foreground/80">
+                  <p className="text-xs leading-relaxed text-foreground/80">
                     {beat.line}
                   </p>
                 </div>
@@ -859,7 +864,7 @@ function MeetingMemoPanel({
       role="dialog"
       aria-modal="true"
       aria-label="회의 메모"
-      className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[22rem] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft sm:w-[22rem]"
+      className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[22rem] flex-col overflow-hidden rounded-2xl bg-card shadow-soft sm:w-[22rem]"
     >
       <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0 flex-1">
@@ -927,7 +932,7 @@ function MeetingMemoPanel({
           addLabel="추가"
         />
         <section className="rounded-2xl bg-warning-soft px-3 py-2.5">
-          <h3 className="text-[11px] font-semibold tracking-wide text-warning">
+          <h3 className="text-xs font-semibold tracking-wide text-warning">
             주의
           </h3>
           <textarea
@@ -1495,7 +1500,7 @@ export function NewMeetingSession() {
                 </button>
                 <span
                   className={cn(
-                    "pointer-events-none absolute left-1/2 top-[calc(100%+4px)] w-max max-w-[4.5rem] -translate-x-1/2 text-center text-[10px] font-semibold leading-tight",
+                    "pointer-events-none absolute left-1/2 top-[calc(100%+4px)] w-max max-w-[4.5rem] -translate-x-1/2 text-center text-xs font-semibold leading-tight",
                     attachMenuOpen ? "text-primary" : "text-foreground/65",
                   )}
                 >

@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 /** 가림 방식 미리보기 칩 — 말풍선 마스킹과 같은 톤 */
 function MaskPreviewChip({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-block max-w-full truncate rounded-md bg-masked-soft px-1.5 font-mono text-[10px] font-semibold leading-5 text-masked">
+    <span className="inline-block max-w-full truncate rounded-md bg-masked-soft px-1.5 font-mono text-xs font-semibold leading-5 text-masked">
       {children}
     </span>
   );
@@ -46,7 +46,7 @@ export function MaskStylePicker({
   return (
     <div className={cn(className)}>
       {showHeading ? (
-        <p className="mb-1.5 text-[11px] font-semibold text-muted-2">
+        <p className="mb-1.5 text-xs font-semibold text-muted-2">
           개인정보 가림
         </p>
       ) : null}
@@ -142,17 +142,21 @@ export function MaskStylePopup({
   value,
   onChange,
   className,
+  forceOpen,
 }: {
   value: MaskStyle;
   onChange: (next: MaskStyle) => void;
   className?: string;
+  /** 디자인 랩: 패널 항상 열림 */
+  forceOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(forceOpen));
   const rootRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  const panelOpen = forceOpen || open;
 
   useEffect(() => {
-    if (!open) return;
+    if (!panelOpen || forceOpen) return;
     function onPointer(e: MouseEvent) {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     }
@@ -165,20 +169,23 @@ export function MaskStylePopup({
       document.removeEventListener("mousedown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [panelOpen, forceOpen]);
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>
       <button
         type="button"
-        aria-expanded={open}
+        aria-expanded={panelOpen}
         aria-controls={panelId}
         aria-label="개인정보 가림 방식"
         title="가림 방식"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (forceOpen) return;
+          setOpen((v) => !v);
+        }}
         className={cn(
           "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-colors",
-          open
+          panelOpen
             ? "bg-primary text-primary-foreground shadow-soft"
             : "bg-surface-2 text-muted hover:text-foreground",
         )}
@@ -186,7 +193,7 @@ export function MaskStylePopup({
         <EyeOff className="h-4 w-4" strokeWidth={1.75} />
       </button>
 
-      {open ? (
+      {panelOpen ? (
         <div
           id={panelId}
           role="dialog"
@@ -197,7 +204,7 @@ export function MaskStylePopup({
             value={value}
             onChange={(next) => {
               onChange(next);
-              setOpen(false);
+              if (!forceOpen) setOpen(false);
             }}
             compact
           />
