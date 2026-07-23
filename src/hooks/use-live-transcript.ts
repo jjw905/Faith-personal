@@ -58,6 +58,10 @@ export function useLiveTranscript(
     setStatus("paused");
   }, [clearTimer]);
 
+  const playFromRef = useRef<
+    (fromIndex: number, alreadyVisible: LiveUtterance[]) => void
+  >(() => {});
+
   const playFrom = useCallback(
     (fromIndex: number, alreadyVisible: LiveUtterance[]) => {
       const list = utterancesRef.current;
@@ -93,7 +97,7 @@ export function useLiveTranscript(
 
         timerRef.current = setTimeout(() => {
           if (statusRef.current === "paused") return;
-          playFrom(fromIndex + 1, completed);
+          playFromRef.current(fromIndex + 1, completed);
         }, current.delayMs);
       };
 
@@ -101,6 +105,10 @@ export function useLiveTranscript(
     },
     [charIntervalMs],
   );
+
+  useEffect(() => {
+    playFromRef.current = playFrom;
+  }, [playFrom]);
 
   const play = useCallback(
     (nextUtterances?: LiveUtterance[]) => {

@@ -119,6 +119,25 @@ body {
   }
 }
 
+/* 분석 중 원형 진행: 살짝 숨 쉬는 느낌 */
+@keyframes process-ring-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 0.92;
+  }
+}
+
+.process-progress-ring {
+  animation: process-ring-breathe 2.4s ease-in-out infinite;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes process-rise {
     from {
@@ -129,6 +148,10 @@ body {
       transform: none;
       opacity: 1;
     }
+  }
+
+  .process-progress-ring {
+    animation: none;
   }
 }
 

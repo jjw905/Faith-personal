@@ -22,6 +22,64 @@ function clampPercent(n: unknown, phase: MeetingProcessPhase): number {
   return 0;
 }
 
+/** M3 원형 진행. viewBox 고정으로 크기만 바꿔도 비율 유지. */
+function ProcessProgressRing({
+  percent,
+  className,
+}: {
+  percent: number;
+  className?: string;
+}) {
+  const size = 120;
+  const stroke = 7;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - Math.min(100, Math.max(0, percent)) / 100);
+
+  return (
+    <div
+      className={cn(
+        "process-progress-ring relative aspect-square size-[min(7.5rem,42vw)] shrink-0 overflow-hidden",
+        className,
+      )}
+      aria-hidden
+    >
+      <svg
+        viewBox={`0 0 ${size} ${size}`}
+        className="block h-full w-full -rotate-90"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          className="text-surface-2"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          className="text-primary transition-[stroke-dashoffset] duration-500 ease-out"
+        />
+      </svg>
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="tabular-nums text-[clamp(1.25rem,5vw,1.75rem)] font-semibold tracking-tight text-primary">
+          {percent}
+          <span className="text-[0.55em] font-semibold">%</span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /** 진행률 + 문구. 디자인 랩·상세 공용. */
 export function MeetingProcessLoader({
   phase,
@@ -40,7 +98,7 @@ export function MeetingProcessLoader({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-3 px-4 py-10",
+        "flex flex-col items-center justify-center gap-4 px-4 py-10",
         className,
       )}
       aria-live="polite"
@@ -51,11 +109,7 @@ export function MeetingProcessLoader({
           : MEETING_PROCESS_LABEL[phase]
       }
     >
-      {active ? (
-        <p className="tabular-nums text-2xl font-semibold tracking-tight text-primary">
-          {percent}%
-        </p>
-      ) : null}
+      {active ? <ProcessProgressRing percent={percent} /> : null}
 
       <div className="relative h-5 overflow-hidden">
         <p
@@ -78,7 +132,6 @@ export function MeetingProcessLoader({
     </div>
   );
 }
-
 /** 업로드 STT 처리 중 폴링. 완료 시 새로고침. */
 export function MeetingProcessBanner({
   meetingId,

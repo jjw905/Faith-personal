@@ -1,20 +1,6 @@
-import dynamic from "next/dynamic";
 import Image from "next/image";
 
-const GlassChatBubblesPreview = dynamic(
-  () =>
-    import("@/components/marketing/glass-chat-bubbles").then(
-      (m) => m.GlassChatBubblesPreview,
-    ),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-        유리 말풍선 로딩…
-      </div>
-    ),
-  },
-);
+import { GlassBubblesClient } from "./glass-bubbles-client";
 
 /** 유리 질감 3D 말풍선 로컬 프리뷰 (포트 3001 권장). */
 export default function GlassBubblesDevPage() {
@@ -37,10 +23,10 @@ export default function GlassBubblesDevPage() {
         <section className="flex flex-col gap-3">
           <h1 className="text-lg font-semibold tracking-tight">WebGL 프리뷰</h1>
           <div className="min-h-[420px] flex-1 overflow-hidden rounded-3xl bg-[#e8eaee] ring-1 ring-black/5">
-            <GlassChatBubblesPreview />
+            <GlassBubblesClient />
           </div>
           <p className="text-xs text-zinc-500">
-            MeshTransmissionMaterial · 두께/굴절/하이라이트 조정용 페이지
+            MeshTransmissionMaterial, 두께/굴절/하이라이트 조정용 페이지
           </p>
         </section>
       </div>

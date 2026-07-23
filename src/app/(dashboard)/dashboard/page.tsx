@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AudioUploadZone } from "@/components/dashboard/audio-upload-zone";
 import { MeetingMidPanel } from "@/components/dashboard/meeting-mid-panel";
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
-import { ProcessingNowSection } from "@/components/dashboard/processing-now";
 import { RecentMeetingsTable } from "@/components/dashboard/recent-meetings-table";
 import { PageContainer } from "@/components/layout/page-container";
 import { useAppContext } from "@/context/app-context";
@@ -45,7 +44,6 @@ export default function DashboardPage() {
   const [meetings, setMeetings] = useState<Meeting[]>(() =>
     getMeetingsByWorkspace(workspaceId),
   );
-  const prevActiveIdsRef = useRef<string[]>([]);
 
   const refreshMeetings = useCallback(async () => {
     let hidden = new Set<string>();
@@ -86,17 +84,6 @@ export default function DashboardPage() {
     );
   }, [workspaceId]);
 
-  const onProcessingActiveChange = useCallback(
-    (activeIds: string[]) => {
-      const prev = prevActiveIdsRef.current;
-      prevActiveIdsRef.current = activeIds;
-      if (prev.some((id) => !activeIds.includes(id))) {
-        void refreshMeetings();
-      }
-    },
-    [refreshMeetings],
-  );
-
   useEffect(() => {
     void refreshMeetings();
   }, [refreshMeetings]);
@@ -133,7 +120,6 @@ export default function DashboardPage() {
             ctaUpload={profile.ctaUpload}
             onMeetingStarted={() => void refreshMeetings()}
           />
-          <ProcessingNowSection onActiveChange={onProcessingActiveChange} />
         </section>
 
         <section>

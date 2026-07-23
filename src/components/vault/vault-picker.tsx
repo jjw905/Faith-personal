@@ -93,7 +93,7 @@ export function VaultPickerDialog({
       }
       const file = new File([item.blob], item.name, {
         type: item.mime,
-        lastModified: Date.parse(item.createdAt) || Date.now(),
+        lastModified: Date.parse(item.createdAt) || 0,
       });
       onPick(file, meta);
       onClose();
