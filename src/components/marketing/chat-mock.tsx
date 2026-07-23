@@ -592,7 +592,7 @@ export function ChatMock() {
         >
           <div
             ref={listRef}
-            className="flex flex-col gap-3.5 pb-1 pt-6 will-change-transform"
+            className="flex flex-col gap-3.5 px-2 pb-1 pt-6 will-change-transform"
           >
             <ChatDateDivider label={dateLabel} />
             {visible.map((msg) => (
