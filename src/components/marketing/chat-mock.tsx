@@ -380,7 +380,7 @@ function MockBubble({
 function ChatDateDivider({ label }: { label: string }) {
   if (!label) return null;
   return (
-    <div className="flex shrink-0 justify-center pb-3 pt-0.5">
+    <div className="flex shrink-0 justify-center pb-1">
       <span className="rounded-full bg-surface-2 px-3 py-1 text-[13px] font-semibold tabular-nums tracking-tight text-foreground">
         {label}
       </span>
@@ -401,6 +401,7 @@ export function ChatMock() {
   const timersRef = useRef<number[]>([]);
   const feedRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const prevCountRef = useRef(0);
   const messagesRef = useRef<VisibleMessage[]>([]);
   const inViewRef = useRef(true);
   const rafRef = useRef(0);
@@ -449,12 +450,17 @@ export function ChatMock() {
     return () => io.disconnect();
   }, []);
 
-  // 위에서 쌓이되, 넘치면 위로 밀어 최신이 보이게 (부드럽게 스크롤)
+  // 위에서 쌓이되, 넘치면 위로 밀어 최신이 보이게.
+  // - 새 메시지 추가: 부드럽게 스크롤(transition)
+  // - ...→내용 전환(개수 동일): 같은 프레임 즉시 보정 → 위아래 처짐 없음
   useLayoutEffect(() => {
     const feed = feedRef.current;
     const list = listRef.current;
     if (!feed || !list) return;
+    const grew = visible.length > prevCountRef.current;
+    prevCountRef.current = visible.length;
     const overflow = list.scrollHeight - feed.clientHeight;
+    list.style.transition = grew ? "transform 320ms ease-out" : "none";
     list.style.transform =
       overflow > 0 ? `translate3d(0, ${-overflow}px, 0)` : "translate3d(0, 0, 0)";
   }, [visible]);
@@ -541,12 +547,21 @@ export function ChatMock() {
       }}
     >
       <div className="flex h-[400px] flex-col xl:h-[440px]">
-        <ChatDateDivider label={dateLabel} />
-        <div ref={feedRef} className="min-h-0 flex-1 overflow-hidden">
+        <div
+          ref={feedRef}
+          className="min-h-0 flex-1 overflow-hidden"
+          style={{
+            WebkitMaskImage:
+              "linear-gradient(to bottom, transparent 0, #000 22px, #000 100%)",
+            maskImage:
+              "linear-gradient(to bottom, transparent 0, #000 22px, #000 100%)",
+          }}
+        >
           <div
             ref={listRef}
-            className="flex flex-col gap-3.5 pb-1 transition-transform duration-300 ease-out will-change-transform"
+            className="flex flex-col gap-3.5 pb-1 pt-6 will-change-transform"
           >
+            <ChatDateDivider label={dateLabel} />
             {visible.map((msg) => (
               <MockBubble
                 key={msg.key}
