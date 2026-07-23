@@ -5,7 +5,7 @@ export function HeroChatShapes() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none relative z-10 w-[11rem] select-none sm:w-[13rem] xl:w-[15rem]"
+      className="pointer-events-none relative z-10 w-[7.5rem] select-none sm:w-[11rem] md:w-[13rem] xl:w-[15rem]"
     >
       <Image
         src="/hero-chat-glass-01.png"

@@ -109,18 +109,18 @@ export function FeatureTimeline() {
             className="mb-8 h-12 w-px bg-[color-mix(in_srgb,var(--foreground)_16%,transparent)] sm:mb-10 sm:h-14 lg:mb-12"
           />
 
-          <div className="mx-auto flex w-fit max-w-full flex-col items-center justify-center gap-[50px] text-center xl:flex-row xl:items-center xl:text-left">
-            <div className="max-w-xl shrink-0">
-              <h2 className="text-4xl font-bold tracking-tight text-foreground lg:text-5xl">
+          <div className="mx-auto flex w-fit max-w-full flex-row items-start justify-center gap-4 text-left sm:gap-6 md:gap-8 lg:gap-10 xl:gap-[50px]">
+            <div className="min-w-0 max-w-xl shrink">
+              <h2 className="break-keep text-[1.75rem] font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
                 회의 전 과정을
                 <br />
                 하나의 흐름으로.
               </h2>
-              <p className="mt-6 text-lg leading-relaxed text-muted">
+              <p className="mt-4 break-keep text-base leading-relaxed text-muted sm:mt-6 sm:text-lg">
                 기록까지 안전하게, Faith가 자동으로 이어줍니다.
               </p>
             </div>
-            <div className="flex shrink-0 justify-center">
+            <div className="flex shrink-0 justify-center pt-0.5 sm:pt-1">
               <HeroChatShapesHost />
             </div>
           </div>
