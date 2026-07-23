@@ -308,29 +308,59 @@ function TypingDots() {
   );
 }
 
+const BUBBLE_BASE =
+  "inline-block rounded-2xl px-3.5 py-2.5 text-left text-[14px] leading-relaxed xl:text-[15px]";
+
 function MockBubble({
   side,
   name,
   initial,
-  children,
+  pending,
+  content,
 }: {
   side: Side;
   name: string;
   initial: string;
-  children: ReactNode;
+  pending: boolean;
+  content: ReactNode;
 }) {
   const isMe = side === "left";
   const displayName = isMe ? "나" : name;
   const displayInitial = isMe ? "나" : initial;
 
+  // 최종 내용 높이를 숨은 사이저로 측정 → 대기(...) 중에도 세로 공간을 미리 확보.
+  // 확보 공간은 투명(카드 배경)이라 넓은 말풍선이 아니고, ...→내용 전환 시 세로 이동 0.
+  const sizerRef = useRef<HTMLDivElement>(null);
+  const [reservedH, setReservedH] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const el = sizerRef.current;
+    if (!el) return;
+    const update = () => setReservedH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [content]);
+
   return (
     <div
       className={cn(
-        "flex w-full animate-[bubble-in_240ms_ease-out] items-end gap-2.5",
+        "relative flex w-full animate-[bubble-in_240ms_ease-out] items-end gap-2.5",
         isMe ? "flex-row" : "flex-row-reverse",
       )}
-      style={{ contain: "layout paint" }}
     >
+      {/* 측정 전용(비표시) — 실제 말풍선과 동일한 폭 제약/타이포 */}
+      <div
+        aria-hidden
+        ref={sizerRef}
+        className={cn(
+          "invisible pointer-events-none absolute left-0 top-0 max-w-[78%]",
+          BUBBLE_BASE,
+        )}
+      >
+        {content}
+      </div>
+
       <div
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
@@ -362,15 +392,18 @@ function MockBubble({
             </span>
           )}
         </p>
-        <div
-          className={cn(
-            "inline-block rounded-2xl px-3.5 py-2.5 text-left text-[14px] leading-relaxed xl:text-[15px]",
-            isMe
-              ? "rounded-bl-md bg-primary text-primary-foreground"
-              : "rounded-br-md bg-surface text-foreground",
-          )}
-        >
-          {children}
+        {/* 세로 공간 예약 래퍼(투명) */}
+        <div style={{ minHeight: pending ? reservedH : undefined }}>
+          <div
+            className={cn(
+              BUBBLE_BASE,
+              isMe
+                ? "rounded-bl-md bg-primary text-primary-foreground"
+                : "rounded-br-md bg-surface text-foreground",
+            )}
+          >
+            {pending ? <TypingDots /> : content}
+          </div>
         </div>
       </div>
     </div>
@@ -568,9 +601,9 @@ export function ChatMock() {
                 side={msg.side}
                 name={msg.name}
                 initial={msg.initial}
-              >
-                {msg.pending ? <TypingDots /> : msg.content}
-              </MockBubble>
+                pending={msg.pending}
+                content={msg.content}
+              />
             ))}
           </div>
         </div>
