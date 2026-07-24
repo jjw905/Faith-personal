@@ -300,7 +300,7 @@ type VisibleMessage = ScriptLine & { key: number; pending: boolean };
 
 function TypingDots() {
   return (
-    <span className="running-dots inline-flex h-[1.625em] items-center gap-1 align-middle text-[14px] text-muted-2 xl:text-[15px]">
+    <span className="running-dots chat-running-dots flex h-[1lh] w-5 items-center justify-center gap-1 text-current opacity-50">
       <span />
       <span />
       <span />
@@ -309,7 +309,7 @@ function TypingDots() {
 }
 
 const BUBBLE_BASE =
-  "inline-block rounded-2xl px-3.5 py-2.5 text-left text-[14px] leading-relaxed xl:text-[15px]";
+  "rounded-2xl px-3.5 py-2.5 text-left text-[14px] leading-relaxed xl:text-[15px]";
 
 function MockBubble({
   side,
@@ -328,39 +328,13 @@ function MockBubble({
   const displayName = isMe ? "나" : name;
   const displayInitial = isMe ? "나" : initial;
 
-  // 최종 내용 높이를 숨은 사이저로 측정 → 대기(...) 중에도 세로 공간을 미리 확보.
-  // 확보 공간은 투명(카드 배경)이라 넓은 말풍선이 아니고, ...→내용 전환 시 세로 이동 0.
-  const sizerRef = useRef<HTMLDivElement>(null);
-  const [reservedH, setReservedH] = useState<number | undefined>(undefined);
-  useLayoutEffect(() => {
-    const el = sizerRef.current;
-    if (!el) return;
-    const update = () => setReservedH(el.offsetHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [content]);
-
   return (
     <div
       className={cn(
-        "relative flex w-full animate-[bubble-in_240ms_ease-out] items-end gap-2.5",
+        "flex w-full items-end gap-2.5",
         isMe ? "flex-row" : "flex-row-reverse",
       )}
     >
-      {/* 측정 전용(비표시) — 실제 말풍선과 동일한 폭 제약/타이포 */}
-      <div
-        aria-hidden
-        ref={sizerRef}
-        className={cn(
-          "invisible pointer-events-none absolute left-0 top-0 max-w-[78%]",
-          BUBBLE_BASE,
-        )}
-      >
-        {content}
-      </div>
-
       <div
         className={cn(
           "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
@@ -373,8 +347,8 @@ function MockBubble({
       </div>
       <div
         className={cn(
-          "max-w-[78%] min-w-0",
-          isMe ? "items-start text-left" : "items-end text-right",
+          "flex min-w-0 max-w-[78%] flex-col",
+          isMe ? "items-start" : "items-end",
         )}
       >
         <p
@@ -392,11 +366,21 @@ function MockBubble({
             </span>
           )}
         </p>
-        {/* 세로 공간 예약 래퍼(투명) */}
-        <div style={{ minHeight: pending ? reservedH : undefined }}>
+        <div className="inline-grid max-w-full grid-cols-1">
+          <div
+            aria-hidden
+            className={cn(
+              BUBBLE_BASE,
+              "invisible col-start-1 row-start-1 min-w-0",
+            )}
+          >
+            {content}
+          </div>
           <div
             className={cn(
               BUBBLE_BASE,
+              "col-start-1 row-start-1 max-w-full self-start",
+              isMe ? "justify-self-start" : "justify-self-end",
               isMe
                 ? "rounded-bl-md bg-primary text-primary-foreground"
                 : "rounded-br-md bg-surface text-foreground",
@@ -425,7 +409,8 @@ function ChatDateDivider({ label }: { label: string }) {
  *
  * 시나리오:
  * - 마운트당 1회만 재생(루프/초기화 없음)
- * - 메시지는 위에서부터 쌓임, 넘치면 transform으로 최신만 보이게
+ * - 메시지는 위에서부터 쌓임, 넘치면 새 줄 추가 시에만 scrollTop 보정
+ * - ...→내용은 말풍선 안에서만 바뀜(높이 예약됨, 스크롤 없음)
  * - 채팅 영역 스크롤/휠 가로채기 없음(페이지 스크롤 버벅임 방지)
  * - 화면 밖에서는 DOM 갱신 보류, 다시 보이면 일괄 반영
  * - 페이지를 나갔다 다시 오면(재마운트)만 처음부터 재생
@@ -446,13 +431,31 @@ export function ChatMock() {
     timersRef.current = [];
   }
 
-  function flushVisible() {
+  function flushVisible(sync = false) {
+    if (!inViewRef.current) return;
+    if (sync) {
+      if (rafRef.current) {
+        window.cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+      setVisible([...messagesRef.current]);
+      return;
+    }
     if (rafRef.current) return;
     rafRef.current = window.requestAnimationFrame(() => {
       rafRef.current = 0;
       if (!inViewRef.current) return;
       setVisible(messagesRef.current);
     });
+  }
+
+  /** 새 메시지 줄이 추가될 때만 스크롤. ...→내용은 높이 동일 → 건드리지 않음 */
+  function scrollToTailIfNeeded() {
+    const feed = feedRef.current;
+    const list = listRef.current;
+    if (!feed || !list) return;
+    const max = list.scrollHeight - feed.clientHeight;
+    feed.scrollTop = max > 0 ? max : 0;
   }
 
   useEffect(() => {
@@ -483,19 +486,10 @@ export function ChatMock() {
     return () => io.disconnect();
   }, []);
 
-  // 위에서 쌓이되, 넘치면 위로 밀어 최신이 보이게.
-  // - 새 메시지 추가: 부드럽게 스크롤(transition)
-  // - ...→내용 전환(개수 동일): 같은 프레임 즉시 보정 → 위아래 처짐 없음
   useLayoutEffect(() => {
-    const feed = feedRef.current;
-    const list = listRef.current;
-    if (!feed || !list) return;
     const grew = visible.length > prevCountRef.current;
     prevCountRef.current = visible.length;
-    const overflow = list.scrollHeight - feed.clientHeight;
-    list.style.transition = grew ? "transform 320ms ease-out" : "none";
-    list.style.transform =
-      overflow > 0 ? `translate3d(0, ${-overflow}px, 0)` : "translate3d(0, 0, 0)";
+    if (grew) scrollToTailIfNeeded();
   }, [visible]);
 
   useEffect(() => {
@@ -539,7 +533,7 @@ export function ChatMock() {
           const prev = messagesRef.current;
           if (prev.some((m) => m.key === key)) return;
           messagesRef.current = [...prev, { ...line, key, pending: true }];
-          flushVisible();
+          flushVisible(true);
         }, start),
       );
 
@@ -552,7 +546,7 @@ export function ChatMock() {
           const copy = prev.slice();
           copy[idx] = { ...copy[idx]!, pending: false };
           messagesRef.current = copy;
-          flushVisible();
+          flushVisible(true);
         }, start + TYPING),
       );
 
@@ -582,6 +576,7 @@ export function ChatMock() {
       <div className="flex h-[400px] flex-col xl:h-[440px]">
         <div
           ref={feedRef}
+          data-chat-feed
           className="min-h-0 flex-1 overflow-hidden"
           style={{
             WebkitMaskImage:
@@ -590,10 +585,7 @@ export function ChatMock() {
               "linear-gradient(to bottom, transparent 0, #000 22px, #000 100%)",
           }}
         >
-          <div
-            ref={listRef}
-            className="flex flex-col gap-3.5 px-2 pb-1 pt-6 will-change-transform"
-          >
+          <div ref={listRef} className="flex flex-col gap-3.5 px-2 pb-1 pt-6">
             <ChatDateDivider label={dateLabel} />
             {visible.map((msg) => (
               <MockBubble
