@@ -49,7 +49,10 @@ async function main() {
     console.log(
       `[admin] 로컬 관리자 준비: ${fallback.email} (${fallback.role})`,
     );
-    printLocalDevLogin(fallback.email, fallback.password);
+    printLocalDevLogin(
+      fallback.email ?? LOCAL_DEV_ADMIN_EMAIL,
+      fallback.password,
+    );
   }
 
   if (process.env.NODE_ENV === "production") return;
