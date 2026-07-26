@@ -61,8 +61,8 @@ const UPCOMING: UpcomingItem[] = [
     dateLabel: "내일",
     timeLabel: "10:30",
     duration: "1시간",
-    location: "본사 3층 미팅룸 B",
-    platform: "custom",
+    location: "Zoom",
+    platform: "zoom",
     organizer: "박감사",
     participants: ["박감사", "김보안", "외부 파트너 2명"],
     agenda: [
@@ -101,8 +101,8 @@ const UPCOMING: UpcomingItem[] = [
     dateLabel: "금요일",
     timeLabel: "11:00",
     duration: "1시간 30분",
-    location: "본사 2층 대회의실",
-    platform: "custom",
+    location: "Google Meet",
+    platform: "meet",
     organizer: "김보안",
     participants: ["김보안", "이정책", "박감사", "최개발", "정운영", "한기획"],
     agenda: [
@@ -231,11 +231,14 @@ export const WORKSPACE_PEOPLE: WorkspacePerson[] = [
   { name: "나", initials: "나", color: "bg-slate-600" },
 ];
 
-/** 오프라인/기타 장소 빠른 선택. */
-export const PLACE_PRESETS = [
-  "본사 3층 미팅룸 B",
-  "본사 2층 대회의실",
-  "모바일 녹음",
+/** 개인 워크스페이스용 장소 빠른 선택. 팀 회의는 온라인만 지원. */
+export const PLACE_PRESETS = ["모바일 녹음"] as const;
+
+/** 팀 워크스페이스 온라인 위치 표시용. */
+export const TEAM_ONLINE_LOCATION_PRESETS = [
+  "Google Meet",
+  "Zoom",
+  "Discord",
 ] as const;
 
 export function resolveWorkspacePerson(name: string): WorkspacePerson {

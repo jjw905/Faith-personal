@@ -26,7 +26,6 @@ export default async function UsersPage() {
         currentUserId={session.user.id}
         initialUsers={users.map((u) => ({
           ...u,
-          emailVerified: u.emailVerified?.toISOString() ?? null,
           createdAt: u.createdAt.toISOString(),
         }))}
       />

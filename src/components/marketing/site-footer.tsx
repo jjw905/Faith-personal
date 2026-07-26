@@ -29,7 +29,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     title: "법적 고지",
     links: [
       { label: "개인정보 처리방침", href: "/privacy" },
-      { label: "이용약관", href: "/privacy#terms" },
+      { label: "이용약관", href: "/terms" },
     ],
   },
 ];

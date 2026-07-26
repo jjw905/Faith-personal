@@ -39,7 +39,7 @@ export default async function AiUsagePage() {
   }));
 
   return (
-    <PageContainer className="!pb-10">
+    <PageContainer>
       <div className="mx-auto w-full max-w-6xl">
         <header className="mb-6 flex items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">

@@ -343,9 +343,9 @@ export function DocsScrollTopFab({
       style={{
         top: "auto",
         left: "auto",
-        right: 24,
-        // 우하단 위젯(N 등) 위에 두어 겹치지 않게
-        bottom: 88,
+        right: 16,
+        // 모바일 하단 목차 레일 위
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 9.5rem)",
       }}
       aria-label="맨 위로"
     >

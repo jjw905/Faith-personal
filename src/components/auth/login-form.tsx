@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useState, type FormEvent } from "react";
 
 import {
@@ -63,6 +63,7 @@ export function LoginForm() {
         email: email.trim().toLowerCase(),
         password,
         redirect: false,
+        callbackUrl: "/dashboard",
       });
       if (!res || res.error) {
         const code =
@@ -76,8 +77,23 @@ export function LoginForm() {
         );
         return;
       }
+
+      // Auth.js credentials callback은 실패여도 HTTP 200일 수 있다.
+      // 실제 세션이 발급됐는지 확인한 뒤 보호 페이지로 이동한다.
+      let session = await getSession();
+      for (let attempt = 0; !session?.user?.id && attempt < 4; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+        session = await getSession();
+      }
+      if (!session?.user?.id || session.user.disabled) {
+        setError("로그인 세션을 만들지 못했습니다. 다시 시도해 주세요.");
+        return;
+      }
+
       router.replace("/dashboard");
       router.refresh();
+    } catch {
+      setError("로그인 처리 중 문제가 생겼어요. 다시 시도해 주세요.");
     } finally {
       setPending(false);
     }

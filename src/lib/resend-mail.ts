@@ -1,27 +1,21 @@
 import { Resend } from "resend";
 
-import { createVerificationToken } from "@/lib/email-verification";
 import {
   appUrl,
   otpEmailHtml,
   resetPasswordEmailHtml,
-  verificationEmailHtml,
 } from "@/lib/mail-templates";
 
 function fromAddress() {
   return process.env.AUTH_EMAIL_FROM || "Faith <onboarding@resend.dev>";
 }
 
-/** Resend 키 여부. 없으면 메일 기능 비활성(가입은 즉시 인증). */
+/** Resend 키 여부. */
 export function isResendConfigured() {
   return Boolean(process.env.AUTH_RESEND_KEY?.trim());
 }
 
-async function send(params: {
-  to: string;
-  subject: string;
-  html: string;
-}) {
+async function send(params: { to: string; subject: string; html: string }) {
   const key = process.env.AUTH_RESEND_KEY;
   if (!key) {
     return { ok: false as const, reason: "missing_key" as const };
@@ -38,20 +32,6 @@ async function send(params: {
     return { ok: false as const, reason: "send_failed" };
   }
   return { ok: true as const };
-}
-
-/** 가입·소셜 후 이메일 인증 */
-export async function sendVerificationEmail(
-  email: string,
-  name?: string | null,
-) {
-  const token = createVerificationToken(email);
-  const verifyUrl = `${appUrl()}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
-  return send({
-    to: email,
-    subject: "[Faith] 이메일 인증을 완료해 주세요",
-    html: verificationEmailHtml({ name, verifyUrl }),
-  });
 }
 
 /** 이메일 변경용 6자리 인증번호 */

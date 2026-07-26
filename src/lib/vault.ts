@@ -4,6 +4,76 @@ export const VAULT_CHANGED_EVENT = "faith.vault.changed";
 export const VAULT_MAX_BYTES = 100 * 1024 * 1024;
 export const VAULT_QUOTA_BYTES = 500 * 1024 * 1024;
 
+/** 보관함·채팅 첨부에 허용하는 확장자. */
+export const VAULT_ALLOWED_EXTENSIONS = [
+  ".mp3",
+  ".m4a",
+  ".wav",
+  ".ogg",
+  ".flac",
+  ".webm",
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".hwp",
+  ".hwpx",
+  ".txt",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".heic",
+  ".heif",
+  ".gif",
+] as const;
+
+const VAULT_ALLOWED_EXT_SET = new Set<string>(VAULT_ALLOWED_EXTENSIONS);
+
+export function vaultFileExtension(name: string): string {
+  const i = name.lastIndexOf(".");
+  if (i < 0) return "";
+  return name.slice(i).toLowerCase();
+}
+
+export function isVaultAllowedFile(name: string): boolean {
+  return VAULT_ALLOWED_EXT_SET.has(vaultFileExtension(name));
+}
+
+/** 형식·단일 용량·보관함 한도. 문제 있으면 안내 문구. */
+export function validateVaultUploadFiles(
+  files: File[],
+  remainingBytes: number | null,
+): string | null {
+  if (files.length === 0) return null;
+
+  const unsupported = files.filter((file) => !isVaultAllowedFile(file.name));
+  if (unsupported.length > 0) {
+    const labels = unsupported
+      .map((file) => vaultFileExtension(file.name) || file.name)
+      .filter((value, index, all) => all.indexOf(value) === index)
+      .slice(0, 3);
+    return `지원하지 않는 형식입니다. (${labels.join(", ")})`;
+  }
+
+  const tooLarge = files.find((file) => file.size > VAULT_MAX_BYTES);
+  if (tooLarge) {
+    return `파일은 ${formatVaultSize(VAULT_MAX_BYTES)} 이하만 올릴 수 있습니다.`;
+  }
+
+  if (remainingBytes != null) {
+    const total = files.reduce((sum, file) => sum + file.size, 0);
+    if (total > remainingBytes) {
+      return `보관함 허용 용량을 초과합니다. (남은 용량 ${formatVaultSize(Math.max(0, remainingBytes))})`;
+    }
+  }
+
+  return null;
+}
+
 export type VaultItemMeta = {
   id: string;
   name: string;

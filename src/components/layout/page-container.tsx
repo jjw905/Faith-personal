@@ -16,12 +16,12 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        "flex flex-1 flex-col overflow-y-auto bg-background p-4 sm:p-6",
+        "flex flex-1 flex-col bg-app-canvas p-4 pb-4 sm:p-6 sm:pb-4",
         className,
       )}
     >
-      <div className="flex min-h-full flex-1 flex-col">
-        <div className="flex-1">{children}</div>
+      <div className="flex flex-col">
+        {children}
         {hideFooter ? null : <AppLegalFooter />}
       </div>
     </div>

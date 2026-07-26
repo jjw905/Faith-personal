@@ -19,11 +19,11 @@ function EntryBlock({
   return (
     <article
       className={cn(
-        "grid gap-4 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:gap-10",
+        "grid grid-cols-[5rem_minmax(0,1fr)] gap-4 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:gap-8 lg:gap-10",
         !isLast && "border-b border-border pb-12 sm:pb-14",
       )}
     >
-      <aside className="sm:pt-1">
+      <aside className="pt-1">
         <p className="text-sm font-semibold tabular-nums tracking-tight text-foreground">
           {getChangelogDateLabel(entry.date)}
         </p>

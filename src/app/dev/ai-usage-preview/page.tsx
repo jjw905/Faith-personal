@@ -18,7 +18,7 @@ export default async function AiUsagePreviewPage() {
   }));
 
   return (
-    <PageContainer className="!pb-10">
+    <PageContainer>
       <div className="mx-auto w-full max-w-6xl">
         <p className="mb-2 text-xs font-semibold tracking-wide text-muted-2">
           로컬 임시

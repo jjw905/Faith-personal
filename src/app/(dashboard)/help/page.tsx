@@ -17,9 +17,14 @@ import {
   useDocsChromeGone,
   useDocsFloatBox,
 } from "@/components/docs/docs-float-tools";
+import {
+  DocsDesktopToc,
+  DocsMobileTocRail,
+} from "@/components/docs/docs-mobile-toc-rail";
 import { DocsSearchInput } from "@/components/docs/docs-search-input";
 import { ContactMailPanel } from "@/components/help/contact-mail-panel";
 import { PageContainer } from "@/components/layout/page-container";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   HELP_ARTICLES,
   HELP_NAV,
@@ -70,6 +75,7 @@ function ArticleBlock({
 
 export default function HelpPage() {
   const router = useRouter();
+  const { scenarioId } = usePageUxPreview();
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState(HELP_ARTICLES[0]?.id ?? "welcome");
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -81,7 +87,11 @@ export default function HelpPage() {
   const showFloatChrome = useDocsChromeGone(chromeRef);
   const floatBox = useDocsFloatBox(pageRef, showFloatChrome);
 
-  const results = useMemo(() => searchHelpArticles(query), [query]);
+  const articles = scenarioId === "empty" ? [] : HELP_ARTICLES;
+  const results = useMemo(
+    () => (scenarioId === "empty" ? [] : searchHelpArticles(query)),
+    [query, scenarioId],
+  );
   const searching = query.trim().length > 0;
 
   function goBack() {
@@ -131,7 +141,7 @@ export default function HelpPage() {
 
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, "");
-    if (!hash || !HELP_ARTICLES.some((a) => a.id === hash)) return;
+    if (!hash || !articles.some((a) => a.id === hash)) return;
     const id = window.setTimeout(() => focusArticle(hash), 40);
     return () => window.clearTimeout(id);
   }, [focusArticle]);
@@ -139,9 +149,9 @@ export default function HelpPage() {
   useEffect(() => {
     if (searching) return;
 
-    const nodes = HELP_ARTICLES.map((article) =>
-      document.getElementById(article.id),
-    ).filter((node): node is HTMLElement => Boolean(node));
+    const nodes = articles
+      .map((article) => document.getElementById(article.id))
+      .filter((node): node is HTMLElement => Boolean(node));
 
     if (nodes.length === 0) return;
 
@@ -166,10 +176,10 @@ export default function HelpPage() {
 
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, [searching]);
+  }, [searching, articles]);
 
   return (
-    <PageContainer className="!pb-12">
+    <PageContainer>
       <div ref={pageRef} className="relative mx-auto w-full max-w-5xl">
         <div ref={chromeRef} className="mb-8 sm:mb-10">
           <div className="mb-6">
@@ -205,77 +215,101 @@ export default function HelpPage() {
 
         <DocsScrollTopFab visible={showFloatChrome} pageRef={pageRef} />
 
-        <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
-          <aside className="lg:w-52 lg:shrink-0">
-            <nav
-              className={cn(
-                "lg:sticky",
-                showFloatChrome ? "lg:top-20" : "lg:top-4",
-              )}
-              aria-label="도움말 목차"
-            >
-              {searching ? (
-                <div className="space-y-1">
-                  <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
-                    검색 결과
+        <DocsMobileTocRail
+          ariaLabel="도움말 목차"
+          activeId={activeId}
+          onNavClick={onNavClick}
+          emptyLabel={
+            articles.length === 0
+              ? "표시할 문서가 없습니다."
+              : "일치하는 문서가 없습니다."
+          }
+          items={
+            searching
+              ? results.map((article) => ({
+                  id: article.id,
+                  title: article.title,
+                }))
+              : articles.length === 0
+                ? []
+                : HELP_NAV.flatMap((group) => group.items)
+          }
+        />
+
+        <div className="flex flex-col gap-6 pb-32 md:flex-row md:gap-8 md:pb-0 lg:gap-12">
+          <DocsDesktopToc
+            ariaLabel="도움말 목차"
+            stickyTopClass={showFloatChrome ? "md:top-20" : "md:top-4"}
+          >
+            {articles.length === 0 ? (
+              <p className="px-2 py-2 text-base text-muted">
+                표시할 문서가 없습니다.
+              </p>
+            ) : searching ? (
+              <div className="space-y-1">
+                <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
+                  검색 결과
+                </p>
+                {results.length === 0 ? (
+                  <p className="px-2 py-2 text-base text-muted">
+                    일치하는 문서가 없습니다.
                   </p>
-                  {results.length === 0 ? (
-                    <p className="px-2 py-2 text-base text-muted">
-                      일치하는 문서가 없습니다.
+                ) : (
+                  results.map((article) => (
+                    <a
+                      key={article.id}
+                      href={`#${article.id}`}
+                      onClick={(e) => onNavClick(e, article.id)}
+                      className="block rounded-lg px-2 py-1.5 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
+                    >
+                      {article.title}
+                    </a>
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {HELP_NAV.map((group) => (
+                  <div key={group.title}>
+                    <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
+                      {group.title}
                     </p>
-                  ) : (
-                    results.map((article) => (
-                      <a
-                        key={article.id}
-                        href={`#${article.id}`}
-                        onClick={(e) => onNavClick(e, article.id)}
-                        className="block rounded-lg px-2 py-1.5 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
-                      >
-                        {article.title}
-                      </a>
-                    ))
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-5">
-                  {HELP_NAV.map((group) => (
-                    <div key={group.title}>
-                      <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
-                        {group.title}
-                      </p>
-                      <ul className="mt-1.5 space-y-0.5">
-                        {group.items.map((item) => (
-                          <li key={item.id}>
-                            <a
-                              href={`#${item.id}`}
-                              onClick={(e) => onNavClick(e, item.id)}
-                              className={cn(
-                                "block rounded-lg px-2 py-1.5 text-base transition-colors",
-                                activeId === item.id
-                                  ? "bg-surface font-medium text-foreground"
-                                  : "text-muted hover:bg-surface/70 hover:text-foreground",
-                              )}
-                            >
-                              {item.title}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </nav>
-          </aside>
+                    <ul className="mt-1.5 space-y-0.5">
+                      {group.items.map((item) => (
+                        <li key={item.id}>
+                          <a
+                            href={`#${item.id}`}
+                            onClick={(e) => onNavClick(e, item.id)}
+                            className={cn(
+                              "block rounded-lg px-2 py-1.5 text-base transition-colors",
+                              activeId === item.id
+                                ? "font-medium text-foreground"
+                                : "text-muted hover:text-foreground",
+                            )}
+                          >
+                            {item.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DocsDesktopToc>
 
           <div className="min-w-0 flex-1">
-            {searching && results.length === 0 ? (
+            {articles.length === 0 ? (
+              <p className="rounded-2xl bg-card px-4 py-10 text-center text-base text-muted shadow-soft">
+                표시할 도움말 문서가 없습니다.
+              </p>
+            ) : searching && results.length === 0 ? (
               <p className="text-base text-muted">
                 다른 검색어로 다시 시도해 보세요.
               </p>
             ) : (
               <div className="space-y-12 sm:space-y-14">
-                {(searching ? results : HELP_ARTICLES).map(
+                {(searching ? results : articles).map(
                   (article, index, list) => (
                     <div
                       key={article.id}

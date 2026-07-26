@@ -1,12 +1,17 @@
-import { NewMeetingSession } from "@/components/meetings/new-meeting-session";
-import { requireAdmin } from "@/lib/admin";
+import { redirect } from "next/navigation";
 
-export default async function NewMeetingPage() {
-  await requireAdmin();
+import { NewMeetingSetup } from "@/components/meetings/new-meeting-setup";
+import { requireUser } from "@/lib/require-user";
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <NewMeetingSession />
-    </div>
-  );
+export default async function NewMeetingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ workspace?: string }>;
+}) {
+  const session = await requireUser();
+  if (!session) redirect("/login");
+  const query = await searchParams;
+  const initialWorkspace = query.workspace === "team" ? "team" : "personal";
+
+  return <NewMeetingSetup initialWorkspace={initialWorkspace} />;
 }

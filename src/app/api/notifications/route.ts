@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const countOnly = url.searchParams.get("countOnly") === "1";
   const retentionDays = retentionFromRequest(request);
-  const result = listVisibleNotifications(session.user.id, retentionDays);
+  const result = await listVisibleNotifications(session.user.id, retentionDays);
 
   if (countOnly) {
     return NextResponse.json({
@@ -80,22 +80,33 @@ export async function PATCH(request: Request) {
       : undefined;
 
   if (retentionDays !== undefined) {
-    setUserNotificationRetention(session.user.id, retentionDays);
+    await setUserNotificationRetention(session.user.id, retentionDays);
   }
 
   if (body.all) {
-    const r = markNotificationsRead(session.user.id, "all", retentionDays);
+    const r = await markNotificationsRead(
+      session.user.id,
+      "all",
+      retentionDays,
+    );
     return NextResponse.json({ ok: true, unreadCount: r.unreadCount });
   }
 
   if (Array.isArray(body.ids) && body.ids.length > 0) {
     const ids = body.ids.map((id) => String(id)).filter(Boolean);
-    const r = markNotificationsRead(session.user.id, ids, retentionDays);
+    const r = await markNotificationsRead(
+      session.user.id,
+      ids,
+      retentionDays,
+    );
     return NextResponse.json({ ok: true, unreadCount: r.unreadCount });
   }
 
   if (retentionDays !== undefined) {
-    const result = listVisibleNotifications(session.user.id, retentionDays);
+    const result = await listVisibleNotifications(
+      session.user.id,
+      retentionDays,
+    );
     return NextResponse.json({
       ok: true,
       unreadCount: result.unreadCount,

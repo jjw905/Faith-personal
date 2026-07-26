@@ -9,8 +9,6 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      /** Faith: 이메일 인증 완료 여부 (Date가 아닌 boolean) */
-      emailVerified: boolean;
       role: Role;
       plan: Plan;
       provider?: string;
@@ -28,7 +26,6 @@ declare module "next-auth" {
 
 declare module "next-auth/jwt" {
   interface JWT {
-    emailVerified?: boolean;
     role?: Role;
     plan?: Plan;
     provider?: string;

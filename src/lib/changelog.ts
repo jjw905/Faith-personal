@@ -18,6 +18,39 @@ export type ChangelogEntry = {
  */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.8",
+    date: "2026-07-24",
+    title: "팀 공간, 온라인 음성 회의",
+    summary:
+      "팀을 만들고 초대로 모을 수 있습니다. 온라인으로 모여 말하고 필요할 때 기록을 켤 수 있으며, 예정 회의 알림을 확인하면 일정에 반영됩니다. 시작 화면 데모도 더 자연스럽게 이어집니다.",
+    sections: [
+      {
+        title: "팀",
+        items: [
+          "초대로 팀 합류, 수락과 거절",
+          "팀원, 팀장, 팀 대표 역할과 권한",
+          "공지, 예정 회의, 미확인 알림 확인",
+          "팀이 없으면 팀 플랜 안내로 이동",
+        ],
+      },
+      {
+        title: "회의",
+        items: [
+          "팀 온라인 음성 회의",
+          "주최자가 기록 시작과 중지",
+          "개인 공간에서는 기록 시작으로 진행",
+        ],
+      },
+      {
+        title: "안내, 시작 화면",
+        items: [
+          "도움말, 개인정보 처리, 이용약관에 팀과 음성, 기록 안내 반영",
+          "기능 소개와 대화 데모 전환이 더 매끄럽게",
+        ],
+      },
+    ],
+  },
+  {
     version: "0.7",
     date: "2026-07-21",
     title: "간편 로그인, 보관함, 회의 시작",
@@ -142,6 +175,43 @@ export const CHANGELOG: ChangelogEntry[] = [
  * 구현, 스키마, 운영, 보안 관점. 날짜당 1개, 최신 위.
  */
 export const DEV_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.8",
+    date: "2026-07-24",
+    title: "Team core, LiveKit, 정책 UI",
+    summary:
+      "팀 스키마와 초대, 권한, 일정, 공지, 미확인 알림을 붙이고 LiveKit 음성 방과 기록 토글을 연결했다. 오프라인 팀 회의는 제외했다. 마케팅 채팅 데모 흔들림도 정리했다.",
+    sections: [
+      {
+        title: "팀 데이터, API",
+        items: [
+          "Prisma team_core, workspace_policy 마이그레이션",
+          "teams, invites respond, members, people, audit, announcements",
+          "team-meetings create/room/access, meeting-access bulk",
+          "permission matrix, meeting-access, schedule conflict/lock",
+          "notifications confirm, 예정 미확인 동기화",
+        ],
+      },
+      {
+        title: "음성, 기록",
+        items: [
+          "LiveKit token API, team-voice-room, 주최자 기록 on/off",
+          "infra/livekit setup-on-droplet, env LiveKit 키",
+          "주최자 부재, 기록 전/중 상태, STT 할당 연계 훅",
+        ],
+      },
+      {
+        title: "UI, 문서",
+        items: [
+          "role별 team-workspace-panel, manage, composer, upcoming row",
+          "개인 cta 기록 시작, 팀 회의 setup, 오프라인 제거",
+          "help, legal, /terms 팀·음성·기록 반영",
+          "Faith-office 팀 운영정책, 보안권한, LiveKit 인프라 docx",
+          "marketing chat-mock 높이 예약, feature scale, 아바타 클리핑",
+        ],
+      },
+    ],
+  },
   {
     version: "0.7",
     date: "2026-07-21",
@@ -277,13 +347,13 @@ export const DEV_AGENDA: {
   date: string;
   items: DevAgendaItem[];
 } = {
-  date: "2026-07-22",
+  date: "2026-07-24",
   items: [
-    { label: "STT 모델 선정" },
-    { label: "기능에 따른 비용 타산추정" },
-    { label: "모델 도입에 따른 UI/UX 수정" },
-    { label: "요금제 도입" },
-    { label: "테스트 및 보완" },
+    { label: "팀 핵심 기능 구현", done: true },
+    { label: "LiveKit 음성 회의 연결", done: true },
+    { label: "도움말, 개인정보, 이용약관 반영", done: true },
+    { label: "팀 워크스페이스 UI 검수" },
+    { label: "어드민 테스트 경로 정리" },
   ],
 };
 

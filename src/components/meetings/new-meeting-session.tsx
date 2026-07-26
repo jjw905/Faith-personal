@@ -392,7 +392,7 @@ type MeetingMemo = {
   caution: string;
 };
 
-const DEFAULT_MEETING_TITLE = "새 회의";
+const DEFAULT_MEETING_TITLE = "새 기록";
 
 let memoLineSeq = 0;
 function createMemoLine(text: string): MemoLine {
@@ -1282,7 +1282,7 @@ export function NewMeetingSession() {
                 className="-ml-1 inline-flex items-center gap-1.5 px-1 py-1 text-sm font-bold text-foreground transition-opacity hover:opacity-70"
               >
                 <ArrowLeft className="h-4 w-4" strokeWidth={2.25} />
-                회의종료
+                기록 종료
               </Link>
             </div>
             {editingTitle ? (
@@ -1292,7 +1292,7 @@ export function NewMeetingSession() {
                   ref={titleInputRef}
                   type="text"
                   value={meetingTitle}
-                  aria-label="회의 제목 수정"
+                  aria-label="기록 제목 수정"
                   onChange={(event) => setMeetingTitle(event.target.value)}
                   onBlur={() => {
                     const next = meetingTitle.trim() || DEFAULT_MEETING_TITLE;
@@ -1318,7 +1318,7 @@ export function NewMeetingSession() {
                 type="button"
                 onClick={() => setEditingTitle(true)}
                 title="제목 수정"
-                aria-label={`회의 제목 수정, 현재 ${meetingTitle}`}
+                aria-label={`기록 제목 수정, 현재 ${meetingTitle}`}
                 className="max-w-[14rem] cursor-pointer truncate rounded-xl px-2 py-1 text-center transition-colors hover:bg-surface-2"
               >
                 <h1 className="truncate text-lg font-bold tracking-tight text-foreground">

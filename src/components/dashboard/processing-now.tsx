@@ -39,15 +39,22 @@ function clampPercent(n: unknown, phase?: string): number {
   return 0;
 }
 
+function flipPhase(phase?: string): "transcribing" | "structuring" {
+  return phase === "structuring" ? "transcribing" : "structuring";
+}
+
 /**
  * 기록 시작 / 파일 올리기 바로 아래.
  * 제작 중이면 회의 제목(리스트와 동일) + 파이프라인 실제 진행률.
  */
 export function ProcessingNowSection({
   demoItems,
+  animateDemo = false,
   onActiveChange,
 }: {
   demoItems?: ProcessingItem[];
+  /** UX 미리보기: 진행률·단계 전환 애니메이션 재생 */
+  animateDemo?: boolean;
   /** active id 목록이 바뀔 때. 줄어들면 리스트 갱신에 사용. */
   onActiveChange?: (activeIds: string[]) => void;
 } = {}) {
@@ -102,18 +109,21 @@ export function ProcessingNowSection({
   }, [workspaceId, demoItems]);
 
   useEffect(() => {
+    if (animateDemo) return;
     void refresh();
-  }, [refresh]);
+  }, [refresh, animateDemo]);
 
   useEffect(() => {
     if (demoItems) return;
+    if (animateDemo) return;
     if (items.length === 0) return;
     const id = window.setInterval(() => void refresh(), 1000);
     return () => window.clearInterval(id);
-  }, [refresh, demoItems, items.length]);
+  }, [refresh, demoItems, animateDemo, items.length]);
 
   useEffect(() => {
     if (demoItems) return;
+    if (animateDemo) return;
     const onShow = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -123,7 +133,36 @@ export function ProcessingNowSection({
       window.removeEventListener("focus", onShow);
       document.removeEventListener("visibilitychange", onShow);
     };
-  }, [refresh, demoItems]);
+  }, [refresh, demoItems, animateDemo]);
+
+  useEffect(() => {
+    if (!animateDemo || !demoItems?.length) return;
+    setItems(
+      demoItems.map((item) => ({
+        ...item,
+        progressPercent: clampPercent(item.progressPercent, item.phase),
+      })),
+    );
+    const id = window.setInterval(() => {
+      setItems((prev) =>
+        prev.map((item, index) => {
+          const step = index % 2 === 0 ? 4 : 3;
+          const next = item.progressPercent + step;
+          if (next >= 96) {
+            const phase = flipPhase(item.phase);
+            return {
+              ...item,
+              phase,
+              status: phase,
+              progressPercent: phase === "structuring" ? 58 : 8,
+            };
+          }
+          return { ...item, progressPercent: next };
+        }),
+      );
+    }, 380);
+    return () => window.clearInterval(id);
+  }, [animateDemo, demoItems]);
 
   useEffect(() => {
     onActiveChange?.(items.map((i) => i.id));
@@ -146,7 +185,7 @@ export function ProcessingNowSection({
                       {item.title}
                     </p>
                     <p
-                      key={item.phase}
+                      key={`${item.id}-${item.phase}`}
                       className="mt-0.5 text-xs text-muted animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]"
                     >
                       {phaseLabel(item.phase)}

@@ -31,23 +31,6 @@ function shell(title: string, bodyHtml: string) {
 </html>`;
 }
 
-export function verificationEmailHtml(params: {
-  name?: string | null;
-  verifyUrl: string;
-}) {
-  const display = params.name?.trim() || "회원";
-  return shell(
-    "이메일 인증",
-    `
-    <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:${brand.muted}">${display}님, Faith 이용을 위해 이메일 인증이 필요합니다.</p>
-    <p style="margin:0 0 24px">
-      <a href="${params.verifyUrl}" style="display:inline-block;background:${brand.primary};color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600">이메일 인증하기</a>
-    </p>
-    <p style="margin:0;font-size:12px;line-height:1.5;color:${brand.muted};word-break:break-all">버튼이 되지 않으면 이 주소를 열어 주세요.<br/>${params.verifyUrl}</p>
-  `,
-  );
-}
-
 export function otpEmailHtml(params: {
   title: string;
   intro: string;

@@ -1,29 +1,98 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  ChevronRight,
+  LoaderCircle,
+  Search,
+  UserRoundPlus,
+  UsersRound,
+  X,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  parseDataRetentionDays,
-  readDataRetentionDaysFromStorage,
-  writeDataRetentionDaysToStorage,
-  type DataRetentionDays,
-} from "@/lib/data-retention";
-import { WORKSPACE_PEOPLE } from "@/lib/workspace-data";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { TeamSheet } from "@/components/team/team-sheet";
+import { useAppContext } from "@/context/app-context";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
+import { useTeamRolePreview } from "@/context/team-role-preview-context";
+import { clientGet, invalidateClientFetch } from "@/lib/client-fetch";
 import { cn } from "@/lib/utils";
 
-const TEAM_MEMBERS = WORKSPACE_PEOPLE.filter((p) => p.name !== "나").map(
-  (person, index) => ({
-    ...person,
-    role: index === 0 ? "팀 관리자" : "멤버",
-  }),
-);
+type TeamSummary = {
+  id: string;
+  name: string;
+  seatLimit: number;
+  memberCount: number;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  canInvite: boolean;
+  canCreateMeeting: boolean;
+  canManageRecordAccess: boolean;
+};
+
+type TeamMember = {
+  userId: string;
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  canInvite: boolean;
+  canCreateMeeting: boolean;
+  canManageRecordAccess: boolean;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+    handle: string | null;
+  };
+};
+
+type TeamDetail = {
+  team: {
+    id: string;
+    name: string;
+    ownerId: string;
+    seatLimit: number;
+    policy: {
+      retentionDays: number;
+      allowAdminUnmask: boolean;
+      allowExternalSharing: boolean;
+    } | null;
+  };
+  currentMember: TeamMember;
+  members: TeamMember[];
+  invites: Array<{
+    id: string;
+    expiresAt: string;
+    invitedUser: { id: string; name: string | null; handle: string | null };
+  }>;
+  meetings: Array<{
+    id: string;
+    title: string;
+    mode: "ONLINE" | "OFFLINE";
+    access?: Array<{
+      userId: string;
+      isParticipant: boolean;
+      canReadMasked: boolean;
+    }>;
+  }>;
+};
+
+const ROLE_LABEL = { OWNER: "팀 대표", ADMIN: "팀장", MEMBER: "팀원" };
+
+const FIELD_CLASS =
+  "min-h-11 rounded-xl bg-surface-2 px-3 text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+
+function initials(name: string | null, email?: string | null) {
+  return (name || email || "?").trim().slice(0, 1).toUpperCase();
+}
 
 function SettingRow({
   label,
@@ -32,14 +101,14 @@ function SettingRow({
 }: {
   label: string;
   description?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between gap-4 py-3.5 first:pt-1 last:pb-1">
       <div className="min-w-0 flex-1 pr-3">
-        <p className="text-sm font-medium leading-5 text-foreground">{label}</p>
+        <p className="text-base font-medium leading-5 text-foreground">{label}</p>
         {description ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center">{children}</div>
@@ -47,26 +116,31 @@ function SettingRow({
   );
 }
 
+/** M3 switch: 52×32 track, 24 thumb */
 function Toggle({
-  on,
-  onChange,
+  checked,
+  disabled,
   label,
+  onChange,
 }: {
-  on: boolean;
-  onChange: (v: boolean) => void;
+  checked: boolean;
+  disabled?: boolean;
   label: string;
+  onChange: (next: boolean) => void;
 }) {
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={on}
+      aria-checked={checked}
       aria-label={label}
-      onClick={() => onChange(!on)}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
       className={cn(
         "inline-flex h-8 w-[52px] shrink-0 cursor-pointer items-center rounded-full p-1 transition-colors",
-        "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        on ? "justify-end bg-primary" : "justify-start bg-surface-2",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "disabled:cursor-not-allowed disabled:opacity-45",
+        checked ? "justify-end bg-primary" : "justify-start bg-surface-2",
       )}
     >
       <span className="block h-6 w-6 rounded-full bg-card shadow-[0_1px_2px_rgba(17,24,46,0.18)]" />
@@ -79,11 +153,13 @@ function Segmented({
   value,
   onChange,
   ariaLabel,
+  disabled,
 }: {
   options: { value: string; label: string }[];
   value: string;
-  onChange: (v: string) => void;
+  onChange: (value: string) => void;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   return (
     <div
@@ -91,129 +167,1079 @@ function Segmented({
       role="group"
       aria-label={ariaLabel}
     >
-      {options.map((o) => (
+      {options.map((option) => (
         <button
-          key={o.value}
+          key={option.value}
           type="button"
-          onClick={() => onChange(o.value)}
+          disabled={disabled}
+          onClick={() => onChange(option.value)}
           className={cn(
-            "cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors outline-none",
-            value === o.value
+            "cursor-pointer rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            value === option.value
               ? "bg-card text-foreground shadow-soft"
               : "text-muted hover:text-foreground",
           )}
         >
-          {o.label}
+          {option.label}
         </button>
       ))}
     </div>
   );
 }
 
-/** 팀 멤버와 팀 운영 설정. */
-export function TeamManagePanel() {
-  const [teamAutoMask, setTeamAutoMask] = useState(true);
-  const [enforceMask, setEnforceMask] = useState(true);
-  const [retention, setRetention] = useState<DataRetentionDays>(90);
+function ManageCard({
+  title,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "overflow-hidden rounded-2xl bg-card shadow-soft outline-none",
+        className,
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2 border-b border-border/60 px-4 py-4 sm:px-5">
+        {action ? (
+          <div className="flex shrink-0 items-center gap-1.5">{action}</div>
+        ) : null}
+        <h2 className="min-w-0 text-xl font-semibold text-foreground">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+type TeamManageView = "members" | "security" | "records" | "invite";
 
-  useEffect(() => {
-    setRetention(readDataRetentionDaysFromStorage());
+const PERMISSION_META: Record<
+  "canInvite" | "canCreateMeeting" | "canManageRecordAccess",
+  { label: string; description: string }
+> = {
+  canInvite: {
+    label: "멤버 초대",
+    description: "팀에 새 멤버를 초대할 수 있습니다.",
+  },
+  canCreateMeeting: {
+    label: "회의 만들기",
+    description: "팀 회의 일정을 생성할 수 있습니다.",
+  },
+  canManageRecordAccess: {
+    label: "기록 열람 관리",
+    description: "회의 기록 열람 권한을 조정할 수 있습니다.",
+  },
+};
+
+function MemberPermissionsSheet({
+  open,
+  member,
+  canManage,
+  canPromoteToAdmin,
+  saving,
+  onClose,
+  onUpdateRole,
+  onUpdatePermission,
+}: {
+  open: boolean;
+  member: TeamMember | null;
+  canManage: boolean;
+  canPromoteToAdmin: boolean;
+  saving: boolean;
+  onClose: () => void;
+  onUpdateRole: (role: "MEMBER" | "ADMIN") => void;
+  onUpdatePermission: (
+    key: "canInvite" | "canCreateMeeting" | "canManageRecordAccess",
+    value: boolean,
+  ) => void;
+}) {
+  if (!member) return null;
+
+  const isOwner = member.role === "OWNER";
+  const title = member.user.name || member.user.handle || "권한";
+
+  return (
+    <TeamSheet open={open} title={title} onClose={onClose}>
+      <div className="flex items-center gap-4 rounded-2xl bg-surface px-4 py-4">
+        <Avatar className="h-14 w-14 shrink-0">
+          <AvatarImage src={member.user.image ?? undefined} />
+          <AvatarFallback className="bg-primary-soft text-lg font-semibold text-primary">
+            {initials(member.user.name, member.user.email)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-lg font-semibold text-foreground">
+            {member.user.name || "이름 없음"}
+          </p>
+          <p className="truncate text-base text-muted">
+            @{member.user.handle || "아이디 없음"}
+          </p>
+          <span className="mt-2 inline-flex rounded-full bg-card px-2.5 py-0.5 text-sm font-semibold text-foreground shadow-soft">
+            {ROLE_LABEL[member.role]}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <p className="mb-2 text-sm font-semibold text-muted">역할</p>
+        {isOwner ? (
+          <p className="rounded-2xl bg-surface px-4 py-3.5 text-base text-muted">
+            팀 대표는 역할을 변경할 수 없습니다.
+          </p>
+        ) : (
+          <Segmented
+            ariaLabel="역할"
+            value={member.role === "ADMIN" ? "ADMIN" : "MEMBER"}
+            disabled={!canManage || saving}
+            onChange={(value) => onUpdateRole(value as "MEMBER" | "ADMIN")}
+            options={[
+              { value: "MEMBER", label: "팀원" },
+              ...(canPromoteToAdmin
+                ? [{ value: "ADMIN", label: "팀장" }]
+                : []),
+            ]}
+          />
+        )}
+      </div>
+
+      <div className="mt-6">
+        <p className="mb-2 text-sm font-semibold text-muted">위임 권한</p>
+        {isOwner ? (
+          <p className="rounded-2xl bg-surface px-4 py-3.5 text-base text-muted">
+            팀 대표는 모든 권한을 갖습니다.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-2xl bg-surface">
+            {(
+              [
+                "canInvite",
+                "canCreateMeeting",
+                "canManageRecordAccess",
+              ] as const
+            ).map((key, index, permissions) => (
+              <div
+                key={key}
+                className={cn(
+                  "px-4 py-3.5",
+                  index < permissions.length - 1 && "border-b border-border/60",
+                )}
+              >
+                <SettingRow
+                  label={PERMISSION_META[key].label}
+                  description={PERMISSION_META[key].description}
+                >
+                  <Toggle
+                    label={PERMISSION_META[key].label}
+                    checked={member[key]}
+                    disabled={!canManage || saving}
+                    onChange={(value) => onUpdatePermission(key, value)}
+                  />
+                </SettingRow>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </TeamSheet>
+  );
+}
+
+function MemberRecordAccessSheet({
+  open,
+  member,
+  meetings,
+  saving,
+  bulkConfirmed,
+  onClose,
+  onBulkConfirmChange,
+  onToggleMeeting,
+  onApplyAll,
+}: {
+  open: boolean;
+  member: TeamMember | null;
+  meetings: TeamDetail["meetings"];
+  saving: boolean;
+  bulkConfirmed: boolean;
+  onClose: () => void;
+  onBulkConfirmChange: (value: boolean) => void;
+  onToggleMeeting: (meetingId: string, canReadMasked: boolean) => void;
+  onApplyAll: (canReadMasked: boolean) => void;
+}) {
+  if (!member) return null;
+
+  const title = member.user.name || member.user.handle || "기록 열람";
+
+  return (
+    <TeamSheet open={open} title={title} onClose={onClose}>
+      <div className="flex items-center gap-4 rounded-2xl bg-surface px-4 py-4">
+        <Avatar className="h-12 w-12 shrink-0">
+          <AvatarImage src={member.user.image ?? undefined} />
+          <AvatarFallback className="bg-primary-soft text-sm font-semibold text-primary">
+            {initials(member.user.name, member.user.email)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="min-w-0">
+          <p className="truncate text-lg font-semibold text-foreground">
+            {member.user.name || member.user.handle}
+          </p>
+          <p className="text-base text-muted">{ROLE_LABEL[member.role]}</p>
+        </div>
+      </div>
+
+      {meetings.length === 0 ? (
+        <p className="mt-6 rounded-2xl bg-surface px-4 py-8 text-center text-base text-muted">
+          열람 권한을 줄 회의 기록이 없습니다.
+        </p>
+      ) : (
+        <>
+          <div className="mt-6 overflow-hidden rounded-2xl bg-surface">
+            {meetings.map((meeting, index) => {
+              const meetingAccess = meeting.access?.find(
+                (access) => access.userId === member.userId,
+              );
+              return (
+                <div
+                  key={meeting.id}
+                  className={cn(
+                    "px-4 py-3.5",
+                    index < meetings.length - 1 && "border-b border-border/60",
+                  )}
+                >
+                  <SettingRow
+                    label={meeting.title}
+                    description={
+                      meetingAccess?.isParticipant
+                        ? "온라인, 참가자"
+                        : "온라인"
+                    }
+                  >
+                    <Toggle
+                      label={`${meeting.title} 기록 열람`}
+                      checked={Boolean(meetingAccess?.canReadMasked)}
+                      disabled={saving || member.role === "OWNER"}
+                      onChange={(value) => onToggleMeeting(meeting.id, value)}
+                    />
+                  </SettingRow>
+                </div>
+              );
+            })}
+          </div>
+
+          <label className="mt-4 flex min-h-11 cursor-pointer items-center gap-3 rounded-xl bg-surface px-4 text-base">
+            <input
+              type="checkbox"
+              checked={bulkConfirmed}
+              onChange={(event) => onBulkConfirmChange(event.target.checked)}
+              className="h-5 w-5 accent-primary"
+            />
+            기존 회의 {meetings.length}건 일괄 적용
+          </label>
+          {bulkConfirmed ? (
+            <div className="mt-3 flex gap-2">
+              <Button
+                variant="secondary"
+                className="min-h-11 flex-1 rounded-xl"
+                onClick={() => onApplyAll(false)}
+                disabled={saving}
+              >
+                모두 해제
+              </Button>
+              <Button
+                className="min-h-11 flex-1 rounded-xl"
+                onClick={() => onApplyAll(true)}
+                disabled={saving}
+              >
+                모두 허용
+              </Button>
+            </div>
+          ) : null}
+        </>
+      )}
+    </TeamSheet>
+  );
+}
+
+export function TeamManagePanel({
+  view = "members",
+}: {
+  view?: TeamManageView;
+}) {
+  const router = useRouter();
+  const { scenarioId, isLive } = usePageUxPreview();
+  const { resolveRole, isPreviewing } = useTeamRolePreview();
+  const { activeTeamId, setActiveTeamId } = useAppContext();
+  const [teams, setTeams] = useState<TeamSummary[]>([]);
+  const [detail, setDetail] = useState<TeamDetail | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const [bulkConfirmed, setBulkConfirmed] = useState(false);
+
+  const activeTeamIdRef = useRef(activeTeamId);
+  activeTeamIdRef.current = activeTeamId;
+
+  const loadTeams = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await clientGet("/api/teams");
+      const data = (await response.json()) as {
+        ok?: boolean;
+        teams?: TeamSummary[];
+        message?: string;
+      };
+      if (response.ok && data.ok) {
+        const nextTeams = data.teams ?? [];
+        setTeams(nextTeams);
+        const current = activeTeamIdRef.current;
+        const validActive = nextTeams.some((team) => team.id === current);
+        const nextId = validActive ? current : (nextTeams[0]?.id ?? null);
+        if (nextId !== current) setActiveTeamId(nextId);
+      } else {
+        setMessage(data.message ?? "팀 정보를 불러오지 못했습니다.");
+      }
+    } catch {
+      setMessage("팀 정보를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, [setActiveTeamId]);
+
+  const loadDetail = useCallback(async (teamId: string) => {
+    try {
+      const response = await clientGet(`/api/teams/${teamId}`);
+      if (activeTeamIdRef.current !== teamId) return;
+      const data = (await response.json()) as TeamDetail & {
+        ok?: boolean;
+        message?: string;
+      };
+      if (response.ok && data.ok) {
+        setDetail(data);
+        setSelectedUserId((current) =>
+          current && data.members.some((member) => member.userId === current)
+            ? current
+            : null,
+        );
+      } else {
+        setMessage(data.message ?? "팀 상세 정보를 불러오지 못했습니다.");
+      }
+    } catch {
+      if (activeTeamIdRef.current === teamId) {
+        setMessage("팀 상세 정보를 불러오지 못했습니다.");
+      }
+    }
   }, []);
 
-  function updateRetention(next: string) {
-    const days = parseDataRetentionDays(next);
-    setRetention(days);
-    writeDataRetentionDaysToStorage(days);
-    void fetch("/api/notifications", {
+  useEffect(() => {
+    queueMicrotask(() => void loadTeams());
+  }, [loadTeams]);
+
+  useEffect(() => {
+    if (!activeTeamId) return;
+    queueMicrotask(() => void loadDetail(activeTeamId));
+  }, [activeTeamId, loadDetail]);
+
+  const refreshDetail = useCallback(
+    async (teamId: string) => {
+      invalidateClientFetch(`/api/teams/${teamId}`);
+      invalidateClientFetch("/api/teams");
+      await loadDetail(teamId);
+    },
+    [loadDetail],
+  );
+
+  const selected = useMemo(
+    () =>
+      detail?.members.find((member) => member.userId === selectedUserId) ??
+      null,
+    [detail?.members, selectedUserId],
+  );
+  const role = detail
+    ? resolveRole(detail.currentMember.role)
+    : undefined;
+  const isOwner = role === "OWNER";
+  const isLeader = role === "OWNER" || role === "ADMIN";
+  const canManage = isLeader;
+  const canInvite = isPreviewing
+    ? isLeader
+    : canManage || Boolean(detail?.currentMember.canInvite);
+  const canManageRecords = isPreviewing
+    ? isLeader
+    : canManage || Boolean(detail?.currentMember.canManageRecordAccess);
+  const viewDenied = Boolean(
+    detail &&
+    !(
+      (view === "members" && isOwner) ||
+      (view === "security" && isOwner) ||
+      (view === "records" && canManageRecords) ||
+      (view === "invite" && canInvite)
+    ),
+  );
+
+  const previewMembers = useMemo(() => {
+    if (!detail) return [] as TeamMember[];
+    if (scenarioId === "empty") return [];
+    if (
+      scenarioId === "full" ||
+      scenarioId === "popup-member" ||
+      scenarioId === "popup-access"
+    ) {
+      if (detail.members.length >= (scenarioId === "full" ? 8 : 1)) {
+        return detail.members;
+      }
+      const count = scenarioId === "full" ? 8 : Math.max(detail.members.length, 1);
+      const extras: TeamMember[] = Array.from({ length: count }, (_, index) => ({
+        userId: `ux-member-${index + 1}`,
+        role: index === 0 ? ("OWNER" as const) : index < 3 ? ("ADMIN" as const) : ("MEMBER" as const),
+        canInvite: index < 3,
+        canCreateMeeting: true,
+        canManageRecordAccess: index < 3,
+        user: {
+          id: `ux-member-${index + 1}`,
+          name: `미리보기 멤버 ${index + 1}`,
+          email: `ux${index + 1}@example.com`,
+          image: null,
+          handle: `ux${index + 1}`,
+        },
+      }));
+      return detail.members.length > 0 ? detail.members : extras;
+    }
+    return detail.members;
+  }, [detail, scenarioId]);
+
+  const previewSelected = useMemo(
+    () =>
+      previewMembers.find((member) => member.userId === selectedUserId) ??
+      selected,
+    [previewMembers, selected, selectedUserId],
+  );
+
+  const previewMeetings = useMemo(() => {
+    if (!detail) return [] as TeamDetail["meetings"];
+    if (scenarioId === "empty") return [];
+    if (scenarioId === "full" || scenarioId === "popup-access") {
+      if (detail.meetings.length >= (scenarioId === "full" ? 6 : 1)) {
+        return detail.meetings;
+      }
+      return Array.from({ length: scenarioId === "full" ? 6 : 3 }, (_, index) => ({
+        id: `ux-tm-${index + 1}`,
+        title: `팀 회의 기록 ${index + 1}`,
+        mode: index % 2 === 0 ? ("ONLINE" as const) : ("OFFLINE" as const),
+        access: [],
+      }));
+    }
+    return detail.meetings;
+  }, [detail, scenarioId]);
+
+  useEffect(() => {
+    if (scenarioId === "popup-invite" || scenarioId === "popup-invite-search") {
+      setShowInvite(true);
+      setSelectedUserId(null);
+      return;
+    }
+    if (scenarioId === "popup-member" || scenarioId === "popup-access") {
+      setShowInvite(false);
+      const first = previewMembers[0]?.userId ?? null;
+      setSelectedUserId(first);
+      return;
+    }
+    if (
+      scenarioId === "live" ||
+      scenarioId === "empty" ||
+      scenarioId === "full" ||
+      scenarioId === "loading"
+    ) {
+      setShowInvite(false);
+      setSelectedUserId(null);
+    }
+  }, [previewMembers, scenarioId]);
+
+  async function updateMember(
+    userId: string,
+    patch: Partial<TeamMember>,
+  ) {
+    const member = detail?.members.find((row) => row.userId === userId);
+    if (!detail || !member || member.role === "OWNER") return;
+    setSaving(true);
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      setSaving(false);
+      return;
+    }
+    const response = await fetch(
+      `/api/teams/${detail.team.id}/members/${userId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      },
+    );
+    const data = (await response.json()) as { ok?: boolean; message?: string };
+    setSaving(false);
+    if (!response.ok || !data.ok) {
+      setMessage(data.message ?? "권한을 저장하지 못했습니다.");
+      return;
+    }
+    await refreshDetail(detail.team.id);
+  }
+
+  async function updatePolicy(patch: Record<string, unknown>) {
+    if (!detail) return;
+    setSaving(true);
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      setSaving(false);
+      return;
+    }
+    const response = await fetch(`/api/teams/${detail.team.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ retentionDays: days }),
-    }).catch(() => {
-      // ignore
+      body: JSON.stringify(patch),
     });
+    const data = (await response.json()) as { ok?: boolean; message?: string };
+    setSaving(false);
+    if (!response.ok || !data.ok) {
+      setMessage(data.message ?? "정책을 저장하지 못했습니다.");
+      return;
+    }
+    await refreshDetail(detail.team.id);
+  }
+
+  async function updateMeetingAccess(
+    userId: string,
+    meetingId: string,
+    canReadMasked: boolean,
+  ) {
+    if (!detail) return;
+    setSaving(true);
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      setSaving(false);
+      return;
+    }
+    const response = await fetch(`/api/team-meetings/${meetingId}/access`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, canReadMasked }),
+    });
+    const data = (await response.json()) as { ok?: boolean; message?: string };
+    setSaving(false);
+    if (!response.ok || !data.ok) {
+      setMessage(data.message ?? "회의 기록 권한을 저장하지 못했습니다.");
+      return;
+    }
+    await refreshDetail(detail.team.id);
+  }
+
+  async function applyMeetingAccessToAll(
+    userId: string,
+    canReadMasked: boolean,
+  ) {
+    if (!detail || !bulkConfirmed) return;
+    setSaving(true);
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      setSaving(false);
+      setBulkConfirmed(false);
+      return;
+    }
+    const response = await fetch(
+      `/api/teams/${detail.team.id}/meeting-access/bulk`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          canReadMasked,
+          confirmCount: detail.meetings.length,
+        }),
+      },
+    );
+    const data = (await response.json()) as { ok?: boolean; message?: string };
+    setSaving(false);
+    if (!response.ok || !data.ok) {
+      setMessage(data.message ?? "기존 회의에 적용하지 못했습니다.");
+      return;
+    }
+    setBulkConfirmed(false);
+    await refreshDetail(detail.team.id);
+  }
+
+  useEffect(() => {
+    if (loading || !detail || !viewDenied || isPreviewing) return;
+    router.replace("/team");
+  }, [detail, isPreviewing, loading, router, viewDenied]);
+
+  if (loading || scenarioId === "loading") {
+    return (
+      <div className="grid min-h-56 place-items-center rounded-2xl bg-card shadow-soft">
+        <LoaderCircle
+          className="h-6 w-6 animate-spin text-muted"
+          aria-label="불러오는 중"
+        />
+      </div>
+    );
+  }
+
+  if (viewDenied) {
+    return (
+      <div className="grid min-h-56 place-items-center rounded-2xl bg-card p-6 text-center shadow-soft">
+        <p className="text-base text-muted">이 관리 화면은 권한이 없습니다.</p>
+        <Button asChild variant="secondary" className="mt-4 min-h-11 rounded-xl">
+          <Link href="/team">팀 공간으로</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  if (view === "invite" && detail && canInvite) {
+    return (
+      <InviteDialog
+        teamId={detail.team.id}
+        canInviteAdmin={isOwner}
+        onClose={() => {
+          if (scenarioId === "popup-invite" || scenarioId === "popup-invite-search") return;
+          router.replace("/team");
+        }}
+        onComplete={async () => {
+          await refreshDetail(detail.team.id);
+          if (scenarioId === "popup-invite" || scenarioId === "popup-invite-search") return;
+          router.replace("/team");
+        }}
+      />
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="space-y-1 px-5 pb-2 pt-5 sm:px-6">
-          <CardTitle className="text-lg">팀 멤버</CardTitle>
-          <p className="text-sm leading-relaxed text-muted">
-            이 팀에 속한 사람들입니다.
-          </p>
-        </CardHeader>
-        <CardContent className="divide-y divide-border px-5 pb-2 pt-0 sm:px-6">
-          {TEAM_MEMBERS.map((member) => (
-            <div
-              key={member.name}
-              className="flex items-center gap-3 py-3.5 first:pt-1 last:pb-1"
-            >
-              <Avatar className="h-9 w-9">
-                <AvatarFallback
-                  className={cn(
-                    "text-xs font-semibold text-white",
-                    member.color,
-                  )}
-                >
-                  {member.initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {member.name}
-                </p>
-                <p className="text-xs text-muted">{member.role}</p>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {message ? (
+        <div className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-primary-soft px-4 py-3 text-base text-foreground">
+          <span className="min-w-0 flex-1">{message}</span>
+          <button
+            type="button"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-card/60 hover:text-foreground"
+            onClick={() => setMessage("")}
+            aria-label="닫기"
+          >
+            <X className="h-5 w-5" strokeWidth={1.75} />
+          </button>
+        </div>
+      ) : null}
 
-      <Card>
-        <CardHeader className="space-y-1 px-5 pb-2 pt-5 sm:px-6">
-          <CardTitle className="text-lg">팀 설정</CardTitle>
-          <p className="text-sm leading-relaxed text-muted">
-            팀 회의와 멤버에게 적용되는 운영 정책입니다.
-          </p>
-        </CardHeader>
-        <CardContent className="divide-y divide-border px-5 pb-4 pt-0 sm:px-6">
-          <SettingRow
-            label="자동 마스킹"
-            description="팀 회의 기록 시 개인정보를 기본으로 마스킹합니다."
-          >
-            <Toggle
-              label="팀 자동 마스킹"
-              on={teamAutoMask}
-              onChange={setTeamAutoMask}
-            />
-          </SettingRow>
-          <SettingRow
-            label="마스킹 정책 강제"
-            description="멤버 개인 설정과 달라도 팀 정책을 우선 적용합니다."
-          >
-            <Toggle
-              label="팀 마스킹 정책 강제"
-              on={enforceMask}
-              onChange={setEnforceMask}
-            />
-          </SettingRow>
-          <SettingRow
-            label="데이터 보존 기간"
-            description="회의록·알림 등 보관 데이터에 적용합니다. 확인한 알림은 최근 내역에 7일만 보이고, 실제 삭제는 이 기간을 따릅니다."
-          >
-            <Segmented
-              ariaLabel="데이터 보존 기간"
-              value={String(retention)}
-              onChange={updateRetention}
-              options={[
-                { value: "30", label: "30일" },
-                { value: "90", label: "90일" },
-                { value: "365", label: "1년" },
-              ]}
-            />
-          </SettingRow>
-        </CardContent>
-      </Card>
+      {teams.length === 0 ? (
+        <ManageCard title="팀">
+          <div className="px-4 py-12 text-center sm:px-5">
+            <UsersRound className="mx-auto h-10 w-10 text-muted-2" strokeWidth={1.5} />
+            <p className="mt-4 text-lg font-semibold text-foreground">
+              참여 중인 팀이 없습니다
+            </p>
+            <p className="mt-1 text-base text-muted">
+              초대를 수락하거나 팀 플랜으로 시작하세요.
+            </p>
+          </div>
+        </ManageCard>
+      ) : (
+        <>
+          {teams.length > 1 ? (
+            <label className="block max-w-md">
+              <span className="mb-2 block text-sm font-semibold text-muted">팀</span>
+              <select
+                value={activeTeamId ?? ""}
+                onChange={(event) => setActiveTeamId(event.target.value)}
+                className={cn(FIELD_CLASS, "w-full font-semibold")}
+              >
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}, {team.memberCount}/{team.seatLimit}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {detail ? (
+            view === "security" ? (
+              <ManageCard title="팀 보안 정책">
+                <div className="divide-y divide-border px-4 sm:px-5">
+                  <SettingRow label="개인정보 보관">
+                    <Segmented
+                      ariaLabel="개인정보 보관"
+                      value={String(detail.team.policy?.retentionDays ?? 90)}
+                      disabled={saving}
+                      onChange={(value) =>
+                        void updatePolicy({ retentionDays: Number(value) })
+                      }
+                      options={[
+                        { value: "30", label: "30일" },
+                        { value: "60", label: "60일" },
+                        { value: "90", label: "90일" },
+                      ]}
+                    />
+                  </SettingRow>
+                  <SettingRow label="팀장 언마스크 허용">
+                    <Toggle
+                      label="팀장 언마스크 허용"
+                      checked={Boolean(detail.team.policy?.allowAdminUnmask)}
+                      disabled={saving}
+                      onChange={(value) =>
+                        void updatePolicy({ allowAdminUnmask: value })
+                      }
+                    />
+                  </SettingRow>
+                  <SettingRow label="외부 공유">
+                    <Toggle
+                      label="외부 공유"
+                      checked={Boolean(detail.team.policy?.allowExternalSharing)}
+                      disabled={saving}
+                      onChange={(value) =>
+                        void updatePolicy({ allowExternalSharing: value })
+                      }
+                    />
+                  </SettingRow>
+                </div>
+              </ManageCard>
+            ) : (
+              <ManageCard
+                title={view === "records" ? "기록 대상" : "멤버"}
+                action={
+                  canInvite && view === "members" ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 rounded-full text-muted hover:bg-surface hover:text-foreground"
+                      onClick={() => setShowInvite(true)}
+                      aria-label="멤버 초대"
+                    >
+                      <UserRoundPlus className="h-5 w-5" strokeWidth={1.75} />
+                    </Button>
+                  ) : null
+                }
+              >
+                <div className="divide-y divide-border/60">
+                  {previewMembers.length === 0 ? (
+                    <p className="px-4 py-10 text-center text-base text-muted sm:px-5">
+                      표시할 멤버가 없습니다.
+                    </p>
+                  ) : (
+                    previewMembers.map((member) => (
+                    <button
+                      type="button"
+                      key={member.userId}
+                      onClick={() => {
+                        setSelectedUserId(member.userId);
+                        setBulkConfirmed(false);
+                      }}
+                      className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface/70 sm:px-5"
+                    >
+                      <Avatar className="h-10 w-10 shrink-0">
+                        <AvatarImage src={member.user.image ?? undefined} />
+                        <AvatarFallback className="bg-primary-soft text-sm font-semibold text-primary">
+                          {initials(member.user.name, member.user.email)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="min-w-0">
+                        <span className="block truncate text-lg font-semibold text-foreground">
+                          {member.user.name || member.user.handle}
+                        </span>
+                        <span className="block text-base text-muted">
+                          {ROLE_LABEL[member.role]}
+                        </span>
+                      </span>
+                      <ChevronRight
+                        className="h-5 w-5 shrink-0 text-muted-2"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                    </button>
+                    ))
+                  )}
+                </div>
+              </ManageCard>
+            )
+          ) : null}
+        </>
+      )}
+
+      {showInvite ||
+      scenarioId === "popup-invite" ||
+      scenarioId === "popup-invite-search" ? (
+        detail && canInvite ? (
+        <InviteDialog
+          teamId={detail.team.id}
+          canInviteAdmin={isOwner}
+          onClose={() => {
+            if (
+              scenarioId === "popup-invite" ||
+              scenarioId === "popup-invite-search"
+            ) {
+              return;
+            }
+            setShowInvite(false);
+          }}
+          onComplete={async () => {
+            if (
+              scenarioId !== "popup-invite" &&
+              scenarioId !== "popup-invite-search"
+            ) {
+              setShowInvite(false);
+            }
+            await refreshDetail(detail.team.id);
+          }}
+        />
+        ) : null
+      ) : null}
+
+      {view === "members" && previewSelected ? (
+        <MemberPermissionsSheet
+          open={Boolean(selectedUserId) || scenarioId === "popup-member"}
+          member={previewSelected}
+          canManage={canManage}
+          canPromoteToAdmin={detail?.currentMember.role === "OWNER"}
+          saving={saving}
+          onClose={() => {
+            if (scenarioId === "popup-member") return;
+            setSelectedUserId(null);
+          }}
+          onUpdateRole={(role) =>
+            void updateMember(previewSelected.userId, { role })
+          }
+          onUpdatePermission={(key, value) =>
+            void updateMember(previewSelected.userId, { [key]: value })
+          }
+        />
+      ) : null}
+
+      {view === "records" && previewSelected && canManageRecords ? (
+        <MemberRecordAccessSheet
+          open={Boolean(selectedUserId) || scenarioId === "popup-access"}
+          member={previewSelected}
+          meetings={previewMeetings}
+          saving={saving}
+          bulkConfirmed={bulkConfirmed}
+          onClose={() => {
+            if (scenarioId === "popup-access") return;
+            setSelectedUserId(null);
+          }}
+          onBulkConfirmChange={setBulkConfirmed}
+          onToggleMeeting={(meetingId, value) =>
+            void updateMeetingAccess(previewSelected.userId, meetingId, value)
+          }
+          onApplyAll={(value) =>
+            void applyMeetingAccessToAll(previewSelected.userId, value)
+          }
+        />
+      ) : null}
     </div>
+  );
+}
+
+function InviteDialog({
+  teamId,
+  canInviteAdmin,
+  onClose,
+  onComplete,
+}: {
+  teamId: string;
+  canInviteAdmin: boolean;
+  onClose: () => void;
+  onComplete: () => Promise<void>;
+}) {
+  const { scenarioId, isLive } = usePageUxPreview();
+  const [query, setQuery] = useState("");
+  const [person, setPerson] = useState<{
+    id: string;
+    name: string | null;
+    handle: string | null;
+    alreadyMember: boolean;
+    pendingInvite: { id: string } | null;
+  } | null>(null);
+  const [role, setRole] = useState<"MEMBER" | "ADMIN">("MEMBER");
+  const [permissions, setPermissions] = useState({
+    canInvite: false,
+    canCreateMeeting: false,
+    canManageRecordAccess: false,
+  });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const previewSearching = scenarioId === "popup-invite-search";
+  const searching = loading || previewSearching;
+
+  async function search() {
+    setLoading(true);
+    const response = await fetch(
+      `/api/teams/${teamId}/people?query=${encodeURIComponent(query)}`,
+      { cache: "no-store" },
+    );
+    const data = (await response.json()) as {
+      ok?: boolean;
+      person?: typeof person;
+      message?: string;
+    };
+    setLoading(false);
+    setPerson(data.person ?? null);
+    setMessage(
+      data.person ? "" : (data.message ?? "사용자를 찾지 못했습니다."),
+    );
+  }
+
+  async function invite() {
+    if (!person) return;
+    setLoading(true);
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      setLoading(false);
+      await onComplete();
+      return;
+    }
+    const response = await fetch(`/api/teams/${teamId}/invites`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: person.id, role, ...permissions }),
+    });
+    const data = (await response.json()) as { ok?: boolean; message?: string };
+    setLoading(false);
+    if (!response.ok || !data.ok) {
+      setMessage(data.message ?? "초대하지 못했습니다.");
+      return;
+    }
+    await onComplete();
+  }
+
+  const canSubmit =
+    person && !person.alreadyMember && !person.pendingInvite && !searching;
+
+  useEffect(() => {
+    if (previewSearching) {
+      setQuery("@preview");
+      setPerson(null);
+      setMessage("");
+    }
+  }, [previewSearching]);
+
+  return (
+    <TeamSheet
+      open
+      title="멤버 초대"
+      onClose={onClose}
+      footer={
+        canSubmit ? (
+          <Button
+            className="min-h-11 w-full rounded-xl"
+            onClick={() => void invite()}
+            disabled={searching}
+          >
+            초대 보내기
+          </Button>
+        ) : null
+      }
+    >
+      <label className="relative flex min-h-11 items-center rounded-xl bg-surface-2 px-3 focus-within:ring-2 focus-within:ring-ring">
+        <Search
+          className="h-4 w-4 shrink-0 text-muted-2"
+          strokeWidth={1.75}
+          aria-hidden
+        />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") void search();
+          }}
+          placeholder="@아이디"
+          className="min-w-0 flex-1 bg-transparent px-2.5 text-base text-foreground outline-none placeholder:text-muted"
+          autoComplete="off"
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9 shrink-0 gap-1.5 rounded-lg px-3 text-sm font-semibold"
+          onClick={() => void search()}
+          disabled={searching}
+        >
+          {searching ? (
+            <LoaderCircle
+              className="h-4 w-4 animate-spin"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+          ) : null}
+          검색
+        </Button>
+      </label>
+
+      {searching ? (
+        <p className="mt-3 text-base text-muted">사용자를 찾는 중…</p>
+      ) : null}
+
+      {message && !searching ? (
+        <p className="mt-3 text-base text-muted">{message}</p>
+      ) : null}
+
+      {person ? (
+        <div className="mt-4 overflow-hidden rounded-2xl bg-surface">
+          <div className="border-b border-border/60 px-4 py-3">
+            <p className="text-lg font-semibold text-foreground">
+              {person.name || person.handle}
+            </p>
+            <p className="text-base text-muted">@{person.handle}</p>
+          </div>
+          {person.alreadyMember || person.pendingInvite ? (
+            <p className="px-4 py-4 text-base text-muted">
+              {person.alreadyMember
+                ? "이미 팀에 참여 중입니다."
+                : "초대 응답 대기 중입니다."}
+            </p>
+          ) : (
+            <div className="divide-y divide-border px-4">
+              <SettingRow label="역할">
+                <select
+                  value={role}
+                  onChange={(event) =>
+                    setRole(event.target.value as "MEMBER" | "ADMIN")
+                  }
+                  className={cn(FIELD_CLASS, "min-w-[6.5rem]")}
+                >
+                  <option value="MEMBER">팀원</option>
+                  {canInviteAdmin ? (
+                    <option value="ADMIN">팀장</option>
+                  ) : null}
+                </select>
+              </SettingRow>
+              {(
+                [
+                  ["canInvite", "멤버 초대"],
+                  ["canCreateMeeting", "회의 만들기"],
+                  ["canManageRecordAccess", "기록 열람 관리"],
+                ] as const
+              ).map(([key, label]) => (
+                <SettingRow key={key} label={label}>
+                  <Toggle
+                    label={label}
+                    checked={permissions[key]}
+                    onChange={(value) =>
+                      setPermissions((current) => ({
+                        ...current,
+                        [key]: value,
+                      }))
+                    }
+                  />
+                </SettingRow>
+              ))}
+              <p className="py-3 text-sm text-muted">
+                초대는 1시간 후 만료됩니다.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </TeamSheet>
   );
 }

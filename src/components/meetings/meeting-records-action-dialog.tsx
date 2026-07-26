@@ -4,6 +4,7 @@ import { Download, Trash2 } from "lucide-react";
 import { useEffect } from "react";
 
 import { MeetingCaptureOverline } from "@/components/meetings/meeting-capture-label";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { formatSeoulListLeading } from "@/lib/meeting-date";
 import type { Meeting } from "@/types/meeting";
 import { cn } from "@/lib/utils";
@@ -29,10 +30,13 @@ export function MeetingRecordsActionDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { isLive } = usePageUxPreview();
+  const blockDismiss = busy && isLive;
+
   useEffect(() => {
     if (!open || contained) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !busy) onCancel();
+      if (e.key === "Escape" && !blockDismiss) onCancel();
     }
     document.addEventListener("keydown", onKeyDown);
     document.body.style.overflow = "hidden";
@@ -40,7 +44,7 @@ export function MeetingRecordsActionDialog({
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = "";
     };
-  }, [open, busy, onCancel, contained]);
+  }, [open, blockDismiss, onCancel, contained]);
 
   if (!open || meetings.length === 0) return null;
 
@@ -79,7 +83,7 @@ export function MeetingRecordsActionDialog({
           : "fixed inset-0 z-[70]",
       )}
       role="presentation"
-      onClick={busy ? undefined : onCancel}
+      onClick={blockDismiss ? undefined : onCancel}
     >
       <div
         role="alertdialog"

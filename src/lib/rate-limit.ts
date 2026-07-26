@@ -52,6 +52,11 @@ export function rateLimit(params: {
   return { ok: true };
 }
 
+/** 성공한 인증 뒤 해당 실패/시도 버킷을 비운다. */
+export function resetRateLimit(...keys: string[]) {
+  for (const key of keys) buckets.delete(key);
+}
+
 export function rateLimitResponse(retryAfterSec: number) {
   return NextResponse.json(
     {

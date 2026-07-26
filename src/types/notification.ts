@@ -1,4 +1,11 @@
-export type NotificationType = "masking" | "access" | "storage" | "system";
+export type NotificationType =
+  | "masking"
+  | "access"
+  | "storage"
+  | "system"
+  | "invite"
+  | "team"
+  | "meeting";
 
 export type AppNotification = {
   id: string;
@@ -10,4 +17,5 @@ export type AppNotification = {
   unread: boolean;
   createdAt?: string;
   readAt?: string | null;
+  data?: Record<string, unknown>;
 };

@@ -1,16 +1,20 @@
 "use client";
 
-import { BellOff, Check, EyeOff, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { Check, EyeOff, Loader2, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
+import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   NOTIFICATION_RECENT_DISPLAY_DAYS,
   readDataRetentionDaysFromStorage,
 } from "@/lib/data-retention";
+import { fixtureNotificationsFull } from "@/lib/page-ux-fixtures";
 import { getNotifications } from "@/lib/notifications-mock";
+import { isPageUxNotificationScenario } from "@/lib/page-ux-registry";
 import type { AppNotification, NotificationType } from "@/types/notification";
 import { cn } from "@/lib/utils";
 
@@ -36,18 +40,48 @@ interface NotificationPanelProps {
   contained?: boolean;
 }
 
-/** 헤더 벨에서 열리는 우측 알림 센터. */
+/** 헤더에서 열리는 우측 알림 센터. */
 export function NotificationPanel({
   open,
   onClose,
   contained,
 }: NotificationPanelProps) {
   const { data: session, status } = useSession();
+  const { scenarioId, isLive } = usePageUxPreview();
   const [unread, setUnread] = useState<AppNotification[]>([]);
   const [recent, setRecent] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(false);
+  const softActions = !isLive || Boolean(contained);
+
+  const previewEmpty = scenarioId === "popup-notifications-empty";
+  const previewLoading = scenarioId === "popup-notifications-loading";
+
+  const applyPreview = useCallback(() => {
+    if (previewEmpty) {
+      setUnread([]);
+      setRecent([]);
+      setLoading(false);
+      return true;
+    }
+    if (previewLoading) {
+      setUnread([]);
+      setRecent([]);
+      setLoading(true);
+      return true;
+    }
+    if (scenarioId === "popup-notifications") {
+      const items = fixtureNotificationsFull();
+      setUnread(items.filter((n) => n.unread));
+      setRecent(items.filter((n) => !n.unread));
+      setLoading(false);
+      return true;
+    }
+    return false;
+  }, [previewEmpty, previewLoading, scenarioId]);
 
   const load = useCallback(async () => {
+    if (applyPreview()) return;
+
     if (contained || status !== "authenticated" || !session?.user?.id) {
       const items = getNotifications().map((n) => ({ ...n }));
       setUnread(items.filter((n) => n.unread));
@@ -77,15 +111,21 @@ export function NotificationPanel({
     } finally {
       setLoading(false);
     }
-  }, [contained, session?.user?.id, status]);
+  }, [applyPreview, contained, session?.user?.id, status]);
 
   useEffect(() => {
     if (!open) return;
-    void load();
+    queueMicrotask(() => void load());
   }, [open, load]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (!isPageUxNotificationScenario(scenarioId)) return;
+    applyPreview();
+  }, [open, scenarioId, applyPreview]);
+
   async function markAllRead() {
-    if (contained || status !== "authenticated") {
+    if (softActions || status !== "authenticated") {
       setRecent((prev) => [...unread.map((n) => ({ ...n, unread: false })), ...prev]);
       setUnread([]);
       emitNotificationsChanged(0);
@@ -105,7 +145,7 @@ export function NotificationPanel({
   }
 
   async function markRead(id: string) {
-    if (contained || status !== "authenticated") {
+    if (softActions || status !== "authenticated") {
       const target = unread.find((n) => n.id === id);
       if (!target) return;
       setUnread((prev) => prev.filter((n) => n.id !== id));
@@ -126,6 +166,50 @@ export function NotificationPanel({
     }
   }
 
+  async function respondInvite(
+    notificationId: string,
+    inviteId: string,
+    action: "accept" | "decline",
+    reason?: string,
+  ) {
+    if (softActions) {
+      await markRead(notificationId);
+      return;
+    }
+    const res = await fetch(`/api/team-invites/${inviteId}/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, reason }),
+    });
+    const data = (await res.json()) as { ok?: boolean };
+    if (res.ok && data.ok) {
+      await markRead(notificationId);
+      await load();
+    }
+  }
+
+  async function confirmMeeting(
+    notificationId: string,
+    meetingId: string | null,
+  ) {
+    if (softActions) {
+      await markRead(notificationId);
+      return;
+    }
+    const res = await fetch("/api/notifications/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        notificationId,
+        meetingId: meetingId ?? undefined,
+      }),
+    });
+    if (res.ok) {
+      emitNotificationsChanged(Math.max(0, unread.length - 1));
+      await load();
+    }
+  }
+
   useEffect(() => {
     if (!open || contained) return;
 
@@ -141,7 +225,7 @@ export function NotificationPanel({
     };
   }, [open, onClose, contained]);
 
-  const empty = unread.length === 0 && recent.length === 0;
+  const empty = !loading && unread.length === 0 && recent.length === 0;
 
   return (
     <>
@@ -151,7 +235,10 @@ export function NotificationPanel({
           contained ? "absolute inset-0 z-10" : "fixed inset-0 z-50",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
-        onClick={onClose}
+        onClick={() => {
+          if (isPageUxNotificationScenario(scenarioId)) return;
+          onClose();
+        }}
         aria-hidden={!open}
       />
 
@@ -197,7 +284,10 @@ export function NotificationPanel({
               variant="ghost"
               size="icon"
               className="h-9 w-9 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground"
-              onClick={onClose}
+              onClick={() => {
+                if (isPageUxNotificationScenario(scenarioId)) return;
+                onClose();
+              }}
               aria-label="알림 센터 닫기"
             >
               <X className="h-5 w-5" />
@@ -206,10 +296,19 @@ export function NotificationPanel({
         </div>
 
         <ScrollArea className="min-h-0 flex-1">
-          {empty ? (
+          {loading || previewLoading ? (
+            <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
+              <Loader2
+                className="h-7 w-7 animate-spin text-primary"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <p className="text-sm text-muted">불러오는 중…</p>
+            </div>
+          ) : empty || previewEmpty ? (
             <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface text-muted-2">
-                <BellOff className="h-6 w-6" strokeWidth={1.5} />
+                <MaterialSymbol name="notifications_off" size={28} weight={300} />
               </span>
               <p className="mt-3 text-sm font-medium text-foreground">
                 새 알림이 없습니다
@@ -226,6 +325,12 @@ export function NotificationPanel({
                   label="안 읽음"
                   items={unread}
                   onItemClick={(id) => void markRead(id)}
+                  onInviteAction={(notificationId, inviteId, action, reason) =>
+                    void respondInvite(notificationId, inviteId, action, reason)
+                  }
+                  onConfirmMeeting={(notificationId, meetingId) =>
+                    void confirmMeeting(notificationId, meetingId)
+                  }
                 />
               ) : null}
               {recent.length > 0 ? (
@@ -246,11 +351,25 @@ function NotificationGroup({
   label,
   items,
   onItemClick,
+  onInviteAction,
+  onConfirmMeeting,
 }: {
   label: string;
   items: AppNotification[];
   onItemClick?: (id: string) => void;
+  onInviteAction?: (
+    notificationId: string,
+    inviteId: string,
+    action: "accept" | "decline",
+    reason?: string,
+  ) => void;
+  onConfirmMeeting?: (
+    notificationId: string,
+    meetingId: string | null,
+  ) => void;
 }) {
+  const [declineId, setDeclineId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
   return (
     <div className="mb-1">
       <p className="px-3 pb-1 pt-2 text-xs font-semibold tracking-wide text-muted-2">
@@ -261,15 +380,16 @@ function NotificationGroup({
           const Icon = notificationIcon(n.type);
           return (
             <li key={n.id}>
-              <button
-                type="button"
-                onClick={() => onItemClick?.(n.id)}
+              <div
                 className={cn(
                   "flex w-full gap-3 rounded-xl px-3 py-3 text-left transition-colors",
-                  onItemClick
+                  onItemClick && n.type !== "invite"
                     ? "cursor-pointer hover:bg-surface"
                     : "cursor-default",
                 )}
+                onClick={() => {
+                  if (n.type !== "invite") onItemClick?.(n.id);
+                }}
               >
                 <div
                   className={cn(
@@ -298,11 +418,109 @@ function NotificationGroup({
                   <p className="mt-0.5 text-xs leading-relaxed text-muted">
                     {n.body}
                   </p>
+                  {n.type === "invite" &&
+                  typeof n.data?.inviteId === "string" &&
+                  onInviteAction ? (
+                    <div className="mt-3" onClick={(event) => event.stopPropagation()}>
+                      {declineId === n.id ? (
+                        <div className="space-y-2">
+                          <input
+                            value={reason}
+                            onChange={(event) => setReason(event.target.value)}
+                            placeholder="거절 사유, 선택"
+                            maxLength={500}
+                            className="min-h-12 w-full rounded-xl border border-border bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="min-h-12"
+                              onClick={() => setDeclineId(null)}
+                            >
+                              취소
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="min-h-12"
+                              onClick={() =>
+                                onInviteAction(
+                                  n.id,
+                                  String(n.data?.inviteId),
+                                  "decline",
+                                  reason,
+                                )
+                              }
+                            >
+                              거절
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="min-h-12"
+                            onClick={() => setDeclineId(n.id)}
+                          >
+                            거절
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="min-h-12"
+                            onClick={() =>
+                              onInviteAction(
+                                n.id,
+                                String(n.data?.inviteId),
+                                "accept",
+                              )
+                            }
+                          >
+                            수락
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                  {n.data?.kind === "meeting_ack" && onConfirmMeeting ? (
+                    <div className="mt-3" onClick={(event) => event.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        className="min-h-12"
+                        onClick={() =>
+                          onConfirmMeeting(
+                            n.id,
+                            typeof n.data?.meetingId === "string"
+                              ? n.data.meetingId
+                              : null,
+                          )
+                        }
+                      >
+                        확인
+                      </Button>
+                    </div>
+                  ) : null}
+                  {(n.data?.kind === "meeting_changed" ||
+                    n.data?.kind === "meeting_canceled" ||
+                    n.data?.kind === "meeting_missed") &&
+                  onConfirmMeeting ? (
+                    <div className="mt-3" onClick={(event) => event.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="min-h-12"
+                        onClick={() => onConfirmMeeting(n.id, null)}
+                      >
+                        확인
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
                 {n.unread ? (
                   <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />
                 ) : null}
-              </button>
+              </div>
             </li>
           );
         })}

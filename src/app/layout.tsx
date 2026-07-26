@@ -39,6 +39,18 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
       className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0..1,-50..200&icon_names=audio_file,description,draft,image,notifications,notifications_off,picture_as_pdf,slideshow,table_chart,text_snippet,video_file&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className="min-h-full">
         <AuthSessionProvider>
           <AppProvider>{children}</AppProvider>

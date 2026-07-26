@@ -21,18 +21,3 @@ export async function isEmailTaken(email: string) {
   });
   return Boolean(user);
 }
-
-export async function isEmailVerified(email: string) {
-  const user = await prisma.user.findUnique({
-    where: { email: normalize(email) },
-    select: { emailVerified: true },
-  });
-  return Boolean(user?.emailVerified);
-}
-
-export async function markEmailVerified(email: string) {
-  await prisma.user.updateMany({
-    where: { email: normalize(email) },
-    data: { emailVerified: new Date() },
-  });
-}

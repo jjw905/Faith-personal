@@ -11,15 +11,12 @@ import {
 } from "react";
 
 import { readDataRetentionDaysFromStorage } from "@/lib/data-retention";
-import {
-  WORKSPACES,
-  type Workspace,
-  type WorkspaceId,
-} from "@/lib/workspaces";
+import { WORKSPACES, type Workspace, type WorkspaceId } from "@/lib/workspaces";
 import type { User } from "@/types/user";
 
 const AUTO_TIMELINE_KEY = "faith.settings.autoOpenTimelineOnStart";
 const WORKSPACE_KEY = "faith.workspaceId";
+const ACTIVE_TEAM_KEY = "faith.activeTeamId";
 
 interface AppContextValue {
   currentUser: User;
@@ -27,6 +24,8 @@ interface AppContextValue {
   workspaceId: WorkspaceId;
   workspace: Workspace;
   setWorkspaceId: (id: WorkspaceId) => void;
+  activeTeamId: string | null;
+  setActiveTeamId: (id: string | null) => void;
   autoOpenTimelineOnStart: boolean;
   setAutoOpenTimelineOnStart: (value: boolean) => void;
 }
@@ -75,31 +74,35 @@ function readAutoTimelinePref(): boolean {
 }
 
 function readWorkspaceId(): WorkspaceId {
-  if (typeof window === "undefined") return "team";
+  if (typeof window === "undefined") return "personal";
   try {
     const raw = window.localStorage.getItem(WORKSPACE_KEY);
     if (raw === "personal" || raw === "team") return raw;
   } catch {
     /* ignore */
   }
-  return "team";
+  return "personal";
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const [notificationCount, setNotificationCount] = useState(0);
-  const [workspaceId, setWorkspaceIdState] = useState<WorkspaceId>("team");
+  const [workspaceId, setWorkspaceIdState] = useState<WorkspaceId>("personal");
+  const [activeTeamId, setActiveTeamIdState] = useState<string | null>(null);
   const [autoOpenTimelineOnStart, setAutoOpenTimelineOnStartState] =
     useState(true);
 
   useEffect(() => {
-    setWorkspaceIdState(readWorkspaceId());
-    setAutoOpenTimelineOnStartState(readAutoTimelinePref());
+    queueMicrotask(() => {
+      setWorkspaceIdState(readWorkspaceId());
+      setActiveTeamIdState(window.localStorage.getItem(ACTIVE_TEAM_KEY));
+      setAutoOpenTimelineOnStartState(readAutoTimelinePref());
+    });
   }, []);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) {
-      setNotificationCount(0);
+      queueMicrotask(() => setNotificationCount(0));
       return;
     }
 
@@ -160,9 +163,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const setActiveTeamId = useCallback((id: string | null) => {
+    setActiveTeamIdState(id);
+    try {
+      if (id) window.localStorage.setItem(ACTIVE_TEAM_KEY, id);
+      else window.localStorage.removeItem(ACTIVE_TEAM_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const sessionUser = session?.user;
   const currentUser = useMemo(() => {
-    if (session?.user?.id) {
-      return sessionToUser(session.user);
+    if (sessionUser?.id) {
+      return sessionToUser(sessionUser);
     }
     return {
       id: "",
@@ -173,7 +187,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       rbacLevel: 0,
       avatarInitials: "?",
     } satisfies User;
-  }, [session?.user]);
+  }, [sessionUser]);
 
   const value = useMemo<AppContextValue>(() => {
     const workspace =
@@ -185,6 +199,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       workspaceId,
       workspace,
       setWorkspaceId,
+      activeTeamId,
+      setActiveTeamId,
       autoOpenTimelineOnStart,
       setAutoOpenTimelineOnStart,
     };
@@ -193,6 +209,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     notificationCount,
     workspaceId,
     setWorkspaceId,
+    activeTeamId,
+    setActiveTeamId,
     autoOpenTimelineOnStart,
     setAutoOpenTimelineOnStart,
   ]);

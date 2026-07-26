@@ -4,11 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-export function SignupEmailForm({
-  initialError,
-}: {
-  initialError?: string;
-}) {
+export function SignupEmailForm({ initialError }: { initialError?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [error, setError] = useState(
@@ -45,7 +41,7 @@ export function SignupEmailForm({
         );
         return;
       }
-      router.replace(data.redirect || "/signup/verify");
+      router.replace(data.redirect || "/dashboard");
       router.refresh();
     } catch {
       setError("요청에 실패했습니다. 다시 시도해 주세요.");

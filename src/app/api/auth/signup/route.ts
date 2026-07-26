@@ -9,10 +9,6 @@ import {
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
-import {
-  isResendConfigured,
-  sendVerificationEmail,
-} from "@/lib/resend-mail";
 
 export async function POST(request: Request) {
   try {
@@ -104,12 +100,13 @@ export async function POST(request: Request) {
         err instanceof Error ? err.message.slice(0, 300) : err,
       );
       return NextResponse.json(
-        { ok: false, message: "비밀번호 처리에 실패했습니다. 다시 시도해 주세요." },
+        {
+          ok: false,
+          message: "비밀번호 처리에 실패했습니다. 다시 시도해 주세요.",
+        },
         { status: 500 },
       );
     }
-
-    const skipMail = !isResendConfigured();
 
     try {
       await prisma.user.create({
@@ -118,7 +115,7 @@ export async function POST(request: Request) {
           name,
           passwordHash,
           signupProvider: "credentials",
-          ...(skipMail ? { emailVerified: new Date() } : {}),
+          emailVerified: new Date(),
         },
       });
     } catch (err) {
@@ -136,34 +133,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (skipMail) {
-      return NextResponse.json({
-        ok: true,
-        message: "회원가입이 완료되었습니다. 바로 로그인할 수 있습니다.",
-        emailVerified: true,
-      });
-    }
-
-    const mailed = await sendVerificationEmail(email, name);
-    if (!mailed.ok) {
-      return NextResponse.json({
-        ok: true,
-        message:
-          "회원가입은 완료되었으나 인증 메일 발송에 실패했습니다. 로그인 후 재발송을 이용해 주세요.",
-      });
-    }
-
-    const res = NextResponse.json({
+    return NextResponse.json({
       ok: true,
-      message: "회원가입이 완료되었습니다. 이메일 인증을 진행해 주세요.",
+      message: "회원가입이 완료되었습니다. 바로 로그인할 수 있습니다.",
     });
-    res.cookies.set("faith.pending-email", email, {
-      httpOnly: true,
-      path: "/",
-      maxAge: 60 * 60 * 24,
-      sameSite: "lax",
-    });
-    return res;
   } catch (err) {
     console.error(
       "[signup] unhandled",

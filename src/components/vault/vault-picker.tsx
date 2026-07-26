@@ -1,10 +1,12 @@
 "use client";
 
-import { Archive, FileIcon, X } from "lucide-react";
+import { Archive, Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import { Button } from "@/components/ui/button";
+import { VaultFileIcon } from "@/components/vault/vault-file-icon";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   VAULT_CHANGED_EVENT,
   formatVaultSize,
@@ -26,11 +28,16 @@ export function VaultPickerDialog({
   /** 디자인 랩: 프리뷰 영역 안에만 표시 */
   contained?: boolean;
 }) {
+  const { scenarioId } = usePageUxPreview();
   const [items, setItems] = useState<VaultItemMeta[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickingId, setPickingId] = useState<string | null>(null);
+  const forceLoading = scenarioId === "popup-vault-picker-loading";
+  const forceEmpty = scenarioId === "popup-vault-picker-empty";
+  const showLoading = loading || forceLoading;
+  const viewItems = forceEmpty ? [] : items;
 
   useEffect(() => {
     if (!open) {
@@ -78,9 +85,9 @@ export function VaultPickerDialog({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((item) => item.name.toLowerCase().includes(q));
-  }, [items, query]);
+    if (!q) return viewItems;
+    return viewItems.filter((item) => item.name.toLowerCase().includes(q));
+  }, [viewItems, query]);
 
   async function pick(meta: VaultItemMeta) {
     setPickingId(meta.id);
@@ -146,7 +153,7 @@ export function VaultPickerDialog({
           </button>
         </div>
 
-        {items.length > 0 || query ? (
+        {viewItems.length > 0 || query ? (
           <div className="px-4 pb-2">
             <MeetingSearch
               value={query}
@@ -159,13 +166,18 @@ export function VaultPickerDialog({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-          {loading ? (
-            <p className="px-3 py-8 text-center text-sm text-muted">
-              불러오는 중…
-            </p>
+          {showLoading ? (
+            <div className="flex flex-col items-center gap-3 px-3 py-10 text-center">
+              <Loader2
+                className="h-6 w-6 animate-spin text-primary"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <p className="text-sm text-muted">불러오는 중…</p>
+            </div>
           ) : error ? (
             <p className="px-3 py-8 text-center text-sm text-muted">{error}</p>
-          ) : items.length === 0 ? (
+          ) : viewItems.length === 0 ? (
             <div className="px-3 py-10 text-center">
               <Archive
                 className="mx-auto h-8 w-8 text-muted-2"
@@ -194,9 +206,12 @@ export function VaultPickerDialog({
                       "hover:bg-surface disabled:cursor-wait disabled:opacity-60",
                     )}
                   >
-                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-foreground">
-                      <FileIcon className="h-4 w-4" strokeWidth={1.75} />
-                    </span>
+                    <VaultFileIcon
+                      name={item.name}
+                      mime={item.mime}
+                      size={18}
+                      className="rounded-xl"
+                    />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-foreground">
                         {item.name}

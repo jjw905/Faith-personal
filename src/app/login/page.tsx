@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   const session = await auth();
-  if (session?.user?.id && session.user.emailVerified && !session.user.disabled) {
+  if (session?.user?.id && !session.user.disabled) {
     redirect("/dashboard");
   }
 

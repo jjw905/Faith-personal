@@ -22,7 +22,10 @@ export async function GET() {
   const gate = await assertAdmin();
   if (!gate.session) {
     return NextResponse.json(
-      { ok: false, message: gate.status === 401 ? "로그인이 필요합니다." : "권한 없음" },
+      {
+        ok: false,
+        message: gate.status === 401 ? "로그인이 필요합니다." : "권한 없음",
+      },
       { status: gate.status },
     );
   }
@@ -34,7 +37,10 @@ export async function PATCH(request: Request) {
   const gate = await assertAdmin();
   if (!gate.session) {
     return NextResponse.json(
-      { ok: false, message: gate.status === 401 ? "로그인이 필요합니다." : "권한 없음" },
+      {
+        ok: false,
+        message: gate.status === 401 ? "로그인이 필요합니다." : "권한 없음",
+      },
       { status: gate.status },
     );
   }
@@ -44,7 +50,10 @@ export async function PATCH(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ ok: false, message: "잘못된 요청" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, message: "잘못된 요청" },
+      { status: 400 },
+    );
   }
 
   const data =
@@ -53,21 +62,20 @@ export async function PATCH(request: Request) {
       : {};
   const userId = typeof data.userId === "string" ? data.userId : "";
   if (!userId) {
-    return NextResponse.json({ ok: false, message: "userId 필요" }, { status: 400 });
-  }
-  if (userId === session.user.id) {
     return NextResponse.json(
-      { ok: false, message: "본인 계정은 여기서 변경할 수 없습니다." },
+      { ok: false, message: "userId 필요" },
       { status: 400 },
     );
   }
-
   const target = await prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true, disabled: true },
+    select: { role: true, plan: true, disabled: true },
   });
   if (!target) {
-    return NextResponse.json({ ok: false, message: "사용자 없음" }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, message: "사용자 없음" },
+      { status: 404 },
+    );
   }
 
   const patch: { role?: Role; plan?: Plan; disabled?: boolean } = {};
@@ -80,46 +88,117 @@ export async function PATCH(request: Request) {
   if (typeof data.disabled === "boolean") {
     patch.disabled = data.disabled;
   }
-  if (Object.keys(patch).length === 0) {
-    return NextResponse.json({ ok: false, message: "변경 항목 없음" }, { status: 400 });
+  const teamSlots =
+    typeof data.teamSlots === "number"
+      ? Math.max(0, Math.min(20, Math.floor(data.teamSlots)))
+      : undefined;
+  const teamSeatLimit =
+    typeof data.teamSeatLimit === "number"
+      ? Math.max(0, Math.min(500, Math.floor(data.teamSeatLimit)))
+      : undefined;
+  const isSelf = userId === session.user.id;
+  if (
+    isSelf &&
+    (process.env.NODE_ENV !== "development" ||
+      patch.role !== undefined ||
+      patch.disabled !== undefined)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          process.env.NODE_ENV === "development"
+            ? "본인 역할과 상태는 변경할 수 없습니다."
+            : "본인 계정은 여기서 변경할 수 없습니다.",
+      },
+      { status: 400 },
+    );
+  }
+  if (
+    teamSlots !== undefined &&
+    teamSlots > 0 &&
+    (patch.plan ?? target.plan) !== "PRO"
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "팀 슬롯은 PRO 사용자에게만 부여할 수 있습니다." },
+      { status: 400 },
+    );
+  }
+  if (teamSlots !== undefined && teamSlots > 0 && (teamSeatLimit ?? 0) < 2) {
+    return NextResponse.json(
+      { ok: false, message: "팀 좌석은 2개 이상이어야 합니다." },
+      { status: 400 },
+    );
+  }
+  if (
+    Object.keys(patch).length === 0 &&
+    teamSlots === undefined &&
+    teamSeatLimit === undefined
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "변경 항목 없음" },
+      { status: 400 },
+    );
   }
 
   const demotingAdmin =
     target.role === "ADMIN" &&
-    ((patch.role === "USER") || patch.disabled === true);
+    (patch.role === "USER" || patch.disabled === true);
   if (demotingAdmin) {
     const admins = await countAdmins();
     if (admins <= 1) {
       return NextResponse.json(
-        { ok: false, message: "마지막 관리자는 강등하거나 비활성화할 수 없습니다." },
+        {
+          ok: false,
+          message: "마지막 관리자는 강등하거나 비활성화할 수 없습니다.",
+        },
         { status: 400 },
       );
     }
   }
 
-  const updated = await prisma.user.update({
-    where: { id: userId },
-    data: patch,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      plan: true,
-      disabled: true,
-      emailVerified: true,
-      signupProvider: true,
-      image: true,
-      createdAt: true,
-      accounts: { select: { provider: true } },
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    if (teamSlots !== undefined || teamSeatLimit !== undefined) {
+      await tx.teamEntitlement.upsert({
+        where: { userId },
+        create: {
+          userId,
+          remainingTeamSlots: teamSlots ?? 0,
+          seatLimit: teamSeatLimit ?? 0,
+          grantedById: session.user.id,
+        },
+        update: {
+          ...(teamSlots !== undefined ? { remainingTeamSlots: teamSlots } : {}),
+          ...(teamSeatLimit !== undefined ? { seatLimit: teamSeatLimit } : {}),
+          grantedById: session.user.id,
+        },
+      });
+    }
+    return tx.user.update({
+      where: { id: userId },
+      data: patch,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        plan: true,
+        disabled: true,
+        signupProvider: true,
+        image: true,
+        createdAt: true,
+        teamEntitlement: {
+          select: { remainingTeamSlots: true, seatLimit: true },
+        },
+        accounts: { select: { provider: true } },
+      },
+    });
   });
 
   return NextResponse.json({
     ok: true,
     user: {
       ...updated,
-      emailVerified: updated.emailVerified?.toISOString() ?? null,
       createdAt: updated.createdAt.toISOString(),
     },
   });

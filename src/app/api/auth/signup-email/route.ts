@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 import { auth } from "@/auth";
-import { isEmailVerified } from "@/lib/auth-store";
 import { isValidEmail } from "@/lib/auth-validation";
 import { prisma } from "@/lib/prisma";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
-import { isResendConfigured, sendVerificationEmail } from "@/lib/resend-mail";
 
 /** 소셜 가입 후 이메일 직접 등록 (Server Action 대신). */
 export async function POST(request: Request) {
@@ -25,7 +22,10 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ ok: false, message: "잘못된 요청" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, message: "잘못된 요청" },
+      { status: 400 },
+    );
   }
 
   const emailRaw =
@@ -57,32 +57,11 @@ export async function POST(request: Request) {
 
   await prisma.user.update({
     where: { id: session.user.id },
-    data: { email },
+    data: { email, emailVerified: new Date() },
   });
 
-  const jar = await cookies();
-  jar.set("faith.pending-email", email, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24,
+  return NextResponse.json({
+    ok: true,
+    redirect: "/dashboard",
   });
-
-  if (!(await isEmailVerified(email))) {
-    if (!isResendConfigured()) {
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { emailVerified: new Date() },
-      });
-      return NextResponse.json({
-        ok: true,
-        redirect: "/dashboard",
-        emailVerified: true,
-      });
-    }
-    await sendVerificationEmail(email, session.user.name);
-  }
-
-  return NextResponse.json({ ok: true, redirect: "/signup/verify" });
 }

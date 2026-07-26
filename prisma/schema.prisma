@@ -22,26 +22,332 @@ enum VaultPurpose {
   MEETING
 }
 
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum TeamInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELED
+}
+
+enum TeamMeetingMode {
+  ONLINE
+  OFFLINE
+}
+
+enum TeamMeetingState {
+  SCHEDULED
+  ACTIVE
+  ENDED
+  CANCELED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum TeamMeetingEndReason {
+  COMPLETED
+  CANCELED
+  ORGANIZER_ABSENT
+}
+
 model User {
-  id            String      @id @default(cuid())
-  name          String?
-  email         String?     @unique
-  emailVerified DateTime?   @map("email_verified")
-  image         String?
-  passwordHash    String?     @map("password_hash")
-  /** 최초 가입 수단: credentials | google | naver | twitter */
-  signupProvider  String?     @map("signup_provider")
-  role            Role        @default(USER)
-  plan            Plan        @default(FREE)
-  disabled        Boolean     @default(false)
-  accounts        Account[]
-  sessions        Session[]
-  vaultFiles      VaultFile[]
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  id                        String              @id @default(cuid())
+  name                      String?
+  email                     String?             @unique
+  emailVerified             DateTime?           @map("email_verified")
+  image                     String?
+  passwordHash              String?             @map("password_hash")
+  /**
+   * 최초 가입 수단: credentials | google | naver | twitter
+   */
+  signupProvider            String?             @map("signup_provider")
+  role                      Role                @default(USER)
+  plan                      Plan                @default(FREE)
+  disabled                  Boolean             @default(false)
+  notificationRetentionDays Int                 @default(90) @map("notification_retention_days")
+  accounts                  Account[]
+  sessions                  Session[]
+  vaultFiles                VaultFile[]
+  handle                    String?             @unique
+  inviteCode                String?             @unique @map("invite_code")
+  ownedTeams                Team[]              @relation("TeamOwner")
+  teamMemberships           TeamMember[]
+  teamInvites               TeamInvite[]        @relation("InvitedUser")
+  sentTeamInvites           TeamInvite[]        @relation("InviteSender")
+  teamEntitlement           TeamEntitlement?    @relation("EntitledUser")
+  entitlementsGranted       TeamEntitlement[]   @relation("EntitlementGrantor")
+  createdTeamMeetings       TeamMeeting[]       @relation("MeetingCreator")
+  organizedTeamMeetings     TeamMeeting[]       @relation("MeetingOrganizer")
+  backupHostMeetings        TeamMeeting[]       @relation("MeetingBackupHost")
+  currentHostMeetings       TeamMeeting[]       @relation("MeetingCurrentHost")
+  teamMeetingAccess         TeamMeetingAccess[]
+  authoredAnnouncements     TeamAnnouncement[]
+  announcementReads         TeamAnnouncementRead[]
+  notifications             Notification[]
+  auditActions              TeamAuditLog[]      @relation("AuditActor")
+  auditTargets              TeamAuditLog[]      @relation("AuditTarget")
+  personalSettings          UserPersonalSettings?
+  createdAt                 DateTime            @default(now()) @map("created_at")
+  updatedAt                 DateTime            @updatedAt @map("updated_at")
 
   @@index([role, disabled])
   @@map("users")
+}
+
+model Team {
+  id            String             @id @default(cuid())
+  name          String
+  slug          String             @unique
+  ownerId       String             @map("owner_id")
+  owner         User               @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  seatLimit     Int                @default(2) @map("seat_limit")
+  members       TeamMember[]
+  invites       TeamInvite[]
+  policy        TeamPolicy?
+  meetings      TeamMeeting[]
+  announcements TeamAnnouncement[]
+  auditLogs     TeamAuditLog[]
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  @@index([ownerId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id                    String   @id @default(cuid())
+  teamId                String   @map("team_id")
+  userId                String   @map("user_id")
+  role                  TeamRole @default(MEMBER)
+  canInvite             Boolean  @default(false) @map("can_invite")
+  canCreateMeeting      Boolean  @default(false) @map("can_create_meeting")
+  canManageRecordAccess Boolean  @default(false) @map("can_manage_record_access")
+  team                  Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt              DateTime @default(now()) @map("joined_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@index([teamId, role])
+  @@map("team_members")
+}
+
+model TeamPolicy {
+  id                        String   @id @default(cuid())
+  teamId                    String   @unique @map("team_id")
+  team                      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  retentionDays             Int      @default(90) @map("retention_days")
+  allowAdminUnmask          Boolean  @default(true) @map("allow_admin_unmask")
+  allowExternalSharing      Boolean  @default(false) @map("allow_external_sharing")
+  announcementHideAfterRead Boolean  @default(false) @map("announcement_hide_after_read")
+  forceMicrophoneOff        Boolean  @default(false) @map("force_microphone_off")
+  preHostRecordingDefault   Boolean  @default(false) @map("pre_host_recording_default")
+  preHostRecordingLocked    Boolean  @default(false) @map("pre_host_recording_locked")
+  participationPolicy       Json     @default("{}") @map("participation_policy")
+  recordPolicy              Json     @default("{}") @map("record_policy")
+  notificationPolicy        Json     @default("{}") @map("notification_policy")
+  schedulePolicy            Json     @default("{}") @map("schedule_policy")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  @@map("team_policies")
+}
+
+model TeamInvite {
+  id                    String           @id @default(cuid())
+  teamId                String           @map("team_id")
+  invitedUserId         String           @map("invited_user_id")
+  invitedById           String           @map("invited_by_id")
+  tokenHash             String           @unique @map("token_hash")
+  status                TeamInviteStatus @default(PENDING)
+  role                  TeamRole         @default(MEMBER)
+  canInvite             Boolean          @default(false) @map("can_invite")
+  canCreateMeeting      Boolean          @default(false) @map("can_create_meeting")
+  canManageRecordAccess Boolean          @default(false) @map("can_manage_record_access")
+  declineReason         String?          @map("decline_reason") @db.Text
+  expiresAt             DateTime         @map("expires_at")
+  respondedAt           DateTime?        @map("responded_at")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  team                  Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  invitedUser           User             @relation("InvitedUser", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  invitedBy             User             @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([invitedUserId, status, expiresAt])
+  @@index([teamId, status])
+  @@map("team_invites")
+}
+
+model TeamEntitlement {
+  id                 String   @id @default(cuid())
+  userId             String   @unique @map("user_id")
+  user               User     @relation("EntitledUser", fields: [userId], references: [id], onDelete: Cascade)
+  remainingTeamSlots Int      @default(0) @map("remaining_team_slots")
+  seatLimit          Int      @default(0) @map("seat_limit")
+  grantedById        String?  @map("granted_by_id")
+  grantedBy          User?    @relation("EntitlementGrantor", fields: [grantedById], references: [id], onDelete: SetNull)
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("team_entitlements")
+}
+
+model TeamMeeting {
+  id                       String                @id @default(cuid())
+  teamId                   String                @map("team_id")
+  team                     Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  legacyMeetingId          String?               @unique @map("legacy_meeting_id")
+  title                    String
+  mode                     TeamMeetingMode
+  state                    TeamMeetingState      @default(SCHEDULED)
+  livekitRoomName          String?               @unique @map("livekit_room_name")
+  createdById              String                @map("created_by_id")
+  createdBy                User                  @relation("MeetingCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  organizerId              String                @map("organizer_id")
+  organizer                User                  @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  backupHostId             String?               @map("backup_host_id")
+  backupHost               User?                 @relation("MeetingBackupHost", fields: [backupHostId], references: [id], onDelete: SetNull)
+  currentHostId            String?               @map("current_host_id")
+  currentHost              User?                 @relation("MeetingCurrentHost", fields: [currentHostId], references: [id], onDelete: SetNull)
+  scheduledStartAt         DateTime?             @map("scheduled_start_at")
+  durationMinutes          Int?                  @map("duration_minutes")
+  canceledAt               DateTime?             @map("canceled_at")
+  endReason                TeamMeetingEndReason? @map("end_reason")
+  recordingActive          Boolean               @default(false) @map("recording_active")
+  sttStartedAt             DateTime?             @map("stt_started_at")
+  sttAccumulatedSeconds    Int                   @default(0) @map("stt_accumulated_seconds")
+  preHostRecordingOverride Boolean?              @map("pre_host_recording_override")
+  hostPresentAt            DateTime?             @map("host_present_at")
+  absenceWarnedAt          DateTime?             @map("absence_warned_at")
+  access                   TeamMeetingAccess[]
+  startedAt                DateTime?             @map("started_at")
+  endedAt                  DateTime?             @map("ended_at")
+  createdAt                DateTime              @default(now()) @map("created_at")
+  updatedAt                DateTime              @updatedAt @map("updated_at")
+
+  @@index([teamId, createdAt])
+  @@index([teamId, scheduledStartAt])
+  @@index([createdById])
+  @@index([organizerId, scheduledStartAt])
+  @@map("team_meetings")
+}
+
+model TeamMeetingAccess {
+  id             String      @id @default(cuid())
+  meetingId      String      @map("meeting_id")
+  userId         String      @map("user_id")
+  isParticipant  Boolean     @default(false) @map("is_participant")
+  canReadMasked  Boolean     @default(false) @map("can_read_masked")
+  acknowledgedAt DateTime?   @map("acknowledged_at")
+  joinedAt       DateTime?   @map("joined_at")
+  meeting        TeamMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantedById    String?     @map("granted_by_id")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  @@unique([meetingId, userId])
+  @@index([userId, canReadMasked])
+  @@index([userId, acknowledgedAt])
+  @@map("team_meeting_access")
+}
+
+model TeamAnnouncement {
+  id         String                 @id @default(cuid())
+  teamId     String                 @map("team_id")
+  team       Team                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  authorId   String                 @map("author_id")
+  author     User                   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  title      String
+  body       String                 @db.Text
+  pinned     Boolean                @default(false)
+  archivedAt DateTime?              @map("archived_at")
+  reads      TeamAnnouncementRead[]
+  createdAt  DateTime               @default(now()) @map("created_at")
+  updatedAt  DateTime               @updatedAt @map("updated_at")
+
+  @@index([teamId, createdAt])
+  @@index([teamId, pinned, createdAt])
+  @@map("team_announcements")
+}
+
+model TeamAnnouncementRead {
+  id             String          @id @default(cuid())
+  announcementId String          @map("announcement_id")
+  announcement   TeamAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String          @map("user_id")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime        @default(now()) @map("read_at")
+
+  @@unique([announcementId, userId])
+  @@index([userId, readAt])
+  @@map("team_announcement_reads")
+}
+
+model UserPersonalSettings {
+  userId                    String   @id @map("user_id")
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultMicrophoneOn       Boolean  @default(false) @map("default_microphone_on")
+  preferredInputDeviceId    String?  @map("preferred_input_device_id")
+  notificationSoundEnabled  Boolean  @default(true) @map("notification_sound_enabled")
+  displayPrefs              Json     @default("{}") @map("display_prefs")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  @@map("user_personal_settings")
+}
+
+model Notification {
+  id                 String    @id @default(cuid())
+  userId             String    @map("user_id")
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type               String
+  kind               String?
+  title              String
+  body               String
+  data               Json?
+  teamId             String?   @map("team_id")
+  meetingId          String?   @map("meeting_id")
+  groupKey           String?   @map("group_key")
+  visibleInWorkspace Boolean   @default(false) @map("visible_in_workspace")
+  readAt             DateTime? @map("read_at")
+  confirmedAt        DateTime? @map("confirmed_at")
+  dismissedAt        DateTime? @map("dismissed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, readAt, createdAt])
+  @@index([userId, kind, confirmedAt])
+  @@index([userId, meetingId, kind])
+  @@index([groupKey])
+  @@map("notifications")
+}
+
+model TeamAuditLog {
+  id           String   @id @default(cuid())
+  teamId       String   @map("team_id")
+  team         Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  actorId      String?  @map("actor_id")
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  targetUserId String?  @map("target_user_id")
+  targetUser   User?    @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  meetingId    String?  @map("meeting_id")
+  action       String
+  metadata     Json?
+  ip           String?
+  userAgent    String?  @map("user_agent") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([teamId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("team_audit_logs")
 }
 
 model VaultFile {
@@ -75,8 +381,8 @@ model Account {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
   @@unique([provider, providerAccountId])
+  @@index([userId])
   @@map("accounts")
 }
 
@@ -105,8 +411,8 @@ model VerificationToken {
   token      String   @unique
   expires    DateTime
 
+  @@unique([identifier, token])
   @@index([identifier])
   @@index([expires])
-  @@unique([identifier, token])
   @@map("verification_tokens")
 }

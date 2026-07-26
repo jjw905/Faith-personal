@@ -1,131 +1,24 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  unlinkSync,
-} from "node:fs";
-import { join } from "node:path";
+import "server-only";
 
-import { openSealedJson, sealJson } from "@/lib/crypto/sealed-json";
+import type { Prisma } from "@prisma/client";
+
 import {
   DEFAULT_DATA_RETENTION_DAYS,
-  isPastDataRetention,
-  isWithinRetentionDays,
   NOTIFICATION_RECENT_DISPLAY_DAYS,
   parseDataRetentionDays,
   type DataRetentionDays,
 } from "@/lib/data-retention";
-import { getNotifications as getCatalogNotifications } from "@/lib/notifications-mock";
+import { prisma } from "@/lib/prisma";
 import type { AppNotification, NotificationType } from "@/types/notification";
 
-export type StoredNotification = {
-  id: string;
-  type: NotificationType;
-  title: string;
-  body: string;
-  createdAt: string;
-  readAt: string | null;
-};
-
-type UserNotificationFile = {
-  userId: string;
-  retentionDays: DataRetentionDays;
-  items: StoredNotification[];
-  updatedAt: string;
-};
-
-const ROOT = join(process.cwd(), ".data", "notifications");
-
-function ensureRoot() {
-  if (!existsSync(ROOT)) mkdirSync(ROOT, { recursive: true });
-}
-
-function pathFor(userId: string) {
-  const safe = userId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
-  return join(ROOT, `${safe}.seal`);
-}
-
-function catalogSeed(now = new Date()): StoredNotification[] {
-  const offsetsMin = [12, 60, 24 * 60];
-  return getCatalogNotifications().map((n, i) => {
-    const created = new Date(
-      now.getTime() - (offsetsMin[i] ?? 60) * 60_000,
-    );
-    return {
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      body: n.body,
-      createdAt: created.toISOString(),
-      readAt: null,
-    };
-  });
-}
-
-function loadRaw(userId: string): UserNotificationFile | null {
-  const p = pathFor(userId);
-  if (!existsSync(p)) return null;
-  try {
-    const sealed = readFileSync(p, "utf8").trim();
-    return openSealedJson<UserNotificationFile>(sealed);
-  } catch {
-    return null;
-  }
-}
-
-function saveRaw(file: UserNotificationFile) {
-  ensureRoot();
-  writeFileSync(pathFor(file.userId), `${sealJson(file)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
-}
-
-function purgeExpired(
-  items: StoredNotification[],
-  retentionDays: number,
-  now = new Date(),
-): StoredNotification[] {
-  return items.filter((n) => !isPastDataRetention(n.createdAt, retentionDays, now));
-}
-
-function ensureUserFile(
-  userId: string,
-  retentionDays: DataRetentionDays = DEFAULT_DATA_RETENTION_DAYS,
-): UserNotificationFile {
-  const existing = loadRaw(userId);
-  const now = new Date();
-  if (!existing) {
-    const fresh: UserNotificationFile = {
-      userId,
-      retentionDays,
-      items: purgeExpired(catalogSeed(now), retentionDays, now),
-      updatedAt: now.toISOString(),
-    };
-    saveRaw(fresh);
-    return fresh;
-  }
-
-  const days = parseDataRetentionDays(
-    existing.retentionDays ?? retentionDays,
+function relativeTime(iso: string, now = new Date()) {
+  const deltaMinutes = Math.max(
+    0,
+    Math.round((now.getTime() - new Date(iso).getTime()) / 60_000),
   );
-  const items = purgeExpired(existing.items, days, now);
-  const next: UserNotificationFile = {
-    ...existing,
-    retentionDays: days,
-    items,
-    updatedAt: now.toISOString(),
-  };
-  if (items.length !== existing.items.length) saveRaw(next);
-  return next;
-}
-
-function formatRelativeTime(iso: string, now = new Date()): string {
-  const mins = Math.round(daysBetweenMinutes(iso, now));
-  if (mins < 1) return "방금";
-  if (mins < 60) return `${mins}분 전`;
-  const hours = Math.round(mins / 60);
+  if (deltaMinutes < 1) return "방금";
+  if (deltaMinutes < 60) return `${deltaMinutes}분 전`;
+  const hours = Math.round(deltaMinutes / 60);
   if (hours < 24) return `${hours}시간 전`;
   const days = Math.round(hours / 24);
   if (days === 1) return "어제";
@@ -136,125 +29,158 @@ function formatRelativeTime(iso: string, now = new Date()): string {
   });
 }
 
-function daysBetweenMinutes(iso: string, now: Date) {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return Number.POSITIVE_INFINITY;
-  return (now.getTime() - t) / 60_000;
-}
-
-function toAppNotification(
-  n: StoredNotification,
-  now = new Date(),
-): AppNotification {
+function toAppNotification(row: {
+  id: string;
+  type: string;
+  kind: string | null;
+  title: string;
+  body: string;
+  data: Prisma.JsonValue | null;
+  teamId: string | null;
+  meetingId: string | null;
+  visibleInWorkspace: boolean;
+  createdAt: Date;
+  readAt: Date | null;
+  confirmedAt: Date | null;
+  dismissedAt: Date | null;
+}): AppNotification {
+  const data =
+    row.data && typeof row.data === "object" && !Array.isArray(row.data)
+      ? { ...(row.data as Record<string, unknown>) }
+      : {};
+  if (row.kind) data.kind = row.kind;
+  if (row.teamId) data.teamId = row.teamId;
+  if (row.meetingId) data.meetingId = row.meetingId;
+  data.visibleInWorkspace = row.visibleInWorkspace;
+  data.confirmed = Boolean(row.confirmedAt);
   return {
-    id: n.id,
-    type: n.type,
-    title: n.title,
-    body: n.body,
-    time: formatRelativeTime(n.createdAt, now),
-    unread: !n.readAt,
-    createdAt: n.createdAt,
-    readAt: n.readAt,
+    id: row.id,
+    type: row.type as NotificationType,
+    title: row.title,
+    body: row.body,
+    data,
+    time: relativeTime(row.createdAt.toISOString()),
+    unread: !row.readAt && !row.confirmedAt && !row.dismissedAt,
+    createdAt: row.createdAt.toISOString(),
+    readAt: row.readAt?.toISOString() ?? null,
   };
 }
 
-/** UI에 보일 목록: 안 읽음 전체(보존 내) + 읽음은 최근 7일만. */
-export function listVisibleNotifications(
+export async function createNotification(params: {
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+  kind?: string;
+  teamId?: string | null;
+  meetingId?: string | null;
+  groupKey?: string | null;
+  visibleInWorkspace?: boolean;
+}) {
+  return prisma.notification.create({
+    data: {
+      userId: params.userId,
+      type: params.type,
+      kind: params.kind,
+      title: params.title,
+      body: params.body,
+      data: params.data as Prisma.InputJsonValue | undefined,
+      teamId: params.teamId,
+      meetingId: params.meetingId,
+      groupKey: params.groupKey,
+      visibleInWorkspace: params.visibleInWorkspace ?? false,
+    },
+  });
+}
+
+export async function listVisibleNotifications(
   userId: string,
-  retentionDays?: DataRetentionDays,
-): {
-  unread: AppNotification[];
-  recent: AppNotification[];
-  unreadCount: number;
-  retentionDays: DataRetentionDays;
-} {
-  const file = ensureUserFile(
-    userId,
-    retentionDays ?? DEFAULT_DATA_RETENTION_DAYS,
+  requestedRetention?: DataRetentionDays,
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { notificationRetentionDays: true },
+  });
+  const retentionDays = parseDataRetentionDays(
+    requestedRetention ??
+      user?.notificationRetentionDays ??
+      DEFAULT_DATA_RETENTION_DAYS,
   );
   const now = new Date();
-  const days = parseDataRetentionDays(retentionDays ?? file.retentionDays);
-  const items = purgeExpired(file.items, days, now);
-
-  if (items.length !== file.items.length || days !== file.retentionDays) {
-    saveRaw({
-      ...file,
-      retentionDays: days,
-      items,
-      updatedAt: now.toISOString(),
-    });
-  }
-
-  const unread = items
-    .filter((n) => !n.readAt)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((n) => toAppNotification(n, now));
-
-  const recent = items
-    .filter(
-      (n) =>
-        Boolean(n.readAt) &&
-        isWithinRetentionDays(
-          n.readAt!,
-          NOTIFICATION_RECENT_DISPLAY_DAYS,
-          now,
-        ),
-    )
-    .sort((a, b) => (b.readAt || "").localeCompare(a.readAt || ""))
-    .map((n) => toAppNotification(n, now));
-
+  const retentionCutoff = new Date(
+    now.getTime() - retentionDays * 24 * 60 * 60 * 1000,
+  );
+  const recentCutoff = new Date(
+    now.getTime() - NOTIFICATION_RECENT_DISPLAY_DAYS * 24 * 60 * 60 * 1000,
+  );
+  await prisma.notification.deleteMany({
+    where: { userId, createdAt: { lt: retentionCutoff } },
+  });
+  const rows = await prisma.notification.findMany({
+    where: {
+      userId,
+      dismissedAt: null,
+      OR: [
+        { confirmedAt: null, readAt: null },
+        { readAt: { gte: recentCutoff } },
+        { confirmedAt: { gte: recentCutoff } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+  });
+  const items = rows.map(toAppNotification);
+  const unread = items.filter((item) => item.unread);
   return {
     unread,
-    recent,
+    recent: items.filter((item) => !item.unread),
     unreadCount: unread.length,
-    retentionDays: days,
+    retentionDays,
   };
 }
 
-export function markNotificationsRead(
+export async function listWorkspaceMeetingAcks(userId: string, teamId: string) {
+  return prisma.notification.findMany({
+    where: {
+      userId,
+      teamId,
+      kind: "meeting_ack",
+      visibleInWorkspace: true,
+      confirmedAt: null,
+      dismissedAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function markNotificationsRead(
   userId: string,
   ids: string[] | "all",
   retentionDays?: DataRetentionDays,
-): { ok: true; unreadCount: number } {
-  const file = ensureUserFile(
-    userId,
-    retentionDays ?? DEFAULT_DATA_RETENTION_DAYS,
-  );
-  const now = new Date().toISOString();
-  const idSet = ids === "all" ? null : new Set(ids);
-  const items = file.items.map((n) => {
-    if (n.readAt) return n;
-    if (idSet && !idSet.has(n.id)) return n;
-    return { ...n, readAt: now };
+) {
+  await prisma.notification.updateMany({
+    where: {
+      userId,
+      readAt: null,
+      ...(ids === "all" ? {} : { id: { in: ids } }),
+    },
+    data: { readAt: new Date() },
   });
-  saveRaw({
-    ...file,
-    items,
-    updatedAt: now,
-  });
-  return {
-    ok: true,
-    unreadCount: listVisibleNotifications(userId, retentionDays).unreadCount,
-  };
+  const result = await listVisibleNotifications(userId, retentionDays);
+  return { ok: true as const, unreadCount: result.unreadCount };
 }
 
-export function setUserNotificationRetention(
+export async function setUserNotificationRetention(
   userId: string,
   retentionDays: DataRetentionDays,
 ) {
-  const file = ensureUserFile(userId, retentionDays);
-  const now = new Date();
-  const items = purgeExpired(file.items, retentionDays, now);
-  saveRaw({
-    ...file,
-    retentionDays,
-    items,
-    updatedAt: now.toISOString(),
+  await prisma.user.update({
+    where: { id: userId },
+    data: { notificationRetentionDays: retentionDays },
   });
 }
 
-/** 테스트용. */
-export function resetUserNotifications(userId: string) {
-  const p = pathFor(userId);
-  if (existsSync(p)) unlinkSync(p);
+export async function resetUserNotifications(userId: string) {
+  await prisma.notification.deleteMany({ where: { userId } });
 }

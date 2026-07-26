@@ -17,11 +17,7 @@ export const metadata: Metadata = {
 /** 사이트 루트 — 로그인 중이면 앱으로, 아니면 마케팅 메인. */
 export default async function HomePage() {
   const session = await auth();
-  if (
-    session?.user?.id &&
-    session.user.emailVerified &&
-    !session.user.disabled
-  ) {
+  if (session?.user?.id && !session.user.disabled) {
     redirect("/dashboard");
   }
 

@@ -6,11 +6,17 @@ import {
   CircleDollarSign,
   Gauge,
   Hash,
+  LoaderCircle,
   Radio,
   RefreshCw,
   Users,
 } from "lucide-react";
 
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
+import {
+  fixtureAiUsageEmpty,
+  fixtureAiUsageFull,
+} from "@/lib/page-ux-fixtures";
 import { seoulDateKey, seoulDateKeyDaysAgo } from "@/lib/meeting-date";
 import type { AiUsageSummary } from "@/lib/stt/usage-store";
 import { cn } from "@/lib/utils";
@@ -150,6 +156,7 @@ export function AiUsageDashboard({
   initial: AiUsageSummary;
   initialUsers?: AiUsageUserOption[];
 }) {
+  const { scenarioId } = usePageUxPreview();
   const [summary, setSummary] = useState(initial);
   const [users, setUsers] = useState(initialUsers);
   const [range, setRange] = useState<RangeKey>("30d");
@@ -164,6 +171,7 @@ export function AiUsageDashboard({
   );
 
   const refresh = useCallback(async () => {
+    if (scenarioId !== "live") return;
     setLoading(true);
     try {
       const q = new URLSearchParams();
@@ -183,30 +191,72 @@ export function AiUsageDashboard({
     } finally {
       setLoading(false);
     }
-  }, [userId, bounds.from, bounds.to]);
+  }, [userId, bounds.from, bounds.to, scenarioId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   useEffect(() => {
+    if (scenarioId !== "live") return;
     const id = window.setInterval(() => {
       void refresh();
     }, 60_000);
     return () => window.clearInterval(id);
-  }, [refresh]);
+  }, [refresh, scenarioId]);
+
+  const viewSummary = useMemo(
+    () =>
+      scenarioId === "empty"
+        ? fixtureAiUsageEmpty()
+        : scenarioId === "full"
+          ? fixtureAiUsageFull()
+          : summary,
+    [scenarioId, summary],
+  );
+  const viewUsers = useMemo(
+    () =>
+      scenarioId === "empty"
+        ? []
+        : scenarioId === "full"
+          ? viewSummary.byUser.map((u) => ({
+              id: u.userId,
+              label: u.userId === "ux-user-1" ? "김서연" : "최민준",
+              usd: u.usd,
+              krw: u.krw,
+              jobs: u.jobs,
+            }))
+          : users,
+    [scenarioId, viewSummary.byUser, users],
+  );
+
+  if (scenarioId === "loading") {
+    return (
+      <div className="grid min-h-56 place-items-center rounded-2xl bg-card shadow-soft">
+        <LoaderCircle
+          className="h-6 w-6 animate-spin text-muted"
+          aria-label="불러오는 중"
+        />
+      </div>
+    );
+  }
 
   const maxDayKrw = Math.max(
-    ...summary.byDay.map((d) => d.totalKrw || d.totalUsd),
+    ...viewSummary.byDay.map((d) => d.totalKrw || d.totalUsd),
     0.000001,
   );
-  const maxDayTokens = Math.max(...summary.byDay.map((d) => d.totalTokens), 1);
-  const pieTotal = (summary.sttKrw || summary.sttUsd) + (summary.structureKrw || summary.structureUsd);
-  const empty = summary.eventCount === 0;
-  const showUserList = userId === "all" && summary.byUser.length > 0;
+  const maxDayTokens = Math.max(
+    ...viewSummary.byDay.map((d) => d.totalTokens),
+    1,
+  );
+  const pieTotal =
+    (viewSummary.sttKrw || viewSummary.sttUsd) +
+    (viewSummary.structureKrw || viewSummary.structureUsd);
+  const empty = viewSummary.eventCount === 0;
+  const showUserList = userId === "all" && viewSummary.byUser.length > 0;
   const userLabel = (id: string) =>
-    users.find((u) => u.id === id)?.label || id;
-  const fx = summary.fx;
+    viewUsers.find((u) => u.id === id)?.label || id;
+  const fx = viewSummary.fx;
 
   return (
     <div className="flex flex-col gap-6">
@@ -274,7 +324,7 @@ export function AiUsageDashboard({
                   className="h-11 w-full appearance-none rounded-xl bg-card py-2 pl-10 pr-10 text-sm font-medium text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="all">전체 사용자</option>
-                  {users.map((u) => (
+                  {viewUsers.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.label}
                     </option>
@@ -314,33 +364,33 @@ export function AiUsageDashboard({
           label="추정 비용"
           valueNode={
             <MoneyText
-              krw={summary.totalKrw}
-              usd={summary.totalUsd}
+              krw={viewSummary.totalKrw}
+              usd={viewSummary.totalUsd}
               align="start"
               size="lg"
             />
           }
-          hint={`받아쓰기 ${formatKrw(summary.sttKrw)}, 정리 ${formatKrw(summary.structureKrw)}`}
+          hint={`받아쓰기 ${formatKrw(viewSummary.sttKrw)}, 정리 ${formatKrw(viewSummary.structureKrw)}`}
         />
         <StatCard
           icon={<Hash className="h-4 w-4" strokeWidth={1.75} />}
           label="토큰"
-          value={formatTokens(summary.totalTokens)}
-          hint={`입력 ${formatTokens(summary.inputTokens)}, 출력 ${formatTokens(summary.outputTokens)}`}
+          value={formatTokens(viewSummary.totalTokens)}
+          hint={`입력 ${formatTokens(viewSummary.inputTokens)}, 출력 ${formatTokens(viewSummary.outputTokens)}`}
         />
         <StatCard
           icon={<AudioLines className="h-4 w-4" strokeWidth={1.75} />}
           label="오디오"
-          value={`${(summary.audioMinutes).toFixed(1)}분`}
-          hint={`회의 ${summary.meetingCount}건`}
+          value={`${(viewSummary.audioMinutes).toFixed(1)}분`}
+          hint={`회의 ${viewSummary.meetingCount}건`}
         />
         <StatCard
           icon={<Radio className="h-4 w-4" strokeWidth={1.75} />}
           label="호출"
-          value={String(summary.eventCount)}
+          value={String(viewSummary.eventCount)}
           hint={
             userId === "all"
-              ? `사용자 ${users.length}명`
+              ? `사용자 ${viewUsers.length}명`
               : userLabel(userId)
           }
         />
@@ -363,12 +413,12 @@ export function AiUsageDashboard({
           {showUserList ? (
             <Panel
               title="사용자별"
-              supporting={`${summary.byUser.length}명, 비용 높은 순`}
+              supporting={`${viewSummary.byUser.length}명, 비용 높은 순`}
             >
               <ul className="divide-y divide-border">
-                {summary.byUser.map((u) => {
+                {viewSummary.byUser.map((u) => {
                   const max = Math.max(
-                    ...summary.byUser.map((x) => x.krw || x.usd),
+                    ...viewSummary.byUser.map((x) => x.krw || x.usd),
                     0.000001,
                   );
                   const pct = Math.round(((u.krw || u.usd) / max) * 100);
@@ -413,11 +463,11 @@ export function AiUsageDashboard({
               title="일별 추정 비용"
               supporting="받아쓰기 + 정리"
             >
-              {summary.byDay.length === 0 ? (
+              {viewSummary.byDay.length === 0 ? (
                 <EmptyChart />
               ) : (
                 <ul className="space-y-3">
-                  {summary.byDay.map((d) => {
+                  {viewSummary.byDay.map((d) => {
                     const sttPct = Math.round(
                       ((d.sttKrw || d.sttUsd) / maxDayKrw) * 100,
                     );
@@ -467,9 +517,9 @@ export function AiUsageDashboard({
               ) : (
                 <div className="flex flex-col items-center gap-5 py-2">
                   <Donut
-                    stt={summary.sttKrw || summary.sttUsd}
-                    structure={summary.structureKrw || summary.structureUsd}
-                    totalLabel={formatKrw(summary.totalKrw)}
+                    stt={viewSummary.sttKrw || viewSummary.sttUsd}
+                    structure={viewSummary.structureKrw || viewSummary.structureUsd}
+                    totalLabel={formatKrw(viewSummary.totalKrw)}
                   />
                   <ul className="w-full space-y-2 text-sm">
                     <li className="flex items-center justify-between gap-2">
@@ -480,7 +530,7 @@ export function AiUsageDashboard({
                         />
                         받아쓰기
                       </span>
-                      <MoneyText krw={summary.sttKrw} usd={summary.sttUsd} />
+                      <MoneyText krw={viewSummary.sttKrw} usd={viewSummary.sttUsd} />
                     </li>
                     <li className="flex items-center justify-between gap-2">
                       <span className="flex items-center gap-2 text-muted">
@@ -491,8 +541,8 @@ export function AiUsageDashboard({
                         정리
                       </span>
                       <MoneyText
-                        krw={summary.structureKrw}
-                        usd={summary.structureUsd}
+                        krw={viewSummary.structureKrw}
+                        usd={viewSummary.structureUsd}
                       />
                     </li>
                   </ul>
@@ -503,11 +553,11 @@ export function AiUsageDashboard({
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel title="일별 토큰" supporting="입력 + 출력">
-              {summary.byDay.length === 0 ? (
+              {viewSummary.byDay.length === 0 ? (
                 <EmptyChart />
               ) : (
                 <ul className="space-y-3">
-                  {summary.byDay.map((d) => {
+                  {viewSummary.byDay.map((d) => {
                     const inPct = Math.round(
                       (d.inputTokens / maxDayTokens) * 100,
                     );
@@ -555,12 +605,12 @@ export function AiUsageDashboard({
 
             <Panel title="모델별">
               <div className="space-y-4">
-                {summary.byModel.length === 0 ? (
+                {viewSummary.byModel.length === 0 ? (
                   <EmptyChart />
                 ) : (
-                  summary.byModel.map((row) => {
+                  viewSummary.byModel.map((row) => {
                     const max = Math.max(
-                      ...summary.byModel.map((m) => m.krw || m.usd),
+                      ...viewSummary.byModel.map((m) => m.krw || m.usd),
                       0.000001,
                     );
                     const pct = Math.round(((row.krw || row.usd) / max) * 100);
@@ -604,24 +654,24 @@ export function AiUsageDashboard({
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-2">
-                    <th className="pb-3 pr-3 font-medium">시각</th>
+                    <th className="pb-3 pr-3 text-center font-medium">시각</th>
                     <th className="pb-3 pr-3 font-medium">단계</th>
                     <th className="pb-3 pr-3 font-medium">모델</th>
                     {userId === "all" ? (
                       <th className="pb-3 pr-3 font-medium">사용자</th>
                     ) : null}
                     <th className="pb-3 pr-3 font-medium">회의</th>
-                    <th className="pb-3 pr-3 font-medium text-right">토큰</th>
-                    <th className="pb-3 font-medium text-right">비용</th>
+                    <th className="pb-3 pr-3 text-center font-medium">토큰</th>
+                    <th className="pb-3 text-center font-medium">비용</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {summary.recent.map((e) => (
+                  {viewSummary.recent.map((e) => (
                     <tr
                       key={e.id}
                       className="border-b border-border/70 last:border-0"
                     >
-                      <td className="whitespace-nowrap py-3 pr-3 tabular-nums text-muted">
+                      <td className="whitespace-nowrap py-3 pr-3 text-center tabular-nums text-muted">
                         {formatWhen(e.at)}
                       </td>
                       <td className="py-3 pr-3">
@@ -647,10 +697,10 @@ export function AiUsageDashboard({
                       <td className="max-w-[180px] truncate py-3 pr-3 text-muted">
                         {e.title || e.meetingId}
                       </td>
-                      <td className="whitespace-nowrap py-3 pr-3 text-right tabular-nums text-muted">
+                      <td className="whitespace-nowrap py-3 pr-3 text-center tabular-nums text-muted">
                         {formatTokens(e.totalTokens)}
                       </td>
-                      <td className="whitespace-nowrap py-3 text-right">
+                      <td className="whitespace-nowrap py-3 text-center">
                         <MoneyText
                           krw={e.estimatedKrw}
                           usd={e.estimatedUsd}

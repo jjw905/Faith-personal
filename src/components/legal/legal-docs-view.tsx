@@ -17,12 +17,18 @@ import {
   DocsScrollTopFab,
   useDocsFloatBox,
 } from "@/components/docs/docs-float-tools";
+import {
+  DocsDesktopToc,
+  DocsMobileTocRail,
+} from "@/components/docs/docs-mobile-toc-rail";
 import { DocsSearchInput } from "@/components/docs/docs-search-input";
 import { Container } from "@/components/marketing/container";
 import {
-  LEGAL_NAV,
-  LEGAL_SECTIONS,
+  LEGAL_DOC_META,
+  getLegalNav,
+  getLegalSections,
   searchLegalSections,
+  type LegalDoc,
   type LegalSection,
 } from "@/lib/legal";
 import {
@@ -63,10 +69,14 @@ function SectionBlock({
   );
 }
 
-export function LegalDocsView() {
+export function LegalDocsView({ doc }: { doc: LegalDoc }) {
   const router = useRouter();
+  const meta = LEGAL_DOC_META[doc];
+  const sections = useMemo(() => getLegalSections(doc), [doc]);
+  const navItems = useMemo(() => getLegalNav(doc), [doc]);
+
   const [query, setQuery] = useState("");
-  const [activeId, setActiveId] = useState(LEGAL_SECTIONS[0]?.id ?? "collect");
+  const [activeId, setActiveId] = useState(sections[0]?.id ?? "");
   const [flashId, setFlashId] = useState<string | null>(null);
 
   const pageRef = useRef<HTMLDivElement>(null);
@@ -89,7 +99,7 @@ export function LegalDocsView() {
     return () => window.removeEventListener("resize", syncFloatChrome);
   }, [syncFloatChrome]);
 
-  const results = useMemo(() => searchLegalSections(query), [query]);
+  const results = useMemo(() => searchLegalSections(doc, query), [doc, query]);
   const searching = query.trim().length > 0;
 
   function goBack() {
@@ -139,17 +149,22 @@ export function LegalDocsView() {
 
   useEffect(() => {
     const hash = window.location.hash.replace(/^#/, "");
-    if (!hash || !LEGAL_SECTIONS.some((s) => s.id === hash)) return;
+    // 예전 합본 앵커 호환
+    if (doc === "privacy" && hash === "terms") {
+      router.replace("/terms");
+      return;
+    }
+    if (!hash || !sections.some((s) => s.id === hash)) return;
     const id = window.setTimeout(() => focusSection(hash), 40);
     return () => window.clearTimeout(id);
-  }, [focusSection]);
+  }, [doc, focusSection, router, sections]);
 
   useEffect(() => {
     if (searching) return;
 
-    const nodes = LEGAL_SECTIONS.map((section) =>
-      document.getElementById(section.id),
-    ).filter((node): node is HTMLElement => Boolean(node));
+    const nodes = sections
+      .map((section) => document.getElementById(section.id))
+      .filter((node): node is HTMLElement => Boolean(node));
     if (nodes.length === 0) return;
 
     const scrollRoot =
@@ -174,7 +189,7 @@ export function LegalDocsView() {
 
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, [searching]);
+  }, [searching, sections]);
 
   return (
     <div className="flex h-dvh flex-col bg-background">
@@ -196,7 +211,10 @@ export function LegalDocsView() {
       >
         <main className="py-10 sm:py-14">
           <Container>
-            <div ref={pageRef} className="relative mx-auto w-full max-w-5xl pb-12">
+            <div
+              ref={pageRef}
+              className="relative mx-auto w-full max-w-5xl pb-12"
+            >
               <div ref={chromeRef} className="mb-8 sm:mb-10">
                 <div className="mb-6">
                   <button
@@ -215,16 +233,19 @@ export function LegalDocsView() {
 
                 <header className="max-w-2xl">
                   <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    개인정보 처리방침, 이용약관
+                    {meta.title}
                   </h1>
                   <p className="mt-2 text-base text-muted">
-                    시행일: 2026년 1월 1일
+                    시행일: {meta.effectiveDateLabel}
+                    <span className="ml-2 text-muted-2">
+                      버전 {meta.versionLabel}
+                    </span>
                   </p>
                   <div className="mt-5 max-w-md">
                     <DocsSearchInput
                       value={query}
                       onChange={setQuery}
-                      id="legal-search"
+                      id={meta.searchId}
                     />
                   </div>
                 </header>
@@ -242,68 +263,53 @@ export function LegalDocsView() {
 
               <DocsScrollTopFab visible={showFloatChrome} pageRef={pageRef} />
 
-              <div className="flex flex-col gap-8 lg:flex-row lg:gap-12">
-                <aside className="lg:w-52 lg:shrink-0">
-                  <nav
-                    className={cn(
-                      "lg:sticky",
-                      showFloatChrome ? "lg:top-20" : "lg:top-4",
-                    )}
-                    aria-label="문서 목차"
-                  >
-                    {searching ? (
-                      <div className="space-y-1">
-                        <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
-                          검색 결과
-                        </p>
-                        {results.length === 0 ? (
-                          <p className="px-2 py-2 text-base text-muted">
-                            일치하는 내용이 없습니다.
-                          </p>
-                        ) : (
-                          results.map((section) => (
-                            <a
-                              key={section.id}
-                              href={`#${section.id}`}
-                              onClick={(e) => onNavClick(e, section.id)}
-                              className="block rounded-lg px-2 py-1.5 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
-                            >
-                              {section.title}
-                            </a>
-                          ))
-                        )}
-                      </div>
+              <DocsMobileTocRail
+                ariaLabel={`${meta.title} 목차`}
+                activeId={activeId}
+                onNavClick={onNavClick}
+                emptyLabel="일치하는 내용이 없습니다."
+                items={
+                  searching
+                    ? results.map((section) => ({
+                        id: section.id,
+                        title: section.title,
+                      }))
+                    : navItems
+                }
+              />
+
+              <div className="flex flex-col gap-6 pb-32 md:flex-row md:gap-8 md:pb-0 lg:gap-12">
+                <DocsDesktopToc
+                  ariaLabel={`${meta.title} 목차`}
+                  stickyTopClass={showFloatChrome ? "md:top-20" : "md:top-4"}
+                >
+                  <div className="space-y-1">
+                    <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
+                      {searching ? "검색 결과" : "목차"}
+                    </p>
+                    {(searching ? results : sections).length === 0 ? (
+                      <p className="px-2 py-2 text-base text-muted">
+                        일치하는 내용이 없습니다.
+                      </p>
                     ) : (
-                      <div className="space-y-5">
-                        {LEGAL_NAV.map((group) => (
-                          <div key={group.title}>
-                            <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
-                              {group.title}
-                            </p>
-                            <ul className="mt-1.5 space-y-0.5">
-                              {group.items.map((item) => (
-                                <li key={item.id}>
-                                  <a
-                                    href={`#${item.id}`}
-                                    onClick={(e) => onNavClick(e, item.id)}
-                                    className={cn(
-                                      "block rounded-lg px-2 py-1.5 text-base transition-colors",
-                                      activeId === item.id
-                                        ? "bg-surface font-medium text-foreground"
-                                        : "text-muted hover:bg-surface/70 hover:text-foreground",
-                                    )}
-                                  >
-                                    {item.title}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
+                      (searching ? results : sections).map((section) => (
+                        <a
+                          key={section.id}
+                          href={`#${section.id}`}
+                          onClick={(e) => onNavClick(e, section.id)}
+                          className={cn(
+                            "block rounded-lg px-2 py-1.5 text-base transition-colors",
+                            activeId === section.id
+                              ? "font-medium text-foreground"
+                              : "text-muted hover:text-foreground",
+                          )}
+                        >
+                          {section.title}
+                        </a>
+                      ))
                     )}
-                  </nav>
-                </aside>
+                  </div>
+                </DocsDesktopToc>
 
                 <div className="min-w-0 flex-1">
                   {searching && results.length === 0 ? (
@@ -312,7 +318,7 @@ export function LegalDocsView() {
                     </p>
                   ) : (
                     <div className="space-y-12 sm:space-y-14">
-                      {(searching ? results : LEGAL_SECTIONS).map(
+                      {(searching ? results : sections).map(
                         (section, index, list) => (
                           <div
                             key={section.id}

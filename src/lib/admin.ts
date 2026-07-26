@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
+import { Role } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { isPlatformAdminEmail } from "@/lib/platform-admin";
 import { prisma } from "@/lib/prisma";
 
 export async function requireAdmin() {
@@ -11,11 +13,24 @@ export async function requireAdmin() {
 
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { role: true, disabled: true },
+    select: { role: true, disabled: true, email: true },
   });
-  if (!dbUser || dbUser.disabled || dbUser.role !== "ADMIN") {
+  if (!dbUser || dbUser.disabled) {
     redirect("/dashboard");
   }
+
+  if (dbUser.role !== Role.ADMIN) {
+    // JWT에만 ADMIN이 남고 DB는 USER인 경우를 정리: 허용 이메일이면 승격, 아니면 차단
+    if (isPlatformAdminEmail(dbUser.email)) {
+      await prisma.user.update({
+        where: { id: session.user.id },
+        data: { role: Role.ADMIN },
+      });
+    } else {
+      redirect("/dashboard");
+    }
+  }
+
   return session;
 }
 
@@ -29,10 +44,12 @@ export async function listUsers() {
       role: true,
       plan: true,
       disabled: true,
-      emailVerified: true,
       signupProvider: true,
       image: true,
       createdAt: true,
+      teamEntitlement: {
+        select: { remainingTeamSlots: true, seatLimit: true },
+      },
       accounts: { select: { provider: true } },
     },
   });

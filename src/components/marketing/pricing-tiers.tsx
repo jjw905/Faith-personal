@@ -18,6 +18,8 @@ type Tier = {
   /** 연간 결제 시 월 환산가. */
   yearlyMonthlyPrice?: number | null;
   yearlyTotal?: number | null;
+  priceUnit?: string;
+  priceNote?: string;
   features: string[];
   cta: { label: string; href?: string; contact?: boolean };
   featured?: boolean;
@@ -26,7 +28,7 @@ type Tier = {
 const TIERS: Tier[] = [
   {
     name: "Free",
-    tagline: "개인 사용자",
+    tagline: "개인 시작",
     monthlyPrice: 0,
     yearlyMonthlyPrice: 0,
     yearlyTotal: 0,
@@ -40,7 +42,7 @@ const TIERS: Tier[] = [
   },
   {
     name: "Pro",
-    tagline: "소규모 팀",
+    tagline: "개인 회의록",
     monthlyPrice: 19_000,
     yearlyMonthlyPrice: 15_833,
     yearlyTotal: 190_000,
@@ -49,23 +51,27 @@ const TIERS: Tier[] = [
       "보관함 20GB",
       "고급 요약, 타임라인",
       "우선 처리 대기열",
-      "역할 기반 접근 권한",
+      "개인 워크스페이스",
     ],
     cta: { label: "Pro 시작", href: "/signup" },
     featured: true,
   },
   {
-    name: "Enterprise",
-    tagline: "조직 단위 도입",
-    monthlyPrice: null,
+    name: "Team",
+    tagline: "팀 2명 이상",
+    monthlyPrice: 15_200,
+    yearlyMonthlyPrice: 15_200,
+    priceUnit: "/ 인 / 월",
+    priceNote: "2명부터, Pro 대비 인당 20% 할인",
     features: [
-      "맞춤 보관 용량",
-      "SSO, 권한 관리",
+      "팀 워크스페이스, 초대",
+      "역할, 기록 열람 권한",
+      "온라인 팀 회의",
+      "예정 회의, 알림, 팀 공지",
       "감사 로그",
-      "전담 지원",
-      "맞춤 보안 정책",
+      "팀 보안 정책",
     ],
-    cta: { label: "도입 문의", contact: true },
+    cta: { label: "Team 시작", href: "/signup?plan=team" },
   },
 ];
 
@@ -120,7 +126,7 @@ function BillingSwitch({
           value === "yearly" ? "text-primary opacity-100" : "opacity-0",
         )}
       >
-        2개월 무료
+        Pro 연간 2개월 무료
       </p>
     </div>
   );
@@ -136,15 +142,17 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
 
   const priceLabel = isInquiry ? "문의" : formatWon(monthly ?? 0);
 
-  const note = isInquiry
-    ? ""
-    : billing === "yearly" && tier.yearlyTotal != null && tier.yearlyTotal > 0
-      ? `연 ${formatWon(tier.yearlyTotal)} 청구`
-      : billing === "yearly" && tier.monthlyPrice === 0
-        ? "항상 무료"
-        : billing === "monthly" && tier.yearlyTotal
-          ? "연 결제 시 2개월 무료"
-          : "";
+  const note = tier.priceNote
+    ? tier.priceNote
+    : isInquiry
+      ? ""
+      : billing === "yearly" && tier.yearlyTotal != null && tier.yearlyTotal > 0
+        ? `연 ${formatWon(tier.yearlyTotal)} 청구`
+        : billing === "yearly" && tier.monthlyPrice === 0
+          ? "항상 무료"
+          : billing === "monthly" && tier.yearlyTotal
+            ? "연 결제 시 2개월 무료"
+            : "";
 
   const ctaClass = cn(
     "mt-5 w-full py-3.5 text-[15px] sm:mt-6 sm:py-3",
@@ -176,7 +184,9 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
           {priceLabel}
         </span>
         {!isInquiry ? (
-          <span className="text-sm font-medium text-muted-2">/ 월</span>
+          <span className="text-sm font-medium text-muted-2">
+            {tier.priceUnit ?? "/ 월"}
+          </span>
         ) : null}
       </div>
       <p className="mt-1.5 min-h-5 text-xs font-medium text-muted-2">{note}</p>
@@ -184,7 +194,7 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
       {tier.cta.contact ? (
         <button
           type="button"
-          onClick={() => openContact({ subject: "Faith Enterprise 도입 문의" })}
+          onClick={() => openContact({ subject: "Faith 팀 플랜 문의" })}
           className={cn(
             "inline-flex items-center justify-center rounded-xl px-5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             "bg-surface text-foreground hover:bg-surface-2",
@@ -205,7 +215,10 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
 
       <ul className="mt-6 space-y-3 border-t border-border/50 pt-5 sm:mt-7 sm:pt-6">
         {tier.features.map((f) => (
-          <li key={f} className="flex items-start gap-2.5 text-sm text-foreground">
+          <li
+            key={f}
+            className="flex items-start gap-2.5 text-sm text-foreground"
+          >
             <Check
               className="mt-0.5 h-4 w-4 shrink-0 text-primary"
               strokeWidth={2.5}
@@ -218,7 +231,7 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
   );
 }
 
-/** 요금제 3단 — 개인/팀/조직. 월간/연간 전환. */
+/** 요금제 3단 — 개인 Free/Pro, 협업 Team. 월간/연간 전환. */
 export function PricingTiers() {
   const [billing, setBilling] = useState<Billing>("monthly");
 
@@ -230,7 +243,7 @@ export function PricingTiers() {
             규모에 맞는 요금제
           </h1>
           <p className="mt-4 text-base leading-relaxed text-muted sm:mt-5 sm:text-lg">
-            개인부터 조직까지, 안전한 회의록을 그대로.
+            개인 회의록은 Pro, 함께하는 회의는 Team.
           </p>
         </div>
 
@@ -245,7 +258,7 @@ export function PricingTiers() {
               className={cn(
                 tier.name === "Free" && "order-2 lg:order-1",
                 tier.name === "Pro" && "order-1 lg:order-2",
-                tier.name === "Enterprise" && "order-3",
+                tier.name === "Team" && "order-3",
               )}
             >
               <TierCard tier={tier} billing={billing} />
@@ -253,9 +266,6 @@ export function PricingTiers() {
           ))}
         </div>
 
-        <p className="mt-8 px-2 text-center text-sm text-muted-2 sm:mt-10">
-          모든 요금제에 개인정보 자동 마스킹, 암호화 저장이 포함됩니다.
-        </p>
       </Container>
     </section>
   );

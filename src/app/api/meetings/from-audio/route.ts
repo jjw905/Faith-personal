@@ -16,6 +16,7 @@ import {
   type UserMeetingRecord,
 } from "@/lib/user-meetings-store";
 import type { WorkspaceId } from "@/lib/workspaces";
+import { requireTeamCapability, writeTeamAudit } from "@/lib/team-permissions";
 
 export async function POST(request: Request) {
   const session = await requireUser();
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
     model?: string;
     title?: string;
     workspace?: string;
+    teamId?: string;
+    mode?: "ONLINE" | "OFFLINE";
   };
   try {
     body = await request.json();
@@ -69,6 +72,21 @@ export async function POST(request: Request) {
     "업로드 회의";
   const workspace: WorkspaceId =
     body.workspace === "team" ? "team" : "personal";
+  const teamId = body.teamId?.trim();
+  const teamMember =
+    workspace === "team" && teamId
+      ? await requireTeamCapability(
+          teamId,
+          session.user.id,
+          "createMeeting",
+        )
+      : null;
+  if (workspace === "team" && (!teamId || !teamMember)) {
+    return NextResponse.json(
+      { ok: false, message: "팀 회의 생성 권한이 없습니다." },
+      { status: 403 },
+    );
+  }
 
   const meetingId = `mtg-up-${randomUUID().slice(0, 8)}`;
   const now = new Date().toISOString();
@@ -94,6 +112,39 @@ export async function POST(request: Request) {
     timeline: placeholder.timeline,
   };
   saveUserMeeting(record);
+
+  if (teamId && teamMember) {
+    await prisma.teamMeeting.create({
+      data: {
+        teamId,
+        legacyMeetingId: meetingId,
+        title,
+        mode: "ONLINE",
+        state: "PROCESSING",
+        createdById: session.user.id,
+        organizerId: session.user.id,
+        currentHostId: session.user.id,
+        livekitRoomName: null,
+        access: {
+          create: {
+            userId: session.user.id,
+            isParticipant: true,
+            canReadMasked: true,
+            grantedById: session.user.id,
+            acknowledgedAt: new Date(),
+          },
+        },
+      },
+    });
+    await writeTeamAudit({
+      teamId,
+      actorId: session.user.id,
+      meetingId,
+      action: "meeting.created_from_audio",
+      metadata: { mode: "ONLINE" },
+      request,
+    });
+  }
 
   after(() =>
     processUploadedMeeting({

@@ -19,7 +19,7 @@ export default async function SignupEmailPage({
     redirect("/signup");
   }
   if (session.user.email) {
-    redirect("/signup/verify");
+    redirect("/dashboard");
   }
 
   return (
@@ -30,7 +30,7 @@ export default async function SignupEmailPage({
             이메일 입력
           </h1>
           <p className="mt-2 text-sm text-muted">
-            X 등 이메일을 주지 않는 계정은 직접 입력 후 인증합니다
+            계정에 사용할 이메일을 입력해 주세요
           </p>
         </div>
 

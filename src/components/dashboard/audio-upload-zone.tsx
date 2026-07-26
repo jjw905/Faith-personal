@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { DuplicateVaultNameDialog } from "@/components/vault/duplicate-name-dialog";
 import { useAppContext } from "@/context/app-context";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { formatBytes } from "@/lib/storage/quota";
 import {
@@ -62,6 +63,7 @@ export function AudioUploadZone({
 }) {
   const router = useRouter();
   const { workspaceId } = useAppContext();
+  const { scenarioId, isLive } = usePageUxPreview();
   const [mode, setMode] = useState<Mode>("idle");
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [vaultUsage, setVaultUsage] = useState<VaultUsage | null>(null);
@@ -87,7 +89,7 @@ export function AudioUploadZone({
     cancelDuplicateUpload,
     attachExistingFile,
     clearFile,
-  } = useFileUpload();
+  } = useFileUpload({ persist: isLive });
 
   useEffect(() => {
     if (mode !== "upload") return;
@@ -111,21 +113,80 @@ export function AudioUploadZone({
     };
   }, [mode]);
 
+  useEffect(() => {
+    if (
+      scenarioId === "popup-vault-picker" ||
+      scenarioId === "popup-vault-picker-loading" ||
+      scenarioId === "popup-vault-picker-empty"
+    ) {
+      setMode("upload");
+      setVaultPickerOpen(true);
+      return;
+    }
+    if (
+      scenarioId === "popup-duplicate" ||
+      scenarioId === "popup-uploading" ||
+      scenarioId === "popup-starting"
+    ) {
+      setMode("upload");
+      setVaultPickerOpen(false);
+      return;
+    }
+    if (
+      scenarioId === "live" ||
+      scenarioId === "empty" ||
+      scenarioId === "full" ||
+      scenarioId === "popup-notifications" ||
+      scenarioId === "popup-notifications-empty" ||
+      scenarioId === "popup-notifications-loading" ||
+      scenarioId === "popup-account" ||
+      scenarioId === "popup-upcoming" ||
+      scenarioId === "popup-upcoming-create" ||
+      scenarioId === "popup-participants" ||
+      scenarioId === "popup-records-delete" ||
+      scenarioId === "popup-records-download" ||
+      scenarioId === "popup-sort" ||
+      scenarioId === "anim-processing"
+    ) {
+      setVaultPickerOpen(false);
+      if (scenarioId !== "live") setMode("idle");
+    }
+  }, [scenarioId]);
+
   function openUpload() {
     setMode("upload");
   }
 
   function closeUpload() {
+    if (
+      scenarioId === "popup-vault-picker" ||
+      scenarioId === "popup-vault-picker-loading" ||
+      scenarioId === "popup-vault-picker-empty" ||
+      scenarioId === "popup-duplicate" ||
+      scenarioId === "popup-uploading" ||
+      scenarioId === "popup-starting"
+    ) {
+      return;
+    }
     clearFile();
     setStartError(null);
     setMode("idle");
   }
+
+  const previewUploading = scenarioId === "popup-uploading";
+  const previewStarting = scenarioId === "popup-starting";
+  const showUploading = previewUploading || uploadStatus === "uploading";
+  const showStarting = previewStarting || starting;
 
   async function startMeeting() {
     if (!storedId || starting) return;
     setStarting(true);
     setStartError(null);
     try {
+      if (!isLive) {
+        await new Promise((resolve) => window.setTimeout(resolve, 600));
+        return;
+      }
       const res = await fetch("/api/meetings/from-audio", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,14 +219,15 @@ export function AudioUploadZone({
     }
   }
 
-  const ready = uploadStatus === "done" && selectedFile;
+  const ready =
+    previewStarting || (uploadStatus === "done" && Boolean(selectedFile));
 
   return (
     <div className="w-full space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="min-w-0 p-0.5">
           <Link
-            href="/meetings/new"
+            href={`/meetings/new?workspace=${workspaceId}`}
             className="group flex h-24 w-full origin-center cursor-pointer items-center gap-4 rounded-2xl bg-primary px-6 text-left text-primary-foreground shadow-soft transition-[transform,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:scale-[1.008] hover:bg-primary-hover hover:shadow-[0_10px_28px_rgba(17,24,46,0.14)] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
           >
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:group-hover:scale-100">
@@ -182,7 +244,7 @@ export function AudioUploadZone({
             type="button"
             onClick={openUpload}
             className={cn(
-              "group flex h-24 w-full origin-center cursor-pointer items-center gap-4 rounded-2xl bg-surface px-6 text-left shadow-soft transition-[transform,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:scale-[1.008] hover:bg-surface-2 hover:shadow-[0_10px_28px_rgba(17,24,46,0.1)] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100",
+              "group flex h-24 w-full origin-center cursor-pointer items-center gap-4 rounded-2xl bg-card px-6 text-left shadow-soft ring-1 ring-border transition-[transform,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:scale-[1.008] hover:bg-surface hover:shadow-[0_10px_28px_rgba(17,24,46,0.1)] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100",
               mode === "upload" && "bg-primary-soft",
             )}
           >
@@ -197,7 +259,7 @@ export function AudioUploadZone({
       </div>
 
       {mode === "upload" && (
-        <div className="overflow-hidden rounded-2xl bg-card shadow-soft">
+        <div className="panel-surface overflow-hidden rounded-2xl">
           <div className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
             <p className="text-sm font-semibold tracking-tight text-foreground">
               {ready ? "회의 정리" : "오디오 업로드"}
@@ -238,10 +300,12 @@ export function AudioUploadZone({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-foreground">
-                    {stripFileExtension(selectedFile.name)}
+                    {selectedFile
+                      ? stripFileExtension(selectedFile.name)
+                      : "주간회의"}
                   </p>
                   <p className="mt-0.5 text-xs tabular-nums text-muted">
-                    {formatBytes(selectedFile.size)}
+                    {selectedFile ? formatBytes(selectedFile.size) : "2.4 MB"}
                   </p>
                 </div>
                 <Button
@@ -249,8 +313,9 @@ export function AudioUploadZone({
                   variant="ghost"
                   size="sm"
                   className="h-9 shrink-0 text-muted hover:text-foreground"
-                  disabled={starting}
+                  disabled={showStarting}
                   onClick={() => {
+                    if (previewStarting) return;
                     clearFile();
                     setStartError(null);
                   }}
@@ -287,21 +352,26 @@ export function AudioUploadZone({
               </div>
 
               {startError ? (
-                <p className="text-sm text-muted">{startError}</p>
+                <p className="text-sm font-medium text-red-600" role="alert">
+                  {startError}
+                </p>
               ) : null}
 
               <button
                 type="button"
-                disabled={starting || !storedId}
-                onClick={() => void startMeeting()}
+                disabled={showStarting || (!storedId && !previewStarting)}
+                onClick={() => {
+                  if (previewStarting) return;
+                  void startMeeting();
+                }}
                 className={cn(
                   "flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-primary px-5 text-base font-semibold tracking-tight text-primary-foreground shadow-soft transition-colors",
-                  starting || !storedId
+                  showStarting || (!storedId && !previewStarting)
                     ? "cursor-not-allowed opacity-70"
                     : "hover:bg-primary-hover",
                 )}
               >
-                {starting ? (
+                {showStarting ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" strokeWidth={1.75} />
                     시작 중…
@@ -327,7 +397,7 @@ export function AudioUploadZone({
                     : "bg-surface/40 hover:bg-surface/70",
                 )}
               >
-                {uploadStatus !== "uploading" && (
+                {uploadStatus !== "uploading" && !previewUploading && (
                   <input
                     type="file"
                     accept={acceptedFormats.join(",")}
@@ -337,7 +407,7 @@ export function AudioUploadZone({
                   />
                 )}
 
-                {uploadStatus === "uploading" ? (
+                {showUploading ? (
                   <div className="flex flex-col items-center gap-3 text-center">
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
                       <Loader2
@@ -352,29 +422,11 @@ export function AudioUploadZone({
                       <p className="mt-1 max-w-[280px] truncate text-xs text-muted">
                         {selectedFile
                           ? stripFileExtension(selectedFile.name)
-                          : null}
+                          : previewUploading
+                            ? "주간회의"
+                            : null}
                       </p>
                     </div>
-                  </div>
-                ) : uploadStatus === "error" ? (
-                  <div className="relative z-10 flex flex-col items-center gap-3 text-center">
-                    <p className="text-sm font-semibold text-foreground">
-                      업로드 실패
-                    </p>
-                    <p className="max-w-[320px] text-xs text-muted">
-                      {uploadError ?? "다시 시도해 주세요."}
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearFile();
-                      }}
-                    >
-                      다시 선택
-                    </Button>
                   </div>
                 ) : (
                   <>
@@ -397,11 +449,33 @@ export function AudioUploadZone({
                         </li>
                       ))}
                     </ul>
+                    {uploadStatus === "error" ? (
+                      <div className="relative z-10 flex flex-col items-center gap-2 text-center">
+                        <p
+                          className="max-w-[320px] text-sm font-medium text-red-600"
+                          role="alert"
+                        >
+                          {uploadError ?? "업로드에 실패했습니다."}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearFile();
+                          }}
+                        >
+                          다시 선택
+                        </Button>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </div>
 
               {uploadStatus === "idle" || uploadStatus === "error" ? (
+                !previewUploading ? (
                 <div className="px-4 py-4 sm:px-5">
                   <div
                     className="mb-3 flex items-center gap-3"
@@ -431,6 +505,7 @@ export function AudioUploadZone({
                     </span>
                   </button>
                 </div>
+                ) : null
               ) : null}
             </div>
           )}
@@ -438,18 +513,44 @@ export function AudioUploadZone({
       )}
 
       <VaultPickerDialog
-        open={vaultPickerOpen}
-        onClose={() => setVaultPickerOpen(false)}
+        open={
+          vaultPickerOpen ||
+          scenarioId === "popup-vault-picker" ||
+          scenarioId === "popup-vault-picker-loading" ||
+          scenarioId === "popup-vault-picker-empty"
+        }
+        onClose={() => {
+          if (
+            scenarioId === "popup-vault-picker" ||
+            scenarioId === "popup-vault-picker-loading" ||
+            scenarioId === "popup-vault-picker-empty"
+          ) {
+            return;
+          }
+          setVaultPickerOpen(false);
+        }}
         onPick={(file, meta) => attachExistingFile(file, meta.id)}
       />
 
       <DuplicateVaultNameDialog
-        open={pendingDuplicate}
-        originalName={duplicateOriginalName ?? ""}
-        nextName={duplicateNextName ?? ""}
+        open={pendingDuplicate || scenarioId === "popup-duplicate"}
+        originalName={
+          duplicateOriginalName ??
+          (scenarioId === "popup-duplicate" ? "주간회의.m4a" : "")
+        }
+        nextName={
+          duplicateNextName ??
+          (scenarioId === "popup-duplicate" ? "주간회의 (1).m4a" : "")
+        }
         busy={uploadStatus === "uploading"}
-        onCancel={cancelDuplicateUpload}
-        onConfirm={confirmDuplicateUpload}
+        onCancel={() => {
+          if (scenarioId === "popup-duplicate") return;
+          cancelDuplicateUpload();
+        }}
+        onConfirm={() => {
+          if (scenarioId === "popup-duplicate") return;
+          confirmDuplicateUpload();
+        }}
       />
     </div>
   );

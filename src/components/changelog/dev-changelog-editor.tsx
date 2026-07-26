@@ -1,11 +1,16 @@
 "use client";
 
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { ChangelogList } from "@/components/changelog/changelog-list";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { getChangelogDateLabel } from "@/lib/changelog";
 import type { DevChangelogState } from "@/lib/changelog-store";
+import {
+  fixtureDevChangelogEmpty,
+  fixtureDevChangelogFull,
+} from "@/lib/page-ux-fixtures";
 import { cn } from "@/lib/utils";
 
 const inputCls =
@@ -59,6 +64,7 @@ export function DevChangelogEditor({
 }: {
   initialState: DevChangelogState;
 }) {
+  const { scenarioId } = usePageUxPreview();
   const [saved, setSaved] = useState<DevChangelogState>(initialState);
   const [draft, setDraft] = useState<DevChangelogState | null>(null);
   const [pending, setPending] = useState(false);
@@ -66,7 +72,14 @@ export function DevChangelogEditor({
 
   const editing = draft !== null;
 
+  const previewState = useMemo(() => {
+    if (scenarioId === "empty") return fixtureDevChangelogEmpty();
+    if (scenarioId === "full") return fixtureDevChangelogFull(saved);
+    return null;
+  }, [scenarioId, saved]);
+
   function startEdit() {
+    if (previewState) return;
     setMsg("");
     setDraft(structuredClone(saved));
   }
@@ -192,8 +205,16 @@ export function DevChangelogEditor({
     });
   }
 
-  const agenda = editing ? draft!.agenda : saved.agenda;
-  const entries = editing ? draft!.entries : saved.entries;
+  const agenda = previewState
+    ? previewState.agenda
+    : editing
+      ? draft!.agenda
+      : saved.agenda;
+  const entries = previewState
+    ? previewState.entries
+    : editing
+      ? draft!.entries
+      : saved.entries;
 
   return (
     <div>
@@ -205,7 +226,7 @@ export function DevChangelogEditor({
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          {editing ? (
+          {previewState ? null : editing ? (
             <>
               <button
                 type="button"
@@ -295,6 +316,8 @@ export function DevChangelogEditor({
             ))}
             <AddButton onClick={addAgendaItem}>안건 추가</AddButton>
           </div>
+        ) : agenda.items.length === 0 ? (
+          <p className="mt-4 text-base text-muted">등록된 개발안건이 없습니다.</p>
         ) : (
           <ol className="mt-4 list-none space-y-2.5 border-l border-border pl-3.5">
             {agenda.items.map((item, index) => (
@@ -393,6 +416,10 @@ export function DevChangelogEditor({
             </article>
           ))}
         </div>
+      ) : entries.length === 0 ? (
+        <p className="rounded-2xl bg-card px-4 py-10 text-center text-base text-muted shadow-soft">
+          표시할 변경 이력이 없습니다.
+        </p>
       ) : (
         <ChangelogList entries={entries} />
       )}

@@ -13,6 +13,7 @@ import {
   updateUserMeeting,
   workDirForMeeting,
 } from "@/lib/user-meetings-store";
+import { prisma } from "@/lib/prisma";
 
 /**
  * 전체 파이프라인 진행률 구간 (실제 작업량 비중).
@@ -154,6 +155,10 @@ export async function processUploadedMeeting(params: {
       semantic: structure,
       errorMessage: undefined,
     });
+    await prisma.teamMeeting.updateMany({
+      where: { legacyMeetingId: params.meetingId },
+      data: { state: "READY" },
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "회의 정리에 실패했습니다.";
@@ -176,6 +181,10 @@ export async function processUploadedMeeting(params: {
             },
           }
         : {}),
+    });
+    await prisma.teamMeeting.updateMany({
+      where: { legacyMeetingId: params.meetingId },
+      data: { state: "FAILED" },
     });
   } finally {
     try {

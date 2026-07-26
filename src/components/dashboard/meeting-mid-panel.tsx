@@ -7,6 +7,7 @@ import { UpcomingDetailPanel } from "@/components/dashboard/upcoming-detail-pane
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/context/app-context";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   daysUntilFromDateLabel,
   resolveUpcomingListDate,
@@ -333,6 +334,7 @@ export function MeetingMidPanel({
   searchQuery?: string;
 }) {
   const { workspaceId, currentUser } = useAppContext();
+  const { scenarioId, isLive } = usePageUxPreview();
   const profile = getWorkspaceProfile(workspaceId);
   const seed = useMemo(
     () => getUpcomingByWorkspace(workspaceId),
@@ -355,10 +357,63 @@ export function MeetingMidPanel({
     setLayout(readLayout());
   }, []);
 
+  const sourceItems = useMemo(() => {
+    if (scenarioId === "empty") return [];
+    if (
+      scenarioId === "full" ||
+      scenarioId === "popup-upcoming" ||
+      scenarioId === "popup-upcoming-create"
+    ) {
+      const base = seed.length > 0 ? seed : getUpcomingByWorkspace(workspaceId);
+      if (base.length >= 8) return base;
+      const padded = [...base];
+      for (let i = padded.length; i < 8; i += 1) {
+        const src = base[i % Math.max(base.length, 1)] ?? createUpcomingDraft(
+          workspaceId,
+          currentUser.name,
+        );
+        padded.push({
+          ...src,
+          id: `ux-up-${i + 1}`,
+          title: `${src.title} ${i + 1}`,
+        });
+      }
+      return padded.length > 0
+        ? padded
+        : [
+            createUpcomingDraft(workspaceId, currentUser.name),
+          ];
+    }
+    return items;
+  }, [scenarioId, seed, items, workspaceId, currentUser.name]);
+
+  useEffect(() => {
+    if (scenarioId !== "popup-upcoming" && scenarioId !== "popup-upcoming-create") {
+      if (
+        scenarioId === "live" ||
+        scenarioId === "empty" ||
+        scenarioId === "full"
+      ) {
+        setDetailOpen(false);
+      }
+      return;
+    }
+    if (scenarioId === "popup-upcoming-create") {
+      setDetailMode("create");
+      setSelected(createUpcomingDraft(workspaceId, currentUser.name));
+      setDetailOpen(true);
+      return;
+    }
+    const target = sourceItems[0] ?? createUpcomingDraft(workspaceId, currentUser.name);
+    setDetailMode("view");
+    setSelected(target);
+    setDetailOpen(true);
+  }, [scenarioId, sourceItems, workspaceId, currentUser.name]);
+
   const visibleItems = useMemo(() => {
     const filtered = !searchQuery.trim()
-      ? items
-      : items.filter((item) =>
+      ? sourceItems
+      : sourceItems.filter((item) =>
           matchesSearchText(
             [
               item.title,
@@ -371,7 +426,7 @@ export function MeetingMidPanel({
           ),
         );
     return [...filtered].sort(compareUpcoming);
-  }, [items, searchQuery]);
+  }, [sourceItems, searchQuery]);
 
   const setLayoutPersist = useCallback((next: UpcomingLayout) => {
     setLayout(next);
@@ -391,12 +446,23 @@ export function MeetingMidPanel({
   }, [workspaceId, currentUser.name]);
 
   const closeDetail = useCallback(() => {
+    if (
+      scenarioId === "popup-upcoming" ||
+      scenarioId === "popup-upcoming-create"
+    ) {
+      return;
+    }
     setDetailOpen(false);
     setDetailMode("view");
-  }, []);
+  }, [scenarioId]);
 
   const saveItem = useCallback(
     (next: UpcomingItem) => {
+      if (!isLive) {
+        setSelected(next);
+        setDetailMode("view");
+        return;
+      }
       setItems((prev) => {
         const exists = prev.some((item) => item.id === next.id);
         const list = exists
@@ -408,11 +474,16 @@ export function MeetingMidPanel({
       setSelected(next);
       setDetailMode("view");
     },
-    [workspaceId],
+    [workspaceId, isLive],
   );
 
   const deleteItem = useCallback(
     (target: UpcomingItem) => {
+      if (!isLive) {
+        setDetailOpen(false);
+        setDetailMode("view");
+        return;
+      }
       setItems((prev) => {
         const list = prev.filter((item) => item.id !== target.id);
         writeStoredUpcoming(workspaceId, list);
@@ -421,37 +492,37 @@ export function MeetingMidPanel({
       setSelected(null);
       setDetailMode("view");
     },
-    [workspaceId],
+    [workspaceId, isLive],
   );
 
   return (
     <>
-      <section className="overflow-hidden rounded-2xl bg-card shadow-soft outline-none">
-        <div className="flex items-center justify-between gap-2 px-4 py-4 sm:px-5">
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-xl font-semibold text-foreground">
-              {profile.upcomingTitle}
-            </h2>
+      <section className="panel-surface overflow-hidden rounded-2xl outline-none">
+        <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-card px-4 py-4 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
             {visibleItems.length > 0 ? (
-              <span className="inline-flex min-w-8 items-center justify-center rounded-lg bg-surface px-2.5 py-1 text-base font-semibold tabular-nums text-foreground">
+              <span className="text-base font-semibold tabular-nums text-muted">
                 {visibleItems.length}
               </span>
             ) : null}
-          </div>
-
-          <div className="flex items-center gap-1.5">
+            <h2 className="text-xl font-semibold text-foreground">
+              {profile.upcomingTitle}
+            </h2>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
+              className="h-8 w-8 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
               aria-label={profile.upcomingAddLabel}
               onClick={openCreate}
             >
               <Plus className="h-4 w-4" strokeWidth={1.75} />
             </Button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <div
-              className="flex items-center rounded-lg bg-surface p-0.5"
+              className="flex overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
               role="group"
               aria-label={`${profile.upcomingTitle} 레이아웃`}
             >
@@ -460,7 +531,7 @@ export function MeetingMidPanel({
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
+                  "h-8 w-8 rounded-none cursor-pointer text-muted-2 hover:bg-transparent hover:text-foreground",
                   layout === "list" && "bg-card text-foreground shadow-soft",
                 )}
                 aria-pressed={layout === "list"}
@@ -474,7 +545,7 @@ export function MeetingMidPanel({
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "h-8 w-8 cursor-pointer text-foreground/55 hover:bg-transparent hover:text-foreground",
+                  "h-8 w-8 rounded-none cursor-pointer text-muted-2 hover:bg-transparent hover:text-foreground",
                   layout === "grid" && "bg-card text-foreground shadow-soft",
                 )}
                 aria-pressed={layout === "grid"}
@@ -533,7 +604,7 @@ export function MeetingMidPanel({
         ) : (
           <ul
             className={cn(
-              "grid gap-3 bg-surface/55 px-4 pb-4 pt-3 sm:grid-cols-2",
+              "grid gap-3 bg-card px-4 pb-4 pt-3 sm:grid-cols-2",
               visibleItems.length >= 5 && "xl:grid-cols-3",
             )}
           >
@@ -552,7 +623,11 @@ export function MeetingMidPanel({
 
       <UpcomingDetailPanel
         item={selected}
-        open={detailOpen}
+        open={
+          detailOpen ||
+          scenarioId === "popup-upcoming" ||
+          scenarioId === "popup-upcoming-create"
+        }
         mode={detailMode}
         onClose={closeDetail}
         onSave={saveItem}

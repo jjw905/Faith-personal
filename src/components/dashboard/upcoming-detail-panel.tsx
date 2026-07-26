@@ -36,6 +36,7 @@ import {
 } from "@/lib/meeting-platform";
 import {
   PLACE_PRESETS,
+  TEAM_ONLINE_LOCATION_PRESETS,
   resolveWorkspacePerson,
   WORKSPACE_PEOPLE,
   type UpcomingItem,
@@ -163,7 +164,7 @@ function AddAction({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs font-medium text-muted transition-colors hover:border-foreground/25 hover:bg-surface hover:text-foreground"
+      className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs font-medium text-muted transition-colors hover:border-foreground/25 hover:bg-surface hover:text-foreground"
     >
       {children}
       <span>{label}</span>
@@ -997,7 +998,10 @@ export function UpcomingDetailPanel({
                             ) : showPlaceEditor ? (
                               <div className="space-y-2">
                                 <div className="flex flex-wrap gap-1.5">
-                                  {PLACE_PRESETS.map((place) => (
+                                  {(item.workspace === "team"
+                                    ? TEAM_ONLINE_LOCATION_PRESETS
+                                    : PLACE_PRESETS
+                                  ).map((place) => (
                                     <Chip
                                       key={place}
                                       active={form.location === place}
@@ -1015,8 +1019,16 @@ export function UpcomingDetailPanel({
                                   onChange={(e) =>
                                     update("location", e.target.value)
                                   }
-                                  placeholder="다른 장소 이름"
-                                  aria-label="장소 이름"
+                                  placeholder={
+                                    item.workspace === "team"
+                                      ? "화상 링크 또는 플랫폼"
+                                      : "다른 장소 이름"
+                                  }
+                                  aria-label={
+                                    item.workspace === "team"
+                                      ? "온라인 위치"
+                                      : "장소 이름"
+                                  }
                                   autoFocus
                                   className={outlinedFieldClass}
                                 />
@@ -1151,7 +1163,7 @@ export function UpcomingDetailPanel({
                                       }
                                     }}
                                     className={cn(
-                                      "inline-flex cursor-pointer items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 transition-colors",
+                                      "inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors",
                                       active
                                         ? "border-primary bg-primary-soft text-primary"
                                         : "border-border hover:bg-surface",
@@ -1162,7 +1174,7 @@ export function UpcomingDetailPanel({
                                       size="sm"
                                       className="border-transparent"
                                     />
-                                    <span className="text-xs font-medium">
+                                    <span className="text-sm font-medium leading-5">
                                       {person.name}
                                     </span>
                                   </button>
@@ -1193,15 +1205,15 @@ export function UpcomingDetailPanel({
                             {form.participants.map((name) => (
                               <span
                                 key={name}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-border py-1 pl-1 pr-1.5"
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-1.5"
                               >
                                 <PersonAvatar name={name} size="sm" />
-                                <span className="max-w-[5.5rem] truncate text-xs font-medium text-foreground">
+                                <span className="max-w-[8rem] truncate text-sm font-medium leading-5 text-foreground">
                                   {name}
                                 </span>
                                 <button
                                   type="button"
-                                  className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
+                                  className="inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
                                   aria-label={`${name} 제거`}
                                   onClick={() =>
                                     update(
@@ -1249,7 +1261,7 @@ export function UpcomingDetailPanel({
                                         toggleParticipant(person.name)
                                       }
                                       className={cn(
-                                        "inline-flex cursor-pointer items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 transition-colors",
+                                        "inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors",
                                         selected
                                           ? "border-primary bg-primary-soft text-primary"
                                           : "border-border hover:bg-surface",
@@ -1260,7 +1272,7 @@ export function UpcomingDetailPanel({
                                         size="sm"
                                         className="border-transparent"
                                       />
-                                      <span className="max-w-[4rem] truncate text-xs font-medium">
+                                      <span className="text-sm font-medium leading-5">
                                         {person.name}
                                       </span>
                                     </button>
@@ -1316,10 +1328,10 @@ export function UpcomingDetailPanel({
                           {view.participants.map((name) => (
                             <span
                               key={name}
-                              className="inline-flex items-center gap-1.5 rounded-full border border-border py-1 pl-1 pr-2"
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-2.5"
                             >
                               <PersonAvatar name={name} size="sm" />
-                              <span className="max-w-[6.5rem] truncate text-xs font-medium text-foreground">
+                              <span className="max-w-[8rem] truncate text-sm font-medium leading-5 text-foreground">
                                 {name}
                               </span>
                             </span>

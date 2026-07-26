@@ -11,14 +11,11 @@ import {
   type ComponentType,
   type ReactNode,
 } from "react";
-import { Check, ChevronDown, Mail } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, Mail } from "lucide-react";
 
-import {
-  GoogleIcon,
-  NaverIcon,
-  XIcon,
-} from "@/components/auth/social-icons";
+import { GoogleIcon, NaverIcon, XIcon } from "@/components/auth/social-icons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { cn } from "@/lib/utils";
 
 type Role = "USER" | "ADMIN";
@@ -32,10 +29,13 @@ type UserRow = {
   role: Role;
   plan: Plan;
   disabled: boolean;
-  emailVerified: string | Date | null;
   signupProvider: string | null;
   image: string | null;
   createdAt: string | Date;
+  teamEntitlement: {
+    remainingTeamSlots: number;
+    seatLimit: number;
+  } | null;
   accounts: { provider: string }[];
 };
 
@@ -250,24 +250,63 @@ export function UsersAdminPanel({
   currentUserId: string;
 }) {
   const router = useRouter();
+  const { scenarioId, isLive } = usePageUxPreview();
   const [users, setUsers] = useState(initialUsers);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const isLocalDevelopment = process.env.NODE_ENV === "development";
+
+  const viewUsers = useMemo(() => {
+    if (scenarioId === "empty") return [];
+    if (scenarioId === "full") {
+      if (users.length >= 12) return users;
+      const padded = [...users];
+      for (let i = padded.length; i < 12; i += 1) {
+        padded.push({
+          id: `ux-user-${i + 1}`,
+          name: `미리보기 사용자 ${i + 1}`,
+          email: `preview${i + 1}@example.com`,
+          role: i % 5 === 0 ? "ADMIN" : "USER",
+          plan: i % 3 === 0 ? "PRO" : "FREE",
+          disabled: i % 7 === 0,
+          signupProvider: "credentials",
+          image: null,
+          createdAt: new Date(Date.now() - i * 86400000).toISOString(),
+          teamEntitlement: null,
+          accounts: [{ provider: "credentials" }],
+        });
+      }
+      return padded;
+    }
+    return users;
+  }, [scenarioId, users]);
+
+  if (scenarioId === "loading") {
+    return (
+      <div className="grid min-h-56 place-items-center rounded-2xl bg-card shadow-soft">
+        <LoaderCircle
+          className="h-6 w-6 animate-spin text-muted"
+          aria-label="불러오는 중"
+        />
+      </div>
+    );
+  }
 
   const stats = useMemo(() => {
     return {
-      total: users.length,
-      admins: users.filter((u) => u.role === "ADMIN").length,
-      pro: users.filter((u) => u.role !== "ADMIN" && u.plan === "PRO").length,
-      paused: users.filter((u) => u.disabled).length,
+      total: viewUsers.length,
+      admins: viewUsers.filter((u) => u.role === "ADMIN").length,
+      pro: viewUsers.filter((u) => u.role !== "ADMIN" && u.plan === "PRO")
+        .length,
+      paused: viewUsers.filter((u) => u.disabled).length,
     };
-  }, [users]);
+  }, [viewUsers]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return users.filter((u) => {
+    return viewUsers.filter((u) => {
       if (filter === "admin" && u.role !== "ADMIN") return false;
       if (filter === "pro" && (u.role === "ADMIN" || u.plan !== "PRO")) {
         return false;
@@ -279,11 +318,17 @@ export function UsersAdminPanel({
         (u.email ?? "").toLowerCase().includes(q)
       );
     });
-  }, [users, query, filter]);
+  }, [viewUsers, query, filter]);
 
   async function patchUser(
     userId: string,
-    body: { role?: Role; plan?: Plan; disabled?: boolean },
+    body: {
+      role?: Role;
+      plan?: Plan;
+      disabled?: boolean;
+      teamSlots?: number;
+      teamSeatLimit?: number;
+    },
   ) {
     setError("");
     const prevSnapshot = users.find((u) => u.id === userId);
@@ -292,6 +337,9 @@ export function UsersAdminPanel({
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, ...body } : u)),
       );
+    }
+    if (!isLive || userId.startsWith("ux-user-")) {
+      return;
     }
     try {
       const res = await fetch("/api/admin/users", {
@@ -321,10 +369,10 @@ export function UsersAdminPanel({
                 role: data.user!.role ?? u.role,
                 plan: data.user!.plan ?? u.plan,
                 disabled: data.user!.disabled ?? u.disabled,
-                emailVerified:
-                  data.user!.emailVerified !== undefined
-                    ? data.user!.emailVerified
-                    : u.emailVerified,
+                teamEntitlement:
+                  data.user!.teamEntitlement !== undefined
+                    ? data.user!.teamEntitlement
+                    : u.teamEntitlement,
               }
             : u,
         ),
@@ -402,9 +450,6 @@ export function UsersAdminPanel({
           {filtered.map((u) => {
             const isSelf = u.id === currentUserId;
             const providers = providerList(u);
-            const showEmailHint =
-              !u.emailVerified &&
-              (u.signupProvider === "credentials" || !u.signupProvider);
             const joined = new Date(u.createdAt).toLocaleDateString("ko-KR");
 
             return (
@@ -441,11 +486,6 @@ export function UsersAdminPanel({
                       <p className="text-xs font-medium text-muted-2">
                         가입 {joined}
                       </p>
-                      {showEmailHint ? (
-                        <p className="text-xs font-medium text-amber-700">
-                          이메일 미확인
-                        </p>
-                      ) : null}
                     </div>
                   </div>
 
@@ -506,6 +546,63 @@ export function UsersAdminPanel({
                     </div>
                   </div>
                 </div>
+                {isSelf && isLocalDevelopment && u.plan !== "PRO" ? (
+                  <div className="mt-3 rounded-2xl bg-surface px-3 py-3">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() =>
+                        void patchUser(u.id, {
+                          plan: "PRO",
+                          teamSlots: 1,
+                          teamSeatLimit: 5,
+                        })
+                      }
+                      className="min-h-12 rounded-xl bg-primary px-4 text-base font-semibold text-primary-foreground disabled:opacity-50"
+                    >
+                      로컬 팀 테스트 활성화
+                    </button>
+                  </div>
+                ) : null}
+                {(!isSelf || isLocalDevelopment) && u.plan === "PRO" ? (
+                  <div className="mt-3 flex flex-wrap items-end gap-3 rounded-2xl bg-surface px-3 py-3">
+                    <label className="text-sm font-medium text-muted">
+                      팀 생성 슬롯
+                      <input
+                        type="number"
+                        min={0}
+                        max={20}
+                        defaultValue={
+                          u.teamEntitlement?.remainingTeamSlots ?? 0
+                        }
+                        onBlur={(event) =>
+                          void patchUser(u.id, {
+                            teamSlots: Number(event.target.value),
+                            teamSeatLimit: u.teamEntitlement?.seatLimit || 2,
+                          })
+                        }
+                        className="mt-1 block h-10 w-24 rounded-xl border border-border bg-card px-3 text-base text-foreground"
+                      />
+                    </label>
+                    <label className="text-sm font-medium text-muted">
+                      팀 좌석
+                      <input
+                        type="number"
+                        min={2}
+                        max={500}
+                        defaultValue={u.teamEntitlement?.seatLimit || 2}
+                        onBlur={(event) =>
+                          void patchUser(u.id, {
+                            teamSlots:
+                              u.teamEntitlement?.remainingTeamSlots ?? 0,
+                            teamSeatLimit: Number(event.target.value),
+                          })
+                        }
+                        className="mt-1 block h-10 w-24 rounded-xl border border-border bg-card px-3 text-base text-foreground"
+                      />
+                    </label>
+                  </div>
+                ) : null}
               </li>
             );
           })}

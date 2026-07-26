@@ -14,6 +14,7 @@ import {
 import { MeetingCaptureChip } from "@/components/meetings/meeting-capture-label";
 import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/admin";
+import { canReadMeeting } from "@/lib/meeting-access";
 import { meetingTopicKeywords } from "@/lib/meeting-keywords";
 import {
   getMeetingById,
@@ -21,6 +22,7 @@ import {
   getMeetingTranscript,
 } from "@/lib/meetings-data";
 import { getUserMeeting } from "@/lib/user-meetings-store";
+import { requireUser } from "@/lib/require-user";
 
 export default async function MeetingDetailPage({
   params,
@@ -37,6 +39,11 @@ export default async function MeetingDetailPage({
       </PageContainer>
     );
   }
+
+  const session = await requireUser();
+  if (!session) notFound();
+  const access = await canReadMeeting(id, session.user.id);
+  if (!access.allowed) notFound();
 
   const meeting = getMeetingById(id);
   if (!meeting) notFound();

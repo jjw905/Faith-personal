@@ -1,0 +1,72 @@
+import { NextResponse } from "next/server";
+
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/require-user";
+import {
+  isTeamManager,
+  requireTeamCapability,
+  writeTeamAudit,
+} from "@/lib/team-permissions";
+
+type RouteContext = {
+  params: Promise<{ teamId: string; announcementId: string }>;
+};
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const session = await requireUser();
+  if (!session) {
+    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
+  }
+  const { teamId, announcementId } = await context.params;
+  let body: { pinned?: boolean; title?: string; body?: string; archive?: boolean; confirmRead?: boolean };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, message: "잘못된 요청입니다." }, { status: 400 });
+  }
+
+  if (body.confirmRead) {
+    const member = await prisma.teamMember.findUnique({
+      where: { teamId_userId: { teamId, userId: session.user.id } },
+    });
+    if (!member) {
+      return NextResponse.json({ ok: false, message: "권한이 없습니다." }, { status: 403 });
+    }
+    await prisma.teamAnnouncementRead.upsert({
+      where: {
+        announcementId_userId: {
+          announcementId,
+          userId: session.user.id,
+        },
+      },
+      create: {
+        announcementId,
+        userId: session.user.id,
+      },
+      update: { readAt: new Date() },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  const actor = await requireTeamCapability(teamId, session.user.id, "manageTeam");
+  if (!actor || !isTeamManager(actor.role)) {
+    return NextResponse.json({ ok: false, message: "공지 권한이 없습니다." }, { status: 403 });
+  }
+  const updated = await prisma.teamAnnouncement.update({
+    where: { id: announcementId },
+    data: {
+      ...(typeof body.pinned === "boolean" ? { pinned: body.pinned } : {}),
+      ...(body.title?.trim() ? { title: body.title.trim().slice(0, 120) } : {}),
+      ...(body.body?.trim() ? { body: body.body.trim().slice(0, 5000) } : {}),
+      ...(body.archive ? { archivedAt: new Date() } : {}),
+    },
+  });
+  await writeTeamAudit({
+    teamId,
+    actorId: session.user.id,
+    action: "announcement.updated",
+    metadata: { announcementId, archive: Boolean(body.archive) },
+    request,
+  });
+  return NextResponse.json({ ok: true, announcement: updated });
+}

@@ -25,6 +25,8 @@ import {
 } from "@/components/meetings/meeting-record-actions";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
+import { useAppContext } from "@/context/app-context";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { meetingCaptureLabel } from "@/lib/meeting-capture";
 import {
   formatRecentDaysLabel,
@@ -39,7 +41,6 @@ import { meetingDisplayKeywords } from "@/lib/meeting-keywords";
 import { matchesSearchText } from "@/lib/search-text";
 import { getWorkspaceProfile } from "@/lib/workspaces";
 import type { Meeting, Participant } from "@/types/meeting";
-import { useAppContext } from "@/context/app-context";
 import { cn } from "@/lib/utils";
 
 interface RecentMeetingsTableProps {
@@ -478,6 +479,7 @@ export function RecentMeetingsTable({
   onMeetingRemoved,
 }: RecentMeetingsTableProps) {
   const { workspaceId } = useAppContext();
+  const { scenarioId, isLive } = usePageUxPreview();
   const profile = getWorkspaceProfile(workspaceId);
   const [recordSearch, setRecordSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("date_desc");
@@ -492,13 +494,20 @@ export function RecentMeetingsTable({
 
   const filtered = useMemo(() => {
     const records = meetings.filter((m) => m.status !== "scheduled");
+    if (
+      scenarioId === "popup-participants" ||
+      scenarioId === "popup-records-delete" ||
+      scenarioId === "popup-records-download"
+    ) {
+      return records;
+    }
     if (activeQuery) {
       return records.filter((m) => matchesMeetingSearch(m, activeQuery));
     }
     return records.filter((m) =>
       isMeetingInPeriod(m.date, periodAnchor, periodUnit),
     );
-  }, [meetings, periodAnchor, periodUnit, activeQuery]);
+  }, [meetings, periodAnchor, periodUnit, activeQuery, scenarioId]);
 
   const sorted = useMemo(
     () => sortMeetings(filtered, sortKey),
@@ -506,13 +515,57 @@ export function RecentMeetingsTable({
   );
 
   useEffect(() => {
+    if (
+      scenarioId === "popup-records-delete" ||
+      scenarioId === "popup-records-download"
+    ) {
+      return;
+    }
     setSelected(new Set());
     setSelectMode(null);
-  }, [workspaceId, periodUnit, periodAnchor, activeQuery]);
+    setActionConfirmOpen(false);
+  }, [workspaceId, periodUnit, periodAnchor, activeQuery, scenarioId]);
 
   useEffect(() => {
     setRecordSearch("");
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (scenarioId === "popup-records-delete") {
+      setSelectMode("delete");
+      const ids = sorted.slice(0, Math.min(2, sorted.length)).map((m) => m.id);
+      setSelected(new Set(ids));
+      setActionConfirmOpen(ids.length > 0);
+      return;
+    }
+    if (scenarioId === "popup-records-download") {
+      setSelectMode("download");
+      const ids = sorted.slice(0, Math.min(2, sorted.length)).map((m) => m.id);
+      setSelected(new Set(ids));
+      setActionConfirmOpen(ids.length > 0);
+      return;
+    }
+    if (scenarioId === "popup-participants") {
+      setSelectMode(null);
+      setSelected(new Set());
+      setActionConfirmOpen(false);
+      return;
+    }
+    if (
+      scenarioId === "live" ||
+      scenarioId === "empty" ||
+      scenarioId === "full"
+    ) {
+      setSelectMode(null);
+      setSelected(new Set());
+      setActionConfirmOpen(false);
+    }
+  }, [scenarioId, sorted]);
+
+  const previewParticipants = useMemo(() => {
+    const withPeople = sorted.find((m) => m.participants.length > 0);
+    return withPeople?.participants ?? sorted[0]?.participants ?? [];
+  }, [sorted]);
 
   function enterMode(mode: Exclude<SelectMode, null>) {
     setSelectMode(mode);
@@ -557,6 +610,11 @@ export function RecentMeetingsTable({
     setActionConfirmOpen(false);
     setBusy(true);
     try {
+      if (!isLive) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        exitMode();
+        return;
+      }
       if (selectMode === "download") {
         exportMeetingsListDownload(selectedMeetings);
         exitMode();
@@ -586,7 +644,11 @@ export function RecentMeetingsTable({
   ) : null;
 
   const sortControl = !selectMode ? (
-    <SortControl value={sortKey} onChange={setSortKey} />
+    <SortControl
+      value={sortKey}
+      onChange={setSortKey}
+      forceOpen={scenarioId === "popup-sort"}
+    />
   ) : null;
 
   const batchActions = (
@@ -666,10 +728,10 @@ export function RecentMeetingsTable({
 
   const titleBlock = (
     <div className="flex min-w-0 items-center gap-2.5">
-      <CardTitle className="text-xl">{profile.recordsTitle}</CardTitle>
-      <span className="inline-flex min-w-8 items-center justify-center rounded-lg bg-surface px-2.5 py-1 text-base font-semibold tabular-nums text-foreground">
+      <span className="text-base font-semibold tabular-nums text-muted">
         {sorted.length}
       </span>
+      <CardTitle className="text-xl">{profile.recordsTitle}</CardTitle>
     </div>
   );
 
@@ -699,7 +761,7 @@ export function RecentMeetingsTable({
 
   return (
     <Card>
-      <div className="space-y-3 px-4 pt-4 sm:px-6">
+      <div className="space-y-3 rounded-t-2xl border-b border-border/70 bg-card px-4 pb-4 pt-4 sm:px-6">
         {/* 1행: 제목 · 필터 */}
         <div className="flex min-w-0 items-center justify-between gap-3">
           {titleBlock}
@@ -753,13 +815,43 @@ export function RecentMeetingsTable({
       </CardContent>
 
       <MeetingRecordsActionDialog
-        open={actionConfirmOpen}
-        mode={selectMode === "download" ? "download" : "delete"}
-        meetings={selectedMeetings}
+        open={
+          actionConfirmOpen ||
+          scenarioId === "popup-records-delete" ||
+          scenarioId === "popup-records-download"
+        }
+        mode={
+          scenarioId === "popup-records-download" || selectMode === "download"
+            ? "download"
+            : "delete"
+        }
+        meetings={
+          selectedMeetings.length > 0
+            ? selectedMeetings
+            : sorted.slice(0, 2)
+        }
         busy={busy}
-        onCancel={() => setActionConfirmOpen(false)}
-        onConfirm={() => void confirmSelectionAction()}
+        onCancel={() => {
+          if (
+            scenarioId === "popup-records-delete" ||
+            scenarioId === "popup-records-download"
+          ) {
+            return;
+          }
+          setActionConfirmOpen(false);
+        }}
+        onConfirm={() => {
+          void confirmSelectionAction();
+        }}
       />
+
+      {scenarioId === "popup-participants" && previewParticipants.length > 0 ? (
+        <ParticipantsPopup
+          participants={previewParticipants}
+          open
+          onClose={() => undefined}
+        />
+      ) : null}
     </Card>
   );
 }

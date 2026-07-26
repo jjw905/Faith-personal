@@ -8,11 +8,11 @@ import type { Plan, Role } from "@prisma/client";
 import type { Provider } from "next-auth/providers";
 import { cookies, headers } from "next/headers";
 
-import { ensureVerified, shouldAutoVerify } from "@/lib/account-verification";
 import { isValidEmail } from "@/lib/auth-validation";
 import { prisma } from "@/lib/prisma";
+import { platformAdminEmails } from "@/lib/platform-admin";
 import { verifyPassword } from "@/lib/password";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 
 class InvalidCredentials extends CredentialsSignin {
   code = "invalid_credentials";
@@ -25,15 +25,15 @@ class DisabledCredentials extends CredentialsSignin {
 }
 
 function adminEmails() {
-  return (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
+  return platformAdminEmails();
 }
 
 function oauthProviders(): Provider[] {
   const list: Provider[] = [];
-  if (process.env.AUTH_GOOGLE_ID?.trim() && process.env.AUTH_GOOGLE_SECRET?.trim()) {
+  if (
+    process.env.AUTH_GOOGLE_ID?.trim() &&
+    process.env.AUTH_GOOGLE_SECRET?.trim()
+  ) {
     list.push(
       Google({
         clientId: process.env.AUTH_GOOGLE_ID,
@@ -43,7 +43,10 @@ function oauthProviders(): Provider[] {
       }),
     );
   }
-  if (process.env.AUTH_NAVER_ID?.trim() && process.env.AUTH_NAVER_SECRET?.trim()) {
+  if (
+    process.env.AUTH_NAVER_ID?.trim() &&
+    process.env.AUTH_NAVER_SECRET?.trim()
+  ) {
     list.push(
       Naver({
         clientId: process.env.AUTH_NAVER_ID,
@@ -52,13 +55,17 @@ function oauthProviders(): Provider[] {
         // 외부 메일로 구글 계정과 자동 병합되지 않게 연결 끔.
         allowDangerousEmailAccountLinking: false,
         profile(profile) {
-          const r = (profile as { response?: {
-            id?: string;
-            nickname?: string;
-            name?: string;
-            email?: string;
-            profile_image?: string;
-          } }).response;
+          const r = (
+            profile as {
+              response?: {
+                id?: string;
+                nickname?: string;
+                name?: string;
+                email?: string;
+                profile_image?: string;
+              };
+            }
+          ).response;
           if (!r?.id) {
             throw new Error("네이버 프로필을 가져오지 못했습니다.");
           }
@@ -76,7 +83,10 @@ function oauthProviders(): Provider[] {
       }),
     );
   }
-  if (process.env.AUTH_TWITTER_ID?.trim() && process.env.AUTH_TWITTER_SECRET?.trim()) {
+  if (
+    process.env.AUTH_TWITTER_ID?.trim() &&
+    process.env.AUTH_TWITTER_SECRET?.trim()
+  ) {
     list.push(
       Twitter({
         clientId: process.env.AUTH_TWITTER_ID,
@@ -127,18 +137,19 @@ async function syncUserFromToken(userId: string) {
       role: true,
       plan: true,
       disabled: true,
-      emailVerified: true,
       passwordHash: true,
     },
   });
 }
 
-/** Auth.js OAuth는 emailVerified:null로 생성함 → 이메일이 있으면 즉시 verified. */
+/** Auth.js OAuth 사용자 생성 시 이메일을 정규화한다. */
 function createAuthAdapter() {
   const base = PrismaAdapter(prisma);
   return {
     ...base,
-    createUser: async (data: Parameters<NonNullable<typeof base.createUser>>[0]) => {
+    createUser: async (
+      data: Parameters<NonNullable<typeof base.createUser>>[0],
+    ) => {
       const email = data.email?.trim().toLowerCase();
       return base.createUser!({
         ...data,
@@ -151,11 +162,10 @@ function createAuthAdapter() {
 }
 
 /** signIn 콜백에서 세션 조회용 (NextAuth 초기화 후 주입). */
-let getAuth: (() => Promise<{ user?: { id?: string } } | null>) | null =
-  null;
+let getAuth: (() => Promise<{ user?: { id?: string } } | null>) | null = null;
 
 /**
- * Faith 인증 — Credentials + 소셜, Prisma, Resend 이메일 인증, Admin.
+ * Faith 인증 — Credentials + 소셜, Prisma, Admin.
  * 소셜은 제공자 ID로 식별. 이메일은 별도 등록. 추가 소셜은 로그인 후 연동.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -236,6 +246,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!ok) {
             throw new InvalidCredentials();
           }
+
+          resetRateLimit(`login:ip:${ip}`, `login:email:${email}`);
 
           return {
             id: user.id,
@@ -350,11 +362,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email = user.email.trim().toLowerCase();
       }
 
-      const oauthWithEmail = shouldAutoVerify(
-        (account?.provider ?? token.provider) as string | undefined,
-        (token.email ?? user?.email) as string | undefined,
-      );
-
       // DB 동기화: 로그인 직후 또는 30초마다 (역할/비활성 반영, 매 요청 부하 완화)
       const DB_SYNC_TTL_MS = 30_000;
       const nowMs = Date.now();
@@ -376,13 +383,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.disabled = dbUser.disabled;
           token.hasPassword = Boolean(dbUser.passwordHash);
 
-          if (oauthWithEmail && !dbUser.emailVerified) {
-            await ensureVerified(token.sub, false);
-            token.emailVerified = true;
-          } else {
-            token.emailVerified = oauthWithEmail || Boolean(dbUser.emailVerified);
-          }
-
           // ADMIN_EMAILS 승격은 계정 DB 이메일만 근거로 판단한다.
           const adminMail = dbUser.email?.trim().toLowerCase();
           if (
@@ -397,16 +397,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.role = "ADMIN";
           }
         } else {
-          token.emailVerified = oauthWithEmail;
-          token.role = (token.role as Role | undefined) ?? ("USER" as Role);
-          token.plan = (token.plan as Plan | undefined) ?? ("FREE" as Plan);
+          // DB 행이 없으면 권한을 유지하지 않는다 (JWT ADMIN 잔존 방지)
+          token.role = "USER" as Role;
+          token.plan = "FREE" as Plan;
+          token.disabled = true;
+          token.hasPassword = false;
         }
       } else if (!token.sub) {
-        token.emailVerified = oauthWithEmail;
         token.role = "USER" as Role;
         token.plan = "FREE" as Plan;
-      } else if (oauthWithEmail && token.emailVerified !== true) {
-        token.emailVerified = true;
       }
 
       // 로그인 상태 유지 쿠키에 따라 JWT 수명 조절
@@ -428,7 +427,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           (token.email as string | undefined) ?? session.user?.email ?? null,
         image:
           (token.picture as string | undefined) ?? session.user?.image ?? null,
-        emailVerified: Boolean(token.emailVerified),
         role: ((token.role as Role | undefined) ?? "USER") as Role,
         plan: ((token.plan as Plan | undefined) ?? "FREE") as Plan,
         provider: token.provider as string | undefined,

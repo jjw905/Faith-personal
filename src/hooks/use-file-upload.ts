@@ -11,7 +11,8 @@ import {
 
 const ACCEPTED_FORMATS = [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".webm"];
 
-export function useFileUpload() {
+export function useFileUpload(options?: { persist?: boolean }) {
+  const persist = options?.persist !== false;
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<
@@ -34,30 +35,44 @@ export function useFileUpload() {
     setIsDragging(false);
   }, []);
 
-  const uploadFile = useCallback(async (file: File) => {
-    setSelectedFile(file);
-    setPendingFile(null);
-    setDuplicateNextName(null);
-    setUploadStatus("uploading");
-    setUploadError(null);
-    setStoredId(null);
-    try {
-      const saved = await addVaultFile(file, "MEETING");
-      setStoredId(saved.id);
+  const uploadFile = useCallback(
+    async (file: File) => {
       setSelectedFile(file);
-      setUploadStatus("done");
-    } catch (err) {
-      setUploadStatus("error");
-      setUploadError(
-        err instanceof Error ? err.message : "업로드에 실패했습니다.",
-      );
-    }
-  }, []);
+      setPendingFile(null);
+      setDuplicateNextName(null);
+      setUploadStatus("uploading");
+      setUploadError(null);
+      setStoredId(null);
+      try {
+        if (!persist) {
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+          setStoredId(`ux-upload-${Date.now()}`);
+          setSelectedFile(file);
+          setUploadStatus("done");
+          return;
+        }
+        const saved = await addVaultFile(file, "MEETING");
+        setStoredId(saved.id);
+        setSelectedFile(file);
+        setUploadStatus("done");
+      } catch (err) {
+        setUploadStatus("error");
+        setUploadError(
+          err instanceof Error ? err.message : "업로드에 실패했습니다.",
+        );
+      }
+    },
+    [persist],
+  );
 
   const processFile = useCallback(
     async (file: File) => {
       setUploadError(null);
       setStoredId(null);
+      if (!persist) {
+        await uploadFile(file);
+        return;
+      }
       try {
         const items = await listVaultItems();
         const names = items.map((i) => i.name);
@@ -73,7 +88,7 @@ export function useFileUpload() {
       }
       await uploadFile(file);
     },
-    [uploadFile],
+    [persist, uploadFile],
   );
 
   const confirmDuplicateUpload = useCallback(() => {
