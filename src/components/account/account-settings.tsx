@@ -229,14 +229,14 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
 
   return (
     <PageContainer>
-      <div className="mx-auto w-full max-w-5xl space-y-8">
+      <div className="mx-auto w-full max-w-5xl space-y-6">
         <header className="min-w-0">
           <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
             계정 설정
           </h1>
         </header>
 
-        <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
           <Card className="flex h-full flex-col rounded-3xl shadow-soft">
             <CardHeader className="flex flex-row items-center gap-4 space-y-0 px-6 pb-6 pt-6">
               <Avatar className="h-16 w-16 shrink-0">

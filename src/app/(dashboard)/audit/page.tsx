@@ -27,7 +27,7 @@ export default async function AuditPage() {
   const maxActivity = Math.max(...metrics.dailyActivity.map((d) => d.value));
 
   return (
-    <PageContainer className="space-y-6">
+    <PageContainer className="space-y-4">
       <PageHeader
         title="감사 로그"
         description="팀 워크스페이스, 접근 기록, 보안 이벤트와 회의, 보안 추이를 함께 확인합니다."
@@ -35,7 +35,7 @@ export default async function AuditPage() {
 
       <TeamAuditPanel />
 
-      <div className="grid gap-6 lg:grid-cols-1">
+      <div className="grid gap-4 lg:grid-cols-1">
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">

@@ -142,7 +142,7 @@ export default function DashboardPage() {
 
   return (
     <PageContainer>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <TodayHeading meetingHeadline={profile.meetingHeadline} />
           <div className="w-full min-w-0 sm:max-w-sm sm:flex-1">

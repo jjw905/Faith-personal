@@ -181,8 +181,8 @@ export default function HelpPage() {
   return (
     <PageContainer>
       <div ref={pageRef} className="relative mx-auto w-full max-w-5xl">
-        <div ref={chromeRef} className="mb-8 sm:mb-10">
-          <div className="mb-6">
+        <div ref={chromeRef} className="mb-5 sm:mb-6">
+          <div className="mb-4">
             <button
               type="button"
               onClick={goBack}

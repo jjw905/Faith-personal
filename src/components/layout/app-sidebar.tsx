@@ -9,6 +9,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Plus,
+  UserRound,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -29,7 +31,7 @@ import {
   type NavItem,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { getWorkspaceProfile } from "@/lib/workspaces";
+import { isMeetingsRoute, isTeamRoute } from "@/lib/workspace-route";
 
 const SIDEBAR_COLLAPSED_KEY = "faith.sidebar.collapsed";
 
@@ -38,29 +40,9 @@ interface AppSidebarProps {
   onMobileClose?: () => void;
 }
 
-function isMeetingsPath(pathname: string) {
-  return (
-    pathname === "/dashboard" ||
-    pathname === "/meetings" ||
-    (pathname.startsWith("/meetings/") &&
-      !pathname.startsWith("/meetings/live-mask") &&
-      !pathname.startsWith("/meetings/new"))
-  );
-}
-
-function isTeamOnlyPath(pathname: string) {
-  return (
-    pathname === "/audit" ||
-    pathname.startsWith("/audit/") ||
-    pathname === "/team" ||
-    pathname.startsWith("/team/") ||
-    pathname.startsWith("/analysis")
-  );
-}
-
 function isNavActive(pathname: string, href: string) {
   if (href === "/dashboard") {
-    return isMeetingsPath(pathname);
+    return isMeetingsRoute(pathname);
   }
   if (href === "/meetings/live-mask") {
     return pathname.startsWith("/meetings/live-mask");
@@ -143,9 +125,9 @@ function MeetingsNav({
     useAppContext();
   const { resolveRole, isPreviewing, previewRole } = useTeamRolePreview();
   const searchParams = useSearchParams();
-  const meetingsActive = isMeetingsPath(pathname);
-  const teamOnlyActive = isTeamOnlyPath(pathname);
-  const sectionActive = meetingsActive || teamOnlyActive;
+  const meetingsActive = isMeetingsRoute(pathname);
+  const teamRouteActive = isTeamRoute(pathname);
+  const sectionActive = meetingsActive || teamRouteActive;
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [teams, setTeams] = useState<
     Array<{ id: string; name: string; role: "OWNER" | "ADMIN" | "MEMBER" }>
@@ -156,8 +138,8 @@ function MeetingsNav({
   activeTeamIdRef.current = activeTeamId;
   const workspaceIdRef = useRef(workspaceId);
   workspaceIdRef.current = workspaceId;
-  const teamOnlyActiveRef = useRef(teamOnlyActive);
-  teamOnlyActiveRef.current = teamOnlyActive;
+  const teamRouteActiveRef = useRef(teamRouteActive);
+  teamRouteActiveRef.current = teamRouteActive;
 
   useEffect(() => {
     let cancelled = false;
@@ -183,7 +165,7 @@ function MeetingsNav({
         if (
           nextTeams.length === 0 &&
           workspaceIdRef.current === "team" &&
-          !teamOnlyActiveRef.current
+          !teamRouteActiveRef.current
         ) {
           setWorkspaceId("personal");
         }
@@ -197,12 +179,6 @@ function MeetingsNav({
       cancelled = true;
     };
   }, [setActiveTeamId, setWorkspaceId]);
-
-  useEffect(() => {
-    if (teamOnlyActive && workspaceId !== "team") {
-      setWorkspaceId("team");
-    }
-  }, [teamOnlyActive, workspaceId, setWorkspaceId]);
 
   if (collapsed) {
     return (
@@ -300,7 +276,7 @@ function MeetingsNav({
                 className={cn(
                   "flex min-h-12 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm font-semibold transition-colors",
                   "hover:bg-surface-2 hover:text-foreground",
-                  workspaceId === "team" && teamOnlyActive
+                  workspaceId === "team" && teamRouteActive
                     ? "bg-primary-soft text-primary"
                     : "text-muted-2",
                 )}
@@ -318,20 +294,18 @@ function MeetingsNav({
                   const teamContextActive =
                     activeTeamId === team.id &&
                     workspaceId === "team" &&
-                    (meetingsActive || teamOnlyActive);
+                    (meetingsActive || teamRouteActive);
                   const teamActive = teamContextActive && onTeamDashboard;
                   const viewRole =
                     activeTeamId === team.id
                       ? resolveRole(team.role)
                       : team.role;
                   // 팀 화면(/team, 감사, 팀 회의)에 있을 때만 하위 메뉴 유지.
-                  // 개인 워크스페이스·보관함·도움말 등으로 나가면 접는다.
+                  // 개인 워크스페이스, 보관함, 도움말 등으로 나가면 접는다.
                   const showTeamChildren =
                     activeTeamId === team.id &&
                     viewRole !== "MEMBER" &&
-                    (teamOnlyActive ||
-                      (workspaceId === "team" &&
-                        pathname.startsWith("/meetings/team")));
+                    teamRouteActive;
 
                   return (
                     <li key={team.id}>
@@ -352,18 +326,18 @@ function MeetingsNav({
                               : "font-normal text-muted-2",
                         )}
                       >
-                        <ChevronRight
+                        <UsersRound
                           className={cn(
-                            "h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
-                            showTeamChildren && "rotate-90",
-                            teamActive || teamContextActive || showTeamChildren
+                            "h-4 w-4 shrink-0",
+                            teamActive || teamContextActive
                               ? "text-primary"
-                              : "text-muted-2/80",
+                              : "text-muted-2",
                           )}
-                          strokeWidth={2}
+                          strokeWidth={1.75}
+                          aria-hidden
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate">{team.name}</span>
+                          <span className="block truncate">팀</span>
                           {viewRole === "MEMBER" ||
                           (isPreviewing &&
                             activeTeamId === team.id &&
@@ -373,6 +347,21 @@ function MeetingsNav({
                             </span>
                           ) : null}
                         </span>
+                        {viewRole !== "MEMBER" ? (
+                          <ChevronRight
+                            className={cn(
+                              "h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
+                              showTeamChildren && "rotate-90",
+                              teamActive ||
+                                teamContextActive ||
+                                showTeamChildren
+                                ? "text-primary"
+                                : "text-muted-2/80",
+                            )}
+                            strokeWidth={2}
+                            aria-hidden
+                          />
+                        ) : null}
                       </Link>
 
                       <div
@@ -442,7 +431,6 @@ function MeetingsNav({
           </li>
           <li>
             {(() => {
-              const profile = getWorkspaceProfile("personal");
               const wsActive = workspaceId === "personal" && meetingsActive;
 
               return (
@@ -453,33 +441,22 @@ function MeetingsNav({
                     onNavigate?.();
                   }}
                   className={cn(
-                    "flex cursor-pointer items-start gap-1.5 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                    "flex min-h-12 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
                     "hover:bg-surface-2 hover:text-foreground",
                     wsActive
                       ? "bg-primary-soft font-medium text-primary"
                       : "font-normal text-muted-2",
                   )}
                 >
-                  <ChevronRight
+                  <UserRound
                     className={cn(
-                      "mt-0.5 h-3.5 w-3.5 shrink-0",
-                      wsActive ? "text-primary" : "text-muted-2/80",
+                      "h-4 w-4 shrink-0",
+                      wsActive ? "text-primary" : "text-muted-2",
                     )}
-                    strokeWidth={2}
+                    strokeWidth={1.75}
+                    aria-hidden
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">
-                      {profile.title} 워크스페이스
-                    </span>
-                    <span
-                      className={cn(
-                        "mt-0.5 block truncate text-sm font-normal leading-snug",
-                        wsActive ? "text-primary/75" : "text-muted-2/90",
-                      )}
-                    >
-                      {profile.subtitle}
-                    </span>
-                  </span>
+                  <span className="min-w-0 flex-1 truncate">개인</span>
                 </Link>
               );
             })()}

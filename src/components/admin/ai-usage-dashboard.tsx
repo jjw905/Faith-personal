@@ -262,7 +262,7 @@ export function AiUsageDashboard({
     <div className="flex flex-col gap-6">
       {/* M3 filter group: period + user + refresh */}
       <section
-        className="rounded-3xl bg-surface px-4 py-4 sm:px-5"
+        className="rounded-3xl bg-card px-4 py-4 shadow-soft sm:px-5"
         aria-label="조회 조건"
       >
         <div className="flex flex-col gap-4">
@@ -397,7 +397,7 @@ export function AiUsageDashboard({
       </section>
 
       {empty ? (
-        <div className="rounded-3xl bg-surface px-5 py-16 text-center sm:px-6">
+        <div className="rounded-3xl bg-card px-5 py-16 text-center shadow-soft sm:px-6">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
             <Gauge className="h-5 w-5" strokeWidth={1.75} />
           </div>

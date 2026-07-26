@@ -105,7 +105,10 @@ export function MeetingDetailBody({
           </Link>
         </div>
 
-        <div className="mt-3" role="tabpanel">
+        <div
+          className="panel-surface mt-3 rounded-2xl px-4 py-4 sm:px-5"
+          role="tabpanel"
+        >
           {tab === "timeline" ? (
             <MeetingTimelineView
               timeline={timeline}

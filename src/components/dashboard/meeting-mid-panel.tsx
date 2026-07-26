@@ -500,11 +500,6 @@ export function MeetingMidPanel({
       <section className="panel-surface overflow-hidden rounded-2xl outline-none">
         <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-card px-4 py-4 sm:px-5">
           <div className="flex min-w-0 items-center gap-2.5">
-            {visibleItems.length > 0 ? (
-              <span className="text-base font-semibold tabular-nums text-muted">
-                {visibleItems.length}
-              </span>
-            ) : null}
             <h2 className="text-xl font-semibold text-foreground">
               {profile.upcomingTitle}
             </h2>
@@ -559,7 +554,7 @@ export function MeetingMidPanel({
         </div>
 
         {visibleItems.length === 0 ? (
-          <div className="px-4 pb-8 pt-2 text-center">
+          <div className="flex min-h-[13.5rem] flex-col items-center justify-center gap-3 px-4 py-8 text-center sm:min-h-[15rem]">
             <p className="text-base text-muted">
               {searchQuery.trim()
                 ? "검색 결과가 없습니다."
@@ -570,7 +565,7 @@ export function MeetingMidPanel({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="mt-3 cursor-pointer"
+                className="cursor-pointer"
                 onClick={openCreate}
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} />

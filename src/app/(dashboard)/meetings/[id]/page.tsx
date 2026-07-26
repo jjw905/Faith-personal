@@ -113,7 +113,7 @@ export default async function MeetingDetailPage({
               {keywords.map((kw) => (
                 <span
                   key={kw}
-                  className="rounded-md bg-surface px-2.5 py-1 text-base font-medium leading-5 text-muted"
+                  className="rounded-md bg-surface-2 px-2.5 py-1 text-base font-medium leading-5 text-muted"
                 >
                   {kw}
                 </span>

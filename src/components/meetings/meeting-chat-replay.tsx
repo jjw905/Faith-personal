@@ -214,20 +214,6 @@ export function MeetingChatReplay({
     [transcript.lines],
   );
 
-  const lastLineSec = useMemo(
-    () => (lineStarts.length ? Math.max(...lineStarts) : 0),
-    [lineStarts],
-  );
-
-  /** 샘플 오디오가 짧을 때 대사 타임라인에 맞춰 스케일. */
-  const timeScale = useMemo(() => {
-    if (durationSec <= 0 || lastLineSec <= 0) return 1;
-    if (durationSec >= lastLineSec * 0.85) return 1;
-    return durationSec / lastLineSec;
-  }, [durationSec, lastLineSec]);
-
-  const lineSecToMediaSec = (lineSec: number) => lineSec * timeScale;
-
   useEffect(() => {
     const lineId =
       focusLine ||
@@ -250,16 +236,10 @@ export function MeetingChatReplay({
 
     a.playbackRate = settings.rate;
 
-    const scale =
-      a.duration > 0 && lastLineSec > 0 && a.duration < lastLineSec * 0.85
-        ? a.duration / lastLineSec
-        : 1;
-
     const onTime = () => {
       const media = a.currentTime;
       setCurrentSec(media);
-      const lineSec = scale > 0 ? media / scale : media;
-      const idx = activeLineIndexAt(lineStarts, lineSec);
+      const idx = activeLineIndexAt(lineStarts, media);
       if (idx < 0) return;
       const line = transcript.lines[idx];
       if (!line) return;
@@ -280,7 +260,7 @@ export function MeetingChatReplay({
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnded);
     };
-  }, [hasAudio, lastLineSec, lineStarts, settings.rate, transcript.lines]);
+  }, [hasAudio, lineStarts, settings.rate, transcript.lines]);
 
   useEffect(() => {
     if (!settings.follow || !activeId) return;
@@ -310,9 +290,15 @@ export function MeetingChatReplay({
       return;
     }
     const lineSec = parseTranscriptTimeToSec(line.time);
+    const dur = a.duration || durationSec;
+    if (dur > 0 && lineSec > dur + 0.5) {
+      // 녹음 길이 밖 대사 — 재생만 맞추지 않고 하이라이트만.
+      setActiveId(line.id);
+      return;
+    }
     const media = Math.min(
-      Math.max(0, lineSecToMediaSec(lineSec)),
-      Math.max(0, (a.duration || durationSec) - 0.05),
+      Math.max(0, lineSec),
+      Math.max(0, dur - 0.05),
     );
     a.currentTime = media;
     setCurrentSec(media);

@@ -18,6 +18,39 @@ export type ChangelogEntry = {
  */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.9",
+    date: "2026-07-26",
+    title: "회의 다시듣기, 말한 사람 구분",
+    summary:
+      "회의 대화를 실제 녹음과 함께 다시 들을 수 있습니다. 말풍선을 고르면 그 대목부터 재생되고, 누가 말했는지도 나눠서 보여 줍니다. 보관함은 휴대폰에서 쓰기 편하게 정리했습니다.",
+    sections: [
+      {
+        title: "다시듣기",
+        items: [
+          "회의 원본 녹음으로 대화 다시 듣기",
+          "대화와 소리의 시각을 맞춰 재생",
+          "원하는 대목을 골라 그 지점부터 듣기",
+        ],
+      },
+      {
+        title: "회의 기록",
+        items: [
+          "말한 사람별로 대화 나눠 보기",
+          "참석자를 고르면 해당 발언만 확인",
+          "요약, 참석자, 타임라인 화면 정리",
+        ],
+      },
+      {
+        title: "보관함, 화면",
+        items: [
+          "휴대폰에서 올리기, 받기, 지우기 정리",
+          "예정과 기록이 비었을 때 안내 표시",
+          "요금제 화면을 현재 상태 중심으로 간단히",
+        ],
+      },
+    ],
+  },
+  {
     version: "0.8",
     date: "2026-07-24",
     title: "팀 공간, 온라인 음성 회의",
@@ -175,6 +208,51 @@ export const CHANGELOG: ChangelogEntry[] = [
  * 구현, 스키마, 운영, 보안 관점. 날짜당 1개, 최신 위.
  */
 export const DEV_CHANGELOG: ChangelogEntry[] = [
+  {
+    version: "0.9",
+    date: "2026-07-26",
+    title: "화자분리, 실측 타임스탬프, 재생 스트리밍",
+    summary:
+      "pyannote 화자분리를 업로드와 실시간 경로에 연결하고, 대화기록 시각을 whisper 실측 구간으로 정렬했다. 추정 시각 폴백은 기본 차단한다. 재생은 Range 스트리밍 API로 바꿔 seek을 지원한다.",
+    sections: [
+      {
+        title: "STT 파이프라인",
+        items: [
+          "diarize-meeting, chunked-transcribe, process-upload 연결",
+          "realtime process-realtime 화자 라벨 반영",
+          "buildMeetingFromDiarize allowEstimateTimes 기본 off",
+          "timed-segments 없으면 업로드, 실시간 모두 실패 처리",
+        ],
+      },
+      {
+        title: "재생, 스토리지",
+        items: [
+          "api/meetings/[id]/replay-audio Range 스트리밍",
+          "vault content 라우트 스트리밍, Range 지원",
+          "meeting.replayAudio 필드, 벤치 원본 경로 확정",
+          "scripts/extract-timed-segments.py, seed:stt-bench",
+        ],
+      },
+      {
+        title: "접근, 보안",
+        items: [
+          "canReadMeeting 목, 카탈로그 회의 열람 복구",
+          "user-meetings-store 회의 id 화이트리스트 검증",
+          "replay-audio Content-Disposition 파일명 정규화",
+          ".venv-stt gitignore 추가",
+        ],
+      },
+      {
+        title: "UI",
+        items: [
+          "워크스페이스 전환을 경로 기준 단일 동기화로 정리",
+          "lib/workspace-route 경로 판정 공용화",
+          "캔버스 대비를 위해 섹션 배경 panel-surface 정리",
+          "사이드바 개인, 팀 라벨과 아이콘 단순화",
+        ],
+      },
+    ],
+  },
   {
     version: "0.8",
     date: "2026-07-24",
@@ -347,13 +425,13 @@ export const DEV_AGENDA: {
   date: string;
   items: DevAgendaItem[];
 } = {
-  date: "2026-07-24",
+  date: "2026-07-26",
   items: [
-    { label: "팀 핵심 기능 구현", done: true },
-    { label: "LiveKit 음성 회의 연결", done: true },
-    { label: "도움말, 개인정보, 이용약관 반영", done: true },
-    { label: "팀 워크스페이스 UI 검수" },
-    { label: "어드민 테스트 경로 정리" },
+    { label: "화자분리 업로드, 실시간 경로 연결", done: true },
+    { label: "실측 타임스탬프로 대화기록 정렬", done: true },
+    { label: "재생 Range 스트리밍 API", done: true },
+    { label: "워크스페이스 전환 경로 기준 정리", done: true },
+    { label: "STT 모델 벤치 비교 정리" },
   ],
 };
 

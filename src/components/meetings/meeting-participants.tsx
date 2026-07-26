@@ -542,7 +542,7 @@ export function MeetingParticipants({
 
   return (
     <section
-      className="rounded-2xl bg-surface px-4 py-4 sm:px-5"
+      className="panel-surface rounded-2xl px-4 py-4 sm:px-5"
       aria-label={`참석자 ${participants.length}명`}
     >
       <div className="mb-3 flex items-baseline gap-2">

@@ -154,7 +154,7 @@ export default function SettingsPage() {
 
   return (
     <PageContainer>
-      <div className="mx-auto w-full max-w-3xl space-y-6">
+      <div className="mx-auto w-full max-w-3xl space-y-4">
         <header className="min-w-0">
           <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
             시스템 설정

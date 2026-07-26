@@ -20,7 +20,7 @@ export default function ChangelogPage() {
   return (
     <PageContainer>
       <div className="mx-auto w-full max-w-3xl">
-        <header className="mb-8 sm:mb-10">
+        <header className="mb-5 sm:mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Changelog
           </h1>

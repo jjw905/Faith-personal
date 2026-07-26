@@ -50,7 +50,7 @@ export function MeetingSummaryCard({
 
   return (
     <section
-      className={cn("rounded-2xl bg-surface px-4 py-4 sm:px-5", className)}
+      className={cn("panel-surface rounded-2xl px-4 py-4 sm:px-5", className)}
       aria-label="회의 요약"
     >
       <p className="text-xs font-semibold tracking-wide text-muted-2">

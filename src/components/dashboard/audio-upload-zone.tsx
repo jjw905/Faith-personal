@@ -27,13 +27,6 @@ import {
   type SttModel,
 } from "@/lib/stt/models";
 import { stripFileExtension } from "@/lib/meeting-process";
-import {
-  VAULT_CHANGED_EVENT,
-  VAULT_QUOTA_BYTES,
-  formatVaultSize,
-  getVaultUsage,
-  type VaultUsage,
-} from "@/lib/vault";
 import { cn } from "@/lib/utils";
 
 type Mode = "idle" | "upload";
@@ -46,11 +39,6 @@ const FORMAT_GUIDES = [
   { ext: ".flac", hint: "무손실" },
   { ext: ".webm", hint: "브라우저 녹음" },
 ] as const;
-
-function formatQuotaChip(bytes: number): string {
-  if (bytes < 1024 * 1024) return formatVaultSize(bytes);
-  return `${Math.round(bytes / (1024 * 1024))}MB`;
-}
 
 export function AudioUploadZone({
   ctaStart = "새 회의 시작",
@@ -66,7 +54,6 @@ export function AudioUploadZone({
   const { scenarioId, isLive } = usePageUxPreview();
   const [mode, setMode] = useState<Mode>("idle");
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
-  const [vaultUsage, setVaultUsage] = useState<VaultUsage | null>(null);
   const [sttModel, setSttModel] = useState<SttModel>(DEFAULT_STT_MODEL);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -90,28 +77,6 @@ export function AudioUploadZone({
     attachExistingFile,
     clearFile,
   } = useFileUpload({ persist: isLive });
-
-  useEffect(() => {
-    if (mode !== "upload") return;
-    let alive = true;
-    async function loadUsage() {
-      try {
-        const usage = await getVaultUsage();
-        if (alive) setVaultUsage(usage);
-      } catch {
-        if (alive) setVaultUsage(null);
-      }
-    }
-    void loadUsage();
-    function onChanged() {
-      void loadUsage();
-    }
-    window.addEventListener(VAULT_CHANGED_EVENT, onChanged);
-    return () => {
-      alive = false;
-      window.removeEventListener(VAULT_CHANGED_EVENT, onChanged);
-    };
-  }, [mode]);
 
   useEffect(() => {
     if (
@@ -264,32 +229,16 @@ export function AudioUploadZone({
             <p className="text-sm font-semibold tracking-tight text-foreground">
               {ready ? "회의 정리" : "오디오 업로드"}
             </p>
-            <div className="flex shrink-0 items-center gap-2">
-              {!ready ? (
-                <span
-                  className="rounded-lg bg-surface-2 px-2.5 py-1 text-xs font-semibold tabular-nums text-foreground"
-                  title={
-                    vaultUsage
-                      ? `${formatVaultSize(vaultUsage.used)} / ${formatVaultSize(vaultUsage.quota)}`
-                      : undefined
-                  }
-                >
-                  {vaultUsage
-                    ? `${formatQuotaChip(vaultUsage.remaining)} 남음`
-                    : `계정 ${formatQuotaChip(VAULT_QUOTA_BYTES)}`}
-                </span>
-              ) : null}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
-                onClick={closeUpload}
-                aria-label="업로드 닫기"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
+              onClick={closeUpload}
+              aria-label="업로드 닫기"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
 
           {ready ? (

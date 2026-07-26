@@ -1112,7 +1112,7 @@ export function TeamWorkspacePanel() {
   }
 
   return (
-    <div className="relative flex flex-col gap-6">
+    <div className="relative flex flex-col gap-4">
       {message ? (
         <div className="rounded-2xl bg-primary-soft px-4 py-3 text-base">
           {message}
@@ -1309,7 +1309,7 @@ export function TeamWorkspacePanel() {
         </section>
       ) : null}
 
-      <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 md:gap-6">
+      <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
         <SectionCard
           title="예정 회의"
           count={filteredUpcoming.length}

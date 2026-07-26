@@ -26,11 +26,11 @@ export function PageUxPreviewControl() {
   if (!showUx && !showRole) return null;
 
   return (
-    <div className="sticky top-0 z-[90] flex flex-wrap items-center justify-start gap-2 px-4 pb-1 pt-2 sm:px-6">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-[90] flex h-16 items-center justify-start gap-2 pl-14 pr-16 sm:pr-[4.5rem] lg:px-6">
       {showUx ? (
         <div
           className={cn(
-            "inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card px-1 shadow-soft",
+            "pointer-events-auto inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card px-1 shadow-soft",
             !isLive && "ring-1 ring-primary/25",
           )}
           role="group"
@@ -63,7 +63,7 @@ export function PageUxPreviewControl() {
       {showRole ? (
         <div
           className={cn(
-            "inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card p-1 shadow-soft",
+            "pointer-events-auto inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card p-1 shadow-soft",
             previewRole && "ring-1 ring-primary/25",
           )}
           role="group"

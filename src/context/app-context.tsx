@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -11,6 +12,7 @@ import {
 } from "react";
 
 import { readDataRetentionDaysFromStorage } from "@/lib/data-retention";
+import { routeWorkspaceId } from "@/lib/workspace-route";
 import { WORKSPACES, type Workspace, type WorkspaceId } from "@/lib/workspaces";
 import type { User } from "@/types/user";
 
@@ -86,15 +88,21 @@ function readWorkspaceId(): WorkspaceId {
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
+  const pathname = usePathname();
   const [notificationCount, setNotificationCount] = useState(0);
-  const [workspaceId, setWorkspaceIdState] = useState<WorkspaceId>("personal");
+  const [chosenWorkspaceId, setChosenWorkspaceId] =
+    useState<WorkspaceId>("personal");
   const [activeTeamId, setActiveTeamIdState] = useState<string | null>(null);
   const [autoOpenTimelineOnStart, setAutoOpenTimelineOnStartState] =
     useState(true);
 
+  // 팀 전용 경로에서는 경로가 워크스페이스를 확정한다.
+  // 그 밖에서는 사용자가 고른 값을 쓴다. 상태를 경로에 맞춰 되쓰지 않으므로 서로 덮어쓸 일이 없다.
+  const workspaceId = routeWorkspaceId(pathname) ?? chosenWorkspaceId;
+
   useEffect(() => {
     queueMicrotask(() => {
-      setWorkspaceIdState(readWorkspaceId());
+      setChosenWorkspaceId(readWorkspaceId());
       setActiveTeamIdState(window.localStorage.getItem(ACTIVE_TEAM_KEY));
       setAutoOpenTimelineOnStartState(readAutoTimelinePref());
     });
@@ -146,7 +154,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [session?.user?.id, status]);
 
   const setWorkspaceId = useCallback((id: WorkspaceId) => {
-    setWorkspaceIdState(id);
+    setChosenWorkspaceId(id);
     try {
       window.localStorage.setItem(WORKSPACE_KEY, id);
     } catch {

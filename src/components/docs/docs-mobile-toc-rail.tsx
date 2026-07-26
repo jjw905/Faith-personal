@@ -81,8 +81,8 @@ export function DocsMobileTocRail({
                   "block shrink-0 whitespace-nowrap rounded-full border px-3 py-2 text-base transition-colors",
                   // MD3 FilterChip: selected = surface/card, unselected = surfaceVariant
                   activeId === item.id
-                    ? "border-border bg-card font-medium text-foreground shadow-sm"
-                    : "border-border bg-surface text-muted hover:text-foreground",
+                    ? "border-border bg-card font-semibold text-foreground shadow-sm"
+                    : "border-border bg-surface font-medium text-muted hover:text-foreground",
                 )}
               >
                 {item.title}

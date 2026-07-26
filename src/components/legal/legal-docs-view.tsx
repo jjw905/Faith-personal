@@ -300,8 +300,8 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
                           className={cn(
                             "block rounded-lg px-2 py-1.5 text-base transition-colors",
                             activeId === section.id
-                              ? "font-medium text-foreground"
-                              : "text-muted hover:text-foreground",
+                              ? "font-semibold text-foreground"
+                              : "font-medium text-muted hover:text-foreground",
                           )}
                         >
                           {section.title}

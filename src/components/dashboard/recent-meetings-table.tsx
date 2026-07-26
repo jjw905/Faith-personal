@@ -728,9 +728,6 @@ export function RecentMeetingsTable({
 
   const titleBlock = (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="text-base font-semibold tabular-nums text-muted">
-        {sorted.length}
-      </span>
       <CardTitle className="text-xl">{profile.recordsTitle}</CardTitle>
     </div>
   );
