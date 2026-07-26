@@ -1,4 +1,5 @@
 import { BarChart3 } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { PageContainer } from "@/components/layout/page-container";
 import { PageHeader } from "@/components/layout/page-header";
@@ -6,9 +7,22 @@ import { TeamAuditPanel } from "@/components/team/team-audit-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { getSecurityMetrics } from "@/lib/metrics-mock";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/require-user";
 
-/** 팀 감사 로그와 기존 분석(트렌드/지표)을 한 화면으로. */
-export default function AuditPage() {
+/** 팀 감사 로그와 기존 분석(트렌드/지표)을 한 화면으로. OWNER만 진입. */
+export default async function AuditPage() {
+  const session = await requireUser();
+  if (!session) redirect("/login");
+
+  const ownedTeam = await prisma.teamMember.findFirst({
+    where: { userId: session.user.id, role: "OWNER" },
+    select: { id: true },
+  });
+  if (!ownedTeam) {
+    redirect("/team");
+  }
+
   const metrics = getSecurityMetrics();
   const maxActivity = Math.max(...metrics.dailyActivity.map((d) => d.value));
 

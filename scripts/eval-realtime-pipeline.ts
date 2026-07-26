@@ -1,9 +1,11 @@
 /**
  * 실시간 파이프라인 평가 (이전 벤치 영상 2개).
- * Realtime STT(gpt-realtime-whisper) → 구조화(gpt-4o-mini) → 회의 산출.
+ * Realtime STT(gpt-realtime-whisper) + 선택적 pyannote 화자분리
+ * → 구조화(gpt-4o-mini) → 회의 산출.
  *
  * npx tsx --tsconfig tsconfig.json scripts/eval-realtime-pipeline.ts
  * MAX_SEC=180 으로 앞부분만 가능.
+ * DIARIZATION=pyannote 로 Community-1 화자분리 결합.
  */
 import { config } from "dotenv";
 import {
@@ -17,8 +19,16 @@ import { join } from "node:path";
 config({ path: ".env" });
 config({ path: ".env.local", override: true });
 
-const OUT = join(process.cwd(), ".data/stt-bench/realtime");
 const MAX_SEC = Number(process.env.MAX_SEC || "0") || undefined;
+const SAMPLE_ID = process.env.SAMPLE_ID?.trim();
+const DIARIZATION =
+  process.env.DIARIZATION === "pyannote" ? "pyannote" : "none";
+const OUT = join(
+  process.cwd(),
+  DIARIZATION === "pyannote"
+    ? ".data/stt-bench/realtime-diarization"
+    : ".data/stt-bench/realtime",
+);
 
 type Sample = {
   id: string;
@@ -92,7 +102,9 @@ async function main() {
 
   const results = [];
 
-  for (const sample of SAMPLES) {
+  for (const sample of SAMPLES.filter(
+    (candidate) => !SAMPLE_ID || candidate.id === SAMPLE_ID,
+  )) {
     if (!existsSync(sample.audio)) {
       console.error("missing audio", sample.audio);
       continue;
@@ -114,6 +126,7 @@ async function main() {
       audioPath: sample.audio,
       maxAudioSec: MAX_SEC,
       logUsage: true,
+      diarization: DIARIZATION,
       onProgress: (p) => {
         const now = Date.now();
         if (now - lastLog < 5000) return;
@@ -142,6 +155,9 @@ async function main() {
       firstDeltaMs: out.stt.firstDeltaMs,
       sttModel: out.stt.model,
       structureModel: out.structureUsage.model,
+      diarizationModel: out.diarization?.model ?? null,
+      diarizationWallMs: out.diarization?.wallMs ?? null,
+      speakerCount: out.diarization?.speakerCount ?? 0,
       utteranceCount: out.stt.utterances.length,
       sttChars: out.stt.text.length,
       dialogueLines: out.structure.dialogue.length,
@@ -167,6 +183,8 @@ async function main() {
         {
           ...row,
           sttText: out.stt.text,
+          speakerUtterances: out.speakerUtterances,
+          diarization: out.diarization,
           structure: out.structure,
           timeline: out.timeline,
           transcriptLineCount: out.transcript.lines.length,
@@ -183,6 +201,7 @@ async function main() {
           wallSec: (row.wallMs / 1000).toFixed(1),
           firstDeltaMs: row.firstDeltaMs,
           utterances: row.utteranceCount,
+          speakers: row.speakerCount,
           dialogue: row.dialogueLines,
           timeline: row.timelineSegments,
           coverage: cov?.toFixed(3),
@@ -207,6 +226,7 @@ async function main() {
     "",
     "구성",
     "- STT: gpt-realtime-whisper (Realtime transcription)",
+    `- 화자분리: ${results[0]?.diarizationModel ?? "없음"}`,
     "- 구조화: gpt-4o-mini (업로드 경로와 동일)",
     "- 산출: 요약, 키워드, 타임라인, 대화, 결정, 액션",
     "",

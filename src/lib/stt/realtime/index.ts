@@ -2,6 +2,16 @@ export {
   realtimeTranscribeFile,
 } from "@/lib/stt/realtime/transcribe-session";
 export { processRealtimeMeeting } from "@/lib/stt/realtime/process-realtime";
+export {
+  alignRealtimeUtterancesToSpeakers,
+  diarizeAudio,
+  formatSpeakerTranscript,
+} from "@/lib/stt/diarization";
+export type {
+  DiarizationResult,
+  DiarizationSegment,
+  SpeakerUtterance,
+} from "@/lib/stt/diarization";
 export type {
   RealtimeUtterance,
   RealtimeTranscribeResult,

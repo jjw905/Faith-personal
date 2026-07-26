@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Gem } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -80,18 +80,13 @@ export default function PlanPage() {
   return (
     <PageContainer>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-        <header className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-            <Gem className="h-5 w-5" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem] sm:leading-9">
-              플랜
-            </h1>
-            <p className="mt-1 text-base text-muted">
-              현재 플랜, 할당량, 요금제를 확인합니다.
-            </p>
-          </div>
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem] sm:leading-9">
+            플랜
+          </h1>
+          <p className="mt-1 text-base text-muted">
+            현재 플랜, 할당량, 요금제를 확인합니다.
+          </p>
         </header>
 
         <section className="panel-surface rounded-2xl p-5 sm:p-6">

@@ -37,8 +37,9 @@ export async function canReadMeeting(meetingId: string, userId: string) {
   }
 
   const legacy = getUserMeeting(meetingId);
+  // store에 없는 id(목 데이터 포함)는 열람 불가. 소유자만 허용.
   return {
-    allowed: !legacy || legacy.userId === userId,
+    allowed: Boolean(legacy && legacy.userId === userId),
     teamMeeting: null,
     maskedOnly: false,
   };

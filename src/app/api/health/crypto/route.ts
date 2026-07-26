@@ -4,9 +4,16 @@ import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { assertSetupSecret } from "@/lib/setup-auth";
 
-/** 공개: ok만. 상세: Authorization Bearer SETUP_SECRET */
+/**
+ * 공개: 고비용 작업 없이 { ok: true }만.
+ * 상세(bcrypt/DB 프로브): Authorization Bearer SETUP_SECRET
+ */
 export async function GET(request: Request) {
-  const detailed = assertSetupSecret(request).ok;
+  const gate = assertSetupSecret(request);
+  if (!gate.ok) {
+    return NextResponse.json({ ok: true });
+  }
+
   const out: Record<string, unknown> = {};
 
   try {
@@ -39,10 +46,5 @@ export async function GET(request: Request) {
   }
 
   const ok = out.bcryptOk === true && out.userCountError == null;
-
-  if (!detailed) {
-    return NextResponse.json({ ok }, { status: ok ? 200 : 503 });
-  }
-
   return NextResponse.json({ ok, ...out }, { status: ok ? 200 : 503 });
 }

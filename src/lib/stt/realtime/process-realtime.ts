@@ -2,6 +2,15 @@ import { buildSemanticStructure } from "@/lib/stt/semantic-structure";
 import { buildMeetingFromStt } from "@/lib/stt/to-meeting";
 import { realtimeTranscribeFile } from "@/lib/stt/realtime/transcribe-session";
 import type { RealtimeTranscribeProgress } from "@/lib/stt/realtime/types";
+import {
+  alignRealtimeUtterancesToSpeakers,
+  assertDiarizationConfigured,
+  diarizeAudio,
+  formatSpeakerTranscript,
+  type DiarizationResult,
+  type SpeakerUtterance,
+} from "@/lib/stt/diarization";
+import { alignDialogueToTimedSegments } from "@/lib/stt/timed-segments";
 import { estimateStructureUsd, STRUCTURE_MODEL } from "@/lib/stt/pricing";
 import { appendAiUsage } from "@/lib/stt/usage-store";
 import type { Meeting } from "@/types/meeting";
@@ -12,6 +21,8 @@ import type { SemanticStructure } from "@/lib/stt/semantic-structure";
 export type RealtimePipelineResult = {
   meetingId: string;
   stt: Awaited<ReturnType<typeof realtimeTranscribeFile>>;
+  diarization: DiarizationResult | null;
+  speakerUtterances: SpeakerUtterance[];
   structure: SemanticStructure;
   structureUsage: {
     model: string;
@@ -40,12 +51,29 @@ export async function processRealtimeMeeting(params: {
   maxAudioSec?: number;
   onProgress?: (p: RealtimeTranscribeProgress) => void;
   logUsage?: boolean;
+  diarization?: "none" | "pyannote";
+  minSpeakers?: number;
+  maxSpeakers?: number;
 }): Promise<RealtimePipelineResult> {
-  const stt = await realtimeTranscribeFile(params.audioPath, {
-    language: params.language ?? "ko",
-    maxAudioSec: params.maxAudioSec,
-    onProgress: params.onProgress,
-  });
+  if (params.diarization === "pyannote") {
+    assertDiarizationConfigured();
+  }
+
+  const [stt, diarization] = await Promise.all([
+    realtimeTranscribeFile(params.audioPath, {
+      language: params.language ?? "ko",
+      maxAudioSec: params.maxAudioSec,
+      onProgress: params.onProgress,
+    }),
+    params.diarization === "pyannote"
+      ? diarizeAudio({
+          audioPath: params.audioPath,
+          maxAudioSec: params.maxAudioSec,
+          minSpeakers: params.minSpeakers,
+          maxSpeakers: params.maxSpeakers,
+        })
+      : Promise.resolve(null),
+  ]);
 
   if (!stt.text.trim()) {
     throw new Error("실시간 전사가 비어 있습니다.");
@@ -68,8 +96,33 @@ export async function processRealtimeMeeting(params: {
     });
   }
 
+  const speakerUtterances = diarization
+    ? alignRealtimeUtterancesToSpeakers({
+        utterances: stt.utterances,
+        diarization,
+        durationSec: stt.durationSec,
+      })
+    : stt.utterances.map((utterance) => ({
+        ...utterance,
+        speaker: "발화",
+      }));
+  const structureInput = diarization
+    ? formatSpeakerTranscript(speakerUtterances)
+    : stt.text;
+
   const { structure, usage } = await buildSemanticStructure(
-    stt.text,
+    structureInput,
+    stt.durationSec,
+  );
+
+  structure.dialogue = alignDialogueToTimedSegments(
+    structure.dialogue,
+    speakerUtterances.map((utterance, index) => ({
+      startSec: utterance.startSec,
+      endSec:
+        speakerUtterances[index + 1]?.startSec ?? stt.durationSec,
+      text: utterance.text,
+    })),
     stt.durationSec,
   );
 
@@ -105,6 +158,8 @@ export async function processRealtimeMeeting(params: {
   return {
     meetingId: params.meetingId,
     stt,
+    diarization,
+    speakerUtterances,
     structure,
     structureUsage: {
       model: STRUCTURE_MODEL,

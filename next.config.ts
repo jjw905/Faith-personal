@@ -1,11 +1,7 @@
 import type { NextConfig } from "next";
 
-// 배포마다 Server Action ID가 바뀌지 않도록 빌드 시 고정 키 사용.
-// DO App Platform에도 동일 값을 BUILD+RUNTIME으로 넣는 것을 권장.
-if (!process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY?.trim()) {
-  process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY =
-    "Rqh8n3sxfdbd69IuHuiSD9Ha/1nuLB1o75zE/YhEgLE=";
-}
+// 롤링 배포에서 Server Action ID가 어긋나지 않게 BUILD+RUNTIME에
+// NEXT_SERVER_ACTIONS_ENCRYPTION_KEY를 동일하게 둔다. 코드에 키를 넣지 않는다.
 
 const nextConfig: NextConfig = {
   // 불필요한 X-Powered-By 응답 헤더 제거(대역폭, 정보 노출 최소화)
@@ -40,7 +36,8 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=(), payment=()",
+            value:
+              "camera=(), microphone=(self), geolocation=(), payment=()",
           },
           {
             key: "Strict-Transport-Security",

@@ -73,6 +73,7 @@ __pycache__/
 *.pyc
 .venv/
 .venv-docx/
+.venv-diarization/
 venv/
 backend/.env
 .local-wip/

@@ -57,6 +57,14 @@ export async function realtimeTranscribeFile(
   let audioSentSec = 0;
   let pendingCommits = 0;
   let closed = false;
+  let lastCommitSec = 0;
+  let nextAddedWindow = 0;
+  let nextFallbackWindow = 0;
+  const commitWindows: Array<{ startSec: number; endSec: number }> = [];
+  const windowByItemId = new Map<
+    string,
+    { startSec: number; endSec: number }
+  >();
 
   const url = "wss://api.openai.com/v1/realtime?intent=transcription";
 
@@ -88,7 +96,10 @@ export async function realtimeTranscribeFile(
         // ignore
       }
       cleanupWorkDir(workDir);
-      const text = utterances
+      const orderedUtterances = [...utterances].sort(
+        (a, b) => a.startSec - b.startSec,
+      );
+      const text = orderedUtterances
         .map((u) => u.text.trim())
         .filter(Boolean)
         .join("\n");
@@ -96,7 +107,7 @@ export async function realtimeTranscribeFile(
         model: REALTIME_STT_MODEL,
         language,
         durationSec,
-        utterances,
+        utterances: orderedUtterances,
         text,
         firstDeltaMs,
         wallMs: Date.now() - wallStart,
@@ -141,6 +152,22 @@ export async function realtimeTranscribeFile(
       }
 
       if (
+        type === "conversation.item.added" &&
+        event.item &&
+        typeof event.item === "object"
+      ) {
+        const itemId = String(
+          (event.item as Record<string, unknown>).id ?? "",
+        );
+        const window = commitWindows[nextAddedWindow];
+        if (itemId && window) {
+          windowByItemId.set(itemId, window);
+          nextAddedWindow += 1;
+        }
+        return;
+      }
+
+      if (
         type === "conversation.item.input_audio_transcription.delta" ||
         type === "conversation.item.audio_transcription.delta"
       ) {
@@ -157,11 +184,18 @@ export async function realtimeTranscribeFile(
       ) {
         const transcript = String(event.transcript ?? "").trim();
         const itemId = String(event.item_id ?? `u${utterances.length + 1}`);
+        const window =
+          windowByItemId.get(itemId) ??
+          commitWindows[nextFallbackWindow] ?? {
+            startSec: Math.max(0, audioSentSec - commitEverySec),
+            endSec: audioSentSec,
+          };
+        nextFallbackWindow += 1;
         if (transcript) {
           utterances.push({
             itemId,
             text: transcript,
-            startSec: Math.max(0, audioSentSec - commitEverySec),
+            startSec: window.startSec,
             completedAtMs: Date.now() - wallStart,
           });
         }
@@ -210,6 +244,11 @@ export async function realtimeTranscribeFile(
             sinceCommit += chunk.endSec - chunk.startSec;
 
             if (sinceCommit >= commitEverySec) {
+              commitWindows.push({
+                startSec: lastCommitSec,
+                endSec: audioSentSec,
+              });
+              lastCommitSec = audioSentSec;
               ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
               pendingCommits += 1;
               sinceCommit = 0;
@@ -219,6 +258,11 @@ export async function realtimeTranscribeFile(
           }
 
           if (sinceCommit > 0.05) {
+            commitWindows.push({
+              startSec: lastCommitSec,
+              endSec: audioSentSec,
+            });
+            lastCommitSec = audioSentSec;
             ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
             pendingCommits += 1;
           }

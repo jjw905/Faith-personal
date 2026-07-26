@@ -72,21 +72,42 @@ export default function DashboardPage() {
         meetings?: Meeting[];
       };
       if (data.ok && Array.isArray(data.meetings)) {
-        setMeetings(
-          data.meetings.filter(
-            (m) => !hidden.has(m.id) && m.status !== "in_progress",
-          ),
+        const next = data.meetings.filter(
+          (m) => !hidden.has(m.id) && m.status !== "in_progress",
         );
+        setMeetings((prev) => {
+          if (
+            prev.length === next.length &&
+            prev.every(
+              (m, i) =>
+                m.id === next[i]?.id &&
+                m.status === next[i]?.status &&
+                m.title === next[i]?.title &&
+                m.date === next[i]?.date &&
+                m.duration === next[i]?.duration,
+            )
+          ) {
+            return prev;
+          }
+          return next;
+        });
         return;
       }
     } catch {
       // fall through to mock
     }
-    setMeetings(
-      getMeetingsByWorkspace(workspaceId).filter(
+    setMeetings((prev) => {
+      const next = getMeetingsByWorkspace(workspaceId).filter(
         (m) => !hidden.has(m.id) && m.status !== "in_progress",
-      ),
-    );
+      );
+      if (
+        prev.length === next.length &&
+        prev.every((m, i) => m.id === next[i]?.id)
+      ) {
+        return prev;
+      }
+      return next;
+    });
   }, [workspaceId]);
 
   useEffect(() => {
@@ -103,6 +124,10 @@ export default function DashboardPage() {
       window.removeEventListener("focus", onShow);
       document.removeEventListener("visibilitychange", onShow);
     };
+  }, [refreshMeetings]);
+
+  const handleProcessingActiveChange = useCallback(() => {
+    void refreshMeetings();
   }, [refreshMeetings]);
 
   const viewMeetings =
@@ -143,7 +168,7 @@ export default function DashboardPage() {
             />
           ) : (
             <ProcessingNowSection
-              onActiveChange={() => void refreshMeetings()}
+              onActiveChange={handleProcessingActiveChange}
             />
           )}
         </section>

@@ -31,6 +31,8 @@
     "test:kms-policy": "npx tsx --tsconfig tsconfig.json scripts/test-kms-runtime-policy.ts",
     "test:masking": "npx --yes tsx --tsconfig tsconfig.json scripts/test-masking.ts",
     "test:masking:random": "npx --yes tsx --tsconfig tsconfig.json scripts/test-random-masking.ts",
+    "diarization:setup": "bash scripts/setup-diarization.sh",
+    "test:realtime:diarization": "DIARIZATION=pyannote MAX_SEC=${MAX_SEC:-60} npx tsx --tsconfig tsconfig.json scripts/eval-realtime-pipeline.ts",
     "train:pii-ner:smoke": "bash ml/pii-ner/run.sh smoke",
     "train:pii-ner": "bash ml/pii-ner/run.sh full",
     "ner:serve": "bash ml/pii-ner/serve.sh"

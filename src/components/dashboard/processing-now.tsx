@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MEETING_PROCESS_LABEL } from "@/lib/meeting-process";
 import { useAppContext } from "@/context/app-context";
@@ -60,6 +60,9 @@ export function ProcessingNowSection({
 } = {}) {
   const { workspaceId } = useAppContext();
   const [items, setItems] = useState<ProcessingItem[]>(demoItems ?? []);
+  const lastActiveKeyRef = useRef<string | null>(null);
+  const onActiveChangeRef = useRef(onActiveChange);
+  onActiveChangeRef.current = onActiveChange;
 
   const refresh = useCallback(async () => {
     if (demoItems) {
@@ -84,29 +87,47 @@ export function ProcessingNowSection({
         }>;
       };
       if (!data.ok || !Array.isArray(data.activity)) {
-        setItems([]);
+        setItems((prev) => (prev.length === 0 ? prev : []));
         return;
       }
-      setItems(
-        data.activity
-          .filter(
-            (a) =>
-              a.workspace === workspaceId &&
-              isActiveItem(a.phase, a.status),
+      const next = data.activity
+        .filter(
+          (a) =>
+            a.workspace === workspaceId &&
+            isActiveItem(a.phase, a.status),
+        )
+        .map((a) => ({
+          id: a.id,
+          title: (a.title || a.fileName || "파일").trim() || "파일",
+          phase: a.phase,
+          status: a.status,
+          workspace: a.workspace,
+          progressPercent: clampPercent(a.progressPercent, a.phase),
+        }));
+      setItems((prev) => {
+        if (
+          prev.length === next.length &&
+          prev.every(
+            (item, i) =>
+              item.id === next[i]?.id &&
+              item.phase === next[i]?.phase &&
+              item.status === next[i]?.status &&
+              item.progressPercent === next[i]?.progressPercent &&
+              item.title === next[i]?.title,
           )
-          .map((a) => ({
-            id: a.id,
-            title: (a.title || a.fileName || "파일").trim() || "파일",
-            phase: a.phase,
-            status: a.status,
-            workspace: a.workspace,
-            progressPercent: clampPercent(a.progressPercent, a.phase),
-          })),
-      );
+        ) {
+          return prev;
+        }
+        return next;
+      });
     } catch {
-      setItems([]);
+      setItems((prev) => (prev.length === 0 ? prev : []));
     }
   }, [workspaceId, demoItems]);
+
+  useEffect(() => {
+    lastActiveKeyRef.current = null;
+  }, [workspaceId]);
 
   useEffect(() => {
     if (animateDemo) return;
@@ -165,8 +186,15 @@ export function ProcessingNowSection({
   }, [animateDemo, demoItems]);
 
   useEffect(() => {
-    onActiveChange?.(items.map((i) => i.id));
-  }, [items, onActiveChange]);
+    const activeIds = items.map((i) => i.id);
+    const key = activeIds.join("\0");
+    if (lastActiveKeyRef.current === key) return;
+    const prevKey = lastActiveKeyRef.current;
+    lastActiveKeyRef.current = key;
+    // 최초 마운트 알림은 건너뛰고, active id가 실제로 바뀔 때만 부모 갱신
+    if (prevKey === null) return;
+    onActiveChangeRef.current?.(activeIds);
+  }, [items]);
 
   if (items.length === 0) return null;
 

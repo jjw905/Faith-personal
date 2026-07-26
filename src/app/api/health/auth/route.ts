@@ -12,8 +12,8 @@ const REQUIRED_TABLES = [
 ] as const;
 
 /**
- * 공개: ok / databaseOk / schemaOk 만.
- * 상세(환경변수 유무 등): Authorization: Bearer <SETUP_SECRET>
+ * 공개: { ok } 만 (인프라 세부 힌트 없음).
+ * 상세: Authorization: Bearer <SETUP_SECRET>
  */
 export async function GET(request: Request) {
   const detailed = assertSetupSecret(request).ok;
@@ -79,10 +79,7 @@ export async function GET(request: Request) {
     schemaOk !== false;
 
   if (!detailed) {
-    return NextResponse.json(
-      { ok, databaseOk, schemaOk },
-      { status: ok ? 200 : 503 },
-    );
+    return NextResponse.json({ ok }, { status: ok ? 200 : 503 });
   }
 
   const optional = {
