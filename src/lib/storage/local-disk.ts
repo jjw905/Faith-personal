@@ -11,6 +11,11 @@ function resolveKey(key: string) {
   return full;
 }
 
+/** 로컬 vault 파일 절대경로. Range 스트리밍용. */
+export function localObjectPath(key: string) {
+  return resolveKey(key);
+}
+
 export async function localPutObject(key: string, data: Buffer) {
   const full = resolveKey(key);
   await mkdir(path.dirname(full), { recursive: true });

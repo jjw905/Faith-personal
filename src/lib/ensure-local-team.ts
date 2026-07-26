@@ -8,8 +8,8 @@ import {
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
-export const LOCAL_DEV_TEAM_NAME = "제품기획팀";
-const LEGACY_TEAM_NAMES = ["Faith 역할 실험팀"];
+export const LOCAL_DEV_TEAM_NAME = "팀";
+const LEGACY_TEAM_NAMES = ["제품기획팀", "Faith 역할 실험팀"];
 
 const TEAM_ACCOUNTS = [
   {
@@ -56,7 +56,7 @@ function localDevPassword() {
 }
 
 /**
- * 로컬 어드민을 제품기획팀 대표로 두고 팀장·팀원 계정을 채운다.
+ * 로컬 어드민을 팀 대표로 두고 팀장·팀원 계정을 채운다.
  * 비프로덕션 전용.
  */
 export async function ensureLocalDevProductTeam() {

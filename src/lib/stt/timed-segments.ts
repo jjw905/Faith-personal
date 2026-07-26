@@ -26,28 +26,148 @@ function textHasToken(text: string, token: string): boolean {
   return tokenize(text).has(tok);
 }
 
+/** 공백, 문장부호 제거. 한국어는 조사 변형이 잦아 글자 단위로 비교한다. */
+function normChars(s: string): string {
+  return s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function bigramCounts(s: string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (let i = 0; i + 1 < s.length; i++) {
+    const g = s.slice(i, i + 2);
+    m.set(g, (m.get(g) ?? 0) + 1);
+  }
+  return m;
+}
+
+type Prepared = {
+  norm: string;
+  grams: Map<string, number>;
+  gramTotal: number;
+};
+
+function prepare(text: string): Prepared {
+  const norm = normChars(text);
+  const grams = bigramCounts(norm);
+  let total = 0;
+  for (const c of grams.values()) total += c;
+  return { norm, grams, gramTotal: total };
+}
+
+/** 글자 bigram Dice 계수 (0~1). 조사, 띄어쓰기 차이에 강함. */
+function gramSim(a: Prepared, b: Prepared): number {
+  if (a.gramTotal === 0 || b.gramTotal === 0) {
+    if (!a.norm || !b.norm) return 0;
+    return a.norm === b.norm ? 1 : 0;
+  }
+  const [small, large] =
+    a.grams.size <= b.grams.size ? [a.grams, b.grams] : [b.grams, a.grams];
+  let inter = 0;
+  for (const [g, c] of small) {
+    const other = large.get(g);
+    if (other) inter += Math.min(c, other);
+  }
+  return (2 * inter) / (a.gramTotal + b.gramTotal);
+}
+
 function overlapScore(a: string, b: string): number {
   const A = tokenize(a);
   const B = tokenize(b);
-  if (A.size === 0 || B.size === 0) return 0;
+  let token = 0;
+  if (A.size > 0 && B.size > 0) {
+    let hit = 0;
+    for (const t of A) if (B.has(t)) hit += 1;
+    token = hit / Math.sqrt(A.size * B.size);
+  }
+  return Math.max(token, gramSim(prepare(a), prepare(b)));
+}
+
+/** 매칭을 신뢰할 최소 유사도. 아래면 앵커로 쓰지 않고 보간한다. */
+const ANCHOR_MIN_SIM = 0.34;
+/** 위치 탐색에 쓰는 줄 앞부분 글자 수. */
+const PROBE_CHARS = 48;
+/** 추정 위치 기준 탐색 폭 (글자). */
+const SEARCH_MIN_CHARS = 400;
+const SEARCH_MAX_CHARS = 4000;
+const SEARCH_RATIO = 0.06;
+/** 추정 위치에서 멀어질 때 감점 폭. */
+const DISTANCE_PENALTY = 0.18;
+
+function cumulative(lengths: number[]): number[] {
+  const out = new Array<number>(lengths.length + 1);
+  out[0] = 0;
+  for (let i = 0; i < lengths.length; i++) out[i + 1] = out[i]! + lengths[i]!;
+  return out;
+}
+
+/** 실측 세그먼트를 글자 스트림으로 펼치고 글자마다 시각을 붙인다. */
+function buildCharTimeline(timed: TimedSegment[]): {
+  chars: string;
+  timeAt: Float64Array;
+} {
+  let chars = "";
+  const times: number[] = [];
+  for (const seg of timed) {
+    const norm = normChars(seg.text);
+    if (!norm) continue;
+    const start = Math.max(0, seg.startSec);
+    const end = Math.max(start, seg.endSec);
+    const span = end - start;
+    for (let i = 0; i < norm.length; i++) {
+      times.push(start + (span * i) / norm.length);
+    }
+    chars += norm;
+  }
+  return { chars, timeAt: Float64Array.from(times) };
+}
+
+function bigramSet(s: string): Set<string> {
+  const out = new Set<string>();
+  for (let i = 0; i + 1 < s.length; i++) out.add(s.slice(i, i + 2));
+  return out;
+}
+
+/** 스트림 offset 위치가 줄 앞부분과 얼마나 겹치는지 (0~1). */
+function probeScore(
+  chars: string,
+  offset: number,
+  width: number,
+  probe: Set<string>,
+): number {
+  const end = Math.min(chars.length - 1, offset + width);
   let hit = 0;
-  for (const t of A) if (B.has(t)) hit += 1;
-  return hit / Math.sqrt(A.size * B.size);
+  let total = 0;
+  for (let i = Math.max(0, offset); i < end; i++) {
+    total += 1;
+    if (probe.has(chars.slice(i, i + 2))) hit += 1;
+  }
+  return total === 0 ? 0 : hit / total;
 }
 
 /**
  * 구조화 dialogue의 startSec를 STT 실측 세그먼트에 맞춤.
- * 순서는 유지하고, 매칭 실패 시 직전 시각·문자비율로 보정.
+ *
+ * 1) 실측 세그먼트를 글자 스트림(글자마다 시각)으로 펼침
+ * 2) 각 줄의 앞부분을 직전 앵커 기준 추정 위치 근처에서 글자 단위로 탐색
+ * 3) 유사도가 낮은 줄은 앞뒤 앵커 사이를 글자 수 비율로 보간
+ *
+ * timed가 비면 기본은 실패(글자 수 추정으로 싱크를 깨지 않음).
  */
 export function alignDialogueToTimedSegments(
   dialogue: SemanticDialogueLine[],
   timed: TimedSegment[],
   durationSec: number,
+  options?: { allowEstimateFallback?: boolean },
 ): SemanticDialogueLine[] {
   if (dialogue.length === 0) return [];
   const dur = Math.max(1, durationSec);
 
   if (timed.length === 0) {
+    if (!options?.allowEstimateFallback) {
+      throw new Error(
+        "STT 실측 시각(timedSegments)이 없어 대화 싱크를 맞출 수 없습니다.",
+      );
+    }
     const totalChars = dialogue.reduce((s, d) => s + d.text.length, 0) || 1;
     let acc = 0;
     let prev = 0;
@@ -60,32 +180,166 @@ export function alignDialogueToTimedSegments(
     });
   }
 
-  let cursor = 0;
-  let prevSec = 0;
-  return dialogue.map((d) => {
-    let bestIdx = -1;
-    let best = -1;
-    const from = Math.max(0, cursor - 2);
-    for (let i = from; i < timed.length; i++) {
-      const sc = overlapScore(d.text, timed[i]!.text);
-      // 가까운 세그먼트 가산
-      const near = 1 / (1 + Math.abs(i - cursor) * 0.15);
-      const score = sc * near;
-      if (score > best) {
-        best = score;
-        bestIdx = i;
+  const n = dialogue.length;
+  const { chars, timeAt } = buildCharTimeline(timed);
+  const tTotal = chars.length;
+  const lastSeg = timed[timed.length - 1]!;
+  const lastEnd = Math.min(dur, Math.max(lastSeg.endSec, lastSeg.startSec));
+
+  const dNorm = dialogue.map((d) => normChars(d.text));
+  const dCum = cumulative(dNorm.map((s) => Math.max(1, s.length)));
+  const dTotal = dCum[n]! || 1;
+
+  if (tTotal === 0) {
+    return dialogue.map((d) => ({ ...d, startSec: 0 }));
+  }
+
+  const scale = tTotal / dTotal;
+  const searchSpan = Math.min(
+    SEARCH_MAX_CHARS,
+    Math.max(SEARCH_MIN_CHARS, Math.ceil(tTotal * SEARCH_RATIO)),
+  );
+
+  /** 줄 앞부분이 스트림 어디서 시작하는지 추정 위치 근처에서 찾는다. */
+  const findOffset = (
+    i: number,
+    estimate: number,
+    span: number,
+    boundLo: number,
+    boundHi: number,
+  ): { offset: number; score: number } | null => {
+    const line = dNorm[i]!;
+    if (line.length < 4) return null;
+    const probeWidth = Math.min(PROBE_CHARS, line.length);
+    const probe = bigramSet(line.slice(0, probeWidth));
+    const lo = Math.max(boundLo, Math.round(estimate - span));
+    const hi = Math.min(boundHi, Math.round(estimate + span));
+    if (hi < lo) return null;
+
+    // 추정 위치에서 멀수록 감점. 먼 곳의 우연한 일치를 막는다.
+    const penalty = (o: number) =>
+      (DISTANCE_PENALTY * Math.abs(o - estimate)) / Math.max(1, span);
+
+    const coarse = Math.max(1, Math.floor(probeWidth / 6));
+    let bestOffset = lo;
+    let bestScore = 0;
+    let bestAdj = -Infinity;
+    const consider = (o: number) => {
+      const raw = probeScore(chars, o, probeWidth, probe);
+      const adj = raw - penalty(o);
+      if (adj > bestAdj) {
+        bestAdj = adj;
+        bestScore = raw;
+        bestOffset = o;
       }
+    };
+    for (let o = lo; o <= hi; o += coarse) consider(o);
+    for (
+      let o = Math.max(lo, bestOffset - coarse);
+      o <= Math.min(hi, bestOffset + coarse);
+      o += 1
+    ) {
+      consider(o);
     }
-    let startSec: number;
-    if (bestIdx >= 0 && best >= 0.08) {
-      startSec = timed[bestIdx]!.startSec;
-      cursor = bestIdx;
-    } else {
-      // 약한 매칭: 진행 커서 근처 세그먼트
-      const approx = timed[Math.min(cursor, timed.length - 1)]!;
-      startSec = approx.startSec;
+    if (bestScore < ANCHOR_MIN_SIM) return null;
+    return { offset: bestOffset, score: bestScore };
+  };
+
+  // 1차: 전체 비율 추정 위치에서 후보 수집 (줄끼리 서로 영향 주지 않게)
+  const cand = new Array<{ offset: number; score: number } | null>(n).fill(null);
+  for (let i = 0; i < n; i++) {
+    cand[i] = findOffset(i, dCum[i]! * scale, searchSpan, 0, tTotal - 2);
+  }
+
+  // 2차: 시간 순서를 지키는 후보만 채택 (점수 합 최대인 비감소 부분열)
+  const pool: number[] = [];
+  for (let i = 0; i < n; i++) if (cand[i]) pool.push(i);
+  const accepted = new Array<boolean>(n).fill(false);
+  if (pool.length > 0) {
+    const best = new Float64Array(pool.length);
+    const back = new Int32Array(pool.length).fill(-1);
+    let tailIdx = 0;
+    for (let k = 0; k < pool.length; k++) {
+      const c = cand[pool[k]!]!;
+      best[k] = c.score;
+      for (let j = 0; j < k; j++) {
+        if (cand[pool[j]!]!.offset > c.offset) continue;
+        const v = best[j]! + c.score;
+        if (v > best[k]!) {
+          best[k] = v;
+          back[k] = j;
+        }
+      }
+      if (best[k]! > best[tailIdx]!) tailIdx = k;
     }
-    startSec = Math.max(prevSec, Math.min(dur, startSec));
+    for (let k = tailIdx; k >= 0; k = back[k]!) {
+      accepted[pool[k]!] = true;
+      if (back[k]! < 0) break;
+    }
+  }
+
+  const anchorOffset = new Array<number | null>(n).fill(null);
+  for (let i = 0; i < n; i++) {
+    if (accepted[i]) anchorOffset[i] = cand[i]!.offset;
+  }
+
+  // 3차: 채택 앵커 사이 빈 줄을 좁은 범위로 다시 탐색
+  for (let i = 0; i < n; i++) {
+    if (anchorOffset[i] != null) continue;
+    let prev = i - 1;
+    while (prev >= 0 && anchorOffset[prev] == null) prev -= 1;
+    let next = i + 1;
+    while (next < n && anchorOffset[next] == null) next += 1;
+    const loBound = prev >= 0 ? anchorOffset[prev]! : 0;
+    const hiBound = next < n ? anchorOffset[next]! : tTotal - 2;
+    if (hiBound <= loBound) continue;
+    const fromChar = prev >= 0 ? dCum[prev]! : 0;
+    const toChar = next < n ? dCum[next]! : dTotal;
+    const ratio =
+      toChar > fromChar ? (dCum[i]! - fromChar) / (toChar - fromChar) : 0;
+    const estimate = loBound + (hiBound - loBound) * ratio;
+    const span = Math.max(120, Math.min(searchSpan, (hiBound - loBound) / 2));
+    const found = findOffset(i, estimate, span, loBound, hiBound);
+    if (found) anchorOffset[i] = found.offset;
+  }
+
+  const anchorSec = new Array<number | null>(n).fill(null);
+  for (let i = 0; i < n; i++) {
+    const off = anchorOffset[i];
+    if (off == null) continue;
+    anchorSec[i] = Math.max(0, Math.min(dur, timeAt[off] ?? 0));
+  }
+
+  // 앵커 사이는 글자 수 비율로 보간
+  const out = new Array<number>(n).fill(0);
+  let idx = 0;
+  let prevAnchorIdx = -1;
+  let prevAnchorSec = 0;
+  while (idx < n) {
+    if (anchorSec[idx] != null) {
+      out[idx] = anchorSec[idx]!;
+      prevAnchorIdx = idx;
+      prevAnchorSec = out[idx]!;
+      idx += 1;
+      continue;
+    }
+    let next = idx;
+    while (next < n && anchorSec[next] == null) next += 1;
+    const nextSec = next < n ? anchorSec[next]! : lastEnd;
+    const fromChar = prevAnchorIdx >= 0 ? dCum[prevAnchorIdx]! : 0;
+    const toChar = next < n ? dCum[next]! : dTotal;
+    const charSpan = Math.max(1, toChar - fromChar);
+    const secSpan = Math.max(0, nextSec - prevAnchorSec);
+    for (let x = idx; x < next; x++) {
+      const ratio = (dCum[x]! - fromChar) / charSpan;
+      out[x] = prevAnchorSec + secSpan * ratio;
+    }
+    idx = next;
+  }
+
+  let prevSec = 0;
+  return dialogue.map((d, i) => {
+    const startSec = Math.max(prevSec, Math.max(0, Math.min(dur, out[i]!)));
     prevSec = startSec;
     return { ...d, startSec };
   });
@@ -184,10 +438,9 @@ export function mapTimelineByDialogue(params: {
   return items.map((item, i) => {
     const a = starts[i]!;
     const b = i + 1 < n ? starts[i + 1]! : m;
-    const startSec = Math.max(
-      0,
-      Math.min(dur, dialogue[a]?.startSec ?? 0),
-    );
+    // 첫 구간은 항상 녹음 시작(0초)부터.
+    const startSec =
+      i === 0 ? 0 : Math.max(0, Math.min(dur, dialogue[a]?.startSec ?? 0));
     const endSec =
       i === n - 1
         ? dur

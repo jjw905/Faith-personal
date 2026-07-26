@@ -24,6 +24,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", required=True)
     parser.add_argument("--label", required=True)
     parser.add_argument("--compute-type", default="int8")
+    parser.add_argument("--vad-filter", action="store_true")
+    parser.add_argument("--no-condition", action="store_true")
     return parser.parse_args()
 
 
@@ -60,8 +62,8 @@ def main() -> int:
         language="ko",
         beam_size=5,
         best_of=5,
-        condition_on_previous_text=True,
-        vad_filter=False,
+        condition_on_previous_text=not args.no_condition,
+        vad_filter=args.vad_filter,
         word_timestamps=False,
     )
     segments = [
@@ -97,6 +99,8 @@ def main() -> int:
         "runtime": {
             "device": "cpu",
             "computeType": args.compute_type,
+            "vadFilter": args.vad_filter,
+            "conditionOnPreviousText": not args.no_condition,
             "machine": platform.machine(),
             "python": platform.python_version(),
         },

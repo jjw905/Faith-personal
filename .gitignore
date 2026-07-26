@@ -74,6 +74,7 @@ __pycache__/
 .venv/
 .venv-docx/
 .venv-diarization/
+.venv-stt/
 venv/
 backend/.env
 .local-wip/

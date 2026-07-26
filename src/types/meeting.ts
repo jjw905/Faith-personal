@@ -43,4 +43,10 @@ export interface Meeting {
   workspace: WorkspaceId;
   /** 실시간 회화 / 업로드. 없으면 id·태그로 추론. */
   capture?: MeetingCapture;
+  /**
+   * 다시듣기 원본.
+   * - `/samples/...` 공개 샘플
+   * - `.data/stt-bench` 상대 파일명 (예: `ktv-briefing-20251231.mp3`)
+   */
+  replayAudio?: string;
 }

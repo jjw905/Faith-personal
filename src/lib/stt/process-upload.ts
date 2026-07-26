@@ -74,6 +74,11 @@ export async function processUploadedMeeting(params: {
     if (!stt.text.trim()) {
       throw new Error("전사 결과가 비어 있습니다.");
     }
+    if (!stt.timedSegments.length) {
+      throw new Error(
+        "STT 실측 시각이 비어 있습니다. 싱크를 맞출 수 없어 중단합니다.",
+      );
+    }
 
     appendAiUsage({
       meetingId: params.meetingId,

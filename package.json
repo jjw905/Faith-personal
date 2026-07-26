@@ -33,6 +33,8 @@
     "test:masking:random": "npx --yes tsx --tsconfig tsconfig.json scripts/test-random-masking.ts",
     "diarization:setup": "bash scripts/setup-diarization.sh",
     "test:realtime:diarization": "DIARIZATION=pyannote MAX_SEC=${MAX_SEC:-60} npx tsx --tsconfig tsconfig.json scripts/eval-realtime-pipeline.ts",
+    "seed:stt-bench": "bash scripts/seed-stt-bench.sh",
+    "stt:extract-timed": "python3 scripts/extract-timed-segments.py",
     "train:pii-ner:smoke": "bash ml/pii-ner/run.sh smoke",
     "train:pii-ner": "bash ml/pii-ner/run.sh full",
     "ner:serve": "bash ml/pii-ner/serve.sh"

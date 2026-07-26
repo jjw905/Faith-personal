@@ -1,6 +1,93 @@
 {
   "meetings": [
     {
+      "id": "mtg-cmp-mini",
+      "title": "다화자 180초, gpt-4o-mini-transcribe",
+      "tags": [
+        "모델비교",
+        "mini",
+        "업로드"
+      ],
+      "summaryTags": [
+        "모델비교",
+        "mini",
+        "업로드"
+      ],
+      "date": "2026-07-26T17:35:20.915Z",
+      "duration": "3분",
+      "participants": [
+        {
+          "id": "spk-A",
+          "name": "화자 A",
+          "initials": "A",
+          "color": "bg-blue-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "차관님에게 설계비 반영의 필요성을 강조하고 약속을 받음",
+          "tags": [
+            "의원",
+            "환경"
+          ]
+        },
+        {
+          "id": "spk-차관님",
+          "name": "화자 차관님",
+          "initials": "차",
+          "color": "bg-emerald-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "803 국립공원 센테 탐방로 조성을 위한 설계비를 2026년 본 예산에 편성",
+          "tags": [
+            "803"
+          ]
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "personal",
+      "capture": "upload",
+      "replayAudio": "fixtures/assembly3-dense-180.wav"
+    },
+    {
+      "id": "mtg-cmp-faster",
+      "title": "다화자 180초, faster-whisper large-v3",
+      "tags": [
+        "모델비교",
+        "faster-whisper",
+        "업로드"
+      ],
+      "summaryTags": [
+        "모델비교",
+        "faster-whisper",
+        "업로드"
+      ],
+      "date": "2026-07-26T17:35:34.758Z",
+      "duration": "3분",
+      "participants": [
+        {
+          "id": "spk-A",
+          "name": "화자 A",
+          "initials": "A",
+          "color": "bg-blue-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "차관님 임명 축하 및 설계비 반영 요청",
+          "tags": [
+            "의원",
+            "환경"
+          ]
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "personal",
+      "capture": "upload",
+      "replayAudio": "fixtures/assembly3-dense-180.wav"
+    },
+    {
       "id": "mtg-stt-assembly",
       "title": "제424회 국회 환노위 (STT 화자분리)",
       "tags": [
@@ -24,12 +111,7 @@
           "color": "bg-blue-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "위원회 개의·안건 상정·예산안 의결 진행",
-          "tags": [
-            "진행",
-            "의결"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-B",
@@ -38,12 +120,7 @@
           "color": "bg-emerald-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "소위 심사 결과·증액 내역 보고",
-          "tags": [
-            "보고",
-            "예산"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-C",
@@ -52,11 +129,7 @@
           "color": "bg-violet-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "심사 과정 보완 발언",
-          "tags": [
-            "질의"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-D",
@@ -65,12 +138,7 @@
           "color": "bg-amber-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "환경부 추경·재난 대응 예산 설명",
-          "tags": [
-            "예산",
-            "환경"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-E",
@@ -79,12 +147,7 @@
           "color": "bg-rose-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "노동자 폭력·경찰 대응 문제 지적",
-          "tags": [
-            "노동",
-            "지적"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-F",
@@ -93,11 +156,7 @@
           "color": "bg-cyan-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "관련 질의·보충 발언",
-          "tags": [
-            "질의"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-G",
@@ -106,18 +165,14 @@
           "color": "bg-orange-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "고용·진상조사 등 후속 조치 요청",
-          "tags": [
-            "고용",
-            "후속"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         }
       ],
       "status": "completed",
       "security": "protected",
       "workspace": "personal",
-      "capture": "upload"
+      "capture": "upload",
+      "replayAudio": "assembly-envlabor-20250425.mp3"
     },
     {
       "id": "mtg-stt-ktv",
@@ -143,12 +198,7 @@
           "color": "bg-blue-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "정부 국정운영 생중계·부처 개방 브리핑",
-          "tags": [
-            "브리핑",
-            "홍보"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-B",
@@ -157,11 +207,7 @@
           "color": "bg-emerald-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "브리핑 내용 보완·질의 응답",
-          "tags": [
-            "질의"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-C",
@@ -170,11 +216,7 @@
           "color": "bg-violet-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "정책 세부 설명 참여",
-          "tags": [
-            "설명"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-D",
@@ -183,12 +225,7 @@
           "color": "bg-amber-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "후속 일정·운영 방안 정리",
-          "tags": [
-            "일정",
-            "운영"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-E",
@@ -197,11 +234,7 @@
           "color": "bg-rose-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "관련 질의 참여",
-          "tags": [
-            "질의"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         },
         {
           "id": "spk-F",
@@ -210,17 +243,14 @@
           "color": "bg-cyan-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "마무리·추가 의견",
-          "tags": [
-            "정리"
-          ]
+          "recognitionNote": "AI 화자 분리 라벨"
         }
       ],
       "status": "completed",
       "security": "protected",
       "workspace": "personal",
-      "capture": "upload"
+      "capture": "upload",
+      "replayAudio": "ktv-briefing-20251231.mp3"
     },
     {
       "id": "mtg-001",

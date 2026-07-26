@@ -91,18 +91,30 @@ function continuePrompt(prevText: string, chunkIndex: number, total: number) {
   );
 }
 
+export type AudioChunk = {
+  path: string;
+  /** 원본 기준 시작 시각. 청크 길이 합산이 아닌 실제 분할 지점. */
+  startSec: number;
+  endSec: number;
+};
+
+/**
+ * 원본을 청크로 자르고 각 청크의 원본 기준 시작 시각을 함께 돌려준다.
+ * 길이를 누적하면 인코딩 패딩이 쌓여 뒤로 갈수록 싱크가 밀린다.
+ */
 function prepareChunks(
   audioPath: string,
   workDir: string,
   chunkSec: number,
-): string[] {
+): AudioChunk[] {
   mkdirSync(workDir, { recursive: true });
   for (const f of readdirSync(workDir)) {
-    if (f.endsWith(".mp3")) {
+    if (f.endsWith(".mp3") || f.endsWith(".csv")) {
       rmSync(join(workDir, f), { force: true });
     }
   }
 
+  const listPath = join(workDir, "segments.csv");
   execFileSync(
     "ffmpeg",
     [
@@ -113,6 +125,10 @@ function prepareChunks(
       "segment",
       "-segment_time",
       String(chunkSec),
+      "-segment_list",
+      listPath,
+      "-segment_list_type",
+      "csv",
       "-c:a",
       "libmp3lame",
       "-q:a",
@@ -124,10 +140,35 @@ function prepareChunks(
     { stdio: "pipe" },
   );
 
-  return readdirSync(workDir)
+  const files = readdirSync(workDir)
     .filter((f) => f.startsWith("part_") && f.endsWith(".mp3"))
-    .sort()
-    .map((f) => join(workDir, f));
+    .sort();
+
+  const byName = new Map<string, { startSec: number; endSec: number }>();
+  if (existsSync(listPath)) {
+    for (const line of readFileSync(listPath, "utf8").split("\n")) {
+      const [name, start, end] = line.trim().split(",");
+      if (!name || start === undefined || end === undefined) continue;
+      const s = Number(start);
+      const e = Number(end);
+      if (!Number.isFinite(s) || !Number.isFinite(e)) continue;
+      byName.set(name.split("/").pop() || name, { startSec: s, endSec: e });
+    }
+  }
+
+  let fallbackStart = 0;
+  return files.map((f, i) => {
+    const path = join(workDir, f);
+    const known = byName.get(f);
+    if (known) {
+      return { path, startSec: known.startSec, endSec: known.endSec };
+    }
+    // segment_list 실패 시에만 목표 분할 길이로 추정
+    const startSec = i === 0 ? 0 : fallbackStart;
+    const endSec = startSec + chunkSec;
+    fallbackStart = endSec;
+    return { path, startSec, endSec };
+  });
 }
 
 function parseVerboseSegments(
@@ -310,12 +351,12 @@ export async function chunkedTranscribe(params: {
   let totalTokens = 0;
   let hadTokenUsage = false;
   let timingAudioSec = 0;
-  let offsetSec = 0;
 
   for (let i = 0; i < chunks.length; i++) {
-    const chunkPath = chunks[i]!;
-    const bytes = readFileSync(chunkPath);
-    const chunkDur = probeDurationSec(chunkPath);
+    const chunk = chunks[i]!;
+    const bytes = readFileSync(chunk.path);
+    const chunkDur = Math.max(0, chunk.endSec - chunk.startSec);
+    const offsetSec = chunk.startSec;
     const prompt =
       i === 0
         ? "회의 녹음 시작 구간이다. 처음부터 끝까지 빠짐없이 전사하라. 요약·생략 금지."
@@ -372,7 +413,6 @@ export async function chunkedTranscribe(params: {
     }
 
     timedSegments.push(...chunkTimed);
-    offsetSec += chunkDur;
   }
 
   report({
@@ -397,7 +437,8 @@ export async function chunkedTranscribe(params: {
           timingAudioSec > 0 ? timingAudioSec : durationSec,
         );
 
-  let estimatedUsd = (tokenUsd != null && tokenUsd > 0 ? tokenUsd : minuteUsd) + timingUsd;
+  const estimatedUsd =
+    (tokenUsd != null && tokenUsd > 0 ? tokenUsd : minuteUsd) + timingUsd;
   let billSource: SttUsageTotals["billSource"] = "audio_minutes";
   if (tokenUsd != null && tokenUsd > 0) {
     billSource = timingUsd > 0 ? "mixed" : "tokens";

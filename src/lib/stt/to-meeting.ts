@@ -71,6 +71,16 @@ function buildTimelineFromSemantic(
     kind: t.kind,
   }));
 
+  // 대화기록은 이미 실측 시각으로 정렬돼 있다. 구간 경계도 같은 기준을 써야
+  // 대화 줄과 구간이 서로 어긋나지 않는다.
+  if (sem.dialogue.length > 0) {
+    return mapTimelineByDialogue({
+      items: mappedItems,
+      dialogue: sem.dialogue,
+      durationSec,
+    });
+  }
+
   if (timedSegments && timedSegments.length > 0) {
     return mapTimelineByTimedSegments({
       items: mappedItems,

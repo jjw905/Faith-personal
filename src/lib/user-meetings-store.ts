@@ -46,8 +46,15 @@ function ensureRoot() {
   mkdirSync(ROOT, { recursive: true });
 }
 
+/** 회의 id는 파일 경로가 되므로 영문, 숫자, -, _ 만 허용한다. */
+function safeMeetingId(id: string) {
+  return /^[A-Za-z0-9_-]{1,128}$/.test(id) ? id : null;
+}
+
 function pathFor(id: string) {
-  return join(ROOT, `${id}.json`);
+  const safe = safeMeetingId(id);
+  if (!safe) throw new Error("잘못된 회의 id입니다.");
+  return join(ROOT, `${safe}.json`);
 }
 
 export function saveUserMeeting(record: UserMeetingRecord) {
@@ -56,6 +63,7 @@ export function saveUserMeeting(record: UserMeetingRecord) {
 }
 
 export function getUserMeeting(id: string): UserMeetingRecord | null {
+  if (!safeMeetingId(id)) return null;
   const p = pathFor(id);
   if (!existsSync(p)) return null;
   try {
@@ -120,6 +128,7 @@ export function setMeetingProgress(
 }
 
 export function deleteUserMeeting(id: string): boolean {
+  if (!safeMeetingId(id)) return false;
   const p = pathFor(id);
   if (!existsSync(p)) return false;
   try {
@@ -131,7 +140,9 @@ export function deleteUserMeeting(id: string): boolean {
 }
 
 export function workDirForMeeting(meetingId: string) {
-  const dir = join(process.cwd(), ".data", "stt-work", meetingId);
+  const safe = safeMeetingId(meetingId);
+  if (!safe) throw new Error("잘못된 회의 id입니다.");
+  const dir = join(process.cwd(), ".data", "stt-work", safe);
   mkdirSync(dir, { recursive: true });
   return dir;
 }

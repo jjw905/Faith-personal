@@ -147,19 +147,33 @@ async function transcribe(
     >[0]);
     const anyRes = res as {
       text?: string;
-      segments?: Array<{ speaker?: string; text?: string }>;
+      segments?: Array<{
+        speaker?: string;
+        text?: string;
+        start?: number;
+        end?: number;
+      }>;
     };
+    const {
+      formatDiarizedTimedLine,
+      parseDiarizedApiSegments,
+    } = await import("../src/lib/diarize-meeting");
+    const parsed = parseDiarizedApiSegments(anyRes.segments ?? []);
+    const timedCount = parsed.filter(
+      (s) => typeof s.startSec === "number" && typeof s.endSec === "number",
+    ).length;
+    if (parsed.length > 0 && timedCount === 0) {
+      throw new Error(
+        "diarized_json segments에 start/end가 없습니다. 싱크 저장을 중단합니다.",
+      );
+    }
     const fromSeg =
-      anyRes.segments
-        ?.map((s) => {
-          const sp = s.speaker ? `[${s.speaker}] ` : "";
-          return `${sp}${s.text || ""}`.trim();
-        })
-        .filter(Boolean)
-        .join("\n") || "";
+      parsed.map((s) => formatDiarizedTimedLine(s)).join("\n") || "";
     return {
       text: anyRes.text || fromSeg,
       diarized: fromSeg || anyRes.text || "",
+      segments: anyRes.segments ?? [],
+      parsedSegments: parsed,
       segmentCount: anyRes.segments?.length ?? 0,
     };
   }
@@ -171,6 +185,18 @@ async function transcribe(
   return {
     text: res.text || "",
     diarized: "",
+    segments: [] as Array<{
+      speaker?: string;
+      text?: string;
+      start?: number;
+      end?: number;
+    }>,
+    parsedSegments: [] as Array<{
+      speaker: string;
+      text: string;
+      startSec?: number;
+      endSec?: number;
+    }>,
     segmentCount: 0,
   };
 }
@@ -241,6 +267,21 @@ async function main() {
         writeFileSync(
           join(OUT, `${sample.id}__${model}__diarized.txt`),
           stt.diarized,
+          "utf8",
+        );
+        writeFileSync(
+          join(OUT, `${sample.id}__${model}__diarized.json`),
+          JSON.stringify(
+            {
+              model,
+              sampleId: sample.id,
+              segmentCount: stt.segmentCount,
+              segments: stt.segments,
+              parsedSegments: stt.parsedSegments,
+            },
+            null,
+            2,
+          ),
           "utf8",
         );
       }

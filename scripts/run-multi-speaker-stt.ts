@@ -141,11 +141,36 @@ async function runUploadModel(
       const diarized =
         anyRes.segments
           ?.map((s) => {
-            const sp = s.speaker ? `[${s.speaker}] ` : "";
-            return `${sp}${(s.text || "").trim()}`.trim();
+            const sp = (s.speaker || "A").trim() || "A";
+            const text = (s.text || "").trim();
+            if (!text) return "";
+            if (
+              typeof s.start === "number" &&
+              Number.isFinite(s.start) &&
+              typeof s.end === "number" &&
+              Number.isFinite(s.end)
+            ) {
+              return `[${sp}][${s.start.toFixed(3)}-${s.end.toFixed(3)}] ${text}`;
+            }
+            return `[${sp}] ${text}`;
           })
           .filter(Boolean)
           .join("\n") || "";
+      const missingTimes = (anyRes.segments || []).some((s) => {
+        const text = (s.text || "").trim();
+        if (!text) return false;
+        return !(
+          typeof s.start === "number" &&
+          Number.isFinite(s.start) &&
+          typeof s.end === "number" &&
+          Number.isFinite(s.end)
+        );
+      });
+      if ((anyRes.segments?.length ?? 0) > 0 && missingTimes) {
+        throw new Error(
+          "diarized_json segments에 start/end가 없습니다. 싱크 저장을 중단합니다.",
+        );
+      }
       const text = (anyRes.text || diarized).trim();
       const speakers = new Set(
         (anyRes.segments || [])

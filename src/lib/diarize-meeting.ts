@@ -6,7 +6,7 @@ import type { MeetingTranscript, TranscriptLine } from "@/types/transcript";
 export type DiarizeSegment = {
   speaker: string;
   text: string;
-  /** 초. 없으면 텍스트 비중으로 추정 */
+  /** 초. 실측(또는 정렬) 시각. 추정 금지 경로에서는 필수. */
   startSec?: number;
   endSec?: number;
 };
@@ -18,13 +18,20 @@ export type DiarizeMeetingInput = {
   summaryTags?: string[];
   daysAgo?: number;
   time?: string;
-  /** 전체 길이(초). start/end 없는 구간 추정용 */
+  /** 전체 길이(초) */
   durationSec: number;
   workspace?: Meeting["workspace"];
   security?: Meeting["security"];
   /** 모델이 준 구간. 화자 매핑하지 않음 */
   segments: DiarizeSegment[];
   overallSummary?: string;
+  /** `.data/stt-bench` 상대 파일명 또는 `/samples/...` */
+  replayAudio?: string;
+  /**
+   * true면 start/end 없는 구간을 글자 수로 추정(싱크 깨짐).
+   * 상품·시드는 false(기본).
+   */
+  allowEstimateTimes?: boolean;
   /** 화자별 한 줄 요약·태그. name은 표시명(화자 A) */
   speakerContributions?: Array<{
     name: string;
@@ -76,17 +83,33 @@ export function formatDurationLabel(durationSec: number): string {
   return `${m}분 ${sec}초`;
 }
 
-/** `[A] text` 줄 파싱. 모델이 준 라벨만 사용. */
+/** `[A] text` 또는 `[A][12.3-15.1] text` 줄 파싱. */
 export function parseDiarizedText(raw: string): DiarizeSegment[] {
   const out: DiarizeSegment[] = [];
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    const timed = trimmed.match(
+      /^\[([^\]]+)\]\[(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)\]\s*(.*)$/,
+    );
+    if (timed) {
+      const text = (timed[4] || "").trim();
+      if (!text) continue;
+      const startSec = Number(timed[2]);
+      const endSec = Number(timed[3]);
+      out.push({
+        speaker: timed[1]!.trim(),
+        text,
+        startSec: Number.isFinite(startSec) ? startSec : undefined,
+        endSec: Number.isFinite(endSec) ? endSec : undefined,
+      });
+      continue;
+    }
     const m = trimmed.match(/^\[([^\]]+)\]\s*(.*)$/);
     if (m) {
       const text = (m[2] || "").trim();
       if (!text) continue;
-      out.push({ speaker: m[1].trim(), text });
+      out.push({ speaker: m[1]!.trim(), text });
       continue;
     }
     out.push({ speaker: "A", text: trimmed });
@@ -94,9 +117,52 @@ export function parseDiarizedText(raw: string): DiarizeSegment[] {
   return out;
 }
 
-function withEstimatedTimes(
+/** OpenAI diarized_json segments → DiarizeSegment (start/end 유지). */
+export function parseDiarizedApiSegments(
+  segments: Array<{
+    speaker?: string;
+    text?: string;
+    start?: number;
+    end?: number;
+  }>,
+): DiarizeSegment[] {
+  const out: DiarizeSegment[] = [];
+  for (const s of segments) {
+    const text = (s.text || "").trim();
+    if (!text) continue;
+    const startSec = Number(s.start);
+    const endSec = Number(s.end);
+    out.push({
+      speaker: (s.speaker || "A").trim() || "A",
+      text,
+      startSec: Number.isFinite(startSec) ? Math.max(0, startSec) : undefined,
+      endSec:
+        Number.isFinite(endSec) && Number.isFinite(startSec)
+          ? Math.max(startSec, endSec)
+          : undefined,
+    });
+  }
+  return out;
+}
+
+/** 실측 시각 포함 diarized 텍스트 한 줄. */
+export function formatDiarizedTimedLine(seg: DiarizeSegment): string {
+  const sp = seg.speaker.trim() || "A";
+  if (
+    typeof seg.startSec === "number" &&
+    Number.isFinite(seg.startSec) &&
+    typeof seg.endSec === "number" &&
+    Number.isFinite(seg.endSec)
+  ) {
+    return `[${sp}][${seg.startSec.toFixed(3)}-${seg.endSec.toFixed(3)}] ${seg.text}`;
+  }
+  return `[${sp}] ${seg.text}`;
+}
+
+function resolveSegmentTimes(
   segments: DiarizeSegment[],
   durationSec: number,
+  allowEstimateTimes: boolean,
 ): Array<DiarizeSegment & { startSec: number; endSec: number }> {
   const hasAll = segments.every(
     (s) => typeof s.startSec === "number" && typeof s.endSec === "number",
@@ -109,11 +175,17 @@ function withEstimatedTimes(
     }));
   }
 
+  if (!allowEstimateTimes) {
+    throw new Error(
+      "화자분리 구간에 실측 start/end가 없습니다. diarized_json·timed-segments로 시각을 넣은 뒤 다시 시도하세요.",
+    );
+  }
+
   const weights = segments.map((s) => Math.max(1, s.text.length));
   const total = weights.reduce((a, b) => a + b, 0);
   let cursor = 0;
   return segments.map((s, i) => {
-    const span = (weights[i] / total) * durationSec;
+    const span = (weights[i]! / total) * durationSec;
     const startSec = cursor;
     const endSec = i === segments.length - 1 ? durationSec : cursor + span;
     cursor = endSec;
@@ -211,13 +283,18 @@ function buildTimelineSegments(
 /**
  * AI diarize 결과를 회의 UI 데이터로 변환.
  * 화자 이름 추론 없음. 모델 라벨만 표시.
+ * 기본은 실측 시각 필수(글자 수 추정으로 싱크를 깨지 않음).
  */
 export function buildMeetingFromDiarize(input: DiarizeMeetingInput): {
   meeting: Omit<Meeting, "date"> & { daysAgo: number; time: string };
   transcript: MeetingTranscript;
   timeline: MeetingTimeline;
 } {
-  const timed = withEstimatedTimes(input.segments, input.durationSec);
+  const timed = resolveSegmentTimes(
+    input.segments,
+    input.durationSec,
+    input.allowEstimateTimes === true,
+  );
   const order: string[] = [];
   const seen = new Set<string>();
   for (const s of timed) {
@@ -263,6 +340,8 @@ export function buildMeetingFromDiarize(input: DiarizeMeetingInput): {
       status: "completed",
       security: input.security ?? "protected",
       workspace: input.workspace ?? "personal",
+      capture: "upload",
+      replayAudio: input.replayAudio,
     },
     transcript: {
       meetingId: input.meetingId,

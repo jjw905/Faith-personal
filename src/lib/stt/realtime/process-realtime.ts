@@ -78,6 +78,11 @@ export async function processRealtimeMeeting(params: {
   if (!stt.text.trim()) {
     throw new Error("실시간 전사가 비어 있습니다.");
   }
+  if (!stt.utterances.length) {
+    throw new Error(
+      "실시간 STT 발화 시각이 비어 있습니다. 싱크를 맞출 수 없어 중단합니다.",
+    );
+  }
 
   if (params.logUsage !== false) {
     appendAiUsage({
@@ -115,14 +120,15 @@ export async function processRealtimeMeeting(params: {
     stt.durationSec,
   );
 
+  const timedSegments = speakerUtterances.map((utterance, index) => ({
+    startSec: utterance.startSec,
+    endSec: speakerUtterances[index + 1]?.startSec ?? stt.durationSec,
+    text: utterance.text,
+  }));
+
   structure.dialogue = alignDialogueToTimedSegments(
     structure.dialogue,
-    speakerUtterances.map((utterance, index) => ({
-      startSec: utterance.startSec,
-      endSec:
-        speakerUtterances[index + 1]?.startSec ?? stt.durationSec,
-      text: utterance.text,
-    })),
+    timedSegments,
     stt.durationSec,
   );
 
@@ -152,6 +158,7 @@ export async function processRealtimeMeeting(params: {
     durationSec: stt.durationSec,
     rawText: stt.text,
     semantic: structure,
+    timedSegments,
     capture: "live",
   });
 
