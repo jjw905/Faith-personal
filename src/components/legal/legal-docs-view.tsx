@@ -20,6 +20,7 @@ import {
 import {
   DocsDesktopToc,
   DocsMobileTocRail,
+  DocsTocLink,
 } from "@/components/docs/docs-mobile-toc-rail";
 import { DocsSearchInput } from "@/components/docs/docs-search-input";
 import { Container } from "@/components/marketing/container";
@@ -31,10 +32,12 @@ import {
   type LegalDoc,
   type LegalSection,
 } from "@/lib/legal";
+import { scrollElementToCenter } from "@/lib/scroll-in-container";
 import {
-  getScrollParent,
-  scrollElementToCenter,
-} from "@/lib/scroll-in-container";
+  notifyDocsSectionScroll,
+  suspendDocsSectionSpy,
+  useDocsSectionSpy,
+} from "@/lib/docs-section-spy";
 import { cn } from "@/lib/utils";
 
 function SectionBlock({
@@ -101,6 +104,18 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
 
   const results = useMemo(() => searchLegalSections(doc, query), [doc, query]);
   const searching = query.trim().length > 0;
+  const visibleSections = searching ? results : sections;
+  const sectionIds = useMemo(
+    () => visibleSections.map((s) => s.id),
+    [visibleSections],
+  );
+
+  useDocsSectionSpy(
+    sectionIds,
+    setActiveId,
+    sectionIds.length > 0,
+    scrollRef,
+  );
 
   function goBack() {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -114,6 +129,7 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
     const el = document.getElementById(id);
     if (!el) return;
 
+    suspendDocsSectionSpy(750);
     setActiveId(id);
     scrollElementToCenter(el);
     window.history.replaceState(null, "", `#${id}`);
@@ -159,42 +175,10 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
     return () => window.clearTimeout(id);
   }, [doc, focusSection, router, sections]);
 
-  useEffect(() => {
-    if (searching) return;
-
-    const nodes = sections
-      .map((section) => document.getElementById(section.id))
-      .filter((node): node is HTMLElement => Boolean(node));
-    if (nodes.length === 0) return;
-
-    const scrollRoot =
-      getScrollParent(nodes[0]!) ?? scrollRef.current ?? undefined;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort(
-            (a, b) =>
-              (a.boundingClientRect.top ?? 0) - (b.boundingClientRect.top ?? 0),
-          );
-        const top = visible[0]?.target.id;
-        if (top) setActiveId(top);
-      },
-      {
-        root: scrollRoot ?? null,
-        rootMargin: "-35% 0px -35% 0px",
-        threshold: [0, 1],
-      },
-    );
-
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [searching, sections]);
-
   return (
     <div className="flex h-dvh flex-col bg-background">
       <header className="shrink-0 border-b border-border/40">
-        <Container className="flex h-16 items-center sm:h-[4.5rem]">
+        <Container className="flex h-16 items-center">
           <Link
             href="/"
             className="text-xl font-bold tracking-tight text-foreground"
@@ -207,7 +191,10 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-y-auto"
-        onScroll={syncFloatChrome}
+        onScroll={() => {
+          syncFloatChrome();
+          notifyDocsSectionScroll();
+        }}
       >
         <main className="py-10 sm:py-14">
           <Container>
@@ -293,19 +280,13 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
                       </p>
                     ) : (
                       (searching ? results : sections).map((section) => (
-                        <a
+                        <DocsTocLink
                           key={section.id}
-                          href={`#${section.id}`}
-                          onClick={(e) => onNavClick(e, section.id)}
-                          className={cn(
-                            "block rounded-lg px-2 py-1.5 text-base transition-colors",
-                            activeId === section.id
-                              ? "font-semibold text-foreground"
-                              : "font-medium text-muted hover:text-foreground",
-                          )}
-                        >
-                          {section.title}
-                        </a>
+                          id={section.id}
+                          title={section.title}
+                          active={activeId === section.id}
+                          onNavClick={onNavClick}
+                        />
                       ))
                     )}
                   </div>

@@ -35,7 +35,6 @@ import {
 } from "@/components/design/scenes/meeting-process-scenes";
 import {
   SceneAttachMenuPopup,
-  SceneContactInquiryDialog,
   SceneParticipantsPopup,
   SceneResetConfirmDialog,
   SceneSortControl,
@@ -235,13 +234,6 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         route: "실시간 기록",
         kind: "popup",
         Preview: SceneResetConfirmDialog,
-      },
-      {
-        id: "contact-inquiry",
-        label: "문의",
-        route: "마케팅",
-        kind: "popup",
-        Preview: SceneContactInquiryDialog,
       },
       {
         id: "user-menu",

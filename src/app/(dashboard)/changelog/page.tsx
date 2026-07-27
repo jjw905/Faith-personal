@@ -18,7 +18,7 @@ export default function ChangelogPage() {
         : CHANGELOG;
 
   return (
-    <PageContainer>
+    <PageContainer className="bg-background">
       <div className="mx-auto w-full max-w-3xl">
         <header className="mb-5 sm:mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">

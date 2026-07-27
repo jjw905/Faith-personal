@@ -54,6 +54,7 @@ export function scrollElementToCenter(el: HTMLElement, durationMs = 480) {
   const step = (now: number) => {
     const progress = Math.min((now - startTime) / duration, 1);
     root.scrollTop = start + distance * easeOutCubic(progress);
+    root.dispatchEvent(new Event("scroll"));
     if (progress < 1) {
       activeScroll = window.requestAnimationFrame(step);
     } else {

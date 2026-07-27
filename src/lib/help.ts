@@ -205,7 +205,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
   {
     id: "contact",
     title: "문의",
-    summary: "메일 보내기를 누르면 기본 메일 앱이 열립니다.",
+    summary: "아래 이메일로 연락해 주세요.",
     body: [],
   },
 ];

@@ -5,7 +5,6 @@ import { useState } from "react";
 import { ParticipantsPopup, SortControl } from "@/components/dashboard/recent-meetings-table";
 import { FIXTURE_PARTICIPANTS } from "@/components/design/fixtures";
 import { UserProfile } from "@/components/layout/user-profile";
-import { ContactInquiryDialog } from "@/components/marketing/contact-inquiry-dialog";
 import {
   AttachMenuPopup,
   ResetConfirmDialog,
@@ -106,24 +105,6 @@ export function SceneResetConfirmDialog() {
         contained
         onCancel={() => setOpen(false)}
         onConfirm={() => setOpen(false)}
-      />
-    </PreviewStage>
-  );
-}
-
-/** 마케팅: 문의 팝업 */
-export function SceneContactInquiryDialog() {
-  const [open, setOpen] = useState(true);
-  return (
-    <PreviewStage
-      hint="푸터·문의 CTA에서."
-      open={open}
-      onReopen={() => setOpen(true)}
-    >
-      <ContactInquiryDialog
-        open={open}
-        contained
-        onClose={() => setOpen(false)}
       />
     </PreviewStage>
   );

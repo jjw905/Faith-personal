@@ -20,6 +20,7 @@ import {
 import {
   DocsDesktopToc,
   DocsMobileTocRail,
+  DocsTocLink,
 } from "@/components/docs/docs-mobile-toc-rail";
 import { DocsSearchInput } from "@/components/docs/docs-search-input";
 import { ContactMailPanel } from "@/components/help/contact-mail-panel";
@@ -31,10 +32,11 @@ import {
   searchHelpArticles,
   type HelpArticle,
 } from "@/lib/help";
+import { scrollElementToCenter } from "@/lib/scroll-in-container";
 import {
-  getScrollParent,
-  scrollElementToCenter,
-} from "@/lib/scroll-in-container";
+  suspendDocsSectionSpy,
+  useDocsSectionSpy,
+} from "@/lib/docs-section-spy";
 import { cn } from "@/lib/utils";
 
 function ArticleBlock({
@@ -93,6 +95,13 @@ export default function HelpPage() {
     [query, scenarioId],
   );
   const searching = query.trim().length > 0;
+  const visibleArticles = searching ? results : articles;
+  const sectionIds = useMemo(
+    () => visibleArticles.map((a) => a.id),
+    [visibleArticles],
+  );
+
+  useDocsSectionSpy(sectionIds, setActiveId, sectionIds.length > 0);
 
   function goBack() {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -106,6 +115,7 @@ export default function HelpPage() {
     const el = document.getElementById(id);
     if (!el) return;
 
+    suspendDocsSectionSpy(750);
     setActiveId(id);
     scrollElementToCenter(el);
     window.history.replaceState(null, "", `#${id}`);
@@ -146,40 +156,8 @@ export default function HelpPage() {
     return () => window.clearTimeout(id);
   }, [focusArticle]);
 
-  useEffect(() => {
-    if (searching) return;
-
-    const nodes = articles
-      .map((article) => document.getElementById(article.id))
-      .filter((node): node is HTMLElement => Boolean(node));
-
-    if (nodes.length === 0) return;
-
-    const scrollRoot = getScrollParent(nodes[0]!);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort(
-            (a, b) =>
-              (a.boundingClientRect.top ?? 0) - (b.boundingClientRect.top ?? 0),
-          );
-        const top = visible[0]?.target.id;
-        if (top) setActiveId(top);
-      },
-      {
-        root: scrollRoot,
-        rootMargin: "-35% 0px -35% 0px",
-        threshold: [0, 1],
-      },
-    );
-
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [searching, articles]);
-
   return (
-    <PageContainer>
+    <PageContainer className="bg-background">
       <div ref={pageRef} className="relative mx-auto w-full max-w-5xl">
         <div ref={chromeRef} className="mb-5 sm:mb-6">
           <div className="mb-4">
@@ -256,14 +234,13 @@ export default function HelpPage() {
                   </p>
                 ) : (
                   results.map((article) => (
-                    <a
+                    <DocsTocLink
                       key={article.id}
-                      href={`#${article.id}`}
-                      onClick={(e) => onNavClick(e, article.id)}
-                      className="block rounded-lg px-2 py-1.5 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
-                    >
-                      {article.title}
-                    </a>
+                      id={article.id}
+                      title={article.title}
+                      active={activeId === article.id}
+                      onNavClick={onNavClick}
+                    />
                   ))
                 )}
               </div>
@@ -277,18 +254,12 @@ export default function HelpPage() {
                     <ul className="mt-1.5 space-y-0.5">
                       {group.items.map((item) => (
                         <li key={item.id}>
-                          <a
-                            href={`#${item.id}`}
-                            onClick={(e) => onNavClick(e, item.id)}
-                            className={cn(
-                              "block rounded-lg px-2 py-1.5 text-base transition-colors",
-                              activeId === item.id
-                                ? "font-medium text-foreground"
-                                : "text-muted hover:text-foreground",
-                            )}
-                          >
-                            {item.title}
-                          </a>
+                          <DocsTocLink
+                            id={item.id}
+                            title={item.title}
+                            active={activeId === item.id}
+                            onNavClick={onNavClick}
+                          />
                         </li>
                       ))}
                     </ul>

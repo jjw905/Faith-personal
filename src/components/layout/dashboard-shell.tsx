@@ -12,6 +12,7 @@ import {
 } from "@/context/meeting-chrome-context";
 import { PageUxPreviewProvider } from "@/context/page-ux-preview-context";
 import { TeamRolePreviewProvider } from "@/context/team-role-preview-context";
+import { notifyDocsSectionScroll } from "@/lib/docs-section-spy";
 import { cn } from "@/lib/utils";
 
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const closeMobile = useCallback(() => setMobileOpen(false), []);
   const hideChrome = focusMode || pathname === "/help";
   const sidebarOpen = hideChrome ? false : mobileOpen;
+  const lightCanvas =
+    pathname === "/help" ||
+    pathname === "/changelog" ||
+    pathname.startsWith("/changelog/");
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -61,7 +66,13 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         </>
       ) : null}
 
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+      <div
+        className={cn(
+          "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto",
+          lightCanvas && "bg-background",
+        )}
+        onScroll={notifyDocsSectionScroll}
+      >
         {!hideChrome ? (
           <AppHeader onMenuClick={() => setMobileOpen(true)} />
         ) : null}

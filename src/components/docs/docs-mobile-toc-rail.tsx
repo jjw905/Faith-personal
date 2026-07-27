@@ -3,7 +3,7 @@
 import {
   useEffect,
   useRef,
-  useState,
+  useSyncExternalStore,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -14,9 +14,11 @@ import { cn } from "@/lib/utils";
 type TocItem = { id: string; title: string };
 
 function useMounted() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  return mounted;
+  return useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 }
 
 /** 모바일: 화면 하단보다 조금 위에 고정, 가로 스크롤 목차. */
@@ -78,11 +80,12 @@ export function DocsMobileTocRail({
                 data-toc-id={item.id}
                 onClick={(e) => onNavClick(e, item.id)}
                 className={cn(
-                  "block shrink-0 whitespace-nowrap rounded-full border px-3 py-2 text-base transition-colors",
+                  "block shrink-0 whitespace-nowrap rounded-full border px-3 py-2 text-base transition-[color,background-color,box-shadow,scale] duration-200 ease-out",
                   // MD3 FilterChip: selected = surface/card, unselected = surfaceVariant
+                  // 크기 변화는 scale만 (font-size 전환 시 떨림 방지)
                   activeId === item.id
-                    ? "border-border bg-card font-semibold text-foreground shadow-sm"
-                    : "border-border bg-surface font-medium text-muted hover:text-foreground",
+                    ? "scale-105 border-border bg-card font-semibold text-foreground shadow-sm"
+                    : "scale-100 border-border bg-surface font-medium text-muted hover:text-foreground",
                 )}
               >
                 {item.title}
@@ -93,6 +96,36 @@ export function DocsMobileTocRail({
       </div>
     </nav>,
     document.body,
+  );
+}
+
+/** 데스크톱 사이드 목차 링크 (스크롤 추적 활성 강조). */
+export function DocsTocLink({
+  id,
+  title,
+  active,
+  onNavClick,
+}: {
+  id: string;
+  title: string;
+  active: boolean;
+  onNavClick: (e: MouseEvent<HTMLAnchorElement>, id: string) => void;
+}) {
+  return (
+    <a
+      href={`#${id}`}
+      onClick={(e) => onNavClick(e, id)}
+      aria-current={active ? "true" : undefined}
+      className={cn(
+        // font-size는 보간 시 레이아웃 떨림 → 고정 크기 + scale/color만 전환
+        "block origin-left rounded-lg px-2 py-1.5 text-base transition-[color,scale] duration-200 ease-out",
+        active
+          ? "scale-105 font-semibold text-foreground"
+          : "scale-100 font-medium text-muted hover:text-foreground",
+      )}
+    >
+      {title}
+    </a>
   );
 }
 
