@@ -104,7 +104,21 @@ export const TEAM_NAV_ITEMS: TeamNavItem[] = [
   },
 ];
 
-/** 관리자만 사이드바 개발전용에 노출. 공통 메뉴와 화면/경로를 섞지 않음. */
+/** 관리자만 사이드바 운영 메뉴에 노출. 계정·사용량 등. */
+export const OPS_NAV_ITEMS: NavItem[] = [
+  {
+    title: "사용자 관리",
+    href: "/users",
+    icon: UserCog,
+  },
+  {
+    title: "AI 사용량",
+    href: "/ai-usage",
+    icon: Gauge,
+  },
+];
+
+/** 관리자만 사이드바 개발자 메뉴에 노출. 공통 메뉴와 화면/경로를 섞지 않음. */
 export const DEV_NAV_ITEMS: NavItem[] = [
   {
     title: "Changelog",
@@ -112,19 +126,9 @@ export const DEV_NAV_ITEMS: NavItem[] = [
     icon: History,
   },
   {
-    title: "AI 사용량",
-    href: "/ai-usage",
-    icon: Gauge,
-  },
-  {
     title: "디자인",
     href: "/design",
     icon: Palette,
-  },
-  {
-    title: "사용자 관리",
-    href: "/users",
-    icon: UserCog,
   },
   {
     title: "개인정보 마스킹",
@@ -167,6 +171,10 @@ export const PAGE_TITLES: Record<
     title: "팀",
     description: "팀 회의, 공지, 기록을 확인합니다.",
   },
+  "/ai-usage": {
+    title: "AI 사용량",
+    description: "받아쓰기, 정리 비용과 토큰을 확인합니다.",
+  },
   "/users": {
     title: "사용자 관리",
     description: "서비스를 이용하는 계정, 역할, 활성 상태를 관리합니다.",
@@ -194,10 +202,6 @@ export const PAGE_TITLES: Record<
   "/design": {
     title: "디자인",
     description: "개발전용, 트리거·조건부 UI를 재현합니다.",
-  },
-  "/ai-usage": {
-    title: "AI 사용량",
-    description: "개발전용, 받아쓰기, 정리 비용과 토큰을 확인합니다.",
   },
   "/vault": {
     title: "보관함",

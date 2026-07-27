@@ -9,6 +9,7 @@ import type { Provider } from "next-auth/providers";
 import { cookies, headers } from "next/headers";
 
 import { isValidEmail } from "@/lib/auth-validation";
+import { expireManualOverridesForUser } from "@/lib/admin-expire";
 import { prisma } from "@/lib/prisma";
 import { platformAdminEmails } from "@/lib/platform-admin";
 import { verifyPassword } from "@/lib/password";
@@ -127,6 +128,7 @@ function oauthProviders(): Provider[] {
 }
 
 async function syncUserFromToken(userId: string) {
+  await expireManualOverridesForUser(userId);
   return prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -239,10 +241,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!user || !user.passwordHash) {
             throw new InvalidCredentials();
           }
-          if (user.disabled) {
+          await expireManualOverridesForUser(user.id);
+          const fresh = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              image: true,
+              role: true,
+              disabled: true,
+              passwordHash: true,
+            },
+          });
+          if (!fresh || !fresh.passwordHash) {
+            throw new InvalidCredentials();
+          }
+          if (fresh.disabled) {
             throw new DisabledCredentials();
           }
-          const ok = await verifyPassword(password, user.passwordHash);
+          const ok = await verifyPassword(password, fresh.passwordHash);
           if (!ok) {
             throw new InvalidCredentials();
           }
@@ -250,12 +268,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           resetRateLimit(`login:ip:${ip}`, `login:email:${email}`);
 
           return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            image: user.image,
-            role: user.role,
-            disabled: user.disabled,
+            id: fresh.id,
+            email: fresh.email,
+            name: fresh.name,
+            image: fresh.image,
+            role: fresh.role,
+            disabled: fresh.disabled,
           };
         } catch (err) {
           if (err instanceof CredentialsSignin) throw err;
@@ -320,10 +338,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             select: { disabled: true, email: true, role: true },
           });
           if (dbUser) {
-            if (dbUser.disabled) return false;
+            await expireManualOverridesForUser(user.id);
+            const fresh = await prisma.user.findUnique({
+              where: { id: user.id },
+              select: { disabled: true, email: true, role: true },
+            });
+            if (!fresh || fresh.disabled) return false;
 
-            const e = (user.email || dbUser.email || "").toLowerCase();
-            if (e && adminEmails().includes(e) && dbUser.role !== "ADMIN") {
+            const e = (user.email || fresh.email || "").toLowerCase();
+            if (e && adminEmails().includes(e) && fresh.role !== "ADMIN") {
               await prisma.user.update({
                 where: { id: user.id },
                 data: { role: "ADMIN" },

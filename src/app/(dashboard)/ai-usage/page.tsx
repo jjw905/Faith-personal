@@ -47,7 +47,7 @@ export default async function AiUsagePage() {
           </div>
           <div className="min-w-0">
             <p className="text-xs font-semibold tracking-wide text-muted-2">
-              개발전용
+              운영
             </p>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               AI 사용량

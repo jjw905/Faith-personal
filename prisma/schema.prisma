@@ -71,6 +71,10 @@ model User {
   role                      Role                @default(USER)
   plan                      Plan                @default(FREE)
   disabled                  Boolean             @default(false)
+  /** 수동 등급 변경 만료. 지나면 FREE로 복귀. */
+  planUntil                 DateTime?           @map("plan_until")
+  /** 정지 만료. 지나면 disabled=false. */
+  disabledUntil             DateTime?           @map("disabled_until")
   notificationRetentionDays Int                 @default(90) @map("notification_retention_days")
   accounts                  Account[]
   sessions                  Session[]
@@ -93,6 +97,8 @@ model User {
   notifications             Notification[]
   auditActions              TeamAuditLog[]      @relation("AuditActor")
   auditTargets              TeamAuditLog[]      @relation("AuditTarget")
+  adminAuditActions         AdminAuditLog[]     @relation("AdminAuditActor")
+  adminAuditTargets         AdminAuditLog[]     @relation("AdminAuditTarget")
   personalSettings          UserPersonalSettings?
   createdAt                 DateTime            @default(now()) @map("created_at")
   updatedAt                 DateTime            @updatedAt @map("updated_at")
@@ -348,6 +354,25 @@ model TeamAuditLog {
   @@index([teamId, createdAt])
   @@index([actorId, createdAt])
   @@map("team_audit_logs")
+}
+
+/** 관리자 오버라이드 감사. 앱에서 삭제·퍼지하지 않음. */
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?  @map("actor_id")
+  actor        User?    @relation("AdminAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  targetUserId String?  @map("target_user_id")
+  targetUser   User?    @relation("AdminAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  action       String
+  metadata     Json?
+  ip           String?
+  userAgent    String?  @map("user_agent") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@map("admin_audit_logs")
 }
 
 model VaultFile {

@@ -27,6 +27,7 @@ import {
   APP_NAME,
   DEV_NAV_ITEMS,
   NAV_ITEMS,
+  OPS_NAV_ITEMS,
   TEAM_NAV_ITEMS,
   type NavItem,
 } from "@/lib/constants";
@@ -76,7 +77,7 @@ function NavLink({
     <Link
       href={item.href}
       onClick={onNavigate}
-      title={collapsed ? item.title : undefined}
+      title={item.title}
       className={cn(
         "group flex cursor-pointer items-center gap-2.5 rounded-xl py-2.5 text-base font-medium outline-none transition-colors",
         "hover:bg-surface-2 hover:text-foreground",
@@ -92,7 +93,7 @@ function NavLink({
           active ? "text-primary" : "text-muted-2 group-hover:text-foreground",
         )}
       />
-      <span className={cn("flex-1 truncate", collapsed && "sr-only")}>
+      <span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>
         {item.title}
       </span>
       {!collapsed && item.badge ? (
@@ -565,7 +566,7 @@ export function AppSidebar({
 
         <nav
           className={cn(
-            "min-h-0 flex-1 overflow-y-auto py-2",
+            "min-h-0 flex-1 overflow-y-auto overscroll-y-contain py-2",
             rail ? "px-3 lg:px-2" : "px-3",
           )}
         >
@@ -592,27 +593,50 @@ export function AppSidebar({
           </div>
 
           {isAdmin ? (
-            <div className="mt-5">
-              <p
-                className={cn(
-                  "px-3 pb-1.5 text-sm font-semibold tracking-wide text-muted-2",
-                  rail && "lg:sr-only",
-                )}
-              >
-                개발전용
-              </p>
-              <div className="space-y-0.5">
-                {DEV_NAV_ITEMS.map((item) => (
-                  <NavLink
-                    key={item.href}
-                    item={item}
-                    active={isNavActive(pathname, item.href)}
-                    onNavigate={onMobileClose}
-                    collapsed={rail}
-                  />
-                ))}
+            <>
+              <div className="mt-5">
+                <p
+                  className={cn(
+                    "px-3 pb-1.5 text-sm font-semibold tracking-wide text-muted-2",
+                    rail && "lg:sr-only",
+                  )}
+                >
+                  운영
+                </p>
+                <div className="space-y-0.5">
+                  {OPS_NAV_ITEMS.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      item={item}
+                      active={isNavActive(pathname, item.href)}
+                      onNavigate={onMobileClose}
+                      collapsed={rail}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+              <div className="mt-5">
+                <p
+                  className={cn(
+                    "px-3 pb-1.5 text-sm font-semibold tracking-wide text-muted-2",
+                    rail && "lg:sr-only",
+                  )}
+                >
+                  개발자
+                </p>
+                <div className="space-y-0.5">
+                  {DEV_NAV_ITEMS.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      item={item}
+                      active={isNavActive(pathname, item.href)}
+                      onNavigate={onMobileClose}
+                      collapsed={rail}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
           ) : null}
         </nav>
 

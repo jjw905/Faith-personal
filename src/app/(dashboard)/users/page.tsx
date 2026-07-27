@@ -1,35 +1,40 @@
-import { UserCog } from "lucide-react";
-
 import { UsersAdminPanel } from "@/components/admin/users-admin-panel";
 import { PageContainer } from "@/components/layout/page-container";
-import { requireAdmin, listUsers } from "@/lib/admin";
+import { countUserStats, listUsersPage, requireAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
   const session = await requireAdmin();
-  const users = await listUsers();
+  const [pageResult, stats] = await Promise.all([
+    listUsersPage({ page: 1, pageSize: 9 }),
+    countUserStats(),
+  ]);
 
   return (
-    <PageContainer>
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="mb-4 flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
-            <UserCog className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">
-              사용자 관리
-            </h1>
-          </div>
-        </div>
+    <PageContainer className="bg-background pt-6 sm:pt-8">
+      <div className="mx-auto w-full max-w-6xl min-w-0">
+        <header className="mb-5 sm:mb-6">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-2xl">
+            사용자 관리
+          </h1>
+          <p className="mt-0.5 text-base text-muted">{stats.total}명 등록</p>
+        </header>
 
         <UsersAdminPanel
           currentUserId={session.user.id}
-          initialUsers={users.map((u) => ({
+          initialUsers={pageResult.users.map((u) => ({
             ...u,
             createdAt: u.createdAt.toISOString(),
+            planUntil: u.planUntil ? u.planUntil.toISOString() : null,
+            disabledUntil: u.disabledUntil
+              ? u.disabledUntil.toISOString()
+              : null,
           }))}
+          initialTotal={pageResult.total}
+          initialStats={stats}
+          initialPage={pageResult.page}
+          initialPageSize={pageResult.pageSize}
         />
       </div>
     </PageContainer>
