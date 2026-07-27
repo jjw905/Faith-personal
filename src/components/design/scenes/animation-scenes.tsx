@@ -9,6 +9,7 @@ import {
   RecordBeatBars,
 } from "@/components/meetings/new-meeting-session";
 import { Button } from "@/components/ui/button";
+import { LoadingMark } from "@/components/ui/loading-mark";
 import { maskPii } from "@/lib/masking";
 
 function ReplayStage({
@@ -101,6 +102,24 @@ export function SceneAnimRunningDots() {
         <div className="inline-flex items-center gap-2 rounded-2xl bg-card px-4 py-3 text-sm text-muted shadow-soft">
           <span>입력 중</span>
           <RunningDots />
+        </div>
+      )}
+    </ReplayStage>
+  );
+}
+
+/** faith-loading-ring — 목록·패널 불러오는 중 */
+export function SceneAnimLoadingMark() {
+  return (
+    <ReplayStage hint="불러오는 중. 얇은 링과 점.">
+      {() => (
+        <div className="flex flex-col items-center gap-6">
+          <div className="grid min-h-40 w-full max-w-md place-items-center rounded-3xl bg-card px-6 shadow-soft">
+            <LoadingMark />
+          </div>
+          <div className="rounded-full bg-card px-3 py-1.5 shadow-soft">
+            <LoadingMark size="sm" />
+          </div>
         </div>
       )}
     </ReplayStage>

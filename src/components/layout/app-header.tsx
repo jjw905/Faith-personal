@@ -42,7 +42,7 @@ export function AppHeader({ onMenuClick }: { onMenuClick?: () => void }) {
           <Button
             variant="ghost"
             size="icon"
-            className="mr-auto h-9 w-9 shrink-0 cursor-pointer hover:bg-surface-2 lg:hidden"
+            className="mr-auto h-12 w-12 shrink-0 cursor-pointer hover:bg-surface-2 lg:hidden"
             onClick={onMenuClick}
             aria-label="메뉴 열기"
           >
@@ -51,16 +51,16 @@ export function AppHeader({ onMenuClick }: { onMenuClick?: () => void }) {
 
           <Button
             type="button"
-            variant="ghost"
+            variant="default"
             size="icon"
-            className="relative h-11 w-11 shrink-0 cursor-pointer rounded-full border border-white bg-card text-foreground shadow-soft transition-colors hover:bg-surface hover:text-foreground [&_svg]:size-6"
+            className="relative h-12 w-12 shrink-0 cursor-pointer rounded-full shadow-soft hover:bg-primary-hover md:h-11 md:w-11 [&_svg]:size-6"
             aria-label="알림 센터"
             aria-expanded={notificationsOpen}
             onClick={() => setNotificationsOpen(true)}
           >
             <MaterialSymbol name="notifications" size={24} weight={400} />
             {notificationCount > 0 ? (
-              <Badge className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold">
+              <Badge className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full border-0 bg-card px-1 text-xs font-semibold text-primary shadow-soft ring-2 ring-primary">
                 N
               </Badge>
             ) : null}

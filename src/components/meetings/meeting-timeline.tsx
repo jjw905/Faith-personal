@@ -126,27 +126,27 @@ function SpeakerLines({
 
   if (!hasNotes) {
     return (
-      <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="발화자">
+      <ul className="mt-3 flex flex-wrap gap-2 md:gap-1.5" aria-label="발화자">
         {speakers.map((s) => (
           <li
             key={s.key}
-            className="inline-flex h-7 items-center gap-1.5 rounded-full bg-surface-2 py-0.5 pl-0.5 pr-2.5"
+            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-surface-2 py-1 pl-1 pr-3 md:h-7 md:min-h-0 md:gap-1.5 md:py-0.5 md:pl-0.5 md:pr-2.5"
           >
-            <Avatar className="h-6 w-6 shrink-0">
+            <Avatar className="h-8 w-8 shrink-0 md:h-6 md:w-6">
               <AvatarFallback
                 className={cn(
-                  "text-xs font-semibold leading-none text-white",
+                  "text-sm font-semibold leading-none text-white md:text-xs",
                   s.color,
                 )}
               >
                 {s.initials}
               </AvatarFallback>
             </Avatar>
-            <span className="max-w-[8rem] truncate text-xs font-semibold leading-4 text-foreground">
+            <span className="max-w-[8rem] truncate text-base font-semibold leading-5 text-foreground md:text-xs md:leading-4">
               {s.name}
             </span>
             {s.roleLabel ? (
-              <span className="shrink-0 text-xs font-medium leading-4 text-muted-2">
+              <span className="shrink-0 text-sm font-medium leading-4 text-muted-2 md:text-xs">
                 {s.roleLabel}
               </span>
             ) : null}
@@ -162,17 +162,17 @@ function SpeakerLines({
         const said = saidBy.get(s.name);
         return (
           <li key={s.key} className="flex min-w-0 items-start gap-2">
-            <Avatar className="mt-0.5 h-6 w-6 shrink-0">
+            <Avatar className="mt-0.5 h-8 w-8 shrink-0 md:h-6 md:w-6">
               <AvatarFallback
                 className={cn(
-                  "text-xs font-semibold leading-none text-white",
+                  "text-sm font-semibold leading-none text-white md:text-xs",
                   s.color,
                 )}
               >
                 {s.initials}
               </AvatarFallback>
             </Avatar>
-            <p className="min-w-0 text-sm leading-6">
+            <p className="min-w-0 text-base leading-6 md:text-sm">
               <span className="font-semibold text-foreground">{s.name}</span>
               {said ? (
                 <span className="text-muted"> {said}</span>
@@ -253,7 +253,7 @@ export function MeetingTimelineView({
   return (
     <section>
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <span className="shrink-0 text-xs font-medium text-muted-2">
+        <span className="shrink-0 text-base font-medium text-muted-2 md:text-xs">
           {searching || speakerFilter
             ? `${filtered.length}/${timeline.segments.length}`
             : timeline.durationLabel}
@@ -263,17 +263,17 @@ export function MeetingTimelineView({
           <button
             type="button"
             onClick={onClearSpeakerFilter}
-            className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-full bg-primary-soft px-2.5 text-xs font-semibold text-primary"
+            className="inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 text-base font-semibold text-primary md:h-7 md:min-h-0 md:gap-1 md:px-2.5 md:text-xs"
           >
             {speakerFilter}
-            <X className="h-3 w-3" strokeWidth={2} />
+            <X className="h-4 w-4 md:h-3 md:w-3" strokeWidth={2} />
           </button>
         ) : null}
 
-        <label className="ml-auto flex h-8 min-w-0 max-w-[11rem] flex-1 items-center rounded-lg bg-surface-2 px-2 sm:max-w-[13rem]">
+        <label className="ml-auto flex h-14 min-w-0 max-w-full flex-1 items-center rounded-xl bg-surface-2 px-3 sm:max-w-[13rem] md:h-8 md:max-w-[11rem] md:rounded-lg md:px-2">
           <span className="sr-only">타임라인 검색</span>
           <Search
-            className="h-3.5 w-3.5 shrink-0 text-foreground/50"
+            className="h-5 w-5 shrink-0 text-foreground/50 md:h-3.5 md:w-3.5"
             strokeWidth={1.75}
             aria-hidden
           />
@@ -282,7 +282,7 @@ export function MeetingTimelineView({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="검색"
-            className="min-w-0 flex-1 bg-transparent px-1.5 text-sm font-medium text-foreground outline-none placeholder:text-foreground/40 [&::-webkit-search-cancel-button]:hidden"
+            className="min-w-0 flex-1 bg-transparent px-2 text-base font-medium text-foreground outline-none placeholder:text-foreground/40 md:px-1.5 md:text-sm [&::-webkit-search-cancel-button]:hidden"
             autoComplete="off"
             enterKeyHint="search"
           />
@@ -290,17 +290,17 @@ export function MeetingTimelineView({
             <button
               type="button"
               onClick={() => setQuery("")}
-              className="inline-flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-foreground/50 hover:text-foreground"
+              className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-xl text-foreground/50 hover:text-foreground md:h-5 md:w-5 md:rounded"
               aria-label="검색어 지우기"
             >
-              <X className="h-3.5 w-3.5" strokeWidth={2} />
+              <X className="h-5 w-5 md:h-3.5 md:w-3.5" strokeWidth={2} />
             </button>
           ) : null}
         </label>
       </div>
 
       {filtered.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted">
+        <p className="py-10 text-center text-base text-muted md:text-sm">
           {speakerFilter
             ? `${speakerFilter}이(가) 표시된 구간이 없습니다.`
             : "검색 결과가 없습니다."}
@@ -321,7 +321,7 @@ export function MeetingTimelineView({
                 <div className="flex w-[3.75rem] shrink-0 justify-end pt-1.5 sm:w-[4.25rem]">
                   <time
                     dateTime={seg.start}
-                    className="text-sm font-bold tabular-nums tracking-tight text-foreground"
+                    className="text-base font-bold tabular-nums tracking-tight text-foreground md:text-sm"
                   >
                     {seg.start}
                   </time>
@@ -336,19 +336,19 @@ export function MeetingTimelineView({
                     />
                   ) : null}
                   <div
-                    className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full bg-surface"
+                    className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-surface md:h-9 md:w-9"
                     aria-label={meta.label}
                     title={meta.label}
                   >
                     <Icon
-                      className={cn("h-4 w-4", meta.iconTone)}
+                      className={cn("h-5 w-5 md:h-4 md:w-4", meta.iconTone)}
                       strokeWidth={2.25}
                       aria-hidden
                     />
                   </div>
                   <span
                     className={cn(
-                      "relative z-10 mt-1 text-xs font-semibold leading-none",
+                      "relative z-10 mt-1 text-sm font-semibold leading-none md:text-xs",
                       meta.iconTone,
                     )}
                   >
@@ -361,16 +361,16 @@ export function MeetingTimelineView({
                     <button
                       type="button"
                       onClick={() => onSegmentSelect(seg.id)}
-                      className="text-left text-sm font-semibold text-foreground underline-offset-2 hover:underline"
+                      className="min-h-12 text-left text-lg font-semibold text-foreground underline-offset-2 hover:underline md:min-h-0 md:text-sm"
                     >
                       {seg.title}
                     </button>
                   ) : (
-                    <h3 className="text-sm font-semibold text-foreground">
+                    <h3 className="text-lg font-semibold text-foreground md:text-sm">
                       {seg.title}
                     </h3>
                   )}
-                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                  <p className="mt-2 text-base leading-relaxed text-muted md:text-sm">
                     {seg.summary}
                   </p>
                   {seg.points && seg.points.length > 0 ? (
@@ -378,7 +378,7 @@ export function MeetingTimelineView({
                       {seg.points.map((point) => (
                         <li
                           key={point}
-                          className="flex gap-2 text-sm leading-6 text-foreground"
+                          className="flex gap-2 text-base leading-6 text-foreground md:text-sm"
                         >
                           <span
                             aria-hidden

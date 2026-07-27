@@ -111,11 +111,11 @@ export function MeetingProcessLoader({
     >
       {active ? <ProcessProgressRing percent={percent} /> : null}
 
-      <div className="relative h-5 overflow-hidden">
+      <div className="relative h-6 overflow-hidden md:h-5">
         <p
           key={phase}
           className={cn(
-            "text-center text-sm font-semibold tracking-tight text-foreground",
+            "text-center text-base font-semibold tracking-tight text-foreground md:text-sm",
             "animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]",
             phase === "error" && "text-masked",
           )}
@@ -125,7 +125,7 @@ export function MeetingProcessLoader({
       </div>
 
       {phase === "error" && error ? (
-        <p className="max-w-xs text-center text-sm leading-relaxed text-muted">
+        <p className="max-w-xs text-center text-base leading-relaxed text-muted md:text-sm">
           {error}
         </p>
       ) : null}

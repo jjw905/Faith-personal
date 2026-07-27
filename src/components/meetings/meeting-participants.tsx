@@ -125,7 +125,7 @@ function ParticipantNameEditor({
         onClick={(e) => e.stopPropagation()}
         disabled={busy}
         aria-label={`${person.name} 이름 수정`}
-        className="w-full max-w-[10rem] border-b border-foreground bg-transparent py-0.5 text-sm font-semibold leading-5 text-foreground outline-none disabled:opacity-60"
+        className="h-12 w-full max-w-[10rem] border-b border-foreground bg-transparent py-1 text-base font-semibold leading-5 text-foreground outline-none disabled:opacity-60 md:h-auto md:py-0.5 md:text-sm"
       />
     </form>
   );
@@ -145,11 +145,11 @@ function RenamePencil({
         e.stopPropagation();
         onEdit();
       }}
-      className="inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted opacity-70 transition-opacity hover:bg-surface-2 hover:text-foreground hover:opacity-100 sm:opacity-0 sm:group-hover/person:opacity-100 sm:focus-visible:opacity-100"
+      className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted opacity-100 transition-opacity hover:bg-surface-2 hover:text-foreground sm:opacity-0 sm:group-hover/person:opacity-100 sm:focus-visible:opacity-100 md:h-6 md:w-6 md:rounded-md"
       aria-label={`${name} 이름 수정`}
       title="이름 수정"
     >
-      <Pencil className="h-3 w-3" strokeWidth={2} aria-hidden />
+      <Pencil className="h-4 w-4 md:h-3 md:w-3" strokeWidth={2} aria-hidden />
     </button>
   );
 }
@@ -183,10 +183,10 @@ function PeopleRow({
         const editing = Boolean(canEdit && meetingId && editingId === p.id && onRenamed && onStopEdit);
 
         const avatar = (
-          <Avatar className="h-8 w-8 shrink-0">
+          <Avatar className="h-10 w-10 shrink-0 md:h-8 md:w-8">
             <AvatarFallback
               className={cn(
-                "text-xs font-semibold leading-none text-white",
+                "text-sm font-semibold leading-none text-white md:text-xs",
                 p.color,
               )}
             >
@@ -214,7 +214,7 @@ function PeopleRow({
         }
 
         const nameLabel = (
-          <span className="max-w-[7.5rem] truncate text-sm font-medium leading-4 text-foreground">
+          <span className="max-w-[7.5rem] truncate text-base font-medium leading-5 text-foreground md:text-sm md:leading-4">
             {p.name}
           </span>
         );
@@ -231,7 +231,7 @@ function PeopleRow({
                 onClick={() => onSelectName?.(p.name)}
                 aria-pressed={selected}
                 className={cn(
-                  "inline-flex h-8 cursor-pointer items-center gap-2 rounded-full pr-2.5 pl-0.5 transition-colors",
+                  "inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-full pr-3 pl-1 transition-colors md:h-8 md:min-h-0 md:pr-2.5 md:pl-0.5",
                   selected
                     ? "bg-primary-soft ring-1 ring-primary/30"
                     : "hover:bg-surface-2",
@@ -241,7 +241,7 @@ function PeopleRow({
                 {nameLabel}
               </button>
             ) : (
-              <span className="inline-flex h-8 items-center gap-2">
+              <span className="inline-flex min-h-12 items-center gap-2 md:h-8 md:min-h-0">
                 {avatar}
                 {nameLabel}
               </span>
@@ -400,7 +400,7 @@ function SpeakerContributionList({
                     type="button"
                     onClick={() => onSelectName?.(person.name)}
                     aria-pressed={selected}
-                    className="flex min-w-0 flex-1 cursor-pointer gap-3 text-left"
+                    className="flex min-h-12 min-w-0 flex-1 cursor-pointer gap-3 py-1 text-left md:min-h-0 md:py-0"
                   >
                     <SpeakerContributionBody
                       person={person}
@@ -445,10 +445,10 @@ function SpeakerContributionBody({
 }: SpeakerRow) {
   return (
     <>
-      <Avatar className="mt-0.5 h-8 w-8 shrink-0">
+      <Avatar className="mt-0.5 h-10 w-10 shrink-0 md:h-8 md:w-8">
         <AvatarFallback
           className={cn(
-            "text-xs font-semibold leading-none text-white",
+            "text-sm font-semibold leading-none text-white md:text-xs",
             person.color,
           )}
         >
@@ -458,14 +458,14 @@ function SpeakerContributionBody({
 
       <div className="min-w-0 flex-1">
         <span
-          className="block min-w-0 truncate text-sm font-semibold leading-5 text-foreground"
+          className="block min-w-0 truncate text-base font-semibold leading-5 text-foreground md:text-sm"
           title={person.recognitionNote || person.name}
         >
           {person.name}
         </span>
         {summary ? (
           <p
-            className="mt-0.5 line-clamp-2 text-xs leading-4 text-muted"
+            className="mt-0.5 line-clamp-2 text-base leading-5 text-muted md:text-xs md:leading-4"
             title={summary}
           >
             {summary}
@@ -476,7 +476,7 @@ function SpeakerContributionBody({
             {tags.map((tag) => (
               <li
                 key={tag}
-                className="max-w-full rounded-md bg-surface-2 px-1.5 py-0.5 text-xs font-semibold leading-4 text-foreground"
+                className="max-w-full rounded-md bg-surface-2 px-1.5 py-0.5 text-sm font-semibold leading-4 text-foreground md:text-xs"
               >
                 {tag}
               </li>
@@ -545,15 +545,15 @@ export function MeetingParticipants({
       className="panel-surface rounded-2xl px-4 py-4 sm:px-5"
       aria-label={`참석자 ${participants.length}명`}
     >
-      <div className="mb-3 flex items-baseline gap-2">
-        <h2 className="text-xs font-semibold tracking-wide text-muted-2">
+      <div className="mb-3 flex flex-wrap items-baseline gap-2">
+        <h2 className="text-sm font-semibold tracking-wide text-muted-2 md:text-xs">
           참석
         </h2>
-        <span className="text-xs font-semibold tabular-nums text-muted-2">
+        <span className="text-sm font-semibold tabular-nums text-muted-2 md:text-xs">
           {participants.length}
         </span>
         {selectedName ? (
-          <span className="text-xs font-medium text-primary">
+          <span className="text-base font-medium text-primary md:text-xs">
             {selectedName} 구간
           </span>
         ) : null}

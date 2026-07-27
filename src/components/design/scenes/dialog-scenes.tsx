@@ -9,6 +9,7 @@ import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { DuplicateVaultNameDialog } from "@/components/vault/duplicate-name-dialog";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { Button } from "@/components/ui/button";
+import { fixtureNotificationsExpand } from "@/lib/page-ux-fixtures";
 import type { MaskStyle } from "@/lib/masking/types";
 
 function PreviewStage({
@@ -148,12 +149,12 @@ export function SceneVaultPicker() {
   );
 }
 
-/** 알림 센터 */
+/** 알림 센터, 클릭 펼침 확인용 */
 export function SceneNotificationPanel() {
   const [open, setOpen] = useState(true);
   return (
     <PreviewStage
-      hint="헤더 벨에서 열릴 때."
+      hint="행 클릭으로 본문 확인. 확인·수락·바로가기."
       open={open}
       onReopen={() => setOpen(true)}
     >
@@ -161,6 +162,7 @@ export function SceneNotificationPanel() {
         <NotificationPanel
           open={open}
           contained
+          previewItems={fixtureNotificationsExpand()}
           onClose={() => setOpen(false)}
         />
       </div>

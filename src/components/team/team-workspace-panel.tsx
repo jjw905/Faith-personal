@@ -782,9 +782,7 @@ export function TeamWorkspacePanel() {
       scenarioId === "full" ||
       scenarioId === "loading" ||
       scenarioId === "banner-alerts" ||
-      scenarioId === "popup-notifications" ||
-      scenarioId === "popup-notifications-empty" ||
-      scenarioId === "popup-notifications-loading" ||
+      scenarioId === "popup-notifications-expand" ||
       scenarioId === "popup-account"
     ) {
       setComposerOpen(false);

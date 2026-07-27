@@ -30,7 +30,11 @@ export default async function MeetingChatPage({
   const audio = resolveMeetingReplayAudio({ meeting, transcript });
 
   return (
-    <PageContainer>
+    <PageContainer
+      white
+      hideFooter
+      className="min-h-0 flex-1 px-2 pb-[max(0.25rem,env(safe-area-inset-bottom))] sm:px-3 lg:px-4 lg:pr-2"
+    >
       <Suspense fallback={null}>
         <MeetingChatReplay
           meeting={meeting}

@@ -65,13 +65,20 @@ function FilledBtn({
 function FieldLine({
   label,
   children,
+  className,
 }: {
   label: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="flex min-h-12 flex-wrap items-center gap-x-4 gap-y-2">
-      <p className="w-20 shrink-0 text-sm font-semibold text-foreground">
+    <div
+      className={cn(
+        "flex min-h-12 flex-wrap items-center gap-x-4 gap-y-2 py-3.5",
+        className,
+      )}
+    >
+      <p className="w-20 shrink-0 text-base font-semibold text-foreground">
         {label}
       </p>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2">
@@ -228,7 +235,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
   }
 
   return (
-    <PageContainer>
+    <PageContainer soft>
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <header className="min-w-0">
           <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
@@ -237,27 +244,36 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
         </header>
 
         <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
-          <Card className="flex h-full flex-col rounded-3xl shadow-soft">
-            <CardHeader className="flex flex-row items-center gap-4 space-y-0 px-6 pb-6 pt-6">
-              <Avatar className="h-16 w-16 shrink-0">
-                {image ? <AvatarImage src={image} alt="" /> : null}
-                <AvatarFallback className="bg-primary-soft text-lg font-semibold text-primary">
-                  {currentUser.avatarInitials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-muted">기본 정보</p>
-                <CardTitle className="mt-1 text-lg font-semibold tracking-tight">
-                  {currentUser.name || "이름 없음"}
-                </CardTitle>
-                <p className="mt-1 truncate text-sm font-medium text-muted">
-                  {email || "이메일 없음"}
-                </p>
-              </div>
+          <Card className="flex h-full flex-col rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
+            <CardHeader className="space-y-0 px-6 pb-0 pt-6">
+              <CardTitle className="text-xl font-bold tracking-tight">
+                기본 정보
+              </CardTitle>
+              <div
+                className="mt-3 h-0.5 w-full bg-foreground"
+                aria-hidden
+              />
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col px-6 pb-6">
-              <div className="space-y-2 rounded-2xl bg-surface p-4">
-                <FieldLine label="이름">
+            <CardContent className="flex flex-1 flex-col px-6 pb-2 pt-1">
+              <div className="flex items-center gap-4 py-5">
+                <Avatar className="h-16 w-16 shrink-0 ring-1 ring-border">
+                  {image ? <AvatarImage src={image} alt="" /> : null}
+                  <AvatarFallback className="bg-white text-lg font-semibold text-foreground">
+                    {currentUser.avatarInitials}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate text-lg font-semibold tracking-tight text-foreground">
+                    {currentUser.name || "이름 없음"}
+                  </p>
+                  <p className="mt-1 truncate text-base font-medium text-muted">
+                    {email || "이메일 없음"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-border">
+                <FieldLine label="이름" className="border-b border-border">
                   {panel === "name" ? (
                     <>
                       <Input
@@ -280,7 +296,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                     </>
                   ) : (
                     <>
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                      <p className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
                         {currentUser.name || "없음"}
                       </p>
                       <TextBtn onClick={() => openPanel("name")}>변경</TextBtn>
@@ -288,7 +304,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                   )}
                 </FieldLine>
                 {nameMsg ? (
-                  <p className="pl-24 text-xs font-medium text-muted">
+                  <p className="pb-2 text-sm font-medium text-muted">
                     {nameMsg}
                   </p>
                 ) : null}
@@ -322,7 +338,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                     </>
                   ) : (
                     <>
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                      <p className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
                         {email || "없음"}
                       </p>
                       <TextBtn onClick={() => openPanel("email")}>변경</TextBtn>
@@ -330,7 +346,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                   )}
                 </FieldLine>
                 {panel === "email" && emailStep === "code" ? (
-                  <div className="pl-24 pt-1">
+                  <div className="pb-3 pl-24">
                     <Input
                       inputMode="numeric"
                       placeholder="인증번호 6자리"
@@ -342,7 +358,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                   </div>
                 ) : null}
                 {emailMsg ? (
-                  <p className="pl-24 text-xs font-medium text-muted">
+                  <p className="pb-3 text-sm font-medium text-muted">
                     {emailMsg}
                   </p>
                 ) : null}
@@ -350,83 +366,80 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
             </CardContent>
           </Card>
 
-          <Card className="flex h-full flex-col rounded-3xl shadow-soft">
-            <CardHeader className="space-y-1 px-6 pb-6 pt-6">
-              <CardTitle className="text-lg font-semibold tracking-tight">
+          <Card className="flex h-full flex-col rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
+            <CardHeader className="space-y-0 px-6 pb-0 pt-6">
+              <CardTitle className="text-xl font-bold tracking-tight">
                 로그인 방법
               </CardTitle>
-              <p className="text-sm font-medium text-muted">
-                비밀번호와 연결된 계정
-              </p>
+              <div
+                className="mt-3 h-0.5 w-full bg-foreground"
+                aria-hidden
+              />
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-5 px-6 pb-6">
-              <div className="rounded-2xl bg-surface p-4">
-                <FieldLine label="비밀번호">
-                  {panel === "password" ? (
-                    <div className="flex w-full min-w-0 flex-col gap-2">
-                      {hasPassword ? (
-                        <Input
-                          type="password"
-                          placeholder="현재 비밀번호"
-                          autoComplete="current-password"
-                          value={currentPassword}
-                          onChange={(e) => setCurrentPassword(e.target.value)}
-                          className="h-10 rounded-xl bg-card"
-                        />
-                      ) : null}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Input
-                          type="password"
-                          placeholder="새 비밀번호"
-                          autoComplete="new-password"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className="h-10 min-w-0 flex-1 rounded-xl bg-card"
-                        />
-                        <Input
-                          type="password"
-                          placeholder="확인"
-                          autoComplete="new-password"
-                          value={newPasswordConfirm}
-                          onChange={(e) =>
-                            setNewPasswordConfirm(e.target.value)
-                          }
-                          className="h-10 min-w-0 flex-1 rounded-xl bg-card"
-                        />
-                        <FilledBtn
-                          disabled={
-                            pwPending ||
-                            !newPassword ||
-                            !newPasswordConfirm ||
-                            (hasPassword && !currentPassword)
-                          }
-                          onClick={() => void savePassword()}
-                        >
-                          {hasPassword ? "변경" : "만들기"}
-                        </FilledBtn>
-                        <TextBtn onClick={() => setPanel(null)}>취소</TextBtn>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                        {hasPassword ? "사용 중" : "없음"}
-                      </p>
-                      <TextBtn onClick={() => openPanel("password")}>
+            <CardContent className="flex flex-1 flex-col px-6 pb-5 pt-1">
+              <FieldLine label="비밀번호" className="border-b border-border">
+                {panel === "password" ? (
+                  <div className="flex w-full min-w-0 flex-col gap-2">
+                    {hasPassword ? (
+                      <Input
+                        type="password"
+                        placeholder="현재 비밀번호"
+                        autoComplete="current-password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="h-10 rounded-xl bg-card"
+                      />
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="password"
+                        placeholder="새 비밀번호"
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                      />
+                      <Input
+                        type="password"
+                        placeholder="확인"
+                        autoComplete="new-password"
+                        value={newPasswordConfirm}
+                        onChange={(e) =>
+                          setNewPasswordConfirm(e.target.value)
+                        }
+                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                      />
+                      <FilledBtn
+                        disabled={
+                          pwPending ||
+                          !newPassword ||
+                          !newPasswordConfirm ||
+                          (hasPassword && !currentPassword)
+                        }
+                        onClick={() => void savePassword()}
+                      >
                         {hasPassword ? "변경" : "만들기"}
-                      </TextBtn>
-                    </>
-                  )}
-                </FieldLine>
-                {pwMsg ? (
-                  <p className="pl-24 pt-1 text-xs font-medium text-muted">
-                    {pwMsg}
-                  </p>
-                ) : null}
-              </div>
+                      </FilledBtn>
+                      <TextBtn onClick={() => setPanel(null)}>취소</TextBtn>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
+                      {hasPassword ? "사용 중" : "없음"}
+                    </p>
+                    <TextBtn onClick={() => openPanel("password")}>
+                      {hasPassword ? "변경" : "만들기"}
+                    </TextBtn>
+                  </>
+                )}
+              </FieldLine>
+              {pwMsg ? (
+                <p className="pb-2 text-sm font-medium text-muted">{pwMsg}</p>
+              ) : null}
 
-              <div className="flex min-h-0 flex-1 flex-col gap-3">
-                <p className="text-sm font-semibold text-foreground">
+              <div className="flex min-h-0 flex-1 flex-col gap-3 pt-4">
+                <p className="text-base font-semibold text-foreground">
                   연결된 계정
                 </p>
                 {children}

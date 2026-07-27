@@ -153,7 +153,7 @@ export function NewMeetingSetup({
   }
 
   return (
-    <PageContainer>
+    <PageContainer white>
       <div className="mx-auto w-full max-w-3xl">
         <header className="mb-5">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">

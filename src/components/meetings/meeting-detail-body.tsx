@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MessagesSquare } from "lucide-react";
 
 import { MeetingAttachmentsList, collectTranscriptFiles } from "@/components/meetings/meeting-attachments";
+import {
+  MeetingDetailMobileRail,
+  type MeetingDetailMobilePane,
+} from "@/components/meetings/meeting-detail-mobile-rail";
 import { MeetingParticipants } from "@/components/meetings/meeting-participants";
 import { MeetingSummaryCard } from "@/components/meetings/meeting-summary-card";
 import { MeetingTimelineView } from "@/components/meetings/meeting-timeline";
@@ -36,31 +40,52 @@ export function MeetingDetailBody({
   const router = useRouter();
   const [tab, setTab] = useState<DetailTab>("timeline");
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
+  const [mobilePane, setMobilePane] =
+    useState<MeetingDetailMobilePane>("summary");
   const chatHref = `/meetings/${meeting.id}/chat`;
   const hasAttachments = collectTranscriptFiles(transcript).length > 0;
+  const hasSummary = Boolean(
+    timeline.overallSummary?.trim() ||
+      timeline.decisions?.length ||
+      timeline.actions?.length,
+  );
+
+  useEffect(() => {
+    if (mobilePane === "timeline") setTab("timeline");
+    if (mobilePane === "files" && hasAttachments) setTab("files");
+  }, [mobilePane, hasAttachments]);
 
   function toggleSpeaker(name: string) {
     setSpeakerFilter((prev) => (prev === name ? null : name));
     setTab("timeline");
+    setMobilePane("timeline");
+  }
+
+  function handleMobilePane(next: MeetingDetailMobilePane) {
+    setMobilePane(next);
   }
 
   return (
     <>
-      <MeetingSummaryCard timeline={timeline} />
+      <div id="meeting-summary" className="scroll-mt-4">
+        {hasSummary ? <MeetingSummaryCard timeline={timeline} /> : null}
+      </div>
 
-      <MeetingParticipants
-        participants={meeting.participants}
-        selectedName={speakerFilter}
-        onSelectName={toggleSpeaker}
-        meetingId={meeting.id}
-        canEdit={canEditParticipants}
-        onParticipantRenamed={(from, to) => {
-          setSpeakerFilter((prev) => (prev === from ? to : prev));
-        }}
-      />
+      <div id="meeting-people" className="scroll-mt-4">
+        <MeetingParticipants
+          participants={meeting.participants}
+          selectedName={speakerFilter}
+          onSelectName={toggleSpeaker}
+          meetingId={meeting.id}
+          canEdit={canEditParticipants}
+          onParticipantRenamed={(from, to) => {
+            setSpeakerFilter((prev) => (prev === from ? to : prev));
+          }}
+        />
+      </div>
 
-      <div>
-        <div className="flex items-end justify-between gap-3">
+      <div id="meeting-records" className="scroll-mt-4 pb-28 md:pb-0">
+        <div className="hidden flex-col gap-2 md:flex md:flex-row md:items-end md:justify-between md:gap-3">
           <div
             role="tablist"
             aria-label="회의 기록 분류"
@@ -82,7 +107,7 @@ export function MeetingDetailBody({
                     setTab(item.id);
                   }}
                   className={cn(
-                    "shrink-0 border-b-2 pb-2 pt-0.5 text-sm transition-colors",
+                    "min-h-0 shrink-0 border-b-2 px-0.5 pb-2 pt-0.5 text-sm transition-colors",
                     isFilesEmpty
                       ? "cursor-not-allowed border-transparent font-medium text-muted opacity-40"
                       : isSelected
@@ -98,7 +123,7 @@ export function MeetingDetailBody({
 
           <Link
             href={chatHref}
-            className="mb-1.5 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary-soft"
+            className="mb-1.5 inline-flex min-h-0 shrink-0 items-center justify-start gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft"
           >
             <MessagesSquare className="h-3.5 w-3.5" strokeWidth={1.75} />
             대화, 다시듣기
@@ -106,7 +131,7 @@ export function MeetingDetailBody({
         </div>
 
         <div
-          className="panel-surface mt-3 rounded-2xl px-4 py-4 sm:px-5"
+          className="panel-surface mt-0 rounded-2xl px-4 py-4 md:mt-3 sm:px-5"
           role="tabpanel"
         >
           {tab === "timeline" ? (
@@ -130,6 +155,13 @@ export function MeetingDetailBody({
           ) : null}
         </div>
       </div>
+
+      <MeetingDetailMobileRail
+        active={mobilePane}
+        onChange={handleMobilePane}
+        chatHref={chatHref}
+        hasAttachments={hasAttachments}
+      />
     </>
   );
 }

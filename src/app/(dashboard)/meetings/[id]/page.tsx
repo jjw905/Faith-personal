@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/page-container";
 import { LiveMaskingTranscript } from "@/components/meetings/live-masking-transcript";
@@ -34,7 +34,7 @@ export default async function MeetingDetailPage({
   if (id === "live-mask") {
     await requireAdmin();
     return (
-      <PageContainer>
+      <PageContainer white>
         <LiveMaskingTranscript />
       </PageContainer>
     );
@@ -67,7 +67,7 @@ export default async function MeetingDetailPage({
   const canEditMeta = Boolean(userRow);
 
   return (
-    <PageContainer>
+    <PageContainer white>
       <div
         className={
           processing || failed
@@ -76,10 +76,14 @@ export default async function MeetingDetailPage({
         }
       >
         <div className={processing || failed ? "shrink-0" : undefined}>
-          <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">
+          <Button
+            asChild
+            variant="ghost"
+            className="-ml-2 mb-3 h-12 gap-1.5 px-2 text-base font-semibold md:h-9 md:px-2.5 md:text-sm"
+          >
             <Link href="/dashboard">
-              <ArrowLeft className="h-4 w-4" />
-              회의로 돌아가기
+              <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
+              돌아가기
             </Link>
           </Button>
 

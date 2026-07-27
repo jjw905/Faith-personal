@@ -1256,8 +1256,8 @@ export function NewMeetingSession() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3 sm:p-4">
+    <div className="flex h-full min-h-0 bg-white">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white p-3 sm:p-4">
         <div
           className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible rounded-3xl border border-transparent bg-card px-5 pb-5 pt-4 xl:px-6 xl:pb-6 xl:pt-5"
           style={{
@@ -1423,13 +1423,16 @@ export function NewMeetingSession() {
                 className={cn(
                   "group relative order-2 flex h-14 shrink-0 cursor-pointer items-center justify-center transition-all active:scale-95 sm:order-3",
                   isRecording
-                    ? "min-w-[5.75rem] gap-1.5 rounded-full bg-masked px-3 text-white shadow-soft ring-2 ring-masked/40"
+                    ? "min-w-[8.5rem] gap-1.5 rounded-full bg-masked px-3 text-white shadow-soft ring-2 ring-masked/40"
                     : "w-14 rounded-full bg-surface-2 ring-1 ring-border-strong hover:bg-[#e4e6eb]",
                 )}
               >
                 {isRecording ? (
                   <>
                     <RecordBeatBars />
+                    <span className="text-[12px] font-bold tracking-tight">
+                      회의 녹음중
+                    </span>
                     <span className="font-mono text-[12px] font-bold tabular-nums tracking-tight">
                       {elapsedLabel}
                     </span>

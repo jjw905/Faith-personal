@@ -91,6 +91,7 @@ async function notifyAnalysisResult(params: {
       meetingId: params.meetingId,
       data: {
         meetingId: params.meetingId,
+        href: `/meetings/${params.meetingId}`,
         ...(params.errorMessage
           ? { errorMessage: params.errorMessage }
           : {}),

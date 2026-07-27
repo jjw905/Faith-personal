@@ -97,7 +97,7 @@ export function AudioUploadZone({
       scenarioId === "live" ||
       scenarioId === "empty" ||
       scenarioId === "full" ||
-      scenarioId.startsWith("popup-notifications") ||
+      scenarioId === "popup-notifications-expand" ||
       scenarioId === "popup-account" ||
       scenarioId === "popup-upcoming" ||
       scenarioId === "popup-upcoming-create" ||

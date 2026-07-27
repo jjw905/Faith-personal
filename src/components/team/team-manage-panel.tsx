@@ -265,9 +265,9 @@ function MemberPermissionsSheet({
   return (
     <TeamSheet open={open} title={title} onClose={onClose}>
       <div className="flex items-center gap-4 rounded-2xl bg-surface px-4 py-4">
-        <Avatar className="h-14 w-14 shrink-0">
+        <Avatar className="h-14 w-14 shrink-0 ring-1 ring-border">
           <AvatarImage src={member.user.image ?? undefined} />
-          <AvatarFallback className="bg-primary-soft text-lg font-semibold text-primary">
+          <AvatarFallback className="bg-white text-lg font-semibold text-foreground">
             {initials(member.user.name, member.user.email)}
           </AvatarFallback>
         </Avatar>
@@ -378,7 +378,7 @@ function MemberRecordAccessSheet({
       <div className="flex items-center gap-4 rounded-2xl bg-surface px-4 py-4">
         <Avatar className="h-12 w-12 shrink-0">
           <AvatarImage src={member.user.image ?? undefined} />
-          <AvatarFallback className="bg-primary-soft text-sm font-semibold text-primary">
+          <AvatarFallback className="bg-white text-sm font-semibold text-foreground">
             {initials(member.user.name, member.user.email)}
           </AvatarFallback>
         </Avatar>
@@ -939,7 +939,7 @@ export function TeamManagePanel({
                     >
                       <Avatar className="h-10 w-10 shrink-0">
                         <AvatarImage src={member.user.image ?? undefined} />
-                        <AvatarFallback className="bg-primary-soft text-sm font-semibold text-primary">
+                        <AvatarFallback className="bg-white text-sm font-semibold text-foreground">
                           {initials(member.user.name, member.user.email)}
                         </AvatarFallback>
                       </Avatar>

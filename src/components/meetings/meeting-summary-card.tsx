@@ -53,18 +53,18 @@ export function MeetingSummaryCard({
       className={cn("panel-surface rounded-2xl px-4 py-4 sm:px-5", className)}
       aria-label="회의 요약"
     >
-      <p className="text-xs font-semibold tracking-wide text-muted-2">
+      <p className="text-sm font-semibold tracking-wide text-muted-2 md:text-xs">
         요약
       </p>
 
       <div className="mt-4 space-y-5">
         {sections.map((section) => (
           <div key={section.title} className="max-w-2xl">
-            <h3 className="text-sm font-semibold tracking-tight text-foreground">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground md:text-sm">
               {section.title}
             </h3>
             {section.body ? (
-              <p className="mt-1.5 text-sm leading-[1.65] text-muted">
+              <p className="mt-1.5 text-base leading-[1.65] text-muted md:text-sm">
                 {section.body}
               </p>
             ) : null}
@@ -73,7 +73,7 @@ export function MeetingSummaryCard({
                 {section.items.map((item) => (
                   <li
                     key={item}
-                    className="text-sm leading-[1.65] text-muted"
+                    className="text-base leading-[1.65] text-muted md:text-sm"
                   >
                     {item}
                   </li>

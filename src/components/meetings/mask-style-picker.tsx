@@ -2,6 +2,7 @@
 
 import { Check, Eye, EyeOff } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import { labelFor } from "@/lib/masking/mask-style";
 import type { MaskStyle } from "@/lib/masking/types";
@@ -72,7 +73,9 @@ export function MaskStylePicker({
               onClick={() => onChange(option.value)}
               className={cn(
                 "flex w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-xl text-left transition-colors",
-                compact ? "px-2.5 py-2" : "px-3 py-2.5",
+                compact
+                  ? "min-h-12 px-2.5 py-2 md:min-h-0"
+                  : "px-3 py-2.5",
                 selected ? "bg-surface-2" : "hover:bg-surface-2/60",
               )}
             >
@@ -225,14 +228,58 @@ export function MaskStylePopup({
   forceOpen?: boolean;
 }) {
   const [open, setOpen] = useState(Boolean(forceOpen));
+  const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const panelOpen = forceOpen || open;
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 256 });
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!panelOpen || forceOpen) return;
+    function place() {
+      const btn = btnRef.current;
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      const width = Math.min(256, window.innerWidth - 16);
+      const left = Math.min(
+        Math.max(8, r.right - width),
+        window.innerWidth - width - 8,
+      );
+      const panelH = panelRef.current?.offsetHeight || 220;
+      const spaceBelow = window.innerHeight - r.bottom - 8;
+      const openUp = spaceBelow < panelH + 16 || r.top > window.innerHeight * 0.55;
+      setPos({
+        top: openUp
+          ? Math.max(8, r.top - 8 - panelH)
+          : r.bottom + 8,
+        left,
+        width,
+      });
+    }
+    place();
+    const raf = requestAnimationFrame(place);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [panelOpen, forceOpen]);
 
   useEffect(() => {
     if (!panelOpen || forceOpen) return;
     function onPointer(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (panelRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -245,9 +292,40 @@ export function MaskStylePopup({
     };
   }, [panelOpen, forceOpen]);
 
+  const panel = panelOpen ? (
+    <div
+      ref={panelRef}
+      id={panelId}
+      role="dialog"
+      aria-label="개인정보 가림 방식"
+      className="z-[70] rounded-2xl border border-border bg-card p-1.5 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
+      style={
+        forceOpen
+          ? undefined
+          : {
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              width: pos.width,
+            }
+      }
+    >
+      <MaskStylePicker
+        value={value}
+        onChange={(next) => {
+          onChange(next);
+          if (!forceOpen) setOpen(false);
+        }}
+        showHeading={false}
+        compact
+      />
+    </div>
+  ) : null;
+
   return (
     <div ref={rootRef} className={cn("relative", className)}>
       <button
+        ref={btnRef}
         type="button"
         aria-expanded={panelOpen}
         aria-controls={panelId}
@@ -258,37 +336,30 @@ export function MaskStylePopup({
           setOpen((v) => !v);
         }}
         className={cn(
-          "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-colors",
+          "inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full transition-colors md:h-10 md:w-10",
           panelOpen
             ? "bg-primary text-primary-foreground shadow-soft"
-            : "text-muted hover:bg-surface-2 hover:text-foreground",
+            : "bg-card text-muted hover:bg-surface-2 hover:text-foreground",
         )}
       >
         {value === "off" ? (
-          <Eye className="h-4 w-4" strokeWidth={1.75} />
+          <Eye className="h-6 w-6 md:h-5 md:w-5" strokeWidth={1.75} />
         ) : (
-          <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+          <EyeOff className="h-6 w-6 md:h-5 md:w-5" strokeWidth={1.75} />
         )}
       </button>
 
-      {panelOpen ? (
-        <div
-          id={panelId}
-          role="dialog"
-          aria-label="개인정보 가림 방식"
-          className="absolute right-0 top-[calc(100%+0.4rem)] z-40 w-[min(100vw-2rem,16rem)] rounded-2xl border border-border bg-card p-1.5 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
-        >
-          <MaskStylePicker
-            value={value}
-            onChange={(next) => {
-              onChange(next);
-              if (!forceOpen) setOpen(false);
-            }}
-            showHeading={false}
-            compact
-          />
-        </div>
-      ) : null}
+      {forceOpen
+        ? panel
+          ? (
+              <div className="absolute right-0 top-[calc(100%+0.4rem)] z-40 w-[min(100vw-2rem,16rem)]">
+                {panel}
+              </div>
+            )
+          : null
+        : mounted && panel
+          ? createPortal(panel, document.body)
+          : null}
     </div>
   );
 }

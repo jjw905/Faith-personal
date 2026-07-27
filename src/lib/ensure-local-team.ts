@@ -21,6 +21,8 @@ const TEAM_ACCOUNTS = [
     canInvite: true,
     canCreateMeeting: true,
     canManageRecordAccess: true,
+    signupProvider: "naver",
+    linkedProviders: ["naver"] as const,
   },
   {
     email: "faith-team-member1@faith.local",
@@ -31,6 +33,8 @@ const TEAM_ACCOUNTS = [
     canInvite: false,
     canCreateMeeting: false,
     canManageRecordAccess: false,
+    signupProvider: "google",
+    linkedProviders: ["google"] as const,
   },
   {
     email: "faith-team-member2@faith.local",
@@ -41,6 +45,8 @@ const TEAM_ACCOUNTS = [
     canInvite: false,
     canCreateMeeting: false,
     canManageRecordAccess: false,
+    signupProvider: "twitter",
+    linkedProviders: ["twitter", "google"] as const,
   },
 ] as const;
 
@@ -53,6 +59,29 @@ function localDevPassword() {
     process.env.ADMIN_SEED_PASSWORD?.trim() ||
     LOCAL_DEV_ADMIN_PASSWORD
   );
+}
+
+/** 로컬 미리보기용 OAuth 계정 표시. 실제 토큰 없음, 관리자 UI 검수용. */
+async function ensureDemoProviderAccounts(
+  userId: string,
+  providers: readonly string[],
+) {
+  for (const provider of providers) {
+    if (provider === "credentials") continue;
+    const existing = await prisma.account.findFirst({
+      where: { userId, provider },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await prisma.account.create({
+      data: {
+        userId,
+        type: "oauth",
+        provider,
+        providerAccountId: `local-demo-${provider}-${userId}`,
+      },
+    });
+  }
 }
 
 /**
@@ -214,7 +243,7 @@ export async function ensureLocalDevProductTeam() {
         plan: Plan.PRO,
         emailVerified: new Date(),
         passwordHash,
-        signupProvider: "credentials",
+        signupProvider: account.signupProvider,
         disabled: false,
       },
       update: {
@@ -224,9 +253,12 @@ export async function ensureLocalDevProductTeam() {
         plan: Plan.PRO,
         emailVerified: new Date(),
         passwordHash,
+        signupProvider: account.signupProvider,
         disabled: false,
       },
     });
+
+    await ensureDemoProviderAccounts(user.id, account.linkedProviders);
 
     await prisma.teamMember.upsert({
       where: {
@@ -250,6 +282,18 @@ export async function ensureLocalDevProductTeam() {
 
     seeded.push({ email: account.email, teamRole: account.teamRole });
   }
+
+  // 예전 대표: Google 가입 표시 (이메일 로그인 비번 유지)
+  if (legacyOwner && legacyOwner.id !== owner.id) {
+    await prisma.user.update({
+      where: { id: legacyOwner.id },
+      data: { signupProvider: "google" },
+    });
+    await ensureDemoProviderAccounts(legacyOwner.id, ["google"]);
+  }
+
+  // 관리자: 이메일 가입 + Google 연동 표시
+  await ensureDemoProviderAccounts(owner.id, ["google"]);
 
   const memberCount = await prisma.teamMember.count({
     where: { teamId: team.id },

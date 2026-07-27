@@ -49,7 +49,7 @@ export default async function TeamMeetingPage({
       participant?.isParticipant);
 
   return (
-    <PageContainer>
+    <PageContainer white>
       <div className="mx-auto w-full max-w-6xl">
         <Button asChild variant="ghost" className="-ml-2 mb-3 min-h-12">
           <Link href="/team">

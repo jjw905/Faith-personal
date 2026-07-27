@@ -25,7 +25,13 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const lightCanvas =
     pathname === "/help" ||
     pathname === "/changelog" ||
-    pathname.startsWith("/changelog/");
+    pathname === "/users" ||
+    pathname === "/account" ||
+    pathname === "/settings" ||
+    pathname.startsWith("/account/") ||
+    pathname.startsWith("/settings/") ||
+    pathname.startsWith("/changelog/") ||
+    pathname.startsWith("/meetings");
 
   useEffect(() => {
     if (!sidebarOpen) return;
@@ -69,7 +75,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto",
-          lightCanvas && "bg-background",
+          lightCanvas &&
+            (pathname.startsWith("/meetings") ? "bg-white" : "bg-background"),
         )}
         onScroll={notifyDocsSectionScroll}
       >

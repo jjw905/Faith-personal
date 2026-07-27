@@ -11,40 +11,44 @@ import {
 } from "@/components/auth/social-icons";
 import { cn } from "@/lib/utils";
 
-const LABELS: Record<string, string> = {
-  google: "Google",
+const PROVIDERS = ["naver", "google", "twitter"] as const;
+
+const LABELS: Record<(typeof PROVIDERS)[number], string> = {
   naver: "네이버",
+  google: "Google",
   twitter: "X",
 };
 
-const ICONS: Record<string, ComponentType<{ className?: string }>> = {
-  google: GoogleIcon,
+const ICONS: Record<
+  (typeof PROVIDERS)[number],
+  ComponentType<{ className?: string }>
+> = {
   naver: NaverIcon,
+  google: GoogleIcon,
   twitter: XIcon,
 };
 
-const CIRCLE: Record<string, string> = {
-  google: "bg-white text-[#3c4043] ring-1 ring-[#c7c7cc]",
+const CIRCLE: Record<(typeof PROVIDERS)[number], string> = {
   naver: "bg-[#03C75A] text-white",
+  google: "bg-white text-[#3c4043] ring-1 ring-[#c7c7cc]",
   twitter: "bg-black text-white",
 };
 
 export type SocialLinksInitial = {
   linked: string[];
-  available: string[];
+  available?: string[];
   primary: string | null;
   hasPassword: boolean;
   notice?: string;
 };
 
-/** 소셜 연동 목록. */
+/** 소셜 연동 목록. 지원 제공자는 항상 전부 표시. */
 export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
   const router = useRouter();
   const [linked, setLinked] = useState(initial.linked);
   const [msg, setMsg] = useState(initial.notice ?? "");
   const [pending, setPending] = useState<string | null>(null);
   const primary = initial.primary;
-  const providers = initial.available;
 
   async function link(provider: string) {
     setMsg("");
@@ -85,34 +89,40 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
     }
   }
 
-  if (providers.length === 0) {
-    return (
-      <p className="text-sm font-medium text-muted">
-        연결할 수 있는 계정이 없어요.
-      </p>
-    );
-  }
+  const orderedProviders = [...PROVIDERS].sort((a, b) => {
+    const rank = (p: (typeof PROVIDERS)[number]) => {
+      const isLinked = linked.includes(p);
+      const isSignupMethod = primary === p && isLinked;
+      // 연결 해제 버튼이 있는 항목을 맨 위
+      if (isLinked && !isSignupMethod) return 0;
+      if (isSignupMethod) return 1;
+      return 2;
+    };
+    return rank(a) - rank(b);
+  });
 
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl bg-surface px-2 py-1">
-        {providers.map((provider) => {
+      <div className="overflow-hidden">
+        {orderedProviders.map((provider, index) => {
           const isLinked = linked.includes(provider);
           const isSignupMethod = primary === provider && isLinked;
-          const label = LABELS[provider] ?? provider;
-          const Icon = ICONS[provider] ?? GoogleIcon;
+          const Icon = ICONS[provider];
           const busy = pending === provider;
 
           return (
             <div
               key={provider}
-              className="flex items-center justify-between gap-3 px-2.5 py-3.5"
+              className={cn(
+                "flex items-center justify-between gap-3 py-3.5",
+                index > 0 && "border-t border-border",
+              )}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <span
                   className={cn(
                     "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-                    CIRCLE[provider] ?? "bg-surface-2",
+                    CIRCLE[provider],
                     !isLinked && "opacity-70",
                   )}
                   aria-hidden
@@ -121,7 +131,7 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">
-                    {label}
+                    {LABELS[provider]}
                   </p>
                   <p className="mt-0.5 text-sm font-medium text-muted">
                     {isSignupMethod

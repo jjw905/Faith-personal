@@ -18,6 +18,9 @@ import {
 } from "@/lib/data-retention";
 import { cn } from "@/lib/utils";
 
+const CARD_SHADOW =
+  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+
 function SettingRow({
   label,
   description,
@@ -28,11 +31,15 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5 first:pt-1 last:pb-1">
+    <div className="flex items-center justify-between gap-4 py-3.5">
       <div className="min-w-0 flex-1 pr-3">
-        <p className="text-sm font-medium leading-5 text-foreground">{label}</p>
+        <p className="text-base font-semibold leading-5 text-foreground">
+          {label}
+        </p>
         {description ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
+          <p className="mt-1 text-base leading-relaxed text-muted">
+            {description}
+          </p>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center">{children}</div>
@@ -91,7 +98,7 @@ function Segmented({
           type="button"
           onClick={() => onChange(o.value)}
           className={cn(
-            "cursor-pointer rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+            "cursor-pointer rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors",
             value === o.value
               ? "bg-card text-foreground shadow-soft"
               : "text-muted hover:text-foreground",
@@ -104,22 +111,28 @@ function Segmented({
   );
 }
 
-function SectionLabel({
-  variant,
+function SettingsSection({
+  title,
+  description,
   children,
 }: {
-  variant: "personal" | "team";
+  title: string;
+  description: string;
   children: React.ReactNode;
 }) {
   return (
-    <p
-      className={cn(
-        "text-sm font-bold tracking-tight",
-        variant === "personal" ? "text-foreground" : "text-primary",
-      )}
-    >
-      {children}
-    </p>
+    <Card className={CARD_SHADOW}>
+      <CardHeader className="space-y-0 px-6 pb-0 pt-6">
+        <CardTitle className="text-xl font-bold tracking-tight">
+          {title}
+        </CardTitle>
+        <p className="mt-1.5 text-base font-medium text-muted">{description}</p>
+        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+      </CardHeader>
+      <CardContent className="divide-y divide-border px-6 pb-2 pt-1">
+        {children}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -153,116 +166,104 @@ export default function SettingsPage() {
   }
 
   return (
-    <PageContainer>
-      <div className="mx-auto w-full max-w-3xl space-y-4">
+    <PageContainer soft>
+      <div className="mx-auto w-full max-w-3xl space-y-6">
         <header className="min-w-0">
           <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
             시스템 설정
           </h1>
         </header>
 
-        <Card>
-          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
-            <SectionLabel variant="personal">개인</SectionLabel>
-            <CardTitle className="text-lg">내 기록 기본값</CardTitle>
-            <p className="text-sm leading-relaxed text-muted">
-              개인 워크스페이스 회의에만 적용됩니다.
-            </p>
-          </CardHeader>
-          <CardContent className="divide-y divide-border px-5 pb-4 pt-0 sm:px-6">
-            <SettingRow
-              label="자동 마스킹"
-              description="내 회의 기록 시 개인정보를 기본으로 마스킹합니다."
-            >
-              <Toggle
-                label="개인 자동 마스킹"
-                on={personalAutoMask}
-                onChange={setPersonalAutoMask}
-              />
-            </SettingRow>
-            <SettingRow
+        <SettingsSection
+          title="내 기록 기본값"
+          description="개인 워크스페이스 회의에만 적용됩니다."
+        >
+          <SettingRow
+            label="자동 마스킹"
+            description="내 회의 기록 시 개인정보를 기본으로 마스킹합니다."
+          >
+            <Toggle
+              label="개인 자동 마스킹"
+              on={personalAutoMask}
+              onChange={setPersonalAutoMask}
+            />
+          </SettingRow>
+          <SettingRow
+            label="화자 분리"
+            description="녹음에서 화자를 구분해 기록합니다."
+          >
+            <Toggle
               label="화자 분리"
-              description="녹음에서 화자를 구분해 기록합니다."
-            >
-              <Toggle
-                label="화자 분리"
-                on={speakerSplit}
-                onChange={setSpeakerSplit}
-              />
-            </SettingRow>
-            <SettingRow
+              on={speakerSplit}
+              onChange={setSpeakerSplit}
+            />
+          </SettingRow>
+          <SettingRow
+            label="회의 시작 시 타임라인 열기"
+            description="녹음(인식)을 시작하면 타임라인 패널을 열린 상태로 시작합니다."
+          >
+            <Toggle
               label="회의 시작 시 타임라인 열기"
-              description="녹음(인식)을 시작하면 타임라인 패널을 열린 상태로 시작합니다."
-            >
-              <Toggle
-                label="회의 시작 시 타임라인 열기"
-                on={autoOpenTimelineOnStart}
-                onChange={setAutoOpenTimelineOnStart}
-              />
-            </SettingRow>
-            <SettingRow
-              label="요약 언어"
-              description="자동 요약에 사용할 기본 언어입니다."
-            >
-              <Segmented
-                ariaLabel="요약 언어"
-                value={summaryLang}
-                onChange={setSummaryLang}
-                options={[
-                  { value: "ko", label: "한국어" },
-                  { value: "en", label: "English" },
-                ]}
-              />
-            </SettingRow>
-          </CardContent>
-        </Card>
+              on={autoOpenTimelineOnStart}
+              onChange={setAutoOpenTimelineOnStart}
+            />
+          </SettingRow>
+          <SettingRow
+            label="요약 언어"
+            description="자동 요약에 사용할 기본 언어입니다."
+          >
+            <Segmented
+              ariaLabel="요약 언어"
+              value={summaryLang}
+              onChange={setSummaryLang}
+              options={[
+                { value: "ko", label: "한국어" },
+                { value: "en", label: "English" },
+              ]}
+            />
+          </SettingRow>
+        </SettingsSection>
 
-        <Card>
-          <CardHeader className="space-y-2 px-5 pb-2 pt-5 sm:px-6">
-            <SectionLabel variant="team">팀</SectionLabel>
-            <CardTitle className="text-lg">팀 운영 정책</CardTitle>
-            <p className="text-sm leading-relaxed text-muted">
-              팀 워크스페이스 회의와 멤버에게 적용됩니다.
-            </p>
-          </CardHeader>
-          <CardContent className="divide-y divide-border px-5 pb-4 pt-0 sm:px-6">
-            <SettingRow
-              label="자동 마스킹"
-              description="팀 회의 기록 시 개인정보를 기본으로 마스킹합니다."
-            >
-              <Toggle
-                label="팀 자동 마스킹"
-                on={teamAutoMask}
-                onChange={setTeamAutoMask}
-              />
-            </SettingRow>
-            <SettingRow
-              label="마스킹 정책 강제"
-              description="멤버 개인 설정과 달라도 팀 정책을 우선 적용합니다."
-            >
-              <Toggle
-                label="팀 마스킹 정책 강제"
-                on={enforceMask}
-                onChange={setEnforceMask}
-              />
-            </SettingRow>
-            <SettingRow
-              label="데이터 보존 기간"
-              description="회의록·알림 등 보관 데이터에 적용합니다. 확인한 알림은 최근 내역에 7일만 보이고, 실제 삭제는 이 기간을 따릅니다."
-            >
-              <Segmented
-                ariaLabel="데이터 보존 기간"
-                value={String(retention)}
-                onChange={updateRetention}
-                options={[
-                  { value: "30", label: "30일" },
-                  { value: "90", label: "90일" },
-                  { value: "365", label: "1년" },
-                ]}
-              />
-            </SettingRow>
-          </CardContent>
-        </Card>
+        <SettingsSection
+          title="팀 운영 정책"
+          description="팀 워크스페이스 회의와 멤버에게 적용됩니다."
+        >
+          <SettingRow
+            label="자동 마스킹"
+            description="팀 회의 기록 시 개인정보를 기본으로 마스킹합니다."
+          >
+            <Toggle
+              label="팀 자동 마스킹"
+              on={teamAutoMask}
+              onChange={setTeamAutoMask}
+            />
+          </SettingRow>
+          <SettingRow
+            label="마스킹 정책 강제"
+            description="멤버 개인 설정과 달라도 팀 정책을 우선 적용합니다."
+          >
+            <Toggle
+              label="팀 마스킹 정책 강제"
+              on={enforceMask}
+              onChange={setEnforceMask}
+            />
+          </SettingRow>
+          <SettingRow
+            label="데이터 보존 기간"
+            description="회의록·알림 등 보관 데이터에 적용합니다. 확인한 알림은 최근 내역에 7일만 보이고, 실제 삭제는 이 기간을 따릅니다."
+          >
+            <Segmented
+              ariaLabel="데이터 보존 기간"
+              value={String(retention)}
+              onChange={updateRetention}
+              options={[
+                { value: "30", label: "30일" },
+                { value: "90", label: "90일" },
+                { value: "365", label: "1년" },
+              ]}
+            />
+          </SettingRow>
+        </SettingsSection>
       </div>
     </PageContainer>
   );

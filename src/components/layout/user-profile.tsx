@@ -305,11 +305,11 @@ export function UserProfile({
           compact ? "justify-center px-2 py-2.5" : "gap-2.5 px-3 py-2.5",
         )}
       >
-        <Avatar className="h-8 w-8 shrink-0">
+        <Avatar className="h-8 w-8 shrink-0 ring-1 ring-border">
           {avatarSrc ? (
             <AvatarImage src={avatarSrc} alt="" className="object-cover" />
           ) : null}
-          <AvatarFallback className="bg-primary-soft text-sm font-semibold text-primary">
+          <AvatarFallback className="bg-white text-sm font-semibold text-foreground">
             {currentUser.avatarInitials}
           </AvatarFallback>
         </Avatar>

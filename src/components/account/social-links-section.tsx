@@ -2,28 +2,7 @@ import { SocialLinksCard } from "@/components/account/social-links-card";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 
-const LINKABLE = ["google", "naver", "twitter"] as const;
-
-function availableProviders() {
-  return LINKABLE.filter((p) => {
-    if (p === "google") {
-      return Boolean(
-        process.env.AUTH_GOOGLE_ID?.trim() &&
-          process.env.AUTH_GOOGLE_SECRET?.trim(),
-      );
-    }
-    if (p === "naver") {
-      return Boolean(
-        process.env.AUTH_NAVER_ID?.trim() &&
-          process.env.AUTH_NAVER_SECRET?.trim(),
-      );
-    }
-    return Boolean(
-      process.env.AUTH_TWITTER_ID?.trim() &&
-        process.env.AUTH_TWITTER_SECRET?.trim(),
-    );
-  });
-}
+const LINKABLE = ["naver", "google", "twitter"] as const;
 
 function noticeFromSearch(linked?: string, error?: string) {
   if (linked === "1") return "계정을 연결했어요.";
@@ -71,7 +50,7 @@ export async function SocialLinksSection({
       key={`${linkedProviders.slice().sort().join(",")}|${primary ?? ""}`}
       initial={{
         linked: linkedProviders,
-        available: [...availableProviders()],
+        available: [...LINKABLE],
         primary,
         hasPassword: Boolean(user?.passwordHash),
         notice: noticeFromSearch(linked, error),

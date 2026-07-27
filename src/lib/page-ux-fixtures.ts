@@ -7,6 +7,42 @@ import type { WorkspaceId } from "@/lib/workspaces";
 import type { Meeting } from "@/types/meeting";
 import type { AppNotification } from "@/types/notification";
 
+/** 관리자 팀 목록 UX용 운영 메타 (본문·정책 제외). */
+export type FixtureAdminTeam = {
+  id: string;
+  name: string;
+  slug: string;
+  plan: "TEAM";
+  seatLimit: number;
+  memberCount: number;
+  adminCount: number;
+  pendingInviteCount: number;
+  meetingCount: number;
+  lastMeetingAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner: {
+    id: string;
+    name: string | null;
+    handle: string | null;
+    email: string | null;
+    disabled: boolean;
+  };
+  managers: {
+    id: string;
+    role: "OWNER" | "ADMIN";
+    name: string | null;
+    handle: string | null;
+    email: string | null;
+    disabled: boolean;
+  }[];
+  pendingInvites: {
+    email: string | null;
+    name: string | null;
+    handle: string | null;
+  }[];
+};
+
 function daysAgoIso(days: number) {
   return new Date(Date.now() - days * 86400000).toISOString();
 }
@@ -326,42 +362,287 @@ export function fixtureDevChangelogFull(
   };
 }
 
-/** UX 미리보기: 알림 센터 채워짐 (초대·회의확인 액션 포함). */
-export function fixtureNotificationsFull(): AppNotification[] {
+/**
+ * 알림 UX 미리보기 (클릭 펼침).
+ * 본문 확인, 수락·거절, 확인+바로가기, 바로가기만 (실존 경로만).
+ */
+export function fixtureNotificationsExpand(): AppNotification[] {
   return [
     {
-      id: "ux-n-invite",
-      type: "invite",
-      title: "팀 초대",
-      body: "제품기획팀에서 초대했습니다.",
+      id: "ux-n-exp-long",
+      type: "urgent",
+      title: "서비스 점검 안내",
+      body: "오늘 새벽 2시부터 30분간 점검이 있습니다. 점검 중에는 회의 업로드와 실시간 녹음이 잠시 중단될 수 있으며, 진행 중이던 분석은 점검 종료 후 이어서 처리됩니다. 도움말에서 일정을 확인할 수 있습니다.",
       time: "방금",
       unread: true,
-      data: { inviteId: "ux-invite-1" },
+      createdAt: new Date().toISOString(),
+      data: { href: "/help" },
     },
     {
-      id: "ux-n-ack",
-      type: "meeting",
-      title: "회의 참석 확인",
-      body: "내일 주간 싱크 참석을 확인해 주세요.",
-      time: "12분 전",
+      id: "ux-n-exp-invite",
+      type: "invite",
+      title: "제품기획팀 초대",
+      body: "김기획님이 제품기획팀에 초대했습니다. 1시간 안에 수락하거나 거절해 주세요. 거절 시 사유를 남길 수 있습니다.",
+      time: "3분 전",
       unread: true,
-      data: { kind: "meeting_ack", meetingId: "ux-mtg-1" },
+      createdAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+      data: { inviteId: "ux-invite-expand" },
     },
     {
-      id: "ux-n-mask",
+      id: "ux-n-exp-mask",
       type: "masking",
       title: "마스킹 검증 필요",
-      body: "미확정 개인정보 후보가 있습니다.",
-      time: "1시간 전",
+      body: "미확정 개인정보 후보가 있습니다. 회의 기록에서 가림을 확인하고 확정할 수 있습니다.",
+      time: "8분 전",
       unread: true,
+      createdAt: new Date(Date.now() - 8 * 60_000).toISOString(),
+      data: { href: "/dashboard" },
     },
     {
-      id: "ux-n-storage",
+      id: "ux-n-exp-open",
       type: "storage",
-      title: "암호화 저장 정상",
-      body: "최근 업로드분 검사가 완료되었습니다.",
-      time: "어제",
-      unread: false,
+      title: "회의 분석이 완료되었습니다",
+      body: "주간 싱크 기록이 준비되었습니다. 요약, 타임라인, 대화기록을 회의 목록에서 이어서 확인할 수 있습니다.",
+      time: "10분 전",
+      unread: true,
+      createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+      data: {
+        kind: "analysis_done",
+        href: "/dashboard",
+      },
+    },
+    {
+      id: "ux-n-exp-ack",
+      type: "meeting",
+      title: "회의 참석 확인",
+      body: "내일 오전 10시 주간 싱크입니다. 참석을 확인하면 팀 예정에 반영됩니다. 확인은 참석 수락이 아닙니다.",
+      time: "20분 전",
+      unread: true,
+      createdAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+      data: {
+        kind: "meeting_ack",
+        meetingId: "ux-mtg-ack-expand",
+        href: "/team",
+      },
+    },
+    {
+      id: "ux-n-exp-access",
+      type: "access",
+      title: "비정상 접근 시도",
+      body: "알 수 없는 기기에서 로그인이 차단되었습니다. 본인 활동이 아니면 비밀번호를 변경하세요.",
+      time: "1시간 전",
+      unread: true,
+      createdAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+      data: { href: "/settings" },
     },
   ];
+}
+
+const ADMIN_TEAM_FIXTURE_SEED: Omit<
+  FixtureAdminTeam,
+  | "id"
+  | "slug"
+  | "plan"
+  | "createdAt"
+  | "updatedAt"
+  | "lastMeetingAt"
+  | "managers"
+  | "pendingInvites"
+>[] = [
+  {
+    name: "제품기획팀",
+    seatLimit: 10,
+    memberCount: 7,
+    adminCount: 2,
+    pendingInviteCount: 1,
+    meetingCount: 24,
+    owner: {
+      id: "ux-owner-plan",
+      name: "김기획",
+      handle: "plan-kim",
+      email: "plan@example.com",
+      disabled: false,
+    },
+  },
+  {
+    name: "보안운영팀",
+    seatLimit: 5,
+    memberCount: 5,
+    adminCount: 1,
+    pendingInviteCount: 0,
+    meetingCount: 12,
+    owner: {
+      id: "ux-owner-sec",
+      name: "이보안",
+      handle: "sec-lee",
+      email: "sec@example.com",
+      disabled: false,
+    },
+  },
+  {
+    name: "스타트업팀",
+    seatLimit: 2,
+    memberCount: 1,
+    adminCount: 1,
+    pendingInviteCount: 2,
+    meetingCount: 0,
+    owner: {
+      id: "ux-owner-start",
+      name: "박스타",
+      handle: "startup",
+      email: "start@example.com",
+      disabled: false,
+    },
+  },
+  {
+    name: "정지대표팀",
+    seatLimit: 8,
+    memberCount: 3,
+    adminCount: 1,
+    pendingInviteCount: 0,
+    meetingCount: 5,
+    owner: {
+      id: "ux-owner-paused",
+      name: "최정지",
+      handle: "paused-choi",
+      email: "paused@example.com",
+      disabled: true,
+    },
+  },
+  {
+    name: "성장마케팅",
+    seatLimit: 15,
+    memberCount: 11,
+    adminCount: 3,
+    pendingInviteCount: 4,
+    meetingCount: 48,
+    owner: {
+      id: "ux-owner-mkt",
+      name: "정성장",
+      handle: "growth",
+      email: "growth@example.com",
+      disabled: false,
+    },
+  },
+  {
+    name: "고객성공",
+    seatLimit: 6,
+    memberCount: 4,
+    adminCount: 2,
+    pendingInviteCount: 0,
+    meetingCount: 9,
+    owner: {
+      id: "ux-owner-cs",
+      name: "한성공",
+      handle: "cs-han",
+      email: "cs@example.com",
+      disabled: false,
+    },
+  },
+  {
+    name: "연구개발",
+    seatLimit: 20,
+    memberCount: 18,
+    adminCount: 4,
+    pendingInviteCount: 1,
+    meetingCount: 61,
+    owner: {
+      id: "ux-owner-rd",
+      name: "오연구",
+      handle: "rd-oh",
+      email: "rd@example.com",
+      disabled: false,
+    },
+  },
+  {
+    name: "신규온보딩",
+    seatLimit: 3,
+    memberCount: 2,
+    adminCount: 1,
+    pendingInviteCount: 3,
+    meetingCount: 1,
+    owner: {
+      id: "ux-owner-onb",
+      name: "윤온보",
+      handle: "onboard",
+      email: "onboard@example.com",
+      disabled: false,
+    },
+  },
+  {
+    name: "파트너얼라이언스",
+    seatLimit: 12,
+    memberCount: 6,
+    adminCount: 2,
+    pendingInviteCount: 0,
+    meetingCount: 15,
+    owner: {
+      id: "ux-owner-pt",
+      name: "서파트너",
+      handle: "partner",
+      email: "partner@example.com",
+      disabled: false,
+    },
+  },
+];
+
+/** UX: 관리자 팀 목록 비움 */
+export function fixtureAdminTeamsEmpty(): FixtureAdminTeam[] {
+  return [];
+}
+
+/** UX: 관리자 팀 목록 채워짐 (운영 메타만, count개) */
+export function fixtureAdminTeamsFull(count = 9): FixtureAdminTeam[] {
+  const n = Math.max(1, count);
+  return Array.from({ length: n }, (_, i) => {
+    const seed = ADMIN_TEAM_FIXTURE_SEED[i % ADMIN_TEAM_FIXTURE_SEED.length]!;
+    const day = i + 1;
+    const ownerId = `${seed.owner.id}-${i + 1}`;
+    const managers: FixtureAdminTeam["managers"] = [
+      {
+        id: ownerId,
+        role: "OWNER",
+        name: seed.owner.name,
+        handle: seed.owner.handle,
+        email: seed.owner.email,
+        disabled: seed.owner.disabled,
+      },
+    ];
+    if (seed.adminCount > 1) {
+      managers.push({
+        id: `ux-admin-${i + 1}`,
+        role: "ADMIN",
+        name: `팀장 ${i + 1}`,
+        handle: `lead${i + 1}`,
+        email: `lead${i + 1}@example.com`,
+        disabled: false,
+      });
+    }
+    const pendingInvites: FixtureAdminTeam["pendingInvites"] = Array.from(
+      { length: seed.pendingInviteCount },
+      (_, j) => ({
+        email: `invite${i + 1}-${j + 1}@example.com`,
+        name: `초대 ${j + 1}`,
+        handle: `inv${i + 1}${j + 1}`,
+      }),
+    );
+    return {
+      ...seed,
+      id: `ux-admin-team-${i + 1}`,
+      plan: "TEAM" as const,
+      name:
+        i < ADMIN_TEAM_FIXTURE_SEED.length ? seed.name : `${seed.name} ${i + 1}`,
+      slug: `ux-team-${i + 1}`,
+      createdAt: daysAgoIso(day + 10),
+      updatedAt: daysAgoIso(Math.max(0, day - 1)),
+      lastMeetingAt:
+        seed.meetingCount > 0 ? daysAgoIso(Math.max(0, day - 2)) : null,
+      owner: {
+        ...seed.owner,
+        id: ownerId,
+      },
+      managers,
+      pendingInvites,
+    };
+  });
 }

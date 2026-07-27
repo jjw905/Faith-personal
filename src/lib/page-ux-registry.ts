@@ -11,14 +11,9 @@ const QUOTA_FULL: PageUxScenario = { id: "quota-full", label: "용량 가득" };
 const LOADING: PageUxScenario = { id: "loading", label: "불러오는 중" };
 
 const POPUP = {
-  notifications: { id: "popup-notifications", label: "알림 패널" },
-  notificationsEmpty: {
-    id: "popup-notifications-empty",
-    label: "알림 비어 있음",
-  },
-  notificationsLoading: {
-    id: "popup-notifications-loading",
-    label: "알림 불러오는 중",
+  notificationsExpand: {
+    id: "popup-notifications-expand",
+    label: "알림, 클릭 펼침",
   },
   account: { id: "popup-account", label: "계정 메뉴" },
   upload: { id: "upload", label: "올리기 팝업" },
@@ -61,9 +56,7 @@ const LIST_SCENARIOS: PageUxScenario[] = [LIVE, EMPTY, FULL];
 
 /** 헤더 알림 + 사이드바 계정 메뉴 (대부분 대시보드 화면 공통). */
 const CHROME_POPUPS: PageUxScenario[] = [
-  POPUP.notifications,
-  POPUP.notificationsEmpty,
-  POPUP.notificationsLoading,
+  POPUP.notificationsExpand,
   POPUP.account,
 ];
 
@@ -319,18 +312,13 @@ export function isPageUxAnimScenario(scenarioId: string): boolean {
     scenarioId === "popup-uploading" ||
     scenarioId === "popup-starting" ||
     scenarioId === "popup-vault-picker-loading" ||
-    scenarioId === "popup-notifications-loading" ||
     scenarioId === "popup-invite-search" ||
     scenarioId === "anim-processing"
   );
 }
 
 export function isPageUxNotificationScenario(scenarioId: string): boolean {
-  return (
-    scenarioId === "popup-notifications" ||
-    scenarioId === "popup-notifications-empty" ||
-    scenarioId === "popup-notifications-loading"
-  );
+  return scenarioId === "popup-notifications-expand";
 }
 
 export const DEFAULT_PAGE_UX_SCENARIOS = LIST_SCENARIOS;

@@ -15,6 +15,7 @@ import {
 
 import {
   SceneAnimBubbleIn,
+  SceneAnimLoadingMark,
   SceneAnimMaskChipIn,
   SceneAnimRecordBeat,
   SceneAnimRunningDots,
@@ -251,7 +252,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
       },
       {
         id: "notifications",
-        label: "알림 센터",
+        label: "알림 센터, 클릭 펼침",
         route: "헤더",
         kind: "popup",
         Preview: SceneNotificationPanel,
@@ -301,6 +302,14 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         kind: "animation",
         trigger: "running-dots",
         Preview: SceneAnimRunningDots,
+      },
+      {
+        id: "loading-mark",
+        label: "불러오는 중",
+        route: "목록",
+        kind: "animation",
+        trigger: "faith-loading-ring",
+        Preview: SceneAnimLoadingMark,
       },
     ],
   },

@@ -101,17 +101,17 @@ export function MeetingRecordsActionDialog({
         </h2>
         <p
           id="records-action-confirm-desc"
-          className="mt-1.5 text-sm leading-relaxed text-muted"
+          className="mt-1.5 text-base leading-relaxed text-muted md:text-sm"
         >
           {desc}
         </p>
 
         <div className="mt-4 rounded-2xl bg-surface px-3 py-3">
           <div className="mb-2 flex items-center justify-between gap-2 px-1">
-            <p className="text-xs font-semibold tracking-wide text-muted-2">
+            <p className="text-sm font-semibold tracking-wide text-muted-2 md:text-xs">
               선택 목록
             </p>
-            <span className="text-xs font-semibold tabular-nums text-muted-2">
+            <span className="text-sm font-semibold tabular-nums text-muted-2 md:text-xs">
               {count}건
             </span>
           </div>
@@ -127,7 +127,7 @@ export function MeetingRecordsActionDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-xl px-4 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-auto"
+            className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-xl px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:min-h-0 sm:w-auto sm:text-sm"
           >
             취소
           </button>
@@ -137,8 +137,8 @@ export function MeetingRecordsActionDialog({
             disabled={busy}
             className={
               isDelete
-                ? "inline-flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-masked px-4 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-auto"
-                : "inline-flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-auto"
+                ? "inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-masked px-4 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:min-h-0 sm:w-auto sm:text-sm"
+                : "inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-base font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:min-h-0 sm:w-auto sm:text-sm"
             }
           >
             <ConfirmIcon className="h-4 w-4" strokeWidth={1.75} aria-hidden />

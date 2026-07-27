@@ -193,7 +193,7 @@ export function MeetingAttachmentsList({
   if (files.length === 0) {
     return (
       <section>
-        <p className="py-8 text-center text-sm text-muted">
+        <p className="py-8 text-center text-base text-muted md:text-sm">
           첨부된 파일이 없습니다.
         </p>
       </section>
@@ -202,7 +202,7 @@ export function MeetingAttachmentsList({
 
   return (
     <section>
-      <p className="mb-3 text-xs font-medium tabular-nums text-muted-2">
+      <p className="mb-3 text-base font-medium tabular-nums text-muted-2 md:text-xs">
         {files.length}개
       </p>
       <ul className="space-y-1 overflow-hidden rounded-2xl bg-surface p-1">
@@ -216,11 +216,11 @@ export function MeetingAttachmentsList({
               <button
                 type="button"
                 onClick={() => onSelectLine?.(item.lineId)}
-                className="flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-card sm:px-4"
+                className="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-card sm:px-4 md:min-h-0"
               >
                 <div
                   className={cn(
-                    "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl",
+                    "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl md:h-11 md:w-11",
                     kindTone(kind, false),
                   )}
                 >
@@ -230,10 +230,10 @@ export function MeetingAttachmentsList({
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">
+                  <p className="truncate text-base font-semibold text-foreground md:text-sm">
                     {item.attachment.name}
                   </p>
-                  <p className="mt-0.5 truncate text-xs font-medium text-muted">
+                  <p className="mt-0.5 truncate text-base font-medium text-muted md:text-xs">
                     {kindLabel(kind)} {item.attachment.sizeLabel}
                     <span className="text-muted-2"> , </span>
                     {item.speaker}
@@ -247,7 +247,7 @@ export function MeetingAttachmentsList({
         })}
       </ul>
       {onSelectLine ? (
-        <p className="mt-2 text-xs font-medium text-muted-2">
+        <p className="mt-2 text-base font-medium text-muted-2 md:text-xs">
           파일을 누르면 해당 대화 위치로 이동합니다.
         </p>
       ) : null}

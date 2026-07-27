@@ -1,7 +1,7 @@
 import "server-only";
 
 import { existsSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { getMeetingById } from "@/lib/meetings-data";
 import { getUserMeeting } from "@/lib/user-meetings-store";
@@ -42,7 +42,7 @@ export function resolveReplayAudioFile(meetingId: string): {
   if (!existsSync(absolutePath)) return null;
   return {
     absolutePath,
-    label: meeting?.title ? `${meeting.title} 녹음` : "회의 녹음",
+    label: meeting?.title ? `${meeting.title} 다시듣기` : "다시듣기",
     mime: mimeForAudioPath(absolutePath),
   };
 }
@@ -61,7 +61,7 @@ export function resolveMeetingReplayAudio(input: {
   if (row?.vaultFileId) {
     return {
       src: `/api/vault/${row.vaultFileId}/content`,
-      label: "회의 녹음",
+      label: "다시듣기",
     };
   }
 
@@ -71,7 +71,7 @@ export function resolveMeetingReplayAudio(input: {
   if (replay.startsWith("/samples/")) {
     return {
       src: replay,
-      label: basename(replay) || "회의 녹음",
+      label: "다시듣기",
     };
   }
 
@@ -79,6 +79,6 @@ export function resolveMeetingReplayAudio(input: {
 
   return {
     src: `/api/meetings/${meeting.id}/replay-audio`,
-    label: meeting.title ? `${meeting.title} 녹음` : "회의 녹음",
+    label: "다시듣기",
   };
 }

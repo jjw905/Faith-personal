@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
@@ -10,8 +11,20 @@ import {
 } from "@/context/team-role-preview-context";
 import { cn } from "@/lib/utils";
 
+/** 돌아가기(도움말·약관·개인정보)와 겹치지 않게 우측 배치. */
+function alignPreviewEnd(pathname: string) {
+  return (
+    pathname === "/help" ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname.startsWith("/privacy/") ||
+    pathname.startsWith("/terms/")
+  );
+}
+
 /** 관리자: 화면 UX + 팀 역할 미리보기. */
 export function PageUxPreviewControl() {
+  const pathname = usePathname();
   const { enabled, supported, surface, scenario, next, prev, isLive } =
     usePageUxPreview();
   const {
@@ -25,8 +38,17 @@ export function PageUxPreviewControl() {
   const showRole = roleEnabled && roleActive;
   if (!showUx && !showRole) return null;
 
+  const endAligned = alignPreviewEnd(pathname);
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-[90] flex h-16 items-center justify-start gap-2 pl-14 pr-16 sm:pr-[4.5rem] lg:px-6">
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 top-0 z-[90] flex h-16 items-center gap-2",
+        endAligned
+          ? "justify-end px-4 sm:px-6"
+          : "justify-start pl-14 pr-16 sm:pr-[4.5rem] lg:px-6",
+      )}
+    >
       {showUx ? (
         <div
           className={cn(

@@ -320,7 +320,7 @@ export function MeetingDateTimeMeta({
     return (
       <div
         className={cn(
-          "mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm",
+          "mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-base md:text-sm",
           className,
         )}
       >
@@ -345,7 +345,7 @@ export function MeetingDateTimeMeta({
     return (
       <div
         className={cn(
-          "mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm",
+          "mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-base md:text-sm",
           className,
         )}
       >
@@ -367,7 +367,7 @@ export function MeetingDateTimeMeta({
           }}
           disabled={busy}
           aria-label="회의 날짜와 시간"
-          className="rounded-lg bg-surface-2 px-2 py-1 font-semibold tabular-nums tracking-tight text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
+          className="h-14 rounded-xl bg-surface-2 px-3 py-2 text-base font-semibold tabular-nums tracking-tight text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-primary disabled:opacity-60 md:h-auto md:rounded-lg md:px-2 md:py-1 md:text-sm"
         />
         {durationNode}
       </div>
@@ -377,7 +377,7 @@ export function MeetingDateTimeMeta({
   return (
     <div
       className={cn(
-        "mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm",
+        "mt-3 flex min-h-12 flex-wrap items-center gap-x-2 gap-y-1 text-base md:min-h-0 md:text-sm",
         className,
       )}
     >
@@ -470,28 +470,28 @@ export function MeetingRecordActions({
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className="flex shrink-0 items-center gap-1">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-9 w-9 text-muted hover:bg-surface-2 hover:text-foreground"
+          className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9"
           aria-label="다운로드"
           disabled={busy}
           onClick={() => setActionMode("download")}
         >
-          <Download className="h-4 w-4" strokeWidth={1.75} />
+          <Download className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-9 w-9 text-masked hover:bg-masked-soft hover:text-masked"
+          className="h-12 w-12 text-masked hover:bg-masked-soft hover:text-masked md:h-9 md:w-9"
           aria-label="기록 삭제"
           disabled={busy}
           onClick={() => setActionMode("delete")}
         >
-          <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+          <Trash2 className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
         </Button>
       </div>
 
