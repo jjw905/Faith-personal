@@ -262,12 +262,10 @@ async function main() {
       "",
     ]),
   ].join("\n");
+  const reportDir = join(process.cwd(), ".data/stt-bench/report");
+  mkdirSync(reportDir, { recursive: true });
   writeFileSync(
-    join(
-      process.cwd(),
-      "Faith-office",
-      `Faith_화자분리_모델비교_${new Date().toISOString().slice(0, 10)}.md`,
-    ),
+    join(reportDir, `diarization-compare-${new Date().toISOString().slice(0, 10)}.md`),
     report,
   );
 }

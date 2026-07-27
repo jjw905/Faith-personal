@@ -217,9 +217,9 @@ async function main() {
 
   writeFileSync(join(OUT, "summary.json"), JSON.stringify(results, null, 2));
 
-  // Faith-office 요약
-  const officeDir = join(process.cwd(), "Faith-office");
-  mkdirSync(officeDir, { recursive: true });
+  // 중간 산출물. 확정 내용은 Faith-office/Faith_STT_사양 문서에 합친다.
+  const reportDir = join(process.cwd(), ".data/stt-bench/report");
+  mkdirSync(reportDir, { recursive: true });
   const lines = [
     "Faith 실시간 STT 파이프라인 평가",
     `날짜: ${new Date().toISOString().slice(0, 10)}`,
@@ -243,7 +243,7 @@ async function main() {
     );
   }
   writeFileSync(
-    join(officeDir, `Faith_실시간파이프라인_평가_${new Date().toISOString().slice(0, 10)}.txt`),
+    join(reportDir, `realtime-pipeline-${new Date().toISOString().slice(0, 10)}.txt`),
     lines.join("\n"),
   );
 

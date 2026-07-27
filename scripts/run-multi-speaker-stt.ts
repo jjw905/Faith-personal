@@ -74,11 +74,15 @@ async function runRealtime() {
   const { realtimeTranscribeFile } = await import(
     "../src/lib/stt/realtime/transcribe-session"
   );
+  const { REALTIME_STT_WHISPER } = await import(
+    "../src/lib/stt/realtime/types"
+  );
   console.log("\n=== REALTIME STT (gpt-realtime-whisper, diarization=none) ===");
   let lastLog = 0;
   const started = Date.now();
   const stt = await realtimeTranscribeFile(CLIP, {
     language: "ko",
+    model: REALTIME_STT_WHISPER,
     onProgress: (p) => {
       const now = Date.now();
       if (now - lastLog < 5000) return;

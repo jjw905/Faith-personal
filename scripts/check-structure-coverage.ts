@@ -39,7 +39,11 @@ async function main() {
 
   console.log(`입력 ${text.length}자, 실측 ${timed.length}구간, ${clock(durationSec)}`);
 
-  const { structure, usage } = await buildSemanticStructure(text, durationSec);
+  const { structure, usage, dialogueCoverage } = await buildSemanticStructure(
+    text,
+    durationSec,
+  );
+  console.log(`커버리지 지표 ${(dialogueCoverage * 100).toFixed(0)}%`);
   const dialogueChars = structure.dialogue.reduce(
     (s, d) => s + d.text.length,
     0,
