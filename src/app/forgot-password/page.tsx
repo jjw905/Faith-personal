@@ -14,7 +14,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell>
       <header className="shrink-0 border-b border-border-strong/50 bg-[#e6e8ed]">
-        <Container className="flex h-16 items-center sm:h-[4.5rem]">
+        <Container className="flex h-16 items-center">
           <Link
             href="/"
             className="text-xl font-bold tracking-tight text-foreground"

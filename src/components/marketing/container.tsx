@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /** 페이지 좌우 여백과 최대 폭을 통일하는 레이아웃 래퍼.
- *  반응형은 작은/큰 2단만 사용 (중간 애매한 단계 없음).
+ *  패딩·폭은 clamp로 연속 변화 (breakpoint 스냅 최소화).
  */
 export function Container({
   children,
@@ -13,7 +13,7 @@ export function Container({
   return (
     <div
       className={cn(
-        "mx-auto w-full max-w-7xl px-6 xl:px-12",
+        "mx-auto w-full max-w-[min(100%,80rem)] px-[clamp(1.5rem,3.5vw,3rem)]",
         className,
       )}
     >

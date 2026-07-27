@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type PointerEvent,
 } from "react";
 
@@ -36,12 +37,17 @@ function readPos(): Pos {
 }
 
 function useEditMode() {
-  const [on, setOn] = useState(false);
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("edit");
-    setOn(q === "1" || q === "features");
-  }, []);
-  return on;
+  return useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener("popstate", onChange);
+      return () => window.removeEventListener("popstate", onChange);
+    },
+    () => {
+      const q = new URLSearchParams(window.location.search).get("edit");
+      return q === "1" || q === "features";
+    },
+    () => false,
+  );
 }
 
 /**
@@ -55,8 +61,25 @@ export function FeaturesHeadline() {
   const innerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [boxH, setBoxH] = useState<number | undefined>(undefined);
-  const [pos, setPos] = useState<Pos>(DEFAULT);
-  const [ready, setReady] = useState(false);
+  // 서버는 DEFAULT, 클라이언트는 localStorage. 드래그 중에는 draft가 이긴다.
+  const storedPos = useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener("storage", onChange);
+      return () => window.removeEventListener("storage", onChange);
+    },
+    () => readPos(),
+    () => DEFAULT,
+  );
+  const [draft, setDraft] = useState<Pos | null>(null);
+  const pos = draft ?? storedPos;
+  const setPos = (
+    next: Pos | ((prev: Pos) => Pos),
+  ) => {
+    setDraft((prev) => {
+      const base = prev ?? storedPos;
+      return typeof next === "function" ? next(base) : next;
+    });
+  };
   const [sel, setSel] = useState<"title" | "bubble">("title");
   const drag = useRef<{
     key: "title" | "bubble";
@@ -67,14 +90,9 @@ export function FeaturesHeadline() {
   } | null>(null);
 
   useEffect(() => {
-    setPos(readPos());
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready || !edit) return;
+    if (!edit) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
-  }, [pos, ready, edit]);
+  }, [pos, edit]);
 
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
@@ -177,11 +195,8 @@ export function FeaturesHeadline() {
           transformOrigin: "top center",
         }}
       >
-        {/* 히어로에서 내려온 세로선 */}
-        <div
-          aria-hidden
-          className="mb-12 h-12 w-px bg-[color-mix(in_srgb,var(--foreground)_16%,transparent)]"
-        />
+        {/* 세로선은 히어로에서 이어짐. 간격만 유지 */}
+        <div aria-hidden className="mb-12 h-12 w-px" />
 
         <div className="grid w-full grid-cols-2 items-start gap-x-10">
           <div
@@ -238,7 +253,7 @@ export function FeaturesHeadline() {
         </div>
       </div>
 
-      {edit && ready ? (
+      {edit ? (
         <div className="fixed bottom-4 right-4 z-[80] w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-3 text-left shadow-lg">
           <p className="text-sm font-semibold text-foreground">위치 조절</p>
           <p className="mt-1 text-xs leading-relaxed text-muted">

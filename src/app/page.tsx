@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { ContactInquiryProvider } from "@/components/marketing/contact-inquiry-provider";
 import { FeatureTimeline } from "@/components/marketing/feature-timeline";
 import { Hero } from "@/components/marketing/hero";
+import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteNav } from "@/components/marketing/site-nav";
 
@@ -22,15 +22,13 @@ export default async function HomePage() {
   }
 
   return (
-    <ContactInquiryProvider>
-      <div className="min-h-screen bg-background">
-        <SiteNav />
-        <main>
-          <Hero />
-          <FeatureTimeline />
-        </main>
-        <SiteFooter />
-      </div>
-    </ContactInquiryProvider>
+    <MarketingShell>
+      <SiteNav />
+      <main className="flex-1">
+        <Hero />
+        <FeatureTimeline />
+      </main>
+      <SiteFooter />
+    </MarketingShell>
   );
 }

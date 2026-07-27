@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { ContactInquiryProvider } from "@/components/marketing/contact-inquiry-provider";
+import { MarketingShell } from "@/components/marketing/marketing-shell";
 import { PricingTiers } from "@/components/marketing/pricing-tiers";
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteNav } from "@/components/marketing/site-nav";
@@ -14,14 +14,12 @@ export const metadata: Metadata = {
 /** 요금제 소개 페이지. */
 export default function PricingPage() {
   return (
-    <ContactInquiryProvider>
-      <div className="min-h-screen bg-background">
-        <SiteNav />
-        <main>
-          <PricingTiers />
-        </main>
-        <SiteFooter />
-      </div>
-    </ContactInquiryProvider>
+    <MarketingShell>
+      <SiteNav />
+      <main className="flex-1">
+        <PricingTiers />
+      </main>
+      <SiteFooter />
+    </MarketingShell>
   );
 }

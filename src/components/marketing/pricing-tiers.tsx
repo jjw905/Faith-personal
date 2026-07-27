@@ -3,9 +3,9 @@
 import { Check } from "lucide-react";
 import { useState } from "react";
 
-import { useContactInquiry } from "@/components/marketing/contact-inquiry-provider";
 import { Container } from "@/components/marketing/container";
 import { CtaButton } from "@/components/marketing/cta-button";
+import { SUPPORT_EMAIL } from "@/lib/support-email";
 import { cn } from "@/lib/utils";
 
 type Billing = "monthly" | "yearly";
@@ -19,7 +19,8 @@ type Tier = {
   yearlyMonthlyPrice?: number | null;
   yearlyTotal?: number | null;
   priceUnit?: string;
-  priceNote?: string;
+  /** 카드 우상단 배지. 추천과 동일 스타일. */
+  badges?: string[];
   features: string[];
   cta: { label: string; href?: string; contact?: boolean };
   featured?: boolean;
@@ -46,6 +47,7 @@ const TIERS: Tier[] = [
     monthlyPrice: 19_000,
     yearlyMonthlyPrice: 15_833,
     yearlyTotal: 190_000,
+    badges: ["연 결제 시 2개월 무료", "추천"],
     features: [
       "회의 무제한",
       "보관함 20GB",
@@ -62,7 +64,7 @@ const TIERS: Tier[] = [
     monthlyPrice: 15_200,
     yearlyMonthlyPrice: 15_200,
     priceUnit: "/ 인 / 월",
-    priceNote: "2명부터, Pro 대비 인당 20% 할인",
+    badges: ["Pro 월간 대비 20% 할인"],
     features: [
       "팀 워크스페이스, 초대",
       "역할, 기록 열람 권한",
@@ -87,18 +89,18 @@ function BillingSwitch({
   onChange: (v: Billing) => void;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-xs flex-col items-center gap-2 sm:max-w-sm">
+    <div className="mx-auto flex w-full max-w-[14rem] flex-col items-center gap-1.5">
       <div
         role="group"
         aria-label="결제 주기"
-        className="flex w-full rounded-full bg-card p-1 shadow-soft ring-1 ring-border/50"
+        className="flex w-full rounded-full bg-card p-0.5 shadow-soft ring-1 ring-border/50"
       >
         <button
           type="button"
           aria-pressed={value === "monthly"}
           onClick={() => onChange("monthly")}
           className={cn(
-            "min-h-11 flex-1 rounded-full px-4 text-sm font-semibold transition-colors duration-200",
+            "min-h-9 flex-1 rounded-full px-3 text-base font-semibold transition-colors duration-200",
             value === "monthly"
               ? "bg-primary text-primary-foreground"
               : "text-foreground/70 hover:text-foreground",
@@ -111,7 +113,7 @@ function BillingSwitch({
           aria-pressed={value === "yearly"}
           onClick={() => onChange("yearly")}
           className={cn(
-            "min-h-11 flex-1 rounded-full px-4 text-sm font-semibold transition-colors duration-200",
+            "min-h-9 flex-1 rounded-full px-3 text-base font-semibold transition-colors duration-200",
             value === "yearly"
               ? "bg-primary text-primary-foreground"
               : "text-foreground/70 hover:text-foreground",
@@ -122,7 +124,7 @@ function BillingSwitch({
       </div>
       <p
         className={cn(
-          "min-h-5 text-xs font-semibold transition-opacity",
+          "min-h-5 text-sm font-semibold transition-opacity",
           value === "yearly" ? "text-primary opacity-100" : "opacity-0",
         )}
       >
@@ -133,7 +135,6 @@ function BillingSwitch({
 }
 
 function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
-  const { openContact } = useContactInquiry();
   const isInquiry = tier.monthlyPrice === null;
   const monthly =
     billing === "yearly"
@@ -142,22 +143,20 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
 
   const priceLabel = isInquiry ? "문의" : formatWon(monthly ?? 0);
 
-  const note = tier.priceNote
-    ? tier.priceNote
-    : isInquiry
-      ? ""
-      : billing === "yearly" && tier.yearlyTotal != null && tier.yearlyTotal > 0
-        ? `연 ${formatWon(tier.yearlyTotal)} 청구`
-        : billing === "yearly" && tier.monthlyPrice === 0
-          ? "항상 무료"
-          : billing === "monthly" && tier.yearlyTotal
-            ? "연 결제 시 2개월 무료"
-            : "";
+  const note = isInquiry
+    ? ""
+    : billing === "yearly" && tier.yearlyTotal != null && tier.yearlyTotal > 0
+      ? `연 ${formatWon(tier.yearlyTotal)} 청구`
+      : billing === "yearly" && tier.monthlyPrice === 0
+        ? "항상 무료"
+        : "";
 
   const ctaClass = cn(
-    "mt-5 w-full py-3.5 text-[15px] sm:mt-6 sm:py-3",
+    "mt-5 w-full py-3.5 text-base sm:mt-6 sm:py-3",
     tier.featured ? "" : "bg-surface hover:bg-surface-2",
   );
+
+  const badges = tier.badges ?? [];
 
   return (
     <div
@@ -168,41 +167,52 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
           : "shadow-soft ring-1 ring-border/50",
       )}
     >
-      {tier.featured ? (
-        <span className="absolute right-5 top-5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground sm:right-6 sm:top-6">
-          추천
-        </span>
+      {badges.length > 0 ? (
+        <div className="absolute right-4 top-4 flex max-w-[min(100%,15rem)] flex-wrap justify-end gap-1.5 sm:right-5 sm:top-5 sm:max-w-[17rem]">
+          {badges.map((label) => (
+            <span
+              key={label}
+              className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
       ) : null}
 
-      <p className="pr-14 text-lg font-bold tracking-tight text-foreground">
+      <p
+        className={cn(
+          "text-xl font-bold tracking-tight text-foreground",
+          badges.length > 0 && "pr-16",
+        )}
+      >
         {tier.name}
       </p>
-      <p className="mt-1 text-sm font-medium text-muted">{tier.tagline}</p>
+      <p className="mt-1 text-base font-medium text-muted">{tier.tagline}</p>
 
       <div className="mt-5 flex min-h-[3.25rem] items-baseline gap-1.5 sm:mt-6">
         <span className="text-3xl font-bold tracking-tight text-foreground tabular-nums xl:text-4xl">
           {priceLabel}
         </span>
         {!isInquiry ? (
-          <span className="text-sm font-medium text-muted-2">
+          <span className="text-base font-medium text-muted-2">
             {tier.priceUnit ?? "/ 월"}
           </span>
         ) : null}
       </div>
-      <p className="mt-1.5 min-h-5 text-xs font-medium text-muted-2">{note}</p>
+      <p className="mt-1.5 min-h-5 text-sm font-medium text-muted-2">{note}</p>
 
       {tier.cta.contact ? (
-        <button
-          type="button"
-          onClick={() => openContact({ subject: "Faith 팀 플랜 문의" })}
+        <a
+          href={`mailto:${SUPPORT_EMAIL}`}
           className={cn(
-            "inline-flex items-center justify-center rounded-xl px-5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex items-center justify-center rounded-xl px-5 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             "bg-surface text-foreground hover:bg-surface-2",
             ctaClass,
           )}
         >
           {tier.cta.label}
-        </button>
+        </a>
       ) : (
         <CtaButton
           href={tier.cta.href ?? "/signup"}
@@ -217,7 +227,7 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
         {tier.features.map((f) => (
           <li
             key={f}
-            className="flex items-start gap-2.5 text-sm text-foreground"
+            className="flex items-start gap-2.5 text-base text-foreground"
           >
             <Check
               className="mt-0.5 h-4 w-4 shrink-0 text-primary"
@@ -236,31 +246,21 @@ export function PricingTiers() {
   const [billing, setBilling] = useState<Billing>("monthly");
 
   return (
-    <section className="bg-surface py-12 sm:py-16 lg:py-24">
+    <section className="py-12 sm:py-16 xl:py-20">
       <Container>
         <div className="mx-auto max-w-2xl text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl xl:text-5xl">
             규모에 맞는 요금제
           </h1>
-          <p className="mt-4 text-base leading-relaxed text-muted sm:mt-5 sm:text-lg">
-            개인 회의록은 Pro, 함께하는 회의는 Team.
-          </p>
         </div>
 
-        <div className="mx-auto mt-8 sm:mt-10">
+        <div className="mx-auto mt-5 sm:mt-6">
           <BillingSwitch value={billing} onChange={setBilling} />
         </div>
 
-        <div className="mx-auto mt-8 grid max-w-5xl gap-4 sm:mt-10 sm:gap-6 lg:grid-cols-3 lg:items-stretch">
+        <div className="mx-auto mt-5 grid w-full max-w-lg gap-4 sm:mt-6 sm:gap-5 lg:max-w-5xl lg:grid-cols-3 lg:items-stretch">
           {TIERS.map((tier) => (
-            <div
-              key={tier.name}
-              className={cn(
-                tier.name === "Free" && "order-2 lg:order-1",
-                tier.name === "Pro" && "order-1 lg:order-2",
-                tier.name === "Team" && "order-3",
-              )}
-            >
+            <div key={tier.name} className="min-w-0">
               <TierCard tier={tier} billing={billing} />
             </div>
           ))}

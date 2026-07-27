@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -424,7 +425,6 @@ export function ChatMock() {
   const inViewRef = useRef(true);
   const rafRef = useRef(0);
   const [visible, setVisible] = useState<VisibleMessage[]>([]);
-  const [dateLabel, setDateLabel] = useState("");
 
   function clearTimers() {
     timersRef.current.forEach((t) => window.clearTimeout(t));
@@ -458,16 +458,17 @@ export function ChatMock() {
     feed.scrollTop = max > 0 ? max : 0;
   }
 
-  useEffect(() => {
-    setDateLabel(
+  const dateLabel = useSyncExternalStore(
+    () => () => {},
+    () =>
       new Intl.DateTimeFormat("ko-KR", {
         year: "numeric",
         month: "long",
         day: "numeric",
         weekday: "short",
       }).format(new Date()),
-    );
-  }, []);
+    () => "",
+  );
 
   // 화면 밖이면 setState 생략 — 스크롤 중 메인 스레드 부담 감소
   useEffect(() => {
@@ -506,13 +507,21 @@ export function ChatMock() {
         pending: false,
       }));
       messagesRef.current = initial;
-      setVisible(initial);
-      return;
+      // 이펙트 본문 동기 setState 금지 — 첫 틱으로 미룬다.
+      const id = window.setTimeout(() => {
+        if (!cancelled) setVisible(initial);
+      }, 0);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(id);
+      };
     }
 
     clearTimers();
     messagesRef.current = [];
-    setVisible([]);
+    const clearId = window.setTimeout(() => {
+      if (!cancelled) setVisible([]);
+    }, 0);
 
     const GAP = 160;
     const TYPING = 1400;
@@ -556,6 +565,7 @@ export function ChatMock() {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(clearId);
       clearTimers();
       if (rafRef.current) {
         window.cancelAnimationFrame(rafRef.current);
@@ -578,12 +588,6 @@ export function ChatMock() {
           ref={feedRef}
           data-chat-feed
           className="min-h-0 flex-1 overflow-hidden"
-          style={{
-            WebkitMaskImage:
-              "linear-gradient(to bottom, transparent 0, #000 22px, #000 100%)",
-            maskImage:
-              "linear-gradient(to bottom, transparent 0, #000 22px, #000 100%)",
-          }}
         >
           <div ref={listRef} className="flex flex-col gap-3.5 px-2 pb-1 pt-6">
             <ChatDateDivider label={dateLabel} />

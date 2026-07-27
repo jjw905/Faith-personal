@@ -79,12 +79,12 @@ function StepCopy({
       <span className="text-xs font-semibold tracking-widest text-muted-2">
         STEP {step}
       </span>
-      <h3 className="mt-1 text-lg font-semibold text-foreground sm:text-xl xl:text-2xl">
+      <h3 className="mt-1 text-xl font-semibold text-foreground xl:text-2xl">
         {title}
       </h3>
       <p
         className={cn(
-          "mt-2 text-sm leading-relaxed text-muted sm:text-base xl:mt-3",
+          "mt-2 text-base leading-relaxed text-muted xl:mt-3",
           align === "right" ? "ml-auto max-w-md" : "max-w-md",
         )}
       >
@@ -99,7 +99,7 @@ export function FeatureTimeline() {
   return (
     <section
       id="features"
-      className="scroll-mt-20 bg-surface pb-20 pt-0 lg:pb-28"
+      className="scroll-mt-20 bg-[#f0f1f4] pb-20 pt-0 xl:pb-28"
     >
       <Container>
         <FeaturesHeadline />

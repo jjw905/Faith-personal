@@ -12,12 +12,12 @@
   /* 30% — 표면/보조 (본문 대비 ≥4.5:1 목표) */
   --card: #ffffff;
   --card-foreground: #1d1d1f;
-  --surface: #eef0f5;
-  --surface-2: #e2e5ed;
+  --surface: #f0f1f4;
+  --surface-2: #e4e6eb;
   --muted: #515154;
   --muted-2: #6e6e73;
-  --border: #e3e5ec;
-  --border-strong: #c6c9d4;
+  --border: #e2e2e7;
+  --border-strong: #c7c7cc;
 
   /* 10% — 액센트 (딥 네이비, 레퍼런스 톤) */
   --primary: #11162e;
@@ -75,6 +75,8 @@
 html {
   /* 해시 스크롤은 JS(scrollToHash)가 담당. CSS smooth와 겹치면 버벅임. */
   scroll-behavior: auto;
+  /* 스크롤바 유무로 뷰포트 폭이 출렁이며 레이아웃이 흔들리는 것 방지 */
+  scrollbar-gutter: stable;
 }
 
 @media (prefers-reduced-motion: no-preference) {
