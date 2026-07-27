@@ -1,5 +1,6 @@
 import { maskAccountDigits, maskPhoneDigits, extractDigits, looksLikeKrPhone } from "@/lib/masking/korean-digits";
 import { maskPii } from "@/lib/masking/mask";
+import { isNotPersonName } from "@/lib/masking/not-name";
 import { applyStyle } from "@/lib/masking/mask-style";
 import {
   maskAddressPartial,
@@ -142,7 +143,7 @@ function nerSpanCredible(type: PiiType, text: string): boolean {
     case "biz_no":
       return digits.length >= 10;
     case "name":
-      return text.length >= 2 && text.length <= 4;
+      return text.length >= 2 && text.length <= 4 && !isNotPersonName(text);
     case "email":
       return text.includes("@") && text.indexOf("@") < text.length - 1;
     case "health_id":

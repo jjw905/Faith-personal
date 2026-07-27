@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import type { PiiMatch } from "@/lib/masking";
 import { cn } from "@/lib/utils";
@@ -20,11 +20,24 @@ export function MaskedText({
   /** 내 말풍선(진한 primary) 위일 때 */
   onPrimary?: boolean;
 }) {
-  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
+  /**
+   * 가린 항목이 바뀔 때만 열어 둔 것을 닫는다.
+   *
+   * 배열을 그대로 의존성에 두면 안 된다. 재생 중에는 부모가 매초 다시 그려지고
+   * 그때마다 matches가 새 배열이 되어, 열어 둔 항목이 1초 만에 도로 잠긴다.
+   */
+  const resetKey = useMemo(
+    () => `${original}\u0000${matches.map(matchKey).join("|")}`,
+    [original, matches],
+  );
 
-  useEffect(() => {
-    setRevealed(new Set());
-  }, [original, matches]);
+  const [state, setState] = useState<{ key: string; revealed: Set<string> }>(
+    () => ({ key: resetKey, revealed: new Set() }),
+  );
+  if (state.key !== resetKey) {
+    setState({ key: resetKey, revealed: new Set() });
+  }
+  const revealed = state.revealed;
 
   const segments = useMemo(() => {
     if (!original) return [];
@@ -61,11 +74,11 @@ export function MaskedText({
   }, [original, matches]);
 
   const toggle = useCallback((key: string) => {
-    setRevealed((prev) => {
-      const next = new Set(prev);
+    setState((prev) => {
+      const next = new Set(prev.revealed);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      return next;
+      return { key: prev.key, revealed: next };
     });
   }, []);
 

@@ -8,6 +8,7 @@ import {
   MIXED_DIGIT_RUN,
   normalizeWithMap,
 } from "@/lib/masking/korean-digits";
+import { isNotPersonName } from "@/lib/masking/not-name";
 import { PII_PATTERNS } from "@/lib/masking/patterns";
 import type {
   MaskOptions,
@@ -43,6 +44,16 @@ function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number) {
   return aStart < bEnd && bStart < aEnd;
 }
 
+/**
+ * 이름 매치에서 실제 이름 후보만 뽑아 오탐인지 본다.
+ * 호칭 규칙은 매치 전체가 이름이고, 단서 규칙은 "고객님 문의"처럼 앞말이 붙는다.
+ */
+export function isNotNameMatch(value: string): boolean {
+  if (isNotPersonName(value)) return true;
+  const tail = value.match(/([가-힣]{2,3})\s*$/)?.[1];
+  return tail ? isNotPersonName(tail) : false;
+}
+
 function collectPatternMatches(
   text: string,
   exclude: Set<PiiType>,
@@ -56,6 +67,7 @@ function collectPatternMatches(
       const value = found[0];
       const start = found.index ?? 0;
       const end = start + value.length;
+      if (pattern.type === "name" && isNotNameMatch(value)) continue;
       matches.push({
         type: pattern.type,
         value,
@@ -89,6 +101,7 @@ function collectSpokenPatternMatches(
       const nStart = found.index ?? 0;
       const nEnd = nStart + found[0].length;
       if (nEnd === nStart) continue;
+      if (pattern.type === "name" && isNotNameMatch(found[0])) continue;
       const start = startMap[nStart]!;
       const end = endMap[nEnd - 1]!;
       matches.push({
@@ -216,6 +229,9 @@ function resolveOverlaps(matches: PiiMatch[]): PiiMatch[] {
  * Independent of STT — feed corrected transcript text (or mock text) directly.
  */
 export function maskPii(text: string, options: MaskOptions = {}): MaskResult {
+  if (options.style === "off") {
+    return { original: text, masked: text, matches: [], stats: emptyStats() };
+  }
   const exclude = new Set(options.excludeTypes ?? []);
   const raw = [
     ...collectPatternMatches(text, exclude),

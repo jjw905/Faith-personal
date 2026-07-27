@@ -39,6 +39,7 @@ export function labelFor(type: PiiType): string {
  * - partial: 라벨 토큰으로 되어있는 것만 부분 별표로 변환(이미 부분표기는 유지)
  */
 export function applyStyle(matches: PiiMatch[], style: MaskStyle): PiiMatch[] {
+  if (style === "off") return [];
   return matches.map((m) => {
     if (m.type === "bank") return m;
     if (style === "label") {

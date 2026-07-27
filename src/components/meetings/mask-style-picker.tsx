@@ -1,6 +1,6 @@
 "use client";
 
-import { EyeOff } from "lucide-react";
+import { Check, Eye, EyeOff } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { labelFor } from "@/lib/masking/mask-style";
@@ -26,7 +26,17 @@ const MASK_STYLE_SAMPLES = {
     phone: labelFor("phone"),
     email: labelFor("email"),
   },
+  off: {
+    phone: "010-2456-3916",
+    email: "sunhyeeee@partner.co.kr",
+  },
 } as const;
+
+const MASK_OPTIONS: Array<{ value: MaskStyle; label: string }> = [
+  { value: "partial", label: "부분 가림" },
+  { value: "label", label: "유형 표시" },
+  { value: "off", label: "가리지 않음" },
+];
 
 /** 부분 가림 / 유형 표시 선택. 실시간 기록 UI용. */
 export function MaskStylePicker({
@@ -41,6 +51,70 @@ export function MaskStylePicker({
   className?: string;
   showHeading?: boolean;
   /** 실시간 세션용 — 한 줄 + 샘플 칩 하나 */
+  compact?: boolean;
+}) {
+  return (
+    <div className={cn(className)}>
+      {showHeading ? (
+        <p className="mb-1.5 text-xs font-semibold text-muted-2">
+          개인정보 가림
+        </p>
+      ) : null}
+      <div role="radiogroup" aria-label="개인정보 가림 방식" className="flex flex-col">
+        {MASK_OPTIONS.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "flex w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-xl text-left transition-colors",
+                compact ? "px-2.5 py-2" : "px-3 py-2.5",
+                selected ? "bg-surface-2" : "hover:bg-surface-2/60",
+              )}
+            >
+              <span className="flex min-w-0 flex-col gap-1">
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    selected ? "text-foreground" : "text-muted",
+                  )}
+                >
+                  {option.label}
+                </span>
+                <MaskPreviewChip>
+                  {MASK_STYLE_SAMPLES[option.value].phone}
+                </MaskPreviewChip>
+              </span>
+              {selected ? (
+                <Check
+                  className="h-4 w-4 shrink-0 text-foreground"
+                  strokeWidth={2.25}
+                />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** 이전 2단 배치. 디자인 랩에서만 쓴다. */
+export function MaskStylePickerLegacy({
+  value,
+  onChange,
+  className,
+  showHeading = true,
+  compact = false,
+}: {
+  value: MaskStyle;
+  onChange: (next: MaskStyle) => void;
+  className?: string;
+  showHeading?: boolean;
   compact?: boolean;
 }) {
   return (
@@ -178,7 +252,7 @@ export function MaskStylePopup({
         aria-expanded={panelOpen}
         aria-controls={panelId}
         aria-label="개인정보 가림 방식"
-        title="가림 방식"
+        title={value === "off" ? "가림 꺼짐" : "가림 방식"}
         onClick={() => {
           if (forceOpen) return;
           setOpen((v) => !v);
@@ -187,10 +261,14 @@ export function MaskStylePopup({
           "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-colors",
           panelOpen
             ? "bg-primary text-primary-foreground shadow-soft"
-            : "bg-surface-2 text-muted hover:text-foreground",
+            : "text-muted hover:bg-surface-2 hover:text-foreground",
         )}
       >
-        <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+        {value === "off" ? (
+          <Eye className="h-4 w-4" strokeWidth={1.75} />
+        ) : (
+          <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+        )}
       </button>
 
       {panelOpen ? (
@@ -198,7 +276,7 @@ export function MaskStylePopup({
           id={panelId}
           role="dialog"
           aria-label="개인정보 가림 방식"
-          className="absolute right-0 top-[calc(100%+0.4rem)] z-40 w-[min(100vw-2rem,18rem)] rounded-2xl border border-border bg-card p-3 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
+          className="absolute right-0 top-[calc(100%+0.4rem)] z-40 w-[min(100vw-2rem,16rem)] rounded-2xl border border-border bg-card p-1.5 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
         >
           <MaskStylePicker
             value={value}
@@ -206,6 +284,7 @@ export function MaskStylePopup({
               onChange(next);
               if (!forceOpen) setOpen(false);
             }}
+            showHeading={false}
             compact
           />
         </div>
