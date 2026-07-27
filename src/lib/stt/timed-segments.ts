@@ -92,6 +92,10 @@ const SEARCH_MAX_CHARS = 4000;
 const SEARCH_RATIO = 0.06;
 /** 추정 위치에서 멀어질 때 감점 폭. */
 const DISTANCE_PENALTY = 0.18;
+/** 발화 시작점으로 당겨 붙이는 허용 오차 (초). */
+const SNAP_SEC = 1.2;
+/** 줄 사이 최소 간격 (초). 같은 시각이 두 개면 클릭이 앞줄로 튕긴다. */
+const MIN_LINE_GAP = 0.05;
 
 function cumulative(lengths: number[]): number[] {
   const out = new Array<number>(lengths.length + 1);
@@ -136,12 +140,16 @@ function probeScore(
 ): number {
   const end = Math.min(chars.length - 1, offset + width);
   let hit = 0;
-  let total = 0;
   for (let i = Math.max(0, offset); i < end; i++) {
-    total += 1;
     if (probe.has(chars.slice(i, i + 2))) hit += 1;
   }
-  return total === 0 ? 0 : hit / total;
+  /**
+   * 창이 스트림 끝에 걸려 잘리면 잘린 만큼 낮게 본다.
+   *
+   * 남은 글자 수로 나누면 끝자리에서 두어 글자만 맞아도 완전 일치가 된다.
+   * 짧은 녹음에서는 그 점수가 제 자리의 진짜 일치를 눌러 모든 줄이 끝으로 쏠린다.
+   */
+  return width === 0 ? 0 : hit / width;
 }
 
 /**
@@ -337,9 +345,40 @@ export function alignDialogueToTimedSegments(
     idx = next;
   }
 
-  let prevSec = 0;
+  /**
+   * 발화 시작점으로 당겨 붙인다.
+   *
+   * 시간을 글자 수로 보간하는데 문장 사이 침묵에는 글자가 없다. 줄이 시작되는
+   * 자리가 바로 그 침묵 뒤라서 추정값이 늘 침묵 앞, 곧 앞 문장 꼬리에 떨어진다.
+   * 눌러서 들으면 "...하겠습니다" 끝소리부터 나온다.
+   * whisper가 끊어 준 구간 머리는 실제 말이 시작되는 지점이므로 거기로 맞춘다.
+   */
+  const segStarts = timed
+    .map((s) => Math.max(0, s.startSec))
+    .sort((a, b) => a - b);
+
+  const snapToSpeechStart = (sec: number, floor: number): number => {
+    let best = sec;
+    let bestGap = SNAP_SEC;
+    for (const s of segStarts) {
+      if (s > sec + SNAP_SEC) break;
+      const gap = Math.abs(s - sec);
+      if (gap <= bestGap && s > floor) {
+        best = s;
+        bestGap = gap;
+      }
+    }
+    return best;
+  };
+
+  let prevSec = -MIN_LINE_GAP;
   return dialogue.map((d, i) => {
-    const startSec = Math.max(prevSec, Math.max(0, Math.min(dur, out[i]!)));
+    const floor = prevSec + MIN_LINE_GAP;
+    const raw = Math.max(floor, Math.max(0, Math.min(dur, out[i]!)));
+    const snapped = Math.min(dur, snapToSpeechStart(raw, prevSec));
+    // 두 줄이 같은 시각이 되면 눌렀을 때 어느 줄로 갈지 정해지지 않는다.
+    // 앞줄로 튕겨 엉뚱한 데서 재생되므로 반드시 앞으로 가게 한다.
+    const startSec = Math.max(floor, snapped);
     prevSec = startSec;
     return { ...d, startSec };
   });
@@ -350,7 +389,24 @@ export type TimelineMapItem = {
   summary?: string;
   speakers?: string[];
   kind?: string;
+  points?: string[];
+  speakerNotes?: Array<{ name: string; said: string }>;
 };
+
+/** 구간에 실제로 말한 사람만 남긴 화자별 발언. */
+function notesFor(
+  item: TimelineMapItem,
+  speakers: string[],
+): Array<{ name: string; said: string }> | undefined {
+  const notes = (item.speakerNotes ?? []).filter((n) =>
+    speakers.includes(n.name),
+  );
+  return notes.length > 0 ? notes : undefined;
+}
+
+function round2(sec: number): number {
+  return Math.round(sec * 100) / 100;
+}
 
 function parseTimelineKind(raw: string | undefined): TimelineSegmentKind {
   const k = (raw || "").trim().toLowerCase();
@@ -385,6 +441,8 @@ export function mapTimelineByDialogue(params: {
       id: `s${i + 1}`,
       start: formatClock(i * span),
       end: formatClock(i === n - 1 ? dur : (i + 1) * span),
+      startSec: round2(i * span),
+      endSec: round2(i === n - 1 ? dur : (i + 1) * span),
       title: item.title || `구간 ${i + 1}`,
       summary: item.summary || item.title || "",
       kind: parseTimelineKind(item.kind),
@@ -465,10 +523,16 @@ export function mapTimelineByDialogue(params: {
       id: `s${i + 1}`,
       start: formatClock(startSec),
       end: formatClock(endSec),
+      startSec: round2(startSec),
+      endSec: round2(endSec),
       title: item.title || `구간 ${i + 1}`,
       summary: item.summary || item.title || "",
       kind: parseTimelineKind(item.kind),
       speakers: speakers.length > 0 ? speakers : (["발화"] as string[]),
+      ...(item.points?.length ? { points: item.points } : {}),
+      ...(notesFor(item, speakers)
+        ? { speakerNotes: notesFor(item, speakers) }
+        : {}),
     } satisfies TimelineSegment;
   });
 }
@@ -562,6 +626,8 @@ export function mapTimelineByTimedSegments(params: {
       id: `s${i + 1}`,
       start: formatClock(startSec),
       end: formatClock(endSec),
+      startSec: round2(startSec),
+      endSec: round2(endSec),
       title: item.title || `구간 ${i + 1}`,
       summary: item.summary || item.title || "",
       kind: parseTimelineKind(item.kind),
@@ -569,6 +635,10 @@ export function mapTimelineByTimedSegments(params: {
         item.speakers && item.speakers.length > 0
           ? item.speakers
           : (["발화"] as string[]),
+      ...(item.points?.length ? { points: item.points } : {}),
+      ...(notesFor(item, item.speakers ?? [])
+        ? { speakerNotes: notesFor(item, item.speakers ?? []) }
+        : {}),
     } satisfies TimelineSegment;
   });
 }

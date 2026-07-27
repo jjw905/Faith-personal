@@ -11,15 +11,13 @@ import {
   readChatReplaySettings,
   type ChatReplaySettings,
 } from "@/components/meetings/meeting-chat-replay-bar";
+import { CorrectionHint } from "@/components/meetings/correction-hint";
 import { MaskedText } from "@/components/meetings/masked-text";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/context/app-context";
 import { maskPii, type MaskStyle } from "@/lib/masking";
-import {
-  activeLineIndexAt,
-  parseTranscriptTimeToSec,
-} from "@/lib/transcript-time";
+import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
 import type { Meeting, Participant } from "@/types/meeting";
 import type { MeetingTranscript, TranscriptLine } from "@/types/transcript";
 import { cn } from "@/lib/utils";
@@ -90,6 +88,7 @@ function ReplayBubble({
   const meta = personMeta(line.speaker, participants, meName);
   const text = line.text ?? "";
   const matches = text ? maskPii(text, { style: maskStyle }).matches : [];
+  const corrections = line.corrections ?? [];
 
   return (
     <div
@@ -104,6 +103,7 @@ function ReplayBubble({
       <div
         className={cn(
           "flex max-w-[min(85%,22rem)] items-end gap-2.5",
+          corrections.length > 0 && "lg:max-w-[min(92%,36rem)]",
           meta.mine ? "flex-row-reverse" : "flex-row",
         )}
       >
@@ -118,7 +118,7 @@ function ReplayBubble({
         </div>
         <div
           className={cn(
-            "flex min-w-0 flex-col gap-2.5",
+            "flex min-w-0 flex-col gap-2.5 lg:max-w-[22rem]",
             meta.mine ? "items-end text-right" : "items-start text-left",
           )}
         >
@@ -141,9 +141,16 @@ function ReplayBubble({
           ) : null}
           {text ? (
             onSeek ? (
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={onSeek}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSeek();
+                  }
+                }}
                 className={cn(
                   "inline-block max-w-full cursor-pointer whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-left text-[14px] font-medium leading-relaxed transition-opacity hover:opacity-90",
                   meta.mine
@@ -157,7 +164,7 @@ function ReplayBubble({
                   matches={matches}
                   onPrimary={meta.mine}
                 />
-              </button>
+              </div>
             ) : (
               <div
                 className={cn(
@@ -175,7 +182,17 @@ function ReplayBubble({
               </div>
             )
           ) : null}
+          <CorrectionHint
+            corrections={corrections}
+            align={meta.mine ? "end" : "start"}
+            className="lg:hidden"
+          />
         </div>
+        <CorrectionHint
+          corrections={corrections}
+          align={meta.mine ? "end" : "start"}
+          className="hidden w-[12rem] shrink-0 pb-1 lg:flex"
+        />
       </div>
     </div>
   );
@@ -210,7 +227,7 @@ export function MeetingChatReplay({
   const hasAudio = Boolean(audioSrc);
 
   const lineStarts = useMemo(
-    () => transcript.lines.map((l) => parseTranscriptTimeToSec(l.time)),
+    () => transcript.lines.map(lineStartSec),
     [transcript.lines],
   );
 
@@ -221,13 +238,16 @@ export function MeetingChatReplay({
         ? transcript.lines.find((l) => l.segmentId === focusSegment)?.id
         : null);
     if (!lineId) return;
-    setActiveId(lineId);
+    const syncId = window.setTimeout(() => setActiveId(lineId), 0);
     const frame = requestAnimationFrame(() => {
       document
         .getElementById(`tx-line-${lineId}`)
         ?.scrollIntoView({ block: "center", behavior: "smooth" });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      window.clearTimeout(syncId);
+      cancelAnimationFrame(frame);
+    };
   }, [focusLine, focusSegment, transcript.lines]);
 
   useEffect(() => {
@@ -289,7 +309,7 @@ export function MeetingChatReplay({
       setActiveId(line.id);
       return;
     }
-    const lineSec = parseTranscriptTimeToSec(line.time);
+    const lineSec = lineStartSec(line);
     const dur = a.duration || durationSec;
     if (dur > 0 && lineSec > dur + 0.5) {
       // 녹음 길이 밖 대사 — 재생만 맞추지 않고 하이라이트만.

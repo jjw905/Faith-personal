@@ -68,53 +68,16 @@ const KIND_META: Record<
   },
 };
 
-type SpeakerRole = "host" | "attendee" | "voice";
-
 type SpeakerView = {
   key: string;
   name: string;
   initials: string;
   color: string;
-  roleLabel: string;
-  roleClass: string;
+  /** 진행자처럼 따로 알려줄 게 있을 때만. 없으면 뱃지를 달지 않는다. */
+  roleLabel: string | null;
 };
 
-/** 구분은 테두리가 아니라 역할 뱃지 면색·글자색. */
-const ROLE_META: Record<
-  SpeakerRole,
-  { label: string; roleClass: string; fallbackColor: string }
-> = {
-  host: {
-    label: "진행자",
-    roleClass: "bg-[#c5d8e8] text-[#1f4a63]",
-    fallbackColor: "bg-[#3d6a8a]",
-  },
-  attendee: {
-    label: "참석자",
-    roleClass: "bg-[#e4e6ea] text-[#3a3f4a]",
-    fallbackColor: "bg-slate-500",
-  },
-  voice: {
-    label: "발화",
-    roleClass: "bg-[#e8d9c8] text-[#5c4028]",
-    fallbackColor: "bg-[#8a6a4a]",
-  },
-};
-
-function resolveSpeakerRole(
-  name: string,
-  found: Participant | undefined,
-): SpeakerRole {
-  if (name === "진행자" || found?.isHost === true) return "host";
-  if (name === "참석자") return "attendee";
-  if (found?.recognition === "voice") return "voice";
-  if (found?.recognition === "guest" || found?.recognition === "member") {
-    return "attendee";
-  }
-  if (found?.isMember === true) return "attendee";
-  if (name === "발화" || name.startsWith("화자")) return "voice";
-  return found ? "attendee" : "voice";
-}
+const FALLBACK_COLOR = "bg-[#8a6a4a]";
 
 function resolveSpeaker(
   name: string,
@@ -122,8 +85,9 @@ function resolveSpeaker(
   index: number,
 ): SpeakerView {
   const found = participants.find((p) => p.name === name);
-  const role = resolveSpeakerRole(name, found);
-  const meta = ROLE_META[role];
+  // 이름만 있으면 이름으로 충분하다. 진행자만 따로 표시한다.
+  const roleLabel =
+    name === "진행자" || found?.isHost === true ? "진행자" : null;
 
   if (found) {
     return {
@@ -131,57 +95,44 @@ function resolveSpeaker(
       name: found.name,
       initials: found.initials,
       color: found.color,
-      roleLabel: meta.label,
-      roleClass: meta.roleClass,
+      roleLabel: found.name === "진행자" ? null : roleLabel,
     };
   }
 
   return {
-    key: `${role}-${index}-${name}`,
+    key: `spk-${index}-${name}`,
     name,
-    initials: name.slice(0, 1),
-    color: meta.fallbackColor,
-    roleLabel: meta.label,
-    roleClass: meta.roleClass,
+    initials: name.replace(/^화자\s*/, "").slice(0, 1) || name.slice(0, 1),
+    color: FALLBACK_COLOR,
+    roleLabel: name === "진행자" ? null : roleLabel,
   };
 }
 
-function SpeakerChips({
+/** 화자별 발언 요지가 있으면 그것까지 같이 보여준다. */
+function SpeakerLines({
   names,
+  notes,
   participants,
 }: {
   names: string[];
+  notes?: Array<{ name: string; said: string }>;
   participants: Participant[];
 }) {
   const speakers = names.map((name, index) =>
     resolveSpeaker(name, participants, index),
   );
+  const saidBy = new Map((notes ?? []).map((n) => [n.name, n.said]));
+  const hasNotes = speakers.some((s) => saidBy.has(s.name));
 
-  return (
-    <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="발화자">
-      {speakers.map((s) => {
-        const roleOnly = s.name === s.roleLabel;
-
-        if (roleOnly) {
-          return (
-            <li
-              key={s.key}
-              className={cn(
-                "inline-flex h-8 items-center rounded-lg px-2.5 text-xs font-bold leading-none",
-                s.roleClass,
-              )}
-            >
-              {s.roleLabel}
-            </li>
-          );
-        }
-
-        return (
+  if (!hasNotes) {
+    return (
+      <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="발화자">
+        {speakers.map((s) => (
           <li
             key={s.key}
-            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface py-0.5 pl-0.5 pr-2"
+            className="inline-flex h-7 items-center gap-1.5 rounded-full bg-surface-2 py-0.5 pl-0.5 pr-2.5"
           >
-            <Avatar className="h-7 w-7 shrink-0">
+            <Avatar className="h-6 w-6 shrink-0">
               <AvatarFallback
                 className={cn(
                   "text-xs font-semibold leading-none text-white",
@@ -191,17 +142,42 @@ function SpeakerChips({
                 {s.initials}
               </AvatarFallback>
             </Avatar>
-            <span className="max-w-[7.5rem] truncate text-xs font-semibold leading-4 text-foreground">
+            <span className="max-w-[8rem] truncate text-xs font-semibold leading-4 text-foreground">
               {s.name}
             </span>
-            <span
-              className={cn(
-                "shrink-0 rounded-md px-1.5 py-0.5 text-xs font-bold leading-4",
-                s.roleClass,
-              )}
-            >
-              {s.roleLabel}
-            </span>
+            {s.roleLabel ? (
+              <span className="shrink-0 text-xs font-medium leading-4 text-muted-2">
+                {s.roleLabel}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <ul className="mt-3 flex flex-col gap-2" aria-label="발화자">
+      {speakers.map((s) => {
+        const said = saidBy.get(s.name);
+        return (
+          <li key={s.key} className="flex min-w-0 items-start gap-2">
+            <Avatar className="mt-0.5 h-6 w-6 shrink-0">
+              <AvatarFallback
+                className={cn(
+                  "text-xs font-semibold leading-none text-white",
+                  s.color,
+                )}
+              >
+                {s.initials}
+              </AvatarFallback>
+            </Avatar>
+            <p className="min-w-0 text-sm leading-6">
+              <span className="font-semibold text-foreground">{s.name}</span>
+              {said ? (
+                <span className="text-muted"> {said}</span>
+              ) : null}
+            </p>
           </li>
         );
       })}
@@ -221,6 +197,8 @@ function segmentMatches(seg: TimelineSegment, query: string): boolean {
     seg.end,
     kindLabel,
     ...(seg.speakers ?? []),
+    ...(seg.points ?? []),
+    ...(seg.speakerNotes ?? []).map((n) => `${n.name} ${n.said}`),
     ...(seg.tags ?? []),
   ]
     .join(" ")
@@ -395,13 +373,28 @@ export function MeetingTimelineView({
                   <p className="mt-2 text-sm leading-relaxed text-muted">
                     {seg.summary}
                   </p>
+                  {seg.points && seg.points.length > 0 ? (
+                    <ul className="mt-2.5 flex flex-col gap-1.5">
+                      {seg.points.map((point) => (
+                        <li
+                          key={point}
+                          className="flex gap-2 text-sm leading-6 text-foreground"
+                        >
+                          <span
+                            aria-hidden
+                            className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-muted-2"
+                          />
+                          <span className="min-w-0">{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                   {seg.speakers && seg.speakers.length > 0 ? (
-                    <div className="mt-3">
-                      <SpeakerChips
-                        names={seg.speakers}
-                        participants={participants}
-                      />
-                    </div>
+                    <SpeakerLines
+                      names={seg.speakers}
+                      notes={seg.speakerNotes}
+                      participants={participants}
+                    />
                   ) : null}
                 </div>
               </li>

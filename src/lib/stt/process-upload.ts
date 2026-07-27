@@ -1,7 +1,29 @@
 import { rmSync } from "node:fs";
+import { join } from "node:path";
 
-import { chunkedTranscribeBuffer } from "@/lib/stt/chunked-transcribe";
+import {
+  chunkedTranscribe,
+  writeSourceAudio,
+} from "@/lib/stt/chunked-transcribe";
+import {
+  diarizationAvailability,
+  diarizeAudio,
+  type DiarizationResult,
+} from "@/lib/stt/diarization";
+import { buildGlossary } from "@/lib/stt/glossary";
+import {
+  attachSpeakersToText,
+  formatSpeakerBlocks,
+} from "@/lib/stt/speaker-attach";
 import { buildSemanticStructure } from "@/lib/stt/semantic-structure";
+import {
+  applySpeakerNames,
+  identifySpeakerNames,
+} from "@/lib/stt/speaker-names";
+import {
+  attachCorrections,
+  suggestTermCorrections,
+} from "@/lib/stt/term-suggest";
 import { buildMeetingFromStt } from "@/lib/stt/to-meeting";
 import { alignDialogueToTimedSegments } from "@/lib/stt/timed-segments";
 import type { SttModel } from "@/lib/stt/models";
@@ -37,6 +59,28 @@ function mapSttFraction(fraction: number): number {
   return PROGRESS.sttStart + f * (PROGRESS.sttEnd - PROGRESS.sttStart);
 }
 
+/**
+ * 화자분리는 있으면 쓰고 없으면 넘어간다. 회의를 실패시키지 않는다.
+ *
+ * 배포 서버에는 파이썬도 모델도 없으니 부르기 전에 확인해서 건너뛴다. 화자
+ * 자리는 구조화 모델이 정한 이름이나 "발화" 라벨로 남는다.
+ */
+async function diarizeUpload(
+  audioPath: string,
+): Promise<DiarizationResult | null> {
+  const available = diarizationAvailability();
+  if (!available.ok) {
+    console.warn(`[stt] 화자분리 없이 진행: ${available.reason}`);
+    return null;
+  }
+  try {
+    return await diarizeAudio({ audioPath });
+  } catch (err) {
+    console.warn("[stt] 화자분리 건너뜀", err);
+    return null;
+  }
+}
+
 export async function processUploadedMeeting(params: {
   meetingId: string;
   userId: string;
@@ -61,15 +105,34 @@ export async function processUploadedMeeting(params: {
     }
     progress(PROGRESS.fileLoaded);
 
-    const stt = await chunkedTranscribeBuffer({
+    const audioPath = writeSourceAudio({
       audioBytes: file.body,
       filename: file.row.name,
       workDir,
-      model: params.model,
-      onProgress: (p) => {
-        progress(mapSttFraction(p.fraction));
-      },
     });
+
+    // 고유명사는 소리만으로 못 가린다. 참석자와 지난 회의에서 모아 미리 알려 준다.
+    const glossary = buildGlossary({
+      userId: params.userId,
+      title: params.title,
+      participantNames: (
+        getUserMeeting(params.meetingId)?.meeting.participants ?? []
+      ).map((p) => p.name),
+    });
+
+    // 화자분리는 로컬 CPU라 API 전사와 같이 돌린다. 실패해도 전사는 살린다.
+    const [stt, diarization] = await Promise.all([
+      chunkedTranscribe({
+        audioPath,
+        workDir: join(workDir, "chunks"),
+        model: params.model,
+        glossary,
+        onProgress: (p) => {
+          progress(mapSttFraction(p.fraction));
+        },
+      }),
+      diarizeUpload(audioPath),
+    ]);
 
     if (!stt.text.trim()) {
       throw new Error("전사 결과가 비어 있습니다.");
@@ -100,8 +163,21 @@ export async function processUploadedMeeting(params: {
       rawText: stt.text,
     });
 
+    // 화자를 붙여서 넘긴다. 구조화 모델이 대화기록을 나눌 때 누가 말했는지
+    // 같이 판단해야 타임라인 화자와 화자별 발언이 채워진다.
+    const blocks = diarization
+      ? attachSpeakersToText({
+          text: stt.text,
+          timedSegments: stt.timedSegments,
+          diarization,
+          durationSec: stt.durationSec,
+        })
+      : [];
+    const structureInput =
+      blocks.length > 0 ? formatSpeakerBlocks(blocks) : stt.text;
+
     const { structure, usage: structureUsage } = await buildSemanticStructure(
-      stt.text,
+      structureInput,
       stt.durationSec,
     );
     progress(PROGRESS.structureDone);
@@ -115,6 +191,31 @@ export async function processUploadedMeeting(params: {
 
     if (structure.dialogue.length === 0) {
       throw new Error("대화기록 생성에 실패했습니다.");
+    }
+
+    // 화자 실명 추정. 근거가 약하면 화자 A 라벨을 그대로 둔다.
+    const confirmedNames: string[] = [];
+    try {
+      const named = await identifySpeakerNames({ dialogue: structure.dialogue });
+      applySpeakerNames(structure, named.guesses);
+      confirmedNames.push(...named.guesses.map((g) => g.name));
+      if (named.usage.inputTokens > 0) {
+        appendAiUsage({
+          meetingId: params.meetingId,
+          userId: params.userId,
+          title: params.title,
+          stage: "structure",
+          model: named.usage.model,
+          durationSec: stt.durationSec,
+          inputTokens: named.usage.inputTokens,
+          outputTokens: named.usage.outputTokens,
+          totalTokens: named.usage.inputTokens + named.usage.outputTokens,
+          estimatedUsd: named.usage.estimatedUsd,
+          billSource: "tokens",
+        });
+      }
+    } catch (err) {
+      console.warn("[stt] 화자 실명 추정 실패", err);
     }
 
     appendAiUsage({
@@ -149,6 +250,36 @@ export async function processUploadedMeeting(params: {
       capture: existing?.meeting.capture ?? "upload",
     });
     progress(PROGRESS.built);
+
+    // 오인식 보정 추천. 표시만 하고 본문은 그대로 둔다. 실패해도 회의는 완료.
+    try {
+      const suggested = await suggestTermCorrections(
+        built.transcript.lines.map((line) => line.text ?? ""),
+        { keepTerms: confirmedNames },
+      );
+      built.transcript.lines = attachCorrections(
+        built.transcript.lines,
+        suggested.suggestions,
+      );
+      if (suggested.usage.inputTokens > 0) {
+        appendAiUsage({
+          meetingId: params.meetingId,
+          userId: params.userId,
+          title: params.title,
+          stage: "structure",
+          model: suggested.usage.model,
+          durationSec: stt.durationSec,
+          inputTokens: suggested.usage.inputTokens,
+          outputTokens: suggested.usage.outputTokens,
+          totalTokens:
+            suggested.usage.inputTokens + suggested.usage.outputTokens,
+          estimatedUsd: suggested.usage.estimatedUsd,
+          billSource: "tokens",
+        });
+      }
+    } catch (err) {
+      console.warn("[stt] 보정 추천 실패", err);
+    }
 
     updateUserMeeting(params.meetingId, {
       phase: "done",

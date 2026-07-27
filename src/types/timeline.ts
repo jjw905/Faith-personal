@@ -11,10 +11,17 @@ export type TimelineSegment = {
   id: string;
   start: string;
   end: string;
+  /** 소수점까지 살린 경계(초). start, end는 내림한 표시용이다. */
+  startSec?: number;
+  endSec?: number;
   title: string;
   summary: string;
   kind: TimelineSegmentKind;
   speakers?: string[];
+  /** 구간 핵심 짚기. */
+  points?: string[];
+  /** 이 구간에서 화자가 무엇을 말했는지. */
+  speakerNotes?: Array<{ name: string; said: string }>;
   tags?: string[];
 };
 

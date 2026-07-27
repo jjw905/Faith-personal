@@ -147,14 +147,21 @@ def run_sherpa(
         else -1
     )
     threshold = float(os.getenv("PYANNOTE_CLUSTER_THRESHOLD", "0.9"))
+    # 기본값이 1스레드라 18분짜리에 8분이 걸린다. 코어를 쓰되 전사 프로세스
+    # 몫은 남긴다.
+    num_threads = int(
+        os.getenv("DIARIZATION_THREADS", "0")
+    ) or max(1, min(6, (os.cpu_count() or 2) - 2))
     config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
         segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
             pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
                 model=str(segmentation_path)
-            )
+            ),
+            num_threads=num_threads,
         ),
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-            model=str(embedding_path)
+            model=str(embedding_path),
+            num_threads=num_threads,
         ),
         clustering=sherpa_onnx.FastClusteringConfig(
             num_clusters=num_speakers,

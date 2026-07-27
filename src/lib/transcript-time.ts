@@ -15,6 +15,19 @@ export function parseTranscriptTimeToSec(time: string): number {
   return 0;
 }
 
+/**
+ * 재생 동기화에 쓸 줄 시작 시각.
+ * time 문자열은 초 단위로 내림한 표시용이라 그대로 쓰면 늘 먼저 넘어간다.
+ */
+export function lineStartSec(line: {
+  time: string;
+  startSec?: number;
+}): number {
+  return typeof line.startSec === "number" && Number.isFinite(line.startSec)
+    ? Math.max(0, line.startSec)
+    : parseTranscriptTimeToSec(line.time);
+}
+
 export function formatPlaybackClock(sec: number): string {
   const s = Math.max(0, Math.floor(sec));
   const h = Math.floor(s / 3600);

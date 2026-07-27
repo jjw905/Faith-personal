@@ -1,8 +1,10 @@
 import WebSocket from "ws";
 
 import {
-  REALTIME_STT_MODEL,
+  DEFAULT_REALTIME_STT_MODEL,
+  REALTIME_STT_MINI,
   REALTIME_STT_USD_PER_MINUTE,
+  type RealtimeSttModel,
   type RealtimeTranscribeProgress,
   type RealtimeTranscribeResult,
   type RealtimeUtterance,
@@ -11,6 +13,8 @@ import { audioToPcm24k, cleanupWorkDir, iterPcmChunks } from "@/lib/stt/realtime
 
 type SessionOpts = {
   language?: string;
+  /** 전사 모델. mini는 server_vad, whisper는 고정 주기 commit. */
+  model?: RealtimeSttModel;
   /** whisper delay: minimal|low|medium|high|xhigh */
   delay?: "minimal" | "low" | "medium" | "high" | "xhigh";
   /** 이 초마다 commit (VAD 없음). */
@@ -19,6 +23,11 @@ type SessionOpts = {
   /** 평가용: 앞에서 N초만. */
   maxAudioSec?: number;
 };
+
+/** 오디오 전송 후 남은 전사를 기다리는 최대 시간. */
+const TAIL_WAIT_MS = 60_000;
+/** 이 시간 동안 새 이벤트가 없으면 전사가 끝난 것으로 본다. */
+const TAIL_QUIET_MS = 3_000;
 
 function getApiKey() {
   const key = process.env.OPENAI_API_KEY?.trim();
@@ -37,6 +46,8 @@ export async function realtimeTranscribeFile(
   opts: SessionOpts = {},
 ): Promise<RealtimeTranscribeResult> {
   const language = opts.language ?? "ko";
+  const model = opts.model ?? DEFAULT_REALTIME_STT_MODEL;
+  const useServerVad = model === REALTIME_STT_MINI;
   const delay = opts.delay ?? "low";
   const commitEverySec = opts.commitEverySec ?? 4;
   const workDir = `.data/tmp-realtime-${Date.now().toString(36)}`;
@@ -58,6 +69,7 @@ export async function realtimeTranscribeFile(
   let pendingCommits = 0;
   let closed = false;
   let lastCommitSec = 0;
+  let lastEventAtMs = Date.now();
   let nextAddedWindow = 0;
   let nextFallbackWindow = 0;
   const commitWindows: Array<{ startSec: number; endSec: number }> = [];
@@ -104,20 +116,24 @@ export async function realtimeTranscribeFile(
         .filter(Boolean)
         .join("\n");
       resolve({
-        model: REALTIME_STT_MODEL,
+        model,
         language,
         durationSec,
         utterances: orderedUtterances,
         text,
         firstDeltaMs,
         wallMs: Date.now() - wallStart,
-        estimatedUsd: (durationSec / 60) * REALTIME_STT_USD_PER_MINUTE,
+        estimatedUsd:
+          (durationSec / 60) * REALTIME_STT_USD_PER_MINUTE[model],
         eventCounts,
+        droppedTurns: Math.max(0, pendingCommits),
+        billedAudioSec: durationSec,
       });
     };
 
     const bump = (type: string) => {
       eventCounts[type] = (eventCounts[type] ?? 0) + 1;
+      lastEventAtMs = Date.now();
     };
 
     const emitProgress = () => {
@@ -141,13 +157,37 @@ export async function realtimeTranscribeFile(
       bump(type);
 
       if (type === "error") {
-        fail(
-          new Error(
-            typeof event.error === "object" && event.error
-              ? JSON.stringify(event.error)
-              : "realtime error",
-          ),
-        );
+        const detail =
+          typeof event.error === "object" && event.error
+            ? JSON.stringify(event.error)
+            : "realtime error";
+        // 마지막 flush commit 때 버퍼가 비어 있으면 정상 상황이다.
+        if (/buffer_?(is_)?empty|buffer_too_small|commit_empty/i.test(detail)) {
+          return;
+        }
+        fail(new Error(detail));
+        return;
+      }
+
+      // server_vad: 발화 시작 시각이 이벤트로 온다.
+      if (type === "input_audio_buffer.speech_started") {
+        const itemId = String(event.item_id ?? "");
+        const startMs = Number(event.audio_start_ms);
+        if (itemId && Number.isFinite(startMs)) {
+          const startSec = Math.max(0, startMs / 1000);
+          windowByItemId.set(itemId, { startSec, endSec: startSec });
+          pendingCommits += 1;
+        }
+        return;
+      }
+
+      if (type === "input_audio_buffer.speech_stopped") {
+        const itemId = String(event.item_id ?? "");
+        const endMs = Number(event.audio_end_ms);
+        const window = windowByItemId.get(itemId);
+        if (window && Number.isFinite(endMs)) {
+          window.endSec = Math.max(window.startSec, endMs / 1000);
+        }
         return;
       }
 
@@ -196,6 +236,8 @@ export async function realtimeTranscribeFile(
             itemId,
             text: transcript,
             startSec: window.startSec,
+            endSec:
+              window.endSec > window.startSec ? window.endSec : undefined,
             completedAtMs: Date.now() - wallStart,
           });
         }
@@ -215,11 +257,17 @@ export async function realtimeTranscribeFile(
             audio: {
               input: {
                 format: { type: "audio/pcm", rate: 24000 },
-                transcription: {
-                  model: REALTIME_STT_MODEL,
-                  language,
-                  delay,
-                },
+                transcription: useServerVad
+                  ? { model, language }
+                  : { model, language, delay },
+                turn_detection: useServerVad
+                  ? {
+                      type: "server_vad",
+                      threshold: 0.5,
+                      prefix_padding_ms: 300,
+                      silence_duration_ms: 600,
+                    }
+                  : null,
               },
             },
           },
@@ -243,6 +291,16 @@ export async function realtimeTranscribeFile(
             audioSentSec = chunk.endSec;
             sinceCommit += chunk.endSec - chunk.startSec;
 
+            if (useServerVad) {
+              // 서버가 턴을 끊는다. 전송만 하고 1초마다 숨을 돌린다.
+              if (sinceCommit >= 1) {
+                sinceCommit = 0;
+                emitProgress();
+                await sleep(15);
+              }
+              continue;
+            }
+
             if (sinceCommit >= commitEverySec) {
               commitWindows.push({
                 startSec: lastCommitSec,
@@ -257,7 +315,11 @@ export async function realtimeTranscribeFile(
             }
           }
 
-          if (sinceCommit > 0.05) {
+          if (useServerVad) {
+            // 마지막 발화가 무음으로 끝나지 않으면 서버가 턴을 못 닫는다.
+            // 남은 버퍼를 직접 commit 해서 꼬리를 살린다.
+            ws.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+          } else if (sinceCommit > 0.05) {
             commitWindows.push({
               startSec: lastCommitSec,
               endSec: audioSentSec,
@@ -267,13 +329,22 @@ export async function realtimeTranscribeFile(
             pendingCommits += 1;
           }
 
-          // 남은 completed 이벤트 대기
-          const deadline = Date.now() + 45_000;
-          while (pendingCommits > 0 && Date.now() < deadline) {
+          // 남은 전사 대기.
+          // 파일을 실시간보다 빠르게 보내면 이벤트가 뒤늦게 오므로,
+          // 미완료가 없고 일정 시간 조용해질 때까지 기다린다.
+          const deadline = Date.now() + TAIL_WAIT_MS;
+          lastEventAtMs = Date.now();
+          while (Date.now() < deadline) {
+            if (pendingCommits === 0 && Date.now() - lastEventAtMs > TAIL_QUIET_MS) {
+              break;
+            }
             await sleep(200);
           }
-          // 마지막 여유
-          await sleep(800);
+          if (pendingCommits > 0) {
+            console.warn(
+              `[realtime] 전사 미완료 ${pendingCommits}건. 뒷부분이 누락될 수 있습니다.`,
+            );
+          }
           finish();
         } catch (err) {
           fail(err);

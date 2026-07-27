@@ -69,6 +69,8 @@ function buildTimelineFromSemantic(
     summary: t.summary,
     speakers: t.speakers,
     kind: t.kind,
+    points: t.points,
+    speakerNotes: t.speakerNotes,
   }));
 
   // 대화기록은 이미 실측 시각으로 정렬돼 있다. 구간 경계도 같은 기준을 써야
@@ -166,6 +168,22 @@ export function buildParticipantsFromSemantic(
       };
     }
 
+    // 대화 속 호명으로 실명을 찾은 화자는 라벨로 되돌리지 않는다.
+    const isLabel = /^화자\s*/.test(name) || /^[A-Za-z0-9]{1,3}$/.test(name);
+    if (!isLabel) {
+      return {
+        id: `spk-${i}`,
+        name,
+        initials: name.slice(0, 1),
+        color: SPEAKER_COLORS[i % SPEAKER_COLORS.length],
+        isMember: false,
+        recognition: "voice" as const,
+        recognitionNote: "대화 속 호명으로 추정",
+        summary,
+        tags,
+      };
+    }
+
     const label = name.startsWith("화자") ? name : aiSpeakerLabel(name);
     const token = label.replace(/^화자\s*/i, "").trim() || String.fromCharCode(65 + i);
     return {
@@ -206,6 +224,7 @@ function buildTranscriptFromSemantic(
     return {
       id: `l${i + 1}`,
       time: formatClock(startSec),
+      startSec: Math.round(startSec * 100) / 100,
       speaker,
       text: d.text.trim(),
       segmentId,
@@ -218,20 +237,30 @@ function parseClockToSec(clock: string): number {
   return (mm || 0) * 60 + (ss || 0);
 }
 
+/**
+ * 구간 경계 시각. 내림한 표시 문자열이 아니라 실수 초를 쓴다.
+ * 문자열을 쓰면 경계 직전 줄이 다음 구간으로 밀려 한 칸 앞서 보인다.
+ */
+function segmentStartSec(seg: TimelineSegment): number {
+  return typeof seg.startSec === "number" && Number.isFinite(seg.startSec)
+    ? seg.startSec
+    : parseClockToSec(seg.start);
+}
+
 /** 대화 시각이 속한 타임라인 구간. even 분할식 사용 금지. */
 function segmentIdForTime(
   startSec: number,
   segments: TimelineSegment[],
 ): string {
   if (segments.length === 0) return "s1";
-  if (startSec <= parseClockToSec(segments[0]!.start)) {
+  if (startSec <= segmentStartSec(segments[0]!)) {
     return segments[0]!.id;
   }
   for (let i = 0; i < segments.length; i++) {
-    const a = parseClockToSec(segments[i]!.start);
+    const a = segmentStartSec(segments[i]!);
     const b =
       i + 1 < segments.length
-        ? parseClockToSec(segments[i + 1]!.start)
+        ? segmentStartSec(segments[i + 1]!)
         : Number.POSITIVE_INFINITY;
     if (startSec >= a && startSec < b) return segments[i]!.id;
   }
