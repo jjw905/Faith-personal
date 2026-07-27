@@ -20,13 +20,10 @@ import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { formatBytes } from "@/lib/storage/quota";
-import {
-  DEFAULT_STT_MODEL,
-  STT_MODELS,
-  STT_MODEL_LABELS,
-  type SttModel,
-} from "@/lib/stt/models";
 import { stripFileExtension } from "@/lib/meeting-process";
+import {
+  MAX_UPLOAD_AUDIO_MINUTES,
+} from "@/lib/stt/upload-limits";
 import { cn } from "@/lib/utils";
 
 type Mode = "idle" | "upload";
@@ -54,7 +51,6 @@ export function AudioUploadZone({
   const { scenarioId, isLive } = usePageUxPreview();
   const [mode, setMode] = useState<Mode>("idle");
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
-  const [sttModel, setSttModel] = useState<SttModel>(DEFAULT_STT_MODEL);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
 
@@ -101,9 +97,7 @@ export function AudioUploadZone({
       scenarioId === "live" ||
       scenarioId === "empty" ||
       scenarioId === "full" ||
-      scenarioId === "popup-notifications" ||
-      scenarioId === "popup-notifications-empty" ||
-      scenarioId === "popup-notifications-loading" ||
+      scenarioId.startsWith("popup-notifications") ||
       scenarioId === "popup-account" ||
       scenarioId === "popup-upcoming" ||
       scenarioId === "popup-upcoming-create" ||
@@ -157,7 +151,6 @@ export function AudioUploadZone({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vaultFileId: storedId,
-          model: sttModel,
           title: selectedFile
             ? stripFileExtension(selectedFile.name)
             : undefined,
@@ -273,33 +266,6 @@ export function AudioUploadZone({
                 </Button>
               </div>
 
-              <div
-                role="radiogroup"
-                aria-label="모델"
-                className="grid grid-cols-3 gap-1 rounded-2xl bg-surface p-1"
-              >
-                {STT_MODELS.map((model) => {
-                  const selected = sttModel === model;
-                  return (
-                    <button
-                      key={model}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => setSttModel(model)}
-                      className={cn(
-                        "rounded-xl px-2 py-2.5 text-center text-sm font-semibold transition-colors",
-                        selected
-                          ? "bg-card text-foreground shadow-soft"
-                          : "text-muted hover:text-foreground",
-                      )}
-                    >
-                      {STT_MODEL_LABELS[model]}
-                    </button>
-                  );
-                })}
-              </div>
-
               {startError ? (
                 <p className="text-sm font-medium text-red-600" role="alert">
                   {startError}
@@ -384,6 +350,9 @@ export function AudioUploadZone({
                     </span>
                     <p className="text-sm font-semibold text-foreground">
                       드래그하거나 클릭해서 업로드
+                    </p>
+                    <p className="text-xs text-muted">
+                      최대 {MAX_UPLOAD_AUDIO_MINUTES}분(1시간), 초과 시 거절
                     </p>
                     <ul className="flex flex-wrap justify-center gap-2">
                       {FORMAT_GUIDES.map((item) => (

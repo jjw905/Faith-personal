@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import {
   chunkedTranscribe,
+  probeDurationSec,
   writeSourceAudio,
 } from "@/lib/stt/chunked-transcribe";
 import {
@@ -11,6 +12,7 @@ import {
   type DiarizationResult,
 } from "@/lib/stt/diarization";
 import { buildGlossary } from "@/lib/stt/glossary";
+import { hasAudioTools } from "@/lib/stt/local-tools";
 import {
   attachSpeakersToText,
   formatSpeakerBlocks,
@@ -27,6 +29,7 @@ import {
 import { buildMeetingFromStt } from "@/lib/stt/to-meeting";
 import { alignDialogueToTimedSegments } from "@/lib/stt/timed-segments";
 import type { SttModel } from "@/lib/stt/models";
+import { assertUploadAudioDuration } from "@/lib/stt/upload-limits";
 import { appendAiUsage } from "@/lib/stt/usage-store";
 import { readUserFileBytes } from "@/lib/storage/vault-service";
 import {
@@ -35,6 +38,7 @@ import {
   updateUserMeeting,
   workDirForMeeting,
 } from "@/lib/user-meetings-store";
+import { createNotification } from "@/lib/notifications-store";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -53,6 +57,50 @@ const PROGRESS = {
   built: 98,
   done: 100,
 } as const;
+
+function analysisGroupKey(meetingId: string) {
+  return `analysis:${meetingId}`;
+}
+
+async function notifyAnalysisResult(params: {
+  userId: string;
+  meetingId: string;
+  title: string;
+  kind: "analysis_done" | "analysis_failed";
+  errorMessage?: string;
+}) {
+  const groupKey = analysisGroupKey(params.meetingId);
+  try {
+    await prisma.notification.updateMany({
+      where: {
+        userId: params.userId,
+        groupKey,
+        dismissedAt: null,
+      },
+      data: { dismissedAt: new Date() },
+    });
+    await createNotification({
+      userId: params.userId,
+      type: "storage",
+      kind: params.kind,
+      title:
+        params.kind === "analysis_done"
+          ? "회의 분석이 완료되었습니다"
+          : "회의 분석에 실패했습니다",
+      body: params.title,
+      meetingId: params.meetingId,
+      data: {
+        meetingId: params.meetingId,
+        ...(params.errorMessage
+          ? { errorMessage: params.errorMessage }
+          : {}),
+      },
+      groupKey,
+    });
+  } catch (err) {
+    console.warn("[stt] 분석 알림 생성 실패", err);
+  }
+}
 
 function mapSttFraction(fraction: number): number {
   const f = Math.max(0, Math.min(1, fraction));
@@ -111,6 +159,11 @@ export async function processUploadedMeeting(params: {
       workDir,
     });
 
+    // ffprobe로 길이를 알 수 있을 때만 1시간 한도. 없으면 파일 크기 한도만.
+    if (hasAudioTools()) {
+      assertUploadAudioDuration(probeDurationSec(audioPath));
+    }
+
     // 고유명사는 소리만으로 못 가린다. 참석자와 지난 회의에서 모아 미리 알려 준다.
     const glossary = buildGlossary({
       userId: params.userId,
@@ -135,11 +188,20 @@ export async function processUploadedMeeting(params: {
     ]);
 
     if (!stt.text.trim()) {
-      throw new Error("전사 결과가 비어 있습니다.");
+      console.error("[stt] 전사 텍스트가 비어 있음", {
+        meetingId: params.meetingId,
+        model: params.model,
+      });
+      throw new Error("전사 결과가 비어 있습니다. 다른 파일로 다시 시도해 주세요.");
     }
     if (!stt.timedSegments.length) {
+      console.error("[stt] 실측 시각(타이밍) 구간이 비어 있음", {
+        meetingId: params.meetingId,
+        model: params.model,
+        textLength: stt.text.length,
+      });
       throw new Error(
-        "STT 실측 시각이 비어 있습니다. 싱크를 맞출 수 없어 중단합니다.",
+        "실측 시각(타이밍)이 비어 있습니다. 싱크를 맞출 수 없어 중단합니다.",
       );
     }
 
@@ -295,6 +357,12 @@ export async function processUploadedMeeting(params: {
       where: { legacyMeetingId: params.meetingId },
       data: { state: "READY" },
     });
+    await notifyAnalysisResult({
+      userId: params.userId,
+      meetingId: params.meetingId,
+      title: params.title,
+      kind: "analysis_done",
+    });
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "회의 정리에 실패했습니다.";
@@ -321,6 +389,13 @@ export async function processUploadedMeeting(params: {
     await prisma.teamMeeting.updateMany({
       where: { legacyMeetingId: params.meetingId },
       data: { state: "FAILED" },
+    });
+    await notifyAnalysisResult({
+      userId: params.userId,
+      meetingId: params.meetingId,
+      title: params.title,
+      kind: "analysis_failed",
+      errorMessage: message,
     });
   } finally {
     try {

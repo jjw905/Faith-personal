@@ -12,6 +12,10 @@ import { toFile } from "openai/uploads";
 
 import { stripHallucination } from "@/lib/stt/hallucination-guard";
 import { hasAudioTools } from "@/lib/stt/local-tools";
+import {
+  assertUploadAudioBytes,
+  assertUploadAudioDuration,
+} from "@/lib/stt/upload-limits";
 import { getOpenAIClient } from "@/lib/stt/openai";
 import type { SttModel } from "@/lib/stt/models";
 import {
@@ -21,12 +25,6 @@ import {
 import type { TimedSegment } from "@/lib/stt/timed-segments";
 
 export const CHUNK_SEC = 300;
-
-/**
- * 나누지 않고 그대로 올릴 수 있는 상한. 전사 API가 파일당 25MB까지 받는다.
- * ffmpeg가 없는 서버에서는 이 안쪽 파일만 처리할 수 있다.
- */
-const DIRECT_UPLOAD_MAX_BYTES = 24 * 1024 * 1024;
 
 /** 무음 판정 기준. 이보다 조용한 구간이 이 길이 이상 이어지면 무음. */
 const SILENCE_NOISE_DB = -32;
@@ -393,22 +391,39 @@ async function timeChunkWithWhisper(
   bytes: Buffer,
   filename: string,
 ): Promise<{ timed: TimedSegment[]; durationBillSec: number }> {
-  const client = getOpenAIClient();
-  const file = await toFile(bytes, filename);
-  const res = await client.audio.transcriptions.create({
-    model: "whisper-1",
-    file,
-    response_format: "verbose_json",
-    timestamp_granularities: ["segment"],
-  });
-  const durationBillSec =
-    typeof (res as { duration?: number }).duration === "number"
-      ? Number((res as { duration: number }).duration)
-      : 0;
-  return {
-    timed: parseVerboseSegments(res, 0),
-    durationBillSec,
-  };
+  try {
+    const client = getOpenAIClient();
+    const file = await toFile(bytes, filename);
+    const res = await client.audio.transcriptions.create({
+      model: "whisper-1",
+      file,
+      response_format: "verbose_json",
+      timestamp_granularities: ["segment"],
+    });
+    const durationBillSec =
+      typeof (res as { duration?: number }).duration === "number"
+        ? Number((res as { duration: number }).duration)
+        : 0;
+    const timed = parseVerboseSegments(res, 0);
+    if (timed.length === 0) {
+      throw new Error(
+        "실측 시각(타이밍) 결과가 비어 있습니다. 잠시 후 다시 시도하거나 다른 파일로 올려 주세요.",
+      );
+    }
+    return { timed, durationBillSec };
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      err.message.includes("실측 시각(타이밍)")
+    ) {
+      throw err;
+    }
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error("[stt] whisper 타이밍 패스 실패", detail);
+    throw new Error(
+      `실측 시각(타이밍) 전사에 실패했습니다. ${detail}`,
+    );
+  }
 }
 
 /** 오디오 분 단위 요금과 토큰 요금을 합친다. 타이밍 패스는 whisper 요금이 따로 붙는다. */
@@ -496,12 +511,7 @@ async function transcribeWholeFile(params: {
   report: StepReporter;
 }): Promise<ChunkedTranscribeResult> {
   const bytes = readFileSync(params.audioPath);
-  if (bytes.length > DIRECT_UPLOAD_MAX_BYTES) {
-    const limitMb = Math.floor(DIRECT_UPLOAD_MAX_BYTES / (1024 * 1024));
-    throw new Error(
-      `이 서버에서는 ${limitMb}MB 이하 파일만 전사할 수 있습니다. 더 작은 파일로 올려 주세요.`,
-    );
-  }
+  assertUploadAudioBytes(bytes.length);
 
   const name = basename(params.audioPath) || "source.mp3";
   const needsTiming = params.model !== "whisper-1";
@@ -622,6 +632,7 @@ export async function chunkedTranscribe(params: {
   }
 
   const durationSec = probeDurationSec(params.audioPath);
+  assertUploadAudioDuration(durationSec);
   report({ fraction: 0.04, step: "probe" });
 
   const chunks = prepareChunks(params.audioPath, params.workDir, chunkSec);

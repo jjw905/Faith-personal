@@ -2,11 +2,7 @@ import { randomUUID } from "crypto";
 import { after, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/require-user";
-import {
-  DEFAULT_STT_MODEL,
-  isSttModel,
-  type SttModel,
-} from "@/lib/stt/models";
+import { DEFAULT_STT_MODEL } from "@/lib/stt/models";
 import { processUploadedMeeting } from "@/lib/stt/process-upload";
 import { placeholderMeeting } from "@/lib/stt/to-meeting";
 import { stripFileExtension } from "@/lib/meeting-process";
@@ -29,7 +25,6 @@ export async function POST(request: Request) {
 
   let body: {
     vaultFileId?: string;
-    model?: string;
     title?: string;
     workspace?: string;
     teamId?: string;
@@ -52,9 +47,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const model: SttModel = isSttModel(body.model ?? "")
-    ? (body.model as SttModel)
-    : DEFAULT_STT_MODEL;
+  // 업로드 회의 STT는 mini로 고정. 클라이언트 model은 무시.
+  const model = DEFAULT_STT_MODEL;
 
   const file = await prisma.vaultFile.findFirst({
     where: { id: vaultFileId, userId: session.user.id },

@@ -8,8 +8,33 @@ import {
   nextDuplicateFileName,
   renameFile,
 } from "@/lib/vault";
+import {
+  assertUploadAudioBytes,
+  assertUploadAudioDuration,
+  UPLOAD_AUDIO_TOO_LARGE_MESSAGE,
+  UPLOAD_AUDIO_TOO_LONG_MESSAGE,
+} from "@/lib/stt/upload-limits";
 
 const ACCEPTED_FORMATS = [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".webm"];
+
+/** 브라우저가 metadata를 주면 길이 검사. 못 읽으면 null(서버가 재검사). */
+function probeBrowserAudioDurationSec(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+    const finish = (sec: number | null) => {
+      URL.revokeObjectURL(url);
+      resolve(sec);
+    };
+    audio.preload = "metadata";
+    audio.onloadedmetadata = () => {
+      const d = audio.duration;
+      finish(Number.isFinite(d) && d > 0 ? d : null);
+    };
+    audio.onerror = () => finish(null);
+    audio.src = url;
+  });
+}
 
 export function useFileUpload(options?: { persist?: boolean }) {
   const persist = options?.persist !== false;
@@ -69,6 +94,20 @@ export function useFileUpload(options?: { persist?: boolean }) {
     async (file: File) => {
       setUploadError(null);
       setStoredId(null);
+      try {
+        assertUploadAudioBytes(file.size);
+        const durationSec = await probeBrowserAudioDurationSec(file);
+        if (durationSec != null) assertUploadAudioDuration(durationSec);
+      } catch (err) {
+        setSelectedFile(file);
+        setUploadStatus("error");
+        setUploadError(
+          err instanceof Error
+            ? err.message
+            : UPLOAD_AUDIO_TOO_LARGE_MESSAGE,
+        );
+        return;
+      }
       if (!persist) {
         await uploadFile(file);
         return;
@@ -111,9 +150,23 @@ export function useFileUpload(options?: { persist?: boolean }) {
     setPendingFile(null);
     setDuplicateNextName(null);
     setSelectedFile(file);
-    setStoredId(id);
-    setUploadStatus("done");
+    setStoredId(null);
+    setUploadStatus("uploading");
     setUploadError(null);
+    void (async () => {
+      try {
+        const durationSec = await probeBrowserAudioDurationSec(file);
+        if (durationSec != null) assertUploadAudioDuration(durationSec);
+        setStoredId(id);
+        setUploadStatus("done");
+      } catch (err) {
+        setStoredId(null);
+        setUploadStatus("error");
+        setUploadError(
+          err instanceof Error ? err.message : UPLOAD_AUDIO_TOO_LONG_MESSAGE,
+        );
+      }
+    })();
   }, []);
 
   const handleDrop = useCallback(
