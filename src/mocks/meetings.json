@@ -1,6 +1,247 @@
 {
   "meetings": [
     {
+      "id": "mtg-stt-assembly",
+      "title": "제424회 국회 환경노동위원회",
+      "tags": [
+        "국회",
+        "환노위",
+        "추경"
+      ],
+      "summaryTags": [
+        "추가경정 예산안",
+        "소위원회",
+        "노동자 농성"
+      ],
+      "date": "2026-07-27T02:33:00.000Z",
+      "duration": "18분 27초",
+      "participants": [
+        {
+          "id": "spk-0",
+          "name": "안호영 위원장",
+          "initials": "안",
+          "color": "bg-blue-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "회의를 주재하며 의결을 진행한 위원장",
+          "tags": [
+            "위원장",
+            "회의 진행"
+          ]
+        },
+        {
+          "id": "spk-1",
+          "name": "임의자 의원",
+          "initials": "임",
+          "color": "bg-emerald-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "소위원회 심사 결과를 보고한 예산결산기금심사소위원장",
+          "tags": [
+            "소위원장",
+            "예산안"
+          ]
+        },
+        {
+          "id": "spk-2",
+          "name": "환경부 장관",
+          "initials": "환",
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "환경부 장관으로서 인사 말씀을 한 발언자",
+          "tags": [
+            "장관",
+            "인사"
+          ]
+        },
+        {
+          "id": "spk-3",
+          "name": "고용노동부 장관 직무대행",
+          "initials": "고",
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "고용노동부 장관 직무대행으로서 인사 말씀을 한 발언자",
+          "tags": [
+            "장관",
+            "인사"
+          ]
+        },
+        {
+          "id": "spk-4",
+          "name": "정혜경 의원",
+          "initials": "정",
+          "color": "bg-rose-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "비정규직 노동자 관련 발언을 한 의원",
+          "tags": [
+            "의원",
+            "노동자"
+          ]
+        },
+        {
+          "id": "spk-F",
+          "name": "화자 F",
+          "initials": "F",
+          "color": "bg-cyan-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "고용노동부의 진상조사 필요성 강조.",
+          "tags": [
+            "고용노동부",
+            "조사"
+          ]
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "personal",
+      "capture": "upload",
+      "replayAudio": "assembly-envlabor-20250425.mp3"
+    },
+    {
+      "id": "mtg-stt-ktv",
+      "title": "KTV 정책 브리핑",
+      "tags": [
+        "브리핑",
+        "정책"
+      ],
+      "summaryTags": [
+        "정책 생중계",
+        "투명성",
+        "언론 소통"
+      ],
+      "date": "2026-07-27T05:00:00.000Z",
+      "duration": "11분 36초",
+      "participants": [
+        {
+          "id": "spk-0",
+          "name": "이규연 홍보소통수석",
+          "initials": "이",
+          "color": "bg-blue-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "정책 생중계 확대 방안을 발표하고 설명했습니다.",
+          "tags": [
+            "홍보소통수석",
+            "정책"
+          ]
+        },
+        {
+          "id": "spk-1",
+          "name": "이상택 기자",
+          "initials": "이",
+          "color": "bg-emerald-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "생중계 예시와 관련된 질문을 했습니다.",
+          "tags": [
+            "기자",
+            "질문"
+          ]
+        },
+        {
+          "id": "spk-2",
+          "name": "홍민기 기자",
+          "initials": "홍",
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "회의 진행 중 격려의 말을 전했습니다.",
+          "tags": [
+            "기자",
+            "격려"
+          ]
+        },
+        {
+          "id": "spk-3",
+          "name": "김용록",
+          "initials": "김",
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "디지털 담당관의 역할과 생중계 신청 활성화에 대해 질문했습니다.",
+          "tags": [
+            "기자",
+            "질문"
+          ]
+        },
+        {
+          "id": "spk-E",
+          "name": "화자 E",
+          "initials": "E",
+          "color": "bg-rose-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "인사 관련 질문을 했습니다.",
+          "tags": [
+            "기자",
+            "질문"
+          ]
+        },
+        {
+          "id": "spk-5",
+          "name": "선재원 기자",
+          "initials": "선",
+          "color": "bg-cyan-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "생중계 기준에 대한 질문을 했습니다.",
+          "tags": [
+            "기자",
+            "질문"
+          ]
+        },
+        {
+          "id": "spk-6",
+          "name": "이경태 기자",
+          "initials": "이",
+          "color": "bg-orange-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "KTV의 인력과 예산에 대한 질문을 했습니다.",
+          "tags": [
+            "기자",
+            "질문"
+          ]
+        },
+        {
+          "id": "spk-7",
+          "name": "김안진",
+          "initials": "김",
+          "color": "bg-slate-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "대화 속 호명으로 추정",
+          "summary": "대통령의 민생 행보에 대한 질문을 했습니다.",
+          "tags": [
+            "기자",
+            "질문"
+          ]
+        }
+      ],
+      "status": "completed",
+      "security": "protected",
+      "workspace": "personal",
+      "capture": "upload",
+      "replayAudio": "ktv-briefing-20251231.mp3"
+    },
+    {
       "id": "mtg-cmp-mini",
       "title": "다화자 180초, gpt-4o-mini-transcribe",
       "tags": [
@@ -86,171 +327,6 @@
       "workspace": "personal",
       "capture": "upload",
       "replayAudio": "fixtures/assembly3-dense-180.wav"
-    },
-    {
-      "id": "mtg-stt-assembly",
-      "title": "제424회 국회 환노위 (STT 화자분리)",
-      "tags": [
-        "STT",
-        "국회",
-        "화자분리"
-      ],
-      "summaryTags": [
-        "AI",
-        "diarize",
-        "환노위"
-      ],
-      "daysAgo": 0,
-      "time": "11:33:00",
-      "duration": "18분 34초",
-      "participants": [
-        {
-          "id": "spk-A",
-          "name": "화자 A",
-          "initials": "A",
-          "color": "bg-blue-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-B",
-          "name": "화자 B",
-          "initials": "B",
-          "color": "bg-emerald-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-C",
-          "name": "화자 C",
-          "initials": "C",
-          "color": "bg-violet-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-D",
-          "name": "화자 D",
-          "initials": "D",
-          "color": "bg-amber-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-E",
-          "name": "화자 E",
-          "initials": "E",
-          "color": "bg-rose-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-F",
-          "name": "화자 F",
-          "initials": "F",
-          "color": "bg-cyan-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-G",
-          "name": "화자 G",
-          "initials": "G",
-          "color": "bg-orange-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        }
-      ],
-      "status": "completed",
-      "security": "protected",
-      "workspace": "personal",
-      "capture": "upload",
-      "replayAudio": "assembly-envlabor-20250425.mp3"
-    },
-    {
-      "id": "mtg-stt-ktv",
-      "title": "KTV 브리핑 (STT 화자분리)",
-      "tags": [
-        "STT",
-        "KTV",
-        "화자분리"
-      ],
-      "summaryTags": [
-        "AI",
-        "diarize",
-        "브리핑"
-      ],
-      "daysAgo": 0,
-      "time": "14:00:00",
-      "duration": "11분 44초",
-      "participants": [
-        {
-          "id": "spk-A",
-          "name": "화자 A",
-          "initials": "A",
-          "color": "bg-blue-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-B",
-          "name": "화자 B",
-          "initials": "B",
-          "color": "bg-emerald-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-C",
-          "name": "화자 C",
-          "initials": "C",
-          "color": "bg-violet-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-D",
-          "name": "화자 D",
-          "initials": "D",
-          "color": "bg-amber-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-E",
-          "name": "화자 E",
-          "initials": "E",
-          "color": "bg-rose-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        },
-        {
-          "id": "spk-F",
-          "name": "화자 F",
-          "initials": "F",
-          "color": "bg-cyan-500",
-          "isMember": false,
-          "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨"
-        }
-      ],
-      "status": "completed",
-      "security": "protected",
-      "workspace": "personal",
-      "capture": "upload",
-      "replayAudio": "ktv-briefing-20251231.mp3"
     },
     {
       "id": "mtg-001",
