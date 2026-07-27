@@ -4,11 +4,12 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
+import { AUTH_CARD } from "@/components/auth/auth-shell";
 import { Input } from "@/components/ui/input";
 import { isValidEmail } from "@/lib/auth-validation";
 
 const fieldInputClass =
-  "h-11 border-border-strong bg-white focus-visible:ring-primary/30";
+  "h-12 border-border bg-card focus-visible:ring-primary/30";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -64,25 +65,30 @@ export function ForgotPasswordForm() {
 
   if (result) {
     return (
-      <div className="w-full max-w-md self-start">
+      <div className="w-full">
         <Link
           href="/login"
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground"
+          className="mb-4 inline-flex min-h-12 items-center gap-1.5 text-base font-medium text-muted transition-colors hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" strokeWidth={2} />
+          <ArrowLeft className="h-5 w-5" strokeWidth={2} />
           로그인으로
         </Link>
 
         <div className="text-center">
-          <h1 className="text-[26px] font-bold tracking-tight text-foreground sm:text-[28px]">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {result.mailEnabled ? "메일을 확인하세요" : "재설정 불가"}
           </h1>
-          <p className="mt-2 text-sm text-muted">{result.message}</p>
+          <p className="mt-2 text-base text-muted">{result.message}</p>
         </div>
 
-        <div className="mt-4 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong">
+        <div className={`mt-5 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
+            안내
+          </h2>
+          <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+
           {result.mailEnabled ? (
-            <p className="text-center text-sm leading-relaxed text-foreground">
+            <p className="mt-5 text-center text-base leading-relaxed text-foreground">
               <span className="font-semibold">{email.trim()}</span>
               <br />
               <span className="text-muted">
@@ -91,14 +97,14 @@ export function ForgotPasswordForm() {
               </span>
             </p>
           ) : (
-            <p className="text-center text-sm leading-relaxed text-muted">
+            <p className="mt-5 text-center text-base leading-relaxed text-muted">
               메일 서비스 연결 후 비밀번호 찾기를 이용할 수 있습니다.
             </p>
           )}
 
           <Link
             href="/login"
-            className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+            className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
           >
             로그인으로 돌아가기
           </Link>
@@ -108,35 +114,40 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <div className="w-full max-w-md self-start">
+    <div className="w-full">
       <Link
         href="/login"
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground"
+        className="mb-4 inline-flex min-h-12 items-center gap-1.5 text-base font-medium text-muted transition-colors hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" strokeWidth={2} />
+        <ArrowLeft className="h-5 w-5" strokeWidth={2} />
         로그인으로
       </Link>
 
       <div className="text-center">
-        <h1 className="text-[26px] font-bold tracking-tight text-foreground sm:text-[28px]">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           비밀번호 찾기
         </h1>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-2 text-base text-muted">
           가입한 이메일로 재설정 안내를 보냅니다.
         </p>
       </div>
 
-      <div className="mt-4 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong">
-        <form className="space-y-5" onSubmit={handleSubmit}>
+      <div className={`mt-4 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
+        <h2 className="text-xl font-bold tracking-tight text-foreground">
+          이메일 확인
+        </h2>
+        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+
+        <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
           {error ? (
-            <p className="rounded-xl bg-masked-soft px-3 py-2 text-sm text-masked">
+            <p className="rounded-xl bg-masked-soft px-3 py-2 text-base text-masked">
               {error}
             </p>
           ) : null}
           <div>
             <label
               htmlFor="email"
-              className="mb-1.5 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-base font-semibold text-foreground"
             >
               이메일
             </label>
@@ -144,7 +155,7 @@ export function ForgotPasswordForm() {
               id="email"
               name="email"
               type="email"
-              placeholder="you@company.com"
+              placeholder="name@example.com"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -155,7 +166,7 @@ export function ForgotPasswordForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
           >
             {submitting ? "보내는 중…" : "재설정 메일 받기"}
           </button>

@@ -157,7 +157,7 @@ export default function HelpPage() {
   }, [focusArticle]);
 
   return (
-    <PageContainer className="bg-background">
+    <PageContainer soft>
       <div ref={pageRef} className="relative mx-auto w-full max-w-5xl">
         <div ref={chromeRef} className="mb-5 sm:mb-6">
           <div className="mb-4">

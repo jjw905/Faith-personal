@@ -58,6 +58,9 @@ const TEAM_SECTION_LAYOUT_KEYS = {
   records: "faith.team.records.layout",
 } as const;
 
+const CARD_SHADOW =
+  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+
 function readSectionLayout(key: string): SectionLayout {
   if (typeof window === "undefined") return "list";
   try {
@@ -130,11 +133,11 @@ function sectionGridClass(
 ) {
   if (options?.split) {
     // 반폭 컬럼: 모바일(스택 시) 1열 → sm 2열 → md(나란히) 1열 → xl 2열
-    return "grid grid-cols-1 gap-3 bg-card px-3 pb-3 pt-2 sm:grid-cols-2 sm:px-4 sm:pb-4 sm:pt-3 md:grid-cols-1 xl:grid-cols-2";
+    return "grid grid-cols-1 gap-3 px-6 pb-5 pt-4 sm:grid-cols-2 md:grid-cols-1 xl:grid-cols-2";
   }
   return cn(
     // 전체 폭: 모바일 1열, 태블릿+ 2열, 항목 많으면 xl 3열
-    "grid grid-cols-1 gap-3 bg-card px-3 pb-3 pt-2 sm:grid-cols-2 sm:gap-3 sm:px-4 sm:pb-4 sm:pt-3",
+    "grid grid-cols-1 gap-3 px-6 pb-5 pt-4 sm:grid-cols-2",
     count >= 5 && "xl:grid-cols-3",
   );
 }
@@ -280,30 +283,34 @@ function SectionCard({
   return (
     <section
       className={cn(
-        "panel-surface flex h-full min-h-0 flex-col overflow-hidden rounded-2xl outline-none",
+        "flex h-full min-h-0 flex-col overflow-hidden bg-card outline-none",
+        CARD_SHADOW,
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-card px-4 py-4 sm:px-5">
-        <div className="flex min-w-0 items-center gap-1.5">
-          {icon ? (
-            <span className="inline-flex shrink-0 text-foreground/70">
-              {icon}
-            </span>
-          ) : null}
+      <div className="space-y-0 bg-card px-6 pb-0 pt-6">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
+            {icon ? (
+              <span className="inline-flex shrink-0 text-foreground/70">
+                {icon}
+              </span>
+            ) : null}
+            <h2 className="text-xl font-bold tracking-tight text-foreground">
+              {title}
+            </h2>
             {typeof count === "number" && count > 0 ? (
               <span className="text-base font-semibold tabular-nums text-muted">
                 {count}
               </span>
             ) : null}
-            <h2 className="text-xl font-semibold text-foreground">{title}</h2>
             {action}
           </div>
+          {toolbar ? (
+            <div className="flex shrink-0 items-center gap-1.5">{toolbar}</div>
+          ) : null}
         </div>
-        {toolbar ? (
-          <div className="flex shrink-0 items-center gap-1.5">{toolbar}</div>
-        ) : null}
+        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
       </div>
       <div className="min-h-0 flex-1 bg-card">{empty ?? children}</div>
     </section>
@@ -320,7 +327,7 @@ function SectionEmpty({
   onAction?: () => void;
 }) {
   return (
-    <div className="px-4 pb-8 pt-1 text-center sm:px-5">
+    <div className="px-6 py-10 text-center">
       <p className="text-base text-muted">{message}</p>
       {actionLabel && onAction ? (
         <Button
@@ -359,7 +366,12 @@ function TeamWorkspaceEmpty() {
         </p>
       </header>
 
-      <article className="mx-auto mt-8 max-w-3xl rounded-[28px] bg-card p-6 shadow-soft sm:mt-10 sm:p-8">
+      <article
+        className={cn(
+          "mx-auto mt-8 max-w-3xl bg-card p-6 sm:mt-10 sm:p-8",
+          CARD_SHADOW,
+        )}
+      >
         <div className="grid gap-8 md:grid-cols-[minmax(0,0.8fr)_minmax(18rem,1.2fr)] md:gap-10">
           <div className="flex flex-col">
             <div>
@@ -1059,7 +1071,7 @@ export function TeamWorkspacePanel() {
 
   if ((loading && !data) || scenarioId === "loading") {
     return (
-      <div className="grid min-h-56 place-items-center rounded-2xl bg-card shadow-soft">
+      <div className={cn("grid min-h-56 place-items-center bg-card", CARD_SHADOW)}>
         <LoaderCircle
           className="h-6 w-6 animate-spin text-muted"
           aria-label="불러오는 중"
@@ -1075,22 +1087,22 @@ export function TeamWorkspacePanel() {
   if (managementPageOpen) {
     const manageTitle =
       manageView === "security"
-        ? "보안 정책"
+        ? "팀 보안 정책"
         : manageView === "records"
-          ? "기록 열람"
+          ? "기록 접근 정책"
           : manageView === "invite"
             ? "멤버 초대"
             : "구성원과 권한";
 
     return (
-      <div className="space-y-6">
+      <div className="mx-auto w-full max-w-3xl space-y-6">
         <header className="min-w-0">
           <Link
             href="/team"
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-1 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
+            className="inline-flex min-h-12 items-center gap-1.5 rounded-xl px-1 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
           >
             <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
-            팀 공간
+            돌아가기
           </Link>
           <h1 className="mt-2 text-2xl font-bold leading-none tracking-tight text-foreground">
             {manageTitle}
@@ -1204,7 +1216,7 @@ export function TeamWorkspacePanel() {
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="회의, 참석자 검색"
-            className="bg-card"
+            className="bg-card ring-1 ring-border"
           />
         </div>
       </div>
@@ -1368,7 +1380,7 @@ export function TeamWorkspacePanel() {
         >
           {filteredUpcoming.length > 0 ? (
             upcomingLayout === "list" ? (
-              <ul className="divide-y divide-border/70">
+              <ul className="divide-y divide-border">
                 {filteredUpcoming.map((meeting) => (
                   <li key={meeting.id}>
                     <UpcomingMeetingRow
@@ -1471,11 +1483,11 @@ export function TeamWorkspacePanel() {
         >
           {displayData!.announcements.length > 0 ? (
             announcementsLayout === "list" ? (
-              <ul className="divide-y divide-border/70">
+              <ul className="divide-y divide-border">
                 {displayData!.announcements.slice(0, 5).map((item) => (
                   <li
                     key={item.id}
-                    className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:px-5"
+                    className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-start sm:justify-between sm:py-5"
                   >
                     <div className="min-w-0">
                       <p
@@ -1513,10 +1525,10 @@ export function TeamWorkspacePanel() {
                   <li key={item.id} className="min-h-0">
                     <div
                       className={cn(
-                        "flex h-full min-h-[9.5rem] flex-col rounded-xl bg-card p-4 sm:min-h-[10.5rem]",
+                        "flex h-full min-h-[9.5rem] flex-col rounded-2xl bg-surface p-4 sm:min-h-[10.5rem]",
                         item.read
-                          ? "border border-border"
-                          : "border-2 border-primary/40 shadow-soft",
+                          ? "ring-1 ring-border"
+                          : "ring-2 ring-primary/40",
                       )}
                     >
                       <p
@@ -1575,12 +1587,12 @@ export function TeamWorkspacePanel() {
       >
         {filteredRecords.length > 0 ? (
           recordsLayout === "list" ? (
-            <ul className="divide-y divide-border/70">
+            <ul className="divide-y divide-border">
               {filteredRecords.map((record) => (
                 <li key={record.id}>
                   <Link
                     href={`/meetings/team/${record.id}`}
-                    className="grid min-h-14 items-start gap-2 px-4 py-3.5 transition-colors hover:bg-surface/70 sm:grid-cols-[minmax(7rem,auto)_1fr_auto] sm:items-center sm:gap-3 sm:px-5"
+                    className="grid min-h-14 items-start gap-2 px-6 py-4 transition-colors hover:bg-surface/70 sm:grid-cols-[minmax(7rem,auto)_1fr_auto] sm:items-center sm:gap-3 sm:py-5"
                   >
                     <span className="text-base font-semibold tabular-nums tracking-tight text-muted sm:text-lg sm:text-foreground">
                       {formatRecordWhen(record.endedAt)}
@@ -1601,7 +1613,7 @@ export function TeamWorkspacePanel() {
                 <li key={record.id} className="min-h-0">
                   <Link
                     href={`/meetings/team/${record.id}`}
-                    className="flex h-full min-h-[8.5rem] flex-col rounded-xl border border-border bg-card p-4 transition-colors hover:border-border-strong hover:bg-surface/50 sm:min-h-[9.5rem]"
+                    className="flex h-full min-h-[8.5rem] flex-col rounded-2xl bg-surface p-4 ring-1 ring-border transition-colors hover:bg-surface-2 sm:min-h-[9.5rem]"
                   >
                     <span className="text-base font-semibold tabular-nums text-muted">
                       {formatRecordWhen(record.endedAt)}

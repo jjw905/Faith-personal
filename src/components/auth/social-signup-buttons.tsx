@@ -22,7 +22,7 @@ const PROVIDERS = [
     id: "google",
     label: "Google",
     className:
-      "border border-[#dadce0] bg-white text-[#3c4043] hover:bg-[#f8f9fa]",
+      "border border-border bg-card text-foreground hover:bg-surface",
     Icon: GoogleIcon,
   },
   {
@@ -85,14 +85,15 @@ export function SocialSignupButtons({
 
   return (
     <div>
-      <p className="text-left text-[13px] font-semibold tracking-tight text-foreground">
+      <p className="text-left text-xl font-bold tracking-tight text-foreground">
         {title}
       </p>
+      <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
       <div
         className={
           dense
             ? "mt-4 flex w-full flex-col gap-3"
-            : "mt-[31px] flex w-full flex-col gap-[17px]"
+            : "mt-5 flex w-full flex-col gap-3"
         }
       >
         {PROVIDERS.map(({ id, label, className, Icon }) => (
@@ -101,9 +102,7 @@ export function SocialSignupButtons({
             type="button"
             disabled={pending}
             onClick={() => handleSocial(id)}
-            className={`flex w-full items-center justify-center rounded-xl text-[15px] font-semibold transition-colors disabled:opacity-60 ${
-              dense ? "h-11" : "h-12"
-            } ${className}`}
+            className={`flex h-12 min-h-12 w-full items-center justify-center rounded-xl text-base font-semibold transition-colors disabled:opacity-60 ${className}`}
           >
             <span className="grid w-[7.25rem] grid-cols-[1.25rem_minmax(0,1fr)] items-center gap-3">
               <span className="flex h-5 w-5 items-center justify-center">
@@ -115,10 +114,10 @@ export function SocialSignupButtons({
         ))}
       </div>
       {error ? (
-        <p className="mt-3 text-center text-[12px] text-destructive">{error}</p>
+        <p className="mt-3 text-center text-base text-destructive">{error}</p>
       ) : null}
       {showPrivacyNote && (
-        <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-2">
+        <p className="mt-3 text-center text-base leading-relaxed text-muted">
           이름과 이메일만 제공받으며, 동의 없이 게시하지 않습니다.
         </p>
       )}
@@ -126,13 +125,13 @@ export function SocialSignupButtons({
   );
 }
 
-/** 소셜 / 이메일 구분선 — Notion·Slack 스타일. */
+/** 소셜 / 이메일 구분선. */
 export function AuthOrDivider() {
   return (
     <div className="flex items-center gap-3" role="separator" aria-label="또는">
-      <span className="h-px flex-1 bg-border-strong" />
-      <span className="shrink-0 text-[12px] font-medium text-muted-2">또는</span>
-      <span className="h-px flex-1 bg-border-strong" />
+      <span className="h-px flex-1 bg-border" />
+      <span className="shrink-0 text-base font-medium text-muted">또는</span>
+      <span className="h-px flex-1 bg-border" />
     </div>
   );
 }

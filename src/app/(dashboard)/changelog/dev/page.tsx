@@ -9,7 +9,7 @@ export default async function DevChangelogPage() {
   const state = await getDevChangelogState();
 
   return (
-    <PageContainer className="bg-background">
+    <PageContainer soft>
       <div className="mx-auto w-full max-w-3xl">
         <DevChangelogEditor initialState={state} />
       </div>

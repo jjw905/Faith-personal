@@ -18,14 +18,13 @@ export default async function AiUsagePreviewPage() {
   }));
 
   return (
-    <PageContainer>
-      <div className="mx-auto w-full max-w-6xl">
-        <p className="mb-2 text-xs font-semibold tracking-wide text-muted-2">
-          로컬 임시
-        </p>
-        <h1 className="mb-6 text-2xl font-bold tracking-tight text-foreground">
-          AI 사용량
-        </h1>
+    <PageContainer soft>
+      <div className="mx-auto w-full max-w-5xl space-y-6">
+        <header className="min-w-0">
+          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+            AI 사용량
+          </h1>
+        </header>
         <AiUsageDashboard initial={summary} initialUsers={initialUsers} />
       </div>
     </PageContainer>

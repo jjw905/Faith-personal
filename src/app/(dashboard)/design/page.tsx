@@ -9,7 +9,7 @@ export default async function DesignPage() {
   await requireAdmin();
 
   return (
-    <PageContainer>
+    <PageContainer soft>
       <Suspense fallback={null}>
         <DesignLab />
       </Suspense>

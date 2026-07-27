@@ -202,14 +202,14 @@ export function fixtureAiUsageEmpty(): AiUsageSummary {
   };
 }
 
-/** UX 미리보기: AI 사용량 채워짐. */
+/** UX 미리보기: AI 사용량 채워짐 (긴 목록/더 보기 검수용). */
 export function fixtureAiUsageFull(): AiUsageSummary {
   if (cachedAiUsageFull) return cachedAiUsageFull;
-  const days = Array.from({ length: 12 }, (_, index) => {
+  const usdKrw = 1380;
+  const days = Array.from({ length: 30 }, (_, index) => {
     const date = daysAgoIso(index).slice(0, 10);
     const sttUsd = 0.42 + index * 0.05;
     const structureUsd = 0.18 + index * 0.02;
-    const usdKrw = 1380;
     return {
       date,
       sttUsd,
@@ -229,7 +229,66 @@ export function fixtureAiUsageFull(): AiUsageSummary {
   const totalUsd = days.reduce((sum, d) => sum + d.totalUsd, 0);
   const sttUsd = days.reduce((sum, d) => sum + d.sttUsd, 0);
   const structureUsd = days.reduce((sum, d) => sum + d.structureUsd, 0);
-  const usdKrw = 1380;
+  const userWeights = [
+    0.18, 0.14, 0.11, 0.09, 0.08, 0.07, 0.06, 0.05, 0.05, 0.04, 0.04, 0.03,
+    0.03, 0.03,
+  ];
+  const byUser = userWeights.map((weight, index) => {
+    const usd = totalUsd * weight;
+    return {
+      userId: `ux-user-${index + 1}`,
+      usd,
+      krw: usd * usdKrw,
+      tokens: Math.round(184_000 * weight),
+      jobs: Math.max(2, Math.round(48 * weight)),
+      meetingCount: Math.max(1, Math.round(16 * weight)),
+      audioSec: Math.round(21_600 * weight),
+    };
+  });
+  const modelRows = [
+    {
+      model: "gpt-4o-transcribe",
+      stage: "stt" as const,
+      share: 0.42,
+      tokens: 120_000,
+      count: 28,
+    },
+    {
+      model: "gpt-4o-mini-transcribe",
+      stage: "stt" as const,
+      share: 0.12,
+      tokens: 36_000,
+      count: 10,
+    },
+    {
+      model: "gpt-4.1-mini",
+      stage: "structure" as const,
+      share: 0.22,
+      tokens: 64_000,
+      count: 20,
+    },
+    {
+      model: "gpt-4.1",
+      stage: "structure" as const,
+      share: 0.1,
+      tokens: 28_000,
+      count: 8,
+    },
+    {
+      model: "gpt-4o",
+      stage: "structure" as const,
+      share: 0.08,
+      tokens: 22_000,
+      count: 6,
+    },
+    {
+      model: "o4-mini",
+      stage: "structure" as const,
+      share: 0.06,
+      tokens: 18_000,
+      count: 5,
+    },
+  ];
   cachedAiUsageFull = {
     totalUsd,
     sttUsd,
@@ -245,61 +304,41 @@ export function fixtureAiUsageFull(): AiUsageSummary {
     inputTokens: days.reduce((sum, d) => sum + d.inputTokens, 0),
     outputTokens: days.reduce((sum, d) => sum + d.outputTokens, 0),
     totalTokens: days.reduce((sum, d) => sum + d.totalTokens, 0),
-    eventCount: 48,
+    eventCount: 40,
     meetingCount: 16,
     audioMinutes: Math.round(
       days.reduce((sum, d) => sum + d.audioSec, 0) / 60,
     ),
     byDay: days,
-    byModel: [
-      {
-        model: "gpt-4o-transcribe",
-        stage: "stt",
-        usd: sttUsd,
-        krw: sttUsd * usdKrw,
-        tokens: 120_000,
-        count: 28,
-      },
-      {
-        model: "gpt-4.1-mini",
-        stage: "structure",
-        usd: structureUsd,
-        krw: structureUsd * usdKrw,
-        tokens: 64_000,
-        count: 20,
-      },
-    ],
-    byUser: [
-      {
-        userId: "ux-user-1",
-        usd: totalUsd * 0.55,
-        krw: totalUsd * 0.55 * usdKrw,
-        tokens: 110_000,
-        jobs: 26,
-        meetingCount: 9,
-        audioSec: 12_000,
-      },
-      {
-        userId: "ux-user-2",
-        usd: totalUsd * 0.45,
-        krw: totalUsd * 0.45 * usdKrw,
-        tokens: 74_000,
-        jobs: 22,
-        meetingCount: 7,
-        audioSec: 9_600,
-      },
-    ],
-    recent: Array.from({ length: 10 }, (_, index) => {
+    byModel: modelRows.map((row) => {
+      const usd = totalUsd * row.share;
+      return {
+        model: row.model,
+        stage: row.stage,
+        usd,
+        krw: usd * usdKrw,
+        tokens: row.tokens,
+        count: row.count,
+      };
+    }),
+    byUser,
+    recent: Array.from({ length: 40 }, (_, index) => {
       const inputTokens = 2_000 + index * 100;
       const outputTokens = 400 + index * 20;
+      const userIndex = (index % byUser.length) + 1;
       return {
         id: `ux-ai-${index + 1}`,
-        at: daysAgoIso(index % 5),
-        userId: index % 2 === 0 ? "ux-user-1" : "ux-user-2",
-        meetingId: `ux-mtg-${(index % 6) + 1}`,
+        at: daysAgoIso(index % 14),
+        userId: `ux-user-${userIndex}`,
+        meetingId: `ux-mtg-${(index % 12) + 1}`,
         title: `미리보기 작업 ${index + 1}`,
         stage: index % 3 === 0 ? ("stt" as const) : ("structure" as const),
-        model: index % 3 === 0 ? "gpt-4o-transcribe" : "gpt-4.1-mini",
+        model:
+          index % 3 === 0
+            ? index % 6 === 0
+              ? "gpt-4o-mini-transcribe"
+              : "gpt-4o-transcribe"
+            : modelRows[2 + (index % 4)].model,
         estimatedUsd: 0.12 + index * 0.01,
         estimatedKrw: (0.12 + index * 0.01) * usdKrw,
         usdKrw,

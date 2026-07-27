@@ -47,6 +47,9 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 12;
 
+const CARD_SHADOW =
+  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+
 /** 파일 목록을 업로드 날짜별로 묶는다(최신순). */
 function groupVaultByDay(
   items: VaultItemMeta[],
@@ -427,14 +430,14 @@ export default function VaultPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer soft>
       <div
         ref={pageRef}
-        className="mx-auto flex w-full max-w-5xl flex-col gap-3 pb-24 sm:pb-0"
+        className="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-24 sm:pb-0"
       >
         <header className="min-w-0 space-y-2.5 sm:space-y-3">
           <div className="flex min-w-0 items-center gap-3">
-            <h1 className="shrink-0 text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem] sm:leading-9">
+            <h1 className="shrink-0 text-2xl font-bold leading-none tracking-tight text-foreground">
               보관함
             </h1>
             <div className="min-w-0 flex-1 sm:hidden">
@@ -657,61 +660,75 @@ export default function VaultPage() {
             void ingestFiles(event.dataTransfer.files);
           }}
           className={cn(
-            "flex min-h-[36rem] flex-col overflow-hidden rounded-xl bg-card shadow-soft transition-[box-shadow,background-color] sm:min-h-[42rem]",
+            "flex min-h-[36rem] flex-col overflow-hidden bg-card transition-[box-shadow,background-color] sm:min-h-[42rem]",
+            CARD_SHADOW,
             dragOver && !quotaFull && "bg-primary-soft ring-2 ring-primary",
           )}
         >
-          <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 px-3 sm:gap-3 sm:px-4">
-            {selectMode ? (
-              <button
-                type="button"
-                className={cn(
-                  "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-2",
-                  allFilteredSelected
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border-strong bg-card",
-                )}
-                aria-label={allFilteredSelected ? "전체 선택 해제" : "전체 선택"}
-                aria-pressed={allFilteredSelected}
-                disabled={busy || filtered.length === 0}
-                onClick={toggleSelectAll}
+          <div className="shrink-0 space-y-0 px-4 pb-0 pt-5 sm:px-6 sm:pt-6">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              {selectMode ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-2",
+                    allFilteredSelected
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border-strong bg-card",
+                  )}
+                  aria-label={
+                    allFilteredSelected ? "전체 선택 해제" : "전체 선택"
+                  }
+                  aria-pressed={allFilteredSelected}
+                  disabled={busy || filtered.length === 0}
+                  onClick={toggleSelectAll}
+                >
+                  {allFilteredSelected ? (
+                    <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  ) : null}
+                </button>
+              ) : null}
+              <h2
+                id="vault-list-heading"
+                className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-foreground"
               >
-                {allFilteredSelected ? (
-                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                ) : null}
-              </button>
-            ) : null}
-            <h2
-              id="vault-list-heading"
-              className="flex min-w-0 flex-1 items-center gap-2 truncate text-sm font-medium text-foreground"
-            >
-              <span className="font-normal tabular-nums text-muted">
-                {filtered.length}
-                {query.trim() && filtered.length !== viewItems.length
-                  ? ` / ${viewItems.length}`
-                  : null}
-              </span>
-              <span className="truncate">
                 {selectMode === "download"
                   ? "받을 파일 선택"
                   : selectMode === "delete"
                     ? "삭제할 파일 선택"
                     : "보관 파일"}
+              </h2>
+              <span className="shrink-0 text-base font-medium tabular-nums text-muted">
+                {filtered.length}
+                {query.trim() && filtered.length !== viewItems.length
+                  ? ` / ${viewItems.length}`
+                  : null}
               </span>
-            </h2>
-            {dragOver ? (
-              <p className="shrink-0 text-xs tabular-nums text-muted-2">
-                여기에 놓기
-              </p>
-            ) : viewItems.length > 0 ? (
-              <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-                <span className="hidden w-[4.5rem] text-center text-sm font-medium text-muted sm:block">
-                  수정시간
+              {dragOver ? (
+                <p className="shrink-0 text-base tabular-nums text-muted-2">
+                  여기에 놓기
+                </p>
+              ) : null}
+            </div>
+            <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+            {viewItems.length > 0 && !dragOver ? (
+              <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-border px-0 sm:gap-3">
+                {selectMode ? (
+                  <span className="w-6 shrink-0" aria-hidden />
+                ) : null}
+                <span className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" aria-hidden />
+                <span className="min-w-0 flex-1 text-base font-medium text-muted">
+                  이름
                 </span>
-                <span className="w-[3.75rem] text-center text-sm font-medium text-muted sm:w-[4.5rem]">
-                  용량
-                </span>
-                <span className="w-10 shrink-0" aria-hidden />
+                <div className="flex shrink-0 items-center gap-3 sm:gap-5">
+                  <span className="hidden w-[4.5rem] text-center text-base font-medium text-muted sm:block">
+                    수정시간
+                  </span>
+                  <span className="w-[3.75rem] text-center text-base font-medium text-muted sm:w-[4.5rem]">
+                    용량
+                  </span>
+                  <span className="w-10 shrink-0" aria-hidden />
+                </div>
               </div>
             ) : null}
           </div>
@@ -725,20 +742,20 @@ export default function VaultPage() {
                     strokeWidth={1.75}
                     aria-hidden
                   />
-                  <p className="text-sm leading-5">올린 파일이 없습니다.</p>
+                  <p className="text-base leading-5">올린 파일이 없습니다.</p>
                 </div>
               </div>
             ) : filtered.length === 0 ? (
-              <p className="px-4 py-6 text-sm leading-5 text-muted">
+              <p className="px-4 py-6 text-base leading-5 text-muted sm:px-6">
                 검색 결과가 없습니다.
               </p>
             ) : (
               grouped.map((group) => (
                 <div key={group.key}>
-                  <p className="sticky top-0 z-10 bg-card px-4 pb-1 pt-3 text-xs font-semibold tracking-wide text-muted-2">
+                  <p className="sticky top-0 z-10 bg-card px-4 pb-1.5 pt-3 text-base font-semibold tracking-wide text-muted sm:px-6">
                     {group.label}
                   </p>
-                  <ul className="divide-y divide-border/60">
+                  <ul className="divide-y divide-border">
                     {group.items.map((item) => (
                       <VaultListItem
                         key={item.id}
@@ -847,7 +864,8 @@ function VaultQuotaGauge({
   return (
     <div
       className={cn(
-        "flex h-11 w-full min-w-0 items-center gap-2 rounded-full bg-card shadow-soft",
+        "flex h-11 w-full min-w-0 items-center gap-2 rounded-full bg-card ring-1 ring-border",
+        "shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)]",
         compact ? "px-3" : "gap-2.5 px-3.5 sm:px-4",
       )}
       title={`${pct}% 사용`}
@@ -870,8 +888,8 @@ function VaultQuotaGauge({
       </div>
       <p
         className={cn(
-          "shrink-0 whitespace-nowrap font-semibold tabular-nums",
-          compact ? "text-[11px]" : "text-xs",
+          "shrink-0 whitespace-nowrap text-base font-semibold tabular-nums",
+          compact && "text-sm",
           tight ? "text-warning" : "text-foreground",
         )}
       >
@@ -1040,7 +1058,7 @@ function VaultListItem({
   return (
     <li
       className={cn(
-        "flex min-h-14 min-w-0 items-center gap-2.5 px-3 py-2.5 transition-colors sm:gap-3 sm:px-4",
+        "flex min-h-14 min-w-0 items-center gap-2.5 px-4 py-3.5 transition-colors sm:gap-3 sm:px-6",
         selecting && "cursor-pointer",
         selecting && checked
           ? "bg-primary/15"
@@ -1100,10 +1118,10 @@ function VaultListItem({
         {item.name}
       </p>
       <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-        <span className="hidden w-[4.5rem] text-center text-xs tabular-nums text-muted sm:block">
+        <span className="hidden w-[4.5rem] text-center text-base tabular-nums text-muted sm:block">
           {formatVaultModifiedTime(item.createdAt)}
         </span>
-        <span className="w-[3.75rem] text-center text-xs tabular-nums text-muted sm:w-[4.5rem]">
+        <span className="w-[3.75rem] text-center text-base tabular-nums text-muted sm:w-[4.5rem]">
           {formatVaultSize(item.size)}
         </span>
         {selecting ? (

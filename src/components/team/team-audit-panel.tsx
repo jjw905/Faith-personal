@@ -91,7 +91,7 @@ export function TeamAuditPanel() {
     scenarioId === "loading"
   ) {
     return (
-      <div className="grid min-h-56 place-items-center rounded-[28px] border border-border bg-card">
+      <div className="grid min-h-56 place-items-center rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
         <LoaderCircle
           className="h-6 w-6 animate-spin text-muted"
           aria-label="불러오는 중"
@@ -102,7 +102,7 @@ export function TeamAuditPanel() {
 
   if ((message && scenarioId === "live") || previewDenied) {
     return (
-      <div className="grid min-h-56 place-items-center rounded-[28px] border border-border bg-card p-6 text-center">
+      <div className="grid min-h-56 place-items-center rounded-3xl bg-card p-6 text-center shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
         <ScrollText className="h-8 w-8 text-muted" aria-hidden />
         <p className="mt-3 text-base text-muted">
           {previewDenied
@@ -139,26 +139,29 @@ export function TeamAuditPanel() {
         : logs;
 
   return (
-    <section className="rounded-[28px] border border-border bg-card p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">최근 이벤트</h2>
-          {retentionDays ? (
-            <p className="mt-1 text-base text-muted">{retentionDays}일 보관</p>
-          ) : null}
+    <section className="rounded-3xl bg-card p-6 shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border sm:p-6">
+      <div className="space-y-0">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight">최근 이벤트</h2>
+            {retentionDays ? (
+              <p className="mt-1 text-base text-muted">{retentionDays}일 보관</p>
+            ) : null}
+          </div>
+          <Button asChild variant="ghost" className="min-h-12">
+            <Link href="/team">팀 공간으로</Link>
+          </Button>
         </div>
-        <Button asChild variant="ghost" className="min-h-12">
-          <Link href="/team">팀 공간으로</Link>
-        </Button>
+        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
       </div>
       {viewLogs.length === 0 ? (
-        <p className="mt-6 text-base text-muted">기록이 없습니다.</p>
+        <p className="mt-4 text-base text-muted">기록이 없습니다.</p>
       ) : (
-        <ul className="mt-4 space-y-3">
+        <ul className="mt-1 divide-y divide-border">
           {viewLogs.map((log) => (
             <li
               key={log.id}
-              className="flex items-start justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0"
+              className="flex items-start justify-between gap-4 py-3.5"
             >
               <div className="min-w-0">
                 <p className="text-lg font-semibold text-foreground">

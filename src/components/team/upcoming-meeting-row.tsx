@@ -109,7 +109,7 @@ export function UpcomingMeetingRow({
   return (
     <div
       className={cn(
-        "grid gap-3 border-l-[3px] px-4 py-3.5 transition-colors sm:grid-cols-[minmax(9rem,auto)_1fr_auto] sm:items-center sm:gap-4 sm:px-5",
+        "grid gap-3 border-l-[3px] px-6 py-4 transition-colors sm:grid-cols-[minmax(9rem,auto)_1fr_auto] sm:items-center sm:gap-4 sm:py-5",
         emphasized
           ? "border-l-primary bg-primary-soft/55"
           : "border-l-transparent hover:bg-surface/70",
@@ -148,10 +148,10 @@ export function UpcomingMeetingGridCard({
   return (
     <div
       className={cn(
-        "flex h-full min-h-[10.5rem] flex-col rounded-xl bg-card p-4 transition-colors sm:min-h-[11.5rem]",
+        "flex h-full min-h-[10.5rem] flex-col rounded-2xl bg-surface p-4 transition-colors sm:min-h-[11.5rem]",
         emphasized
-          ? "border-2 border-primary shadow-soft"
-          : "border border-border hover:border-border-strong hover:bg-surface/50",
+          ? "ring-2 ring-primary"
+          : "ring-1 ring-border hover:bg-surface-2",
         meeting.canJoin &&
           "motion-safe:animate-[process-rise_200ms_ease-out] motion-reduce:animate-none",
       )}

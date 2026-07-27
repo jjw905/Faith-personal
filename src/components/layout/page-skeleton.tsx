@@ -14,7 +14,7 @@ export function PageSkeleton({
   icon: Icon,
 }: PageSkeletonProps) {
   return (
-    <PageContainer>
+    <PageContainer soft>
       <div className="mx-auto flex max-w-3xl flex-col items-center justify-center rounded-3xl bg-card px-8 py-16 text-center shadow-soft">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface text-muted">
           <Icon className="h-7 w-7" />

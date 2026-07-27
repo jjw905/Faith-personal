@@ -217,36 +217,39 @@ export function AudioUploadZone({
       </div>
 
       {mode === "upload" && (
-        <div className="panel-surface overflow-hidden rounded-2xl">
-          <div className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
-            <p className="text-sm font-semibold tracking-tight text-foreground">
-              {ready ? "회의 정리" : "오디오 업로드"}
-            </p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
-              onClick={closeUpload}
-              aria-label="업로드 닫기"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+        <div className="overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
+          <div className="space-y-0 px-6 pb-0 pt-6">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xl font-bold tracking-tight text-foreground">
+                {ready ? "회의 정리" : "오디오 업로드"}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
+                onClick={closeUpload}
+                aria-label="업로드 닫기"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
           </div>
 
           {ready ? (
-            <div className="space-y-4 px-4 py-5 sm:px-5">
+            <div className="space-y-4 px-6 py-5">
               <div className="flex items-center gap-3 rounded-2xl bg-surface px-3.5 py-3 sm:px-4">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
                   <FileAudio className="h-5 w-5" strokeWidth={1.75} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">
+                  <p className="truncate text-base font-semibold text-foreground">
                     {selectedFile
                       ? stripFileExtension(selectedFile.name)
                       : "주간회의"}
                   </p>
-                  <p className="mt-0.5 text-xs tabular-nums text-muted">
+                  <p className="mt-0.5 text-base tabular-nums text-muted">
                     {selectedFile ? formatBytes(selectedFile.size) : "2.4 MB"}
                   </p>
                 </div>
@@ -306,7 +309,7 @@ export function AudioUploadZone({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 className={cn(
-                  "relative flex min-h-[188px] w-full flex-col items-center justify-center gap-3 px-4 py-6 transition-colors sm:px-5",
+                  "relative flex min-h-[188px] w-full flex-col items-center justify-center gap-3 px-6 py-6 transition-colors",
                   isDragging
                     ? "bg-primary-soft"
                     : "bg-surface/40 hover:bg-surface/70",
@@ -331,10 +334,10 @@ export function AudioUploadZone({
                       />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-foreground">
+                      <p className="text-base font-semibold text-foreground">
                         업로드 중
                       </p>
-                      <p className="mt-1 max-w-[280px] truncate text-xs text-muted">
+                      <p className="mt-1 max-w-[280px] truncate text-base text-muted">
                         {selectedFile
                           ? stripFileExtension(selectedFile.name)
                           : previewUploading
@@ -348,10 +351,10 @@ export function AudioUploadZone({
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                       <Upload className="h-5 w-5" strokeWidth={1.75} />
                     </span>
-                    <p className="text-sm font-semibold text-foreground">
+                    <p className="text-base font-semibold text-foreground">
                       드래그하거나 클릭해서 업로드
                     </p>
-                    <p className="text-xs text-muted">
+                    <p className="text-base text-muted">
                       최대 {MAX_UPLOAD_AUDIO_MINUTES}분(1시간), 초과 시 거절
                     </p>
                     <ul className="flex flex-wrap justify-center gap-2">
@@ -363,14 +366,14 @@ export function AudioUploadZone({
                           <span className="font-mono text-sm font-bold tracking-tight text-primary">
                             {item.ext}
                           </span>
-                          <span className="text-xs text-muted">{item.hint}</span>
+                          <span className="text-base text-muted">{item.hint}</span>
                         </li>
                       ))}
                     </ul>
                     {uploadStatus === "error" ? (
                       <div className="relative z-10 flex flex-col items-center gap-2 text-center">
                         <p
-                          className="max-w-[320px] text-sm font-medium text-red-600"
+                          className="max-w-[320px] text-base font-medium text-red-600"
                           role="alert"
                         >
                           {uploadError ?? "업로드에 실패했습니다."}
@@ -394,13 +397,13 @@ export function AudioUploadZone({
 
               {uploadStatus === "idle" || uploadStatus === "error" ? (
                 !previewUploading ? (
-                <div className="px-4 py-4 sm:px-5">
+                <div className="px-6 py-4">
                   <div
                     className="mb-3 flex items-center gap-3"
                     aria-hidden
                   >
                     <span className="h-px flex-1 bg-surface-2" />
-                    <span className="text-xs font-semibold tracking-wide text-muted-2">
+                    <span className="text-base font-semibold tracking-wide text-muted-2">
                       또는
                     </span>
                     <span className="h-px flex-1 bg-surface-2" />
@@ -414,10 +417,10 @@ export function AudioUploadZone({
                       <Archive className="h-5 w-5" strokeWidth={1.75} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-foreground">
+                      <span className="block text-base font-semibold text-foreground">
                         보관함에서 고르기
                       </span>
-                      <span className="mt-0.5 block text-xs text-muted">
+                      <span className="mt-0.5 block text-base text-muted">
                         올려 둔 파일 바로 사용
                       </span>
                     </span>

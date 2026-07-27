@@ -192,7 +192,7 @@ function UpcomingListItem({
       type="button"
       onClick={() => onOpen(item)}
       className={cn(
-        "group flex w-full items-center gap-3 border-l-[3px] px-3.5 py-4 text-left transition-colors sm:gap-4 sm:px-5",
+        "group flex w-full items-center gap-3 border-l-[3px] px-6 py-4 text-left transition-colors sm:gap-4 sm:py-5",
         isToday
           ? "border-l-primary bg-primary-soft hover:bg-primary-soft/80"
           : "border-l-transparent hover:bg-surface/70",
@@ -202,9 +202,7 @@ function UpcomingListItem({
         <p className="whitespace-nowrap text-lg font-semibold leading-6 tracking-tight text-foreground">
           <span className="font-medium text-muted">{dateLabel}</span>{" "}
           <span className="tabular-nums">{item.timeLabel}</span>
-          <span className="mx-1.5 font-medium text-muted-2" aria-hidden>
-            ·
-          </span>
+          <span className="font-medium text-muted-2">, </span>
           <span className="font-medium tabular-nums text-muted">
             {item.duration}
           </span>
@@ -268,10 +266,10 @@ function UpcomingGridItem({
       type="button"
       onClick={() => onOpen(item)}
       className={cn(
-        "group flex h-full min-h-[11rem] w-full flex-col rounded-xl bg-card p-4 text-left transition-colors",
+        "group flex h-full min-h-[11rem] w-full flex-col rounded-2xl bg-surface p-4 text-left transition-colors",
         isToday
-          ? "border-2 border-primary shadow-soft hover:bg-primary-soft/40"
-          : "border border-border hover:border-border-strong hover:bg-surface/50",
+          ? "ring-2 ring-primary hover:bg-primary-soft/40"
+          : "ring-1 ring-border hover:bg-surface-2",
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -279,9 +277,7 @@ function UpcomingGridItem({
           <p className="whitespace-nowrap text-lg font-semibold tracking-tight text-foreground">
             <span className="font-medium text-muted">{dateLabel}</span>{" "}
             <span className="tabular-nums">{item.timeLabel}</span>
-            <span className="mx-1.5 font-medium text-muted-2" aria-hidden>
-              ·
-            </span>
+            <span className="font-medium text-muted-2">, </span>
             <span className="font-medium tabular-nums text-muted">
               {item.duration}
             </span>
@@ -497,64 +493,67 @@ export function MeetingMidPanel({
 
   return (
     <>
-      <section className="panel-surface overflow-hidden rounded-2xl outline-none">
-        <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-card px-4 py-4 sm:px-5">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <h2 className="text-xl font-semibold text-foreground">
-              {profile.upcomingTitle}
-            </h2>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
-              aria-label={profile.upcomingAddLabel}
-              onClick={openCreate}
-            >
-              <Plus className="h-4 w-4" strokeWidth={1.75} />
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <div
-              className="flex overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
-              role="group"
-              aria-label={`${profile.upcomingTitle} 레이아웃`}
-            >
+      <section className="overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border outline-none">
+        <div className="space-y-0 bg-card px-6 pb-0 pt-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <h2 className="text-xl font-bold tracking-tight text-foreground">
+                {profile.upcomingTitle}
+              </h2>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className={cn(
-                  "h-8 w-8 rounded-none cursor-pointer text-muted-2 hover:bg-transparent hover:text-foreground",
-                  layout === "list" && "bg-card text-foreground shadow-soft",
-                )}
-                aria-pressed={layout === "list"}
-                aria-label="목록 보기"
-                onClick={() => setLayoutPersist("list")}
+                className="h-8 w-8 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
+                aria-label={profile.upcomingAddLabel}
+                onClick={openCreate}
               >
-                <List className="h-4 w-4" strokeWidth={1.75} />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-8 w-8 rounded-none cursor-pointer text-muted-2 hover:bg-transparent hover:text-foreground",
-                  layout === "grid" && "bg-card text-foreground shadow-soft",
-                )}
-                aria-pressed={layout === "grid"}
-                aria-label="격자 보기"
-                onClick={() => setLayoutPersist("grid")}
-              >
-                <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
+                <Plus className="h-4 w-4" strokeWidth={1.75} />
               </Button>
             </div>
+
+            <div className="flex items-center gap-1.5">
+              <div
+                className="flex overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
+                role="group"
+                aria-label={`${profile.upcomingTitle} 레이아웃`}
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 rounded-none cursor-pointer text-muted-2 hover:bg-transparent hover:text-foreground",
+                    layout === "list" && "bg-card text-foreground shadow-soft",
+                  )}
+                  aria-pressed={layout === "list"}
+                  aria-label="목록 보기"
+                  onClick={() => setLayoutPersist("list")}
+                >
+                  <List className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 rounded-none cursor-pointer text-muted-2 hover:bg-transparent hover:text-foreground",
+                    layout === "grid" && "bg-card text-foreground shadow-soft",
+                  )}
+                  aria-pressed={layout === "grid"}
+                  aria-label="격자 보기"
+                  onClick={() => setLayoutPersist("grid")}
+                >
+                  <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
+                </Button>
+              </div>
+            </div>
           </div>
+          <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
         </div>
 
         {visibleItems.length === 0 ? (
-          <div className="flex min-h-[13.5rem] flex-col items-center justify-center gap-3 px-4 py-8 text-center sm:min-h-[15rem]">
+          <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
             <p className="text-base text-muted">
               {searchQuery.trim()
                 ? "검색 결과가 없습니다."
@@ -574,7 +573,7 @@ export function MeetingMidPanel({
             ) : null}
           </div>
         ) : layout === "list" ? (
-          <ul className="divide-y divide-border/60">
+          <ul className="divide-y divide-border">
             {visibleItems.map((item) => (
               <li key={item.id}>
                 <UpcomingListItem
@@ -588,7 +587,7 @@ export function MeetingMidPanel({
               <button
                 type="button"
                 onClick={openCreate}
-                className="flex w-full cursor-pointer items-center justify-center gap-1.5 px-4 py-3.5 text-base font-medium text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
+                className="flex w-full cursor-pointer items-center justify-center gap-1.5 px-6 py-3.5 text-base font-medium text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
                 aria-label={profile.upcomingAddLabel}
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
@@ -599,7 +598,7 @@ export function MeetingMidPanel({
         ) : (
           <ul
             className={cn(
-              "grid gap-3 bg-card px-4 pb-4 pt-3 sm:grid-cols-2",
+              "grid gap-3 px-6 pb-5 pt-4 sm:grid-cols-2",
               visibleItems.length >= 5 && "xl:grid-cols-3",
             )}
           >

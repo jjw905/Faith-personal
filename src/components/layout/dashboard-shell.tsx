@@ -22,15 +22,27 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const closeMobile = useCallback(() => setMobileOpen(false), []);
   const hideChrome = focusMode || pathname === "/help";
   const sidebarOpen = hideChrome ? false : mobileOpen;
+  const meetingFocus =
+    pathname.startsWith("/meetings/") && !pathname.startsWith("/meetings/new");
   const lightCanvas =
     pathname === "/help" ||
     pathname === "/changelog" ||
     pathname === "/users" ||
     pathname === "/account" ||
     pathname === "/settings" ||
+    pathname === "/ai-usage" ||
+    pathname === "/dashboard" ||
+    pathname === "/team" ||
+    pathname === "/audit" ||
+    pathname === "/vault" ||
+    pathname === "/plan" ||
+    pathname === "/design" ||
     pathname.startsWith("/account/") ||
     pathname.startsWith("/settings/") ||
     pathname.startsWith("/changelog/") ||
+    pathname.startsWith("/team/") ||
+    pathname.startsWith("/vault/") ||
+    pathname.startsWith("/plan/") ||
     pathname.startsWith("/meetings");
 
   useEffect(() => {
@@ -75,8 +87,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto",
-          lightCanvas &&
-            (pathname.startsWith("/meetings") ? "bg-white" : "bg-background"),
+          lightCanvas && (meetingFocus ? "bg-white" : "bg-background"),
         )}
         onScroll={notifyDocsSectionScroll}
       >

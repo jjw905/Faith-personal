@@ -153,18 +153,18 @@ export function NewMeetingSetup({
   }
 
   return (
-    <PageContainer white>
+    <PageContainer soft>
       <div className="mx-auto w-full max-w-3xl">
         <header className="mb-5">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             팀 회의
           </h1>
         </header>
-        <section className="rounded-2xl bg-card p-4 shadow-soft sm:p-6">
+        <section className="rounded-3xl bg-card p-6 shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border sm:p-6">
           {teams.length === 0 && !loading ? (
             <div className="grid min-h-64 place-items-center rounded-2xl bg-surface p-6 text-center">
               <div className="max-w-sm">
-                <h2 className="text-xl font-semibold text-foreground">
+                <h2 className="text-xl font-bold tracking-tight text-foreground">
                   {joinedTeamCount === 0
                     ? "팀을 먼저 구성해 주세요"
                     : "회의 생성 권한이 없습니다"}

@@ -728,7 +728,9 @@ export function RecentMeetingsTable({
 
   const titleBlock = (
     <div className="flex min-w-0 items-center gap-2.5">
-      <CardTitle className="text-xl">{profile.recordsTitle}</CardTitle>
+      <CardTitle className="text-xl font-bold tracking-tight">
+        {profile.recordsTitle}
+      </CardTitle>
     </div>
   );
 
@@ -757,9 +759,9 @@ export function RecentMeetingsTable({
     ) : null;
 
   return (
-    <Card>
-      <div className="space-y-3 rounded-t-2xl border-b border-border/70 bg-card px-4 pb-4 pt-4 sm:px-6">
-        {/* 1행: 제목 · 필터 */}
+    <Card className="overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
+      <div className="space-y-3 bg-card px-6 pb-0 pt-6">
+        {/* 1행: 제목, 필터 */}
         <div className="flex min-w-0 items-center justify-between gap-3">
           {titleBlock}
           {filterControls}
@@ -776,7 +778,7 @@ export function RecentMeetingsTable({
           />
         ) : null}
 
-        {/* 기간 / 선택 안내 · 다운로드·삭제 (좌우 동일 폭으로 날짜 광학 중앙) */}
+        {/* 기간 / 선택 안내, 다운로드·삭제 (좌우 동일 폭으로 날짜 광학 중앙) */}
         <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
           <div
             className="pointer-events-none invisible justify-self-start"
@@ -787,15 +789,17 @@ export function RecentMeetingsTable({
           <div className="min-w-0 justify-self-center">{periodHint}</div>
           <div className="justify-self-end">{batchActions}</div>
         </div>
+
+        <div className="h-0.5 w-full bg-foreground" aria-hidden />
       </div>
 
-      <CardContent className="px-0 pb-2 pt-0">
+      <CardContent className="px-0 pb-0 pt-0">
         {sorted.length === 0 ? (
-          <p className="mx-6 mb-3 rounded-xl bg-surface px-4 py-8 text-center text-base text-muted">
+          <p className="px-6 py-10 text-center text-base text-muted">
             {activeQuery ? "검색 결과가 없습니다." : profile.recordsEmpty}
           </p>
         ) : (
-          <ul className="mt-3 divide-y divide-border/60">
+          <ul className="divide-y divide-border">
             {sorted.map((meeting) => (
               <li key={meeting.id}>
                 <MeetingRecordListItem
@@ -873,7 +877,7 @@ function MeetingRecordListItem({
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-3 px-4 py-4 transition-colors hover:bg-surface/70 sm:gap-4 sm:px-6 sm:py-5",
+        "group relative flex items-center gap-3 px-6 py-4 transition-colors hover:bg-surface/70 sm:gap-4 sm:py-5",
         selecting && checked && "bg-primary-soft/40",
       )}
     >

@@ -206,21 +206,21 @@ export function ProcessingNowSection({
 
           return (
             <li key={item.id}>
-              <div className="relative overflow-hidden rounded-2xl bg-card shadow-soft">
-                <div className="flex items-center gap-3 px-3.5 py-3.5 pr-5 sm:px-4 sm:pr-6 sm:py-4">
+              <div className="relative overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
+                <div className="flex items-center gap-3 px-4 py-3.5 pr-5 sm:px-5 sm:pr-6 sm:py-4">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold tracking-tight text-foreground">
+                    <p className="truncate text-base font-semibold tracking-tight text-foreground">
                       {item.title}
                     </p>
                     <p
                       key={`${item.id}-${item.phase}`}
-                      className="mt-0.5 text-xs text-muted animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]"
+                      className="mt-0.5 text-base text-muted animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]"
                     >
                       {phaseLabel(item.phase)}
                     </p>
                   </div>
                   <span
-                    className="shrink-0 self-center tabular-nums text-sm font-semibold tracking-tight text-primary"
+                    className="shrink-0 self-center tabular-nums text-base font-semibold tracking-tight text-primary"
                     aria-label={`진행 ${percent}퍼센트`}
                   >
                     {percent}%

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
 import { useState, type FormEvent } from "react";
 
+import { AUTH_CARD } from "@/components/auth/auth-shell";
 import {
   AuthOrDivider,
   SocialSignupButtons,
@@ -31,6 +32,9 @@ const CODE_MESSAGES: Record<string, string> = {
   disabled: "비활성화된 계정입니다. 관리자에게 문의해 주세요.",
   credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
 };
+
+const fieldInputClass =
+  "h-12 border-border bg-card focus-visible:ring-primary/30";
 
 /** 로그인 패널 — Credentials + 소셜. */
 export function LoginForm() {
@@ -100,14 +104,14 @@ export function LoginForm() {
   }
 
   return (
-    <div className="w-full max-w-md self-start">
+    <div className="w-full">
       <div className="text-center">
-        <h1 className="text-[26px] font-bold tracking-tight text-foreground sm:text-[28px]">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           로그인
         </h1>
       </div>
 
-      <div className="mt-4 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong">
+      <div className={`mt-4 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
         <SocialSignupButtons
           title="간편 소셜 로그인"
           showPrivacyNote={false}
@@ -118,13 +122,18 @@ export function LoginForm() {
         </div>
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
+            이메일 로그인
+          </h2>
+          <div className="-mt-2 h-0.5 w-full bg-foreground" aria-hidden />
+
           {displayInfo ? (
-            <p className="rounded-xl bg-surface px-3 py-2 text-sm text-foreground">
+            <p className="rounded-xl bg-surface px-3 py-2 text-base text-foreground">
               {displayInfo}
             </p>
           ) : null}
           {displayError ? (
-            <p className="rounded-xl bg-masked-soft px-3 py-2 text-sm text-masked">
+            <p className="rounded-xl bg-masked-soft px-3 py-2 text-base text-masked">
               {displayError}
             </p>
           ) : null}
@@ -132,7 +141,7 @@ export function LoginForm() {
           <div>
             <label
               htmlFor="email"
-              className="mb-1.5 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-base font-semibold text-foreground"
             >
               이메일
             </label>
@@ -140,11 +149,11 @@ export function LoginForm() {
               id="email"
               name="email"
               type="email"
-              placeholder="you@company.com"
+              placeholder="name@example.com"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 border-border-strong bg-white focus-visible:ring-primary/30"
+              className={fieldInputClass}
               required
             />
           </div>
@@ -152,7 +161,7 @@ export function LoginForm() {
           <div>
             <label
               htmlFor="password"
-              className="mb-1.5 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-base font-semibold text-foreground"
             >
               비밀번호
             </label>
@@ -164,25 +173,25 @@ export function LoginForm() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 border-border-strong bg-white focus-visible:ring-primary/30"
+              className={fieldInputClass}
               required
             />
           </div>
 
-          <div className="flex items-center justify-between pt-0.5 text-sm">
-            <label className="flex items-center gap-2 text-muted">
+          <div className="flex items-center justify-between gap-3 border-t border-border pt-4 text-base">
+            <label className="flex min-h-12 items-center gap-2 text-muted">
               <input
                 type="checkbox"
                 name="remember"
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
-                className="h-4 w-4 rounded border-border-strong text-primary"
+                className="h-4 w-4 rounded border-border text-primary"
               />
               로그인 상태 유지
             </label>
             <Link
               href="/forgot-password"
-              className="font-medium text-muted transition-colors hover:text-foreground"
+              className="inline-flex min-h-12 items-center font-medium text-muted transition-colors hover:text-foreground"
             >
               비밀번호 찾기
             </Link>
@@ -191,14 +200,14 @@ export function LoginForm() {
           <button
             type="submit"
             disabled={pending}
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
           >
             {pending ? "로그인 중…" : "로그인"}
           </button>
         </form>
       </div>
 
-      <p className="mt-5 text-center text-sm text-muted">
+      <p className="mt-5 text-center text-base text-muted">
         아직 계정이 없으신가요?{" "}
         <Link
           href="/signup"

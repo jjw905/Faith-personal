@@ -12,7 +12,7 @@ export default async function UsersPage() {
   ]);
 
   return (
-    <PageContainer className="bg-background pt-6 sm:pt-8">
+    <PageContainer soft className="pt-6 sm:pt-8">
       <div className="mx-auto w-full max-w-6xl min-w-0">
         <header className="mb-5 sm:mb-6">
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-2xl">

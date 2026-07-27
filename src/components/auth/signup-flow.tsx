@@ -1,10 +1,18 @@
 "use client";
 
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import { SocialSignupButtons, AuthOrDivider } from "@/components/auth/social-signup-buttons";
+import {
+  AUTH_CARD,
+  AuthBackButton,
+  AuthBackLink,
+} from "@/components/auth/auth-shell";
+import {
+  SocialSignupButtons,
+  AuthOrDivider,
+} from "@/components/auth/social-signup-buttons";
 import { Input } from "@/components/ui/input";
 import {
   getPasswordErrors,
@@ -18,7 +26,7 @@ type Step = "social" | "email";
 type EmailCheck = "idle" | "checking" | "available" | "taken" | "invalid";
 
 const fieldInputClass =
-  "border-border-strong bg-white focus-visible:ring-primary/30";
+  "h-12 border-border bg-card focus-visible:ring-primary/30";
 
 /** 회원가입 플로우 — 소셜 선택 / 일반(수동) 가입 분리. */
 export function SignupFlow() {
@@ -29,27 +37,29 @@ export function SignupFlow() {
   }
 
   return (
-    <div className="w-full max-w-md self-start">
+    <div className="w-full">
+      <AuthBackLink href="/login" className="mb-4" />
+
       <div className="text-center">
-        <h1 className="text-[28px] font-bold tracking-tight text-foreground sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           회원가입
         </h1>
-        <p className="mt-2 text-sm text-muted">
+        <p className="mt-2 text-base text-muted">
           소셜 계정으로 빠르게 시작하세요
         </p>
       </div>
 
-      <div className="mt-6 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong">
+      <div className={`mt-5 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
         <SocialSignupButtons />
 
-        <div className="mt-[31px]">
+        <div className="mt-6">
           <AuthOrDivider />
         </div>
 
         <button
           type="button"
           onClick={() => setStep("email")}
-          className="mt-[31px] flex h-12 w-full items-center justify-center rounded-xl border border-border-strong bg-white text-[15px] font-semibold text-foreground transition-colors hover:bg-surface"
+          className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl border border-border bg-card text-base font-semibold text-foreground transition-colors hover:bg-surface"
         >
           이메일로 가입
         </button>
@@ -184,35 +194,31 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="w-full max-w-md self-start">
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" strokeWidth={2} />
-        뒤로가기
-      </button>
+    <div className="w-full">
+      <AuthBackButton onClick={onBack} className="mb-4" />
 
       <div className="text-center">
-        <h1 className="text-[28px] font-bold tracking-tight text-foreground sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           이메일로 가입
         </h1>
-        <p className="mt-2 text-sm text-muted">
-          계정 정보를 입력해 주세요
-        </p>
+        <p className="mt-2 text-base text-muted">계정 정보를 입력해 주세요</p>
       </div>
 
       <form
         onSubmit={handleSubmit}
-        className="mt-6 rounded-3xl bg-card px-[30px] py-7 shadow-soft ring-1 ring-border-strong"
+        className={`mt-5 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}
         noValidate
       >
-        <div className="space-y-5">
+        <h2 className="text-xl font-bold tracking-tight text-foreground">
+          계정 정보
+        </h2>
+        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+
+        <div className="mt-5 space-y-5">
           <div>
             <label
               htmlFor="email"
-              className="mb-1.5 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-base font-semibold text-foreground"
             >
               아이디 (이메일)
             </label>
@@ -221,7 +227,7 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="you@company.com"
+                placeholder="name@example.com"
                 autoComplete="email"
                 value={email}
                 onChange={(e) => {
@@ -236,27 +242,27 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
                 type="button"
                 onClick={handleCheckEmail}
                 disabled={emailCheck === "checking"}
-                className="h-10 shrink-0 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-50"
+                className="min-h-12 shrink-0 rounded-xl bg-primary px-3.5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-50"
               >
                 {emailCheck === "checking" ? "확인 중" : "중복확인"}
               </button>
             </div>
-            {emailMessage && (
+            {emailMessage ? (
               <p
                 className={cn(
-                  "mt-1.5 text-xs",
+                  "mt-1.5 text-base",
                   emailCheck === "available" ? "text-success" : "text-masked",
                 )}
               >
                 {emailMessage}
               </p>
-            )}
+            ) : null}
           </div>
 
           <div>
             <label
               htmlFor="password"
-              className="mb-1.5 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-base font-semibold text-foreground"
             >
               비밀번호
             </label>
@@ -273,44 +279,44 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
                 required
               />
               <div className="absolute inset-y-0 right-0 flex items-center">
-                {password.length > 0 && (
+                {password.length > 0 ? (
                   <span
-                    className="pr-1 text-[11px] tabular-nums text-muted-2"
+                    className="pr-1 text-base tabular-nums text-muted"
                     aria-live="polite"
                   >
                     {password.length}
                   </span>
-                )}
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="flex h-10 w-10 items-center justify-center text-muted transition-colors hover:text-foreground"
+                  className="flex min-h-12 min-w-12 items-center justify-center text-muted transition-colors hover:text-foreground"
                   aria-label={
                     showPassword ? "비밀번호 숨기기" : "비밀번호 보기"
                   }
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" strokeWidth={2} />
+                    <EyeOff className="h-5 w-5" strokeWidth={2} />
                   ) : (
-                    <Eye className="h-4 w-4" strokeWidth={2} />
+                    <Eye className="h-5 w-5" strokeWidth={2} />
                   )}
                 </button>
               </div>
             </div>
-            <p className="mt-1.5 text-xs text-muted">
+            <p className="mt-1.5 text-base text-muted">
               영문 대문자, 소문자, 특수문자를 각각 1자 이상 포함 (8자 이상)
             </p>
-            {passwordErrors.length > 0 && (
-              <p className="mt-1 text-xs text-masked">
+            {passwordErrors.length > 0 ? (
+              <p className="mt-1 text-base text-masked">
                 미충족: {passwordErrors.join(", ")}
               </p>
-            )}
+            ) : null}
           </div>
 
           <div>
             <label
               htmlFor="passwordConfirm"
-              className="mb-1.5 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-base font-semibold text-foreground"
             >
               비밀번호 확인
             </label>
@@ -327,41 +333,41 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
                 required
               />
               <div className="absolute inset-y-0 right-0 flex items-center">
-                {passwordConfirm.length > 0 && (
+                {passwordConfirm.length > 0 ? (
                   <span
-                    className="pr-1 text-[11px] tabular-nums text-muted-2"
+                    className="pr-1 text-base tabular-nums text-muted"
                     aria-live="polite"
                   >
                     {passwordConfirm.length}
                   </span>
-                )}
+                ) : null}
                 <button
                   type="button"
                   onClick={() => setShowPasswordConfirm((v) => !v)}
-                  className="flex h-10 w-10 items-center justify-center text-muted transition-colors hover:text-foreground"
+                  className="flex min-h-12 min-w-12 items-center justify-center text-muted transition-colors hover:text-foreground"
                   aria-label={
                     showPasswordConfirm ? "비밀번호 숨기기" : "비밀번호 보기"
                   }
                 >
                   {showPasswordConfirm ? (
-                    <EyeOff className="h-4 w-4" strokeWidth={2} />
+                    <EyeOff className="h-5 w-5" strokeWidth={2} />
                   ) : (
-                    <Eye className="h-4 w-4" strokeWidth={2} />
+                    <Eye className="h-5 w-5" strokeWidth={2} />
                   )}
                 </button>
               </div>
             </div>
-            {passwordMismatch && (
-              <p className="mt-1.5 text-xs text-masked">
+            {passwordMismatch ? (
+              <p className="mt-1.5 text-base text-masked">
                 비밀번호가 일치하지 않습니다.
               </p>
-            )}
+            ) : null}
           </div>
 
           <div>
             <label
               htmlFor="name"
-              className="mb-1.5 block text-sm font-medium text-foreground"
+              className="mb-1.5 block text-base font-semibold text-foreground"
             >
               이름
             </label>
@@ -376,27 +382,27 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
               className={fieldInputClass}
               required
             />
-            <p className="mt-1.5 text-xs text-muted">
+            <p className="mt-1.5 text-base text-muted">
               정확한 한글 이름만 입력 (2~5자, 공백/영문 불가)
             </p>
-            {nameInvalid && (
-              <p className="mt-1 text-xs text-masked">
+            {nameInvalid ? (
+              <p className="mt-1 text-base text-masked">
                 한글 이름 형식이 올바르지 않습니다.
               </p>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {formError && (
-          <p className="mt-5 rounded-lg bg-masked-soft px-3 py-2 text-sm text-masked">
+        {formError ? (
+          <p className="mt-5 rounded-xl bg-masked-soft px-3 py-2 text-base text-masked">
             {formError}
           </p>
-        )}
+        ) : null}
 
         <button
           type="submit"
           disabled={submitting}
-          className="mt-6 flex h-11 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+          className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
         >
           {submitting ? "가입 중..." : "가입하기"}
         </button>

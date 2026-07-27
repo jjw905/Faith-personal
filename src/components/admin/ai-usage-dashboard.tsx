@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  AudioLines,
-  CircleDollarSign,
   Gauge,
-  Hash,
   LoaderCircle,
-  Radio,
   RefreshCw,
   Users,
 } from "lucide-react";
 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   fixtureAiUsageEmpty,
@@ -21,11 +23,15 @@ import { seoulDateKey, seoulDateKeyDaysAgo } from "@/lib/meeting-date";
 import type { AiUsageSummary } from "@/lib/stt/usage-store";
 import { cn } from "@/lib/utils";
 
+const CARD_SHADOW =
+  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+
+/** Faith tokens only (primary / success / muted). */
 const COLORS = {
-  stt: "#0071e3",
-  structure: "#248a3d",
-  tokensIn: "#5b6b8c",
-  tokensOut: "#9a6700",
+  stt: "var(--primary)",
+  structure: "var(--success)",
+  tokensIn: "var(--muted)",
+  tokensOut: "var(--muted-2)",
 };
 
 export type AiUsageUserOption = {
@@ -80,15 +86,13 @@ function MoneyText({
         className={cn(
           "font-semibold text-foreground",
           size === "lg" && "text-2xl tracking-tight",
-          size === "md" && "text-sm",
-          size === "sm" && "text-sm",
+          size === "md" && "text-base",
+          size === "sm" && "text-base",
         )}
       >
         {formatKrw(krw)}
       </span>
-      <span className="text-xs font-medium text-muted-2">
-        {formatUsd(usd)}
-      </span>
+      <span className="text-base font-medium text-muted">{formatUsd(usd)}</span>
     </span>
   );
 }
@@ -149,6 +153,102 @@ const RANGE_OPTIONS: Array<{ key: RangeKey; label: string }> = [
   { key: "custom", label: "직접" },
 ];
 
+/** Client-side page sizes for long lists (filters still refetch full summary). */
+const PAGE_USERS = 10;
+const PAGE_DAYS = 14;
+const PAGE_MODELS = 10;
+const PAGE_RECENT = 15;
+
+const UX_USER_LABELS: Record<string, string> = {
+  "ux-user-1": "김서연",
+  "ux-user-2": "최민준",
+  "ux-user-3": "이준호",
+  "ux-user-4": "박지혜",
+  "ux-user-5": "정우진",
+  "ux-user-6": "한소희",
+  "ux-user-7": "오세훈",
+  "ux-user-8": "윤아름",
+  "ux-user-9": "강태영",
+  "ux-user-10": "문채원",
+  "ux-user-11": "신동혁",
+  "ux-user-12": "배유진",
+  "ux-user-13": "조현우",
+  "ux-user-14": "서민지",
+};
+
+function useListPage(pageSize: number, resetKey: string) {
+  const [visible, setVisible] = useState(pageSize);
+  useEffect(() => {
+    setVisible(pageSize);
+  }, [resetKey, pageSize]);
+  return {
+    visible,
+    showMore: (total: number) =>
+      setVisible((v) => Math.min(v + pageSize, total)),
+    collapse: () => setVisible(pageSize),
+  };
+}
+
+function ListPager({
+  total,
+  visible,
+  pageSize,
+  onMore,
+  onCollapse,
+  emptyLabel = "표시할 항목이 없습니다",
+}: {
+  total: number;
+  visible: number;
+  pageSize: number;
+  onMore: () => void;
+  onCollapse: () => void;
+  emptyLabel?: string;
+}) {
+  if (total === 0) {
+    return (
+      <p className="mt-3 border-t border-border pt-3 text-center text-base text-muted">
+        {emptyLabel}
+      </p>
+    );
+  }
+  if (total <= pageSize) return null;
+
+  const shown = Math.min(visible, total);
+  const hasMore = shown < total;
+  const remaining = total - shown;
+  const expanded = visible > pageSize;
+
+  return (
+    <div className="mt-3 flex flex-col items-stretch gap-2 border-t border-border pt-3 sm:items-center">
+      <p className="text-center text-base text-muted">
+        {shown} / {total}
+      </p>
+      <div className="flex flex-wrap justify-center gap-2">
+        {hasMore ? (
+          <button
+            type="button"
+            onClick={onMore}
+            className="inline-flex h-12 min-w-12 items-center justify-center rounded-full border border-border-strong bg-surface px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2"
+          >
+            더 보기 ({remaining})
+          </button>
+        ) : (
+          <p className="self-center text-base text-muted">모두 표시됨</p>
+        )}
+        {expanded ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="inline-flex h-12 min-w-12 items-center justify-center rounded-full border border-border px-5 text-base font-semibold text-muted transition-colors hover:bg-surface hover:text-foreground"
+          >
+            접기
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function AiUsageDashboard({
   initial,
   initialUsers = [],
@@ -169,6 +269,13 @@ export function AiUsageDashboard({
     () => rangeToBounds(range, customFrom, customTo),
     [range, customFrom, customTo],
   );
+
+  const listResetKey = `${scenarioId}|${range}|${userId}|${bounds.from ?? ""}|${bounds.to ?? ""}`;
+  const usersPage = useListPage(PAGE_USERS, listResetKey);
+  const daysCostPage = useListPage(PAGE_DAYS, listResetKey);
+  const daysTokenPage = useListPage(PAGE_DAYS, listResetKey);
+  const modelsPage = useListPage(PAGE_MODELS, listResetKey);
+  const recentPage = useListPage(PAGE_RECENT, listResetKey);
 
   const refresh = useCallback(async () => {
     if (scenarioId !== "live") return;
@@ -221,7 +328,7 @@ export function AiUsageDashboard({
         : scenarioId === "full"
           ? viewSummary.byUser.map((u) => ({
               id: u.userId,
-              label: u.userId === "ux-user-1" ? "김서연" : "최민준",
+              label: UX_USER_LABELS[u.userId] || u.userId,
               usd: u.usd,
               krw: u.krw,
               jobs: u.jobs,
@@ -232,7 +339,7 @@ export function AiUsageDashboard({
 
   if (scenarioId === "loading") {
     return (
-      <div className="grid min-h-56 place-items-center rounded-2xl bg-card shadow-soft">
+      <div className={cn("grid min-h-56 place-items-center bg-card", CARD_SHADOW)}>
         <LoaderCircle
           className="h-6 w-6 animate-spin text-muted"
           aria-label="불러오는 중"
@@ -255,32 +362,40 @@ export function AiUsageDashboard({
   const empty = viewSummary.eventCount === 0;
   const showUserList = userId === "all" && viewSummary.byUser.length > 0;
   const userLabel = (id: string) =>
-    viewUsers.find((u) => u.id === id)?.label || id;
+    viewUsers.find((u) => u.id === id)?.label ||
+    UX_USER_LABELS[id] ||
+    id;
   const fx = viewSummary.fx;
+  const visibleUsers = viewSummary.byUser.slice(0, usersPage.visible);
+  const visibleDaysCost = viewSummary.byDay.slice(0, daysCostPage.visible);
+  const visibleDaysToken = viewSummary.byDay.slice(0, daysTokenPage.visible);
+  const visibleModels = viewSummary.byModel.slice(0, modelsPage.visible);
+  const visibleRecent = viewSummary.recent.slice(0, recentPage.visible);
 
   return (
     <div className="flex flex-col gap-6">
-      {/* M3 filter group: period + user + refresh */}
-      <section
-        className="rounded-3xl bg-card px-4 py-4 shadow-soft sm:px-5"
-        aria-label="조회 조건"
+      <SectionCard
+        title="조회 조건"
+        description="기간과 사용자를 고른 뒤 사용량을 확인합니다."
       >
-        <div className="flex flex-col gap-4">
+        <div className="space-y-5 py-4">
           <div className="space-y-2">
-            <p className="text-xs font-medium tracking-wide text-muted-2">
-              기간
-            </p>
-            <div className="flex flex-wrap gap-2">
+            <p className="text-base font-semibold text-foreground">기간</p>
+            <div
+              className="inline-flex max-w-full flex-wrap rounded-xl bg-surface p-1"
+              role="group"
+              aria-label="기간"
+            >
               {RANGE_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
                   type="button"
                   onClick={() => setRange(opt.key)}
                   className={cn(
-                    "inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition-colors",
+                    "min-h-12 cursor-pointer rounded-lg px-3 py-2 text-base font-semibold transition-colors",
                     range === opt.key
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card text-foreground ring-1 ring-border hover:bg-surface-2",
+                      ? "bg-card text-foreground shadow-soft"
+                      : "text-muted hover:text-foreground",
                   )}
                 >
                   {opt.label}
@@ -293,35 +408,33 @@ export function AiUsageDashboard({
                   type="date"
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
-                  className="h-10 rounded-xl bg-card px-3 text-sm text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+                  className="h-14 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
                   aria-label="시작일"
                 />
-                <span className="text-sm text-muted">~</span>
+                <span className="text-base text-muted">~</span>
                 <input
                   type="date"
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
-                  className="h-10 rounded-xl bg-card px-3 text-sm text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+                  className="h-14 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
                   aria-label="종료일"
                 />
               </div>
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="min-w-0 flex-1 space-y-2">
-              <p className="text-xs font-medium tracking-wide text-muted-2">
-                사용자
-              </p>
+              <p className="text-base font-semibold text-foreground">사용자</p>
               <label className="relative block max-w-md">
                 <Users
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted"
                   strokeWidth={1.75}
                 />
                 <select
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
-                  className="h-11 w-full appearance-none rounded-xl bg-card py-2 pl-10 pr-10 text-sm font-medium text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+                  className="h-14 w-full appearance-none rounded-xl bg-card py-2 pl-11 pr-10 text-base font-medium text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="all">전체 사용자</option>
                   {viewUsers.map((u) => (
@@ -336,7 +449,7 @@ export function AiUsageDashboard({
               type="button"
               onClick={() => void refresh()}
               disabled={loading}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-card px-4 text-sm font-semibold text-foreground ring-1 ring-border transition-colors hover:bg-surface-2 disabled:opacity-60"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-border-strong bg-surface px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:opacity-60"
             >
               <RefreshCw
                 className={cn("h-4 w-4", loading && "animate-spin")}
@@ -345,78 +458,75 @@ export function AiUsageDashboard({
               새로고침
             </button>
           </div>
+
           {fx ? (
-            <p className="text-xs text-muted-2">
+            <p className="border-t border-border pt-3 text-base text-muted">
               일별 환율 적용, $1 = ₩{formatRate(fx.latestRate)} (
               {formatShortDate(fx.latestAsOf)})
             </p>
           ) : null}
         </div>
-      </section>
+      </SectionCard>
 
-      {/* KPI */}
-      <section
-        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
-        aria-label="요약"
-      >
-        <StatCard
-          icon={<CircleDollarSign className="h-4 w-4" strokeWidth={1.75} />}
-          label="추정 비용"
-          valueNode={
-            <MoneyText
-              krw={viewSummary.totalKrw}
-              usd={viewSummary.totalUsd}
-              align="start"
-              size="lg"
-            />
-          }
-          hint={`받아쓰기 ${formatKrw(viewSummary.sttKrw)}, 정리 ${formatKrw(viewSummary.structureKrw)}`}
-        />
-        <StatCard
-          icon={<Hash className="h-4 w-4" strokeWidth={1.75} />}
-          label="토큰"
-          value={formatTokens(viewSummary.totalTokens)}
-          hint={`입력 ${formatTokens(viewSummary.inputTokens)}, 출력 ${formatTokens(viewSummary.outputTokens)}`}
-        />
-        <StatCard
-          icon={<AudioLines className="h-4 w-4" strokeWidth={1.75} />}
-          label="오디오"
-          value={`${(viewSummary.audioMinutes).toFixed(1)}분`}
-          hint={`회의 ${viewSummary.meetingCount}건`}
-        />
-        <StatCard
-          icon={<Radio className="h-4 w-4" strokeWidth={1.75} />}
-          label="호출"
-          value={String(viewSummary.eventCount)}
-          hint={
-            userId === "all"
-              ? `사용자 ${viewUsers.length}명`
-              : userLabel(userId)
-          }
-        />
-      </section>
+      <SectionCard title="요약" description="선택한 조건의 추정 비용과 사용량입니다.">
+        <div className="grid grid-cols-2 divide-y divide-border lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+          <StatCell
+            label="추정 비용"
+            valueNode={
+              <MoneyText
+                krw={viewSummary.totalKrw}
+                usd={viewSummary.totalUsd}
+                align="start"
+                size="lg"
+              />
+            }
+            hint={`받아쓰기 ${formatKrw(viewSummary.sttKrw)}, 정리 ${formatKrw(viewSummary.structureKrw)}`}
+          />
+          <StatCell
+            label="토큰"
+            value={formatTokens(viewSummary.totalTokens)}
+            hint={`입력 ${formatTokens(viewSummary.inputTokens)}, 출력 ${formatTokens(viewSummary.outputTokens)}`}
+          />
+          <StatCell
+            label="오디오"
+            value={`${viewSummary.audioMinutes.toFixed(1)}분`}
+            hint={`회의 ${viewSummary.meetingCount}건`}
+          />
+          <StatCell
+            label="호출"
+            value={String(viewSummary.eventCount)}
+            hint={
+              userId === "all"
+                ? `사용자 ${viewUsers.length}명`
+                : userLabel(userId)
+            }
+          />
+        </div>
+      </SectionCard>
 
       {empty ? (
-        <div className="rounded-3xl bg-card px-5 py-16 text-center shadow-soft sm:px-6">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-            <Gauge className="h-5 w-5" strokeWidth={1.75} />
-          </div>
-          <p className="text-base font-semibold text-foreground">
-            선택한 조건에 기록이 없습니다
-          </p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            기간이나 사용자를 바꾸거나, 회의를 처리하면 여기에 쌓입니다.
-          </p>
-        </div>
+        <Card className={CARD_SHADOW}>
+          <CardContent className="px-6 py-16 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
+              <Gauge className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <p className="text-lg font-semibold text-foreground">
+              선택한 조건에 기록이 없습니다
+            </p>
+            <p className="mx-auto mt-2 max-w-md text-base text-muted">
+              기간이나 사용자를 바꾸거나, 회의를 처리하면 여기에 쌓입니다.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <>
           {showUserList ? (
-            <Panel
+            <SectionCard
               title="사용자별"
-              supporting={`${viewSummary.byUser.length}명, 비용 높은 순`}
+              description={`${viewSummary.byUser.length}명, 비용 높은 순`}
             >
               <ul className="divide-y divide-border">
-                {viewSummary.byUser.map((u) => {
+                {visibleUsers.map((u) => {
                   const max = Math.max(
                     ...viewSummary.byUser.map((x) => x.krw || x.usd),
                     0.000001,
@@ -427,13 +537,13 @@ export function AiUsageDashboard({
                       <button
                         type="button"
                         onClick={() => setUserId(u.userId)}
-                        className="flex w-full flex-col gap-2 py-3 text-left transition-colors hover:bg-surface/80 sm:flex-row sm:items-center sm:gap-4"
+                        className="flex min-h-12 w-full flex-col gap-2 py-3.5 text-left transition-colors hover:bg-surface/80 sm:flex-row sm:items-center sm:gap-4"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-foreground">
+                          <p className="truncate text-lg font-semibold text-foreground">
                             {userLabel(u.userId)}
                           </p>
-                          <p className="mt-0.5 text-xs text-muted">
+                          <p className="mt-1 text-base text-muted">
                             회의 {u.meetingCount}건, 호출 {u.jobs}회,{" "}
                             {formatTokens(u.tokens)} 토큰
                           </p>
@@ -454,54 +564,72 @@ export function AiUsageDashboard({
                   );
                 })}
               </ul>
-            </Panel>
+              <ListPager
+                total={viewSummary.byUser.length}
+                visible={usersPage.visible}
+                pageSize={PAGE_USERS}
+                onMore={() => usersPage.showMore(viewSummary.byUser.length)}
+                onCollapse={usersPage.collapse}
+              />
+            </SectionCard>
           ) : null}
 
-          <div className="grid gap-4 lg:grid-cols-5">
-            <Panel
+          <div className="grid gap-6 lg:grid-cols-5">
+            <SectionCard
               className="lg:col-span-3"
               title="일별 추정 비용"
-              supporting="받아쓰기 + 정리"
+              description={`받아쓰기 + 정리, ${viewSummary.byDay.length}일`}
             >
               {viewSummary.byDay.length === 0 ? (
                 <EmptyChart />
               ) : (
-                <ul className="space-y-3">
-                  {viewSummary.byDay.map((d) => {
-                    const sttPct = Math.round(
-                      ((d.sttKrw || d.sttUsd) / maxDayKrw) * 100,
-                    );
-                    const structPct = Math.round(
-                      ((d.structureKrw || d.structureUsd) / maxDayKrw) * 100,
-                    );
-                    return (
-                      <li key={d.date} className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="tabular-nums text-muted">
-                            {formatShortDate(d.date)}
-                          </span>
-                          <MoneyText krw={d.totalKrw} usd={d.totalUsd} />
-                        </div>
-                        <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
-                          <span
-                            className="h-full"
-                            style={{
-                              width: `${sttPct}%`,
-                              background: COLORS.stt,
-                            }}
-                          />
-                          <span
-                            className="h-full"
-                            style={{
-                              width: `${structPct}%`,
-                              background: COLORS.structure,
-                            }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  <ul className="divide-y divide-border">
+                    {visibleDaysCost.map((d) => {
+                      const sttPct = Math.round(
+                        ((d.sttKrw || d.sttUsd) / maxDayKrw) * 100,
+                      );
+                      const structPct = Math.round(
+                        ((d.structureKrw || d.structureUsd) / maxDayKrw) * 100,
+                      );
+                      return (
+                        <li key={d.date} className="space-y-2 py-3.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-base tabular-nums text-muted">
+                              {formatShortDate(d.date)}
+                            </span>
+                            <MoneyText krw={d.totalKrw} usd={d.totalUsd} />
+                          </div>
+                          <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
+                            <span
+                              className="h-full"
+                              style={{
+                                width: `${sttPct}%`,
+                                background: COLORS.stt,
+                              }}
+                            />
+                            <span
+                              className="h-full"
+                              style={{
+                                width: `${structPct}%`,
+                                background: COLORS.structure,
+                              }}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <ListPager
+                    total={viewSummary.byDay.length}
+                    visible={daysCostPage.visible}
+                    pageSize={PAGE_DAYS}
+                    onMore={() =>
+                      daysCostPage.showMore(viewSummary.byDay.length)
+                    }
+                    onCollapse={daysCostPage.collapse}
+                  />
+                </>
               )}
               <LegendRow
                 items={[
@@ -509,31 +637,40 @@ export function AiUsageDashboard({
                   { label: "정리", color: COLORS.structure },
                 ]}
               />
-            </Panel>
+            </SectionCard>
 
-            <Panel className="lg:col-span-2" title="비용 비중">
+            <SectionCard
+              className="lg:col-span-2"
+              title="비용 비중"
+              description="받아쓰기와 정리 비율"
+            >
               {pieTotal <= 0 ? (
                 <EmptyChart />
               ) : (
                 <div className="flex flex-col items-center gap-5 py-2">
                   <Donut
                     stt={viewSummary.sttKrw || viewSummary.sttUsd}
-                    structure={viewSummary.structureKrw || viewSummary.structureUsd}
+                    structure={
+                      viewSummary.structureKrw || viewSummary.structureUsd
+                    }
                     totalLabel={formatKrw(viewSummary.totalKrw)}
                   />
-                  <ul className="w-full space-y-2 text-sm">
-                    <li className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-2 text-muted">
+                  <ul className="w-full divide-y divide-border">
+                    <li className="flex items-center justify-between gap-2 py-3">
+                      <span className="flex items-center gap-2 text-base text-muted">
                         <span
                           className="h-2.5 w-2.5 rounded-full"
                           style={{ background: COLORS.stt }}
                         />
                         받아쓰기
                       </span>
-                      <MoneyText krw={viewSummary.sttKrw} usd={viewSummary.sttUsd} />
+                      <MoneyText
+                        krw={viewSummary.sttKrw}
+                        usd={viewSummary.sttUsd}
+                      />
                     </li>
-                    <li className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-2 text-muted">
+                    <li className="flex items-center justify-between gap-2 py-3">
+                      <span className="flex items-center gap-2 text-base text-muted">
                         <span
                           className="h-2.5 w-2.5 rounded-full"
                           style={{ background: COLORS.structure }}
@@ -548,52 +685,66 @@ export function AiUsageDashboard({
                   </ul>
                 </div>
               )}
-            </Panel>
+            </SectionCard>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Panel title="일별 토큰" supporting="입력 + 출력">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <SectionCard
+              title="일별 토큰"
+              description={`입력 + 출력, ${viewSummary.byDay.length}일`}
+            >
               {viewSummary.byDay.length === 0 ? (
                 <EmptyChart />
               ) : (
-                <ul className="space-y-3">
-                  {viewSummary.byDay.map((d) => {
-                    const inPct = Math.round(
-                      (d.inputTokens / maxDayTokens) * 100,
-                    );
-                    const outPct = Math.round(
-                      (d.outputTokens / maxDayTokens) * 100,
-                    );
-                    return (
-                      <li key={d.date} className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="tabular-nums text-muted">
-                            {formatShortDate(d.date)}
-                          </span>
-                          <span className="font-medium tabular-nums text-foreground">
-                            {formatTokens(d.totalTokens)}
-                          </span>
-                        </div>
-                        <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
-                          <span
-                            className="h-full"
-                            style={{
-                              width: `${inPct}%`,
-                              background: COLORS.tokensIn,
-                            }}
-                          />
-                          <span
-                            className="h-full"
-                            style={{
-                              width: `${outPct}%`,
-                              background: COLORS.tokensOut,
-                            }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  <ul className="divide-y divide-border">
+                    {visibleDaysToken.map((d) => {
+                      const inPct = Math.round(
+                        (d.inputTokens / maxDayTokens) * 100,
+                      );
+                      const outPct = Math.round(
+                        (d.outputTokens / maxDayTokens) * 100,
+                      );
+                      return (
+                        <li key={d.date} className="space-y-2 py-3.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-base tabular-nums text-muted">
+                              {formatShortDate(d.date)}
+                            </span>
+                            <span className="text-base font-semibold tabular-nums text-foreground">
+                              {formatTokens(d.totalTokens)}
+                            </span>
+                          </div>
+                          <div className="flex h-2 overflow-hidden rounded-full bg-surface-2">
+                            <span
+                              className="h-full"
+                              style={{
+                                width: `${inPct}%`,
+                                background: COLORS.tokensIn,
+                              }}
+                            />
+                            <span
+                              className="h-full"
+                              style={{
+                                width: `${outPct}%`,
+                                background: COLORS.tokensOut,
+                              }}
+                            />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <ListPager
+                    total={viewSummary.byDay.length}
+                    visible={daysTokenPage.visible}
+                    pageSize={PAGE_DAYS}
+                    onMore={() =>
+                      daysTokenPage.showMore(viewSummary.byDay.length)
+                    }
+                    onCollapse={daysTokenPage.collapse}
+                  />
+                </>
               )}
               <LegendRow
                 items={[
@@ -601,181 +752,207 @@ export function AiUsageDashboard({
                   { label: "출력", color: COLORS.tokensOut },
                 ]}
               />
-            </Panel>
+            </SectionCard>
 
-            <Panel title="모델별">
-              <div className="space-y-4">
-                {viewSummary.byModel.length === 0 ? (
-                  <EmptyChart />
-                ) : (
-                  viewSummary.byModel.map((row) => {
-                    const max = Math.max(
-                      ...viewSummary.byModel.map((m) => m.krw || m.usd),
-                      0.000001,
-                    );
-                    const pct = Math.round(((row.krw || row.usd) / max) * 100);
-                    return (
-                      <div
-                        key={`${row.stage}-${row.model}`}
-                        className="space-y-1.5"
-                      >
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="truncate font-medium text-foreground">
-                            {row.stage === "stt" ? "받아쓰기" : "정리"},{" "}
-                            {row.model}
-                          </span>
-                          <MoneyText krw={row.krw} usd={row.usd} />
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${pct}%`,
-                              background:
-                                row.stage === "stt"
-                                  ? COLORS.stt
-                                  : COLORS.structure,
-                            }}
-                          />
-                        </div>
-                        <p className="text-xs text-muted-2">
-                          {row.count}회, {formatTokens(row.tokens)} 토큰
-                        </p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </Panel>
+            <SectionCard
+              title="모델별"
+              description={`단계·모델 비용, ${viewSummary.byModel.length}종`}
+            >
+              {viewSummary.byModel.length === 0 ? (
+                <EmptyChart />
+              ) : (
+                <>
+                  <ul className="divide-y divide-border">
+                    {visibleModels.map((row) => {
+                      const max = Math.max(
+                        ...viewSummary.byModel.map((m) => m.krw || m.usd),
+                        0.000001,
+                      );
+                      const pct = Math.round(
+                        ((row.krw || row.usd) / max) * 100,
+                      );
+                      return (
+                        <li
+                          key={`${row.stage}-${row.model}`}
+                          className="space-y-2 py-3.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-base font-semibold text-foreground">
+                              {row.stage === "stt" ? "받아쓰기" : "정리"},{" "}
+                              {row.model}
+                            </span>
+                            <MoneyText krw={row.krw} usd={row.usd} />
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${pct}%`,
+                                background:
+                                  row.stage === "stt"
+                                    ? COLORS.stt
+                                    : COLORS.structure,
+                              }}
+                            />
+                          </div>
+                          <p className="text-base text-muted">
+                            {row.count}회, {formatTokens(row.tokens)} 토큰
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <ListPager
+                    total={viewSummary.byModel.length}
+                    visible={modelsPage.visible}
+                    pageSize={PAGE_MODELS}
+                    onMore={() =>
+                      modelsPage.showMore(viewSummary.byModel.length)
+                    }
+                    onCollapse={modelsPage.collapse}
+                  />
+                </>
+              )}
+            </SectionCard>
           </div>
 
-          <Panel title="최근 호출" supporting="최신 40건">
-            <div className="-mx-1 overflow-x-auto sm:mx-0">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs text-muted-2">
-                    <th className="pb-3 pr-3 text-center font-medium">시각</th>
-                    <th className="pb-3 pr-3 font-medium">단계</th>
-                    <th className="pb-3 pr-3 font-medium">모델</th>
-                    {userId === "all" ? (
-                      <th className="pb-3 pr-3 font-medium">사용자</th>
-                    ) : null}
-                    <th className="pb-3 pr-3 font-medium">회의</th>
-                    <th className="pb-3 pr-3 text-center font-medium">토큰</th>
-                    <th className="pb-3 text-center font-medium">비용</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewSummary.recent.map((e) => (
-                    <tr
-                      key={e.id}
-                      className="border-b border-border/70 last:border-0"
-                    >
-                      <td className="whitespace-nowrap py-3 pr-3 text-center tabular-nums text-muted">
-                        {formatWhen(e.at)}
-                      </td>
-                      <td className="py-3 pr-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
-                            e.stage === "stt"
-                              ? "bg-[#e8f1fc] text-[#0071e3]"
-                              : "bg-success-soft text-success",
-                          )}
+          <SectionCard
+            title="최근 호출"
+            description={`최신 ${viewSummary.recent.length}건`}
+          >
+            {viewSummary.recent.length === 0 ? (
+              <EmptyChart />
+            ) : (
+              <>
+                <div className="-mx-1 max-h-[min(28rem,70vh)] overflow-auto sm:mx-0">
+                  <table className="w-full min-w-[720px] text-left text-base">
+                    <thead className="sticky top-0 z-10 bg-card">
+                      <tr className="border-b border-border text-base text-muted">
+                        <th className="bg-card py-3 pr-3 text-center font-semibold">
+                          시각
+                        </th>
+                        <th className="bg-card py-3 pr-3 font-semibold">단계</th>
+                        <th className="bg-card py-3 pr-3 font-semibold">모델</th>
+                        {userId === "all" ? (
+                          <th className="bg-card py-3 pr-3 font-semibold">
+                            사용자
+                          </th>
+                        ) : null}
+                        <th className="bg-card py-3 pr-3 font-semibold">회의</th>
+                        <th className="bg-card py-3 pr-3 text-center font-semibold">
+                          토큰
+                        </th>
+                        <th className="bg-card py-3 text-center font-semibold">
+                          비용
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleRecent.map((e) => (
+                        <tr
+                          key={e.id}
+                          className="border-b border-border last:border-0"
                         >
-                          {e.stage === "stt" ? "받아쓰기" : "정리"}
-                        </span>
-                      </td>
-                      <td className="max-w-[140px] truncate py-3 pr-3 text-foreground">
-                        {e.model}
-                      </td>
-                      {userId === "all" ? (
-                        <td className="max-w-[120px] truncate py-3 pr-3 text-muted">
-                          {userLabel(e.userId)}
-                        </td>
-                      ) : null}
-                      <td className="max-w-[180px] truncate py-3 pr-3 text-muted">
-                        {e.title || e.meetingId}
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-3 text-center tabular-nums text-muted">
-                        {formatTokens(e.totalTokens)}
-                      </td>
-                      <td className="whitespace-nowrap py-3 text-center">
-                        <MoneyText
-                          krw={e.estimatedKrw}
-                          usd={e.estimatedUsd}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
+                          <td className="whitespace-nowrap py-3.5 pr-3 text-center tabular-nums text-muted">
+                            {formatWhen(e.at)}
+                          </td>
+                          <td className="py-3.5 pr-3 font-semibold text-foreground">
+                            {e.stage === "stt" ? "받아쓰기" : "정리"}
+                          </td>
+                          <td className="max-w-[140px] truncate py-3.5 pr-3 text-foreground">
+                            {e.model}
+                          </td>
+                          {userId === "all" ? (
+                            <td className="max-w-[120px] truncate py-3.5 pr-3 text-muted">
+                              {userLabel(e.userId)}
+                            </td>
+                          ) : null}
+                          <td className="max-w-[180px] truncate py-3.5 pr-3 text-muted">
+                            {e.title || e.meetingId}
+                          </td>
+                          <td className="whitespace-nowrap py-3.5 pr-3 text-center tabular-nums text-muted">
+                            {formatTokens(e.totalTokens)}
+                          </td>
+                          <td className="whitespace-nowrap py-3.5 text-center">
+                            <MoneyText
+                              krw={e.estimatedKrw}
+                              usd={e.estimatedUsd}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ListPager
+                  total={viewSummary.recent.length}
+                  visible={recentPage.visible}
+                  pageSize={PAGE_RECENT}
+                  onMore={() =>
+                    recentPage.showMore(viewSummary.recent.length)
+                  }
+                  onCollapse={recentPage.collapse}
+                  emptyLabel="최근 호출 기록이 없습니다"
+                />
+              </>
+            )}
+          </SectionCard>
         </>
       )}
     </div>
   );
 }
 
-function StatCard({
-  icon,
+function SectionCard({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={cn(CARD_SHADOW, className)}>
+      <CardHeader className="space-y-0 px-6 pb-0 pt-6">
+        <CardTitle className="text-xl font-bold tracking-tight">
+          {title}
+        </CardTitle>
+        {description ? (
+          <p className="mt-1.5 text-base font-medium text-muted">{description}</p>
+        ) : null}
+        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+      </CardHeader>
+      <CardContent className="px-6 pb-5 pt-1">{children}</CardContent>
+    </Card>
+  );
+}
+
+function StatCell({
   label,
   value,
   valueNode,
   hint,
 }: {
-  icon: ReactNode;
   label: string;
   value?: string;
   valueNode?: ReactNode;
   hint: string;
 }) {
   return (
-    <div className="rounded-3xl bg-card p-4 shadow-soft sm:p-5">
-      <div className="flex items-center gap-2.5 text-muted">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-          {icon}
-        </span>
-        <span className="text-sm font-medium">{label}</span>
-      </div>
+    <div className="px-0 py-4 first:pt-3 last:pb-3 lg:px-4 lg:first:pl-0 lg:last:pr-0 lg:py-4">
+      <p className="text-base font-semibold text-foreground">{label}</p>
       {valueNode ? (
-        <div className="mt-3">{valueNode}</div>
+        <div className="mt-2">{valueNode}</div>
       ) : (
-        <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground tabular-nums">
+        <p className="mt-2 text-2xl font-semibold tracking-tight text-foreground tabular-nums">
           {value}
         </p>
       )}
-      <p className="mt-1 text-xs leading-snug text-muted-2">{hint}</p>
+      <p className="mt-1 text-base leading-snug text-muted">{hint}</p>
     </div>
-  );
-}
-
-function Panel({
-  title,
-  supporting,
-  children,
-  className,
-}: {
-  title: string;
-  supporting?: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      className={cn("rounded-3xl bg-card p-4 shadow-soft sm:p-5", className)}
-    >
-      <div className="mb-4">
-        <h2 className="text-base font-semibold tracking-tight text-foreground">
-          {title}
-        </h2>
-        {supporting ? (
-          <p className="mt-0.5 text-xs text-muted-2">{supporting}</p>
-        ) : null}
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -785,11 +962,11 @@ function LegendRow({
   items: Array<{ label: string; color: string }>;
 }) {
   return (
-    <ul className="mt-4 flex flex-wrap gap-4 text-xs text-muted">
+    <ul className="mt-4 flex flex-wrap gap-4 border-t border-border pt-3 text-base text-muted">
       {items.map((item) => (
         <li key={item.label} className="flex items-center gap-1.5">
           <span
-            className="h-2 w-2 rounded-full"
+            className="h-2.5 w-2.5 rounded-full"
             style={{ background: item.color }}
           />
           {item.label}
@@ -819,7 +996,7 @@ function Donut({
       aria-hidden
     >
       <div className="absolute inset-[22%] flex items-center justify-center rounded-full bg-card px-1">
-        <span className="text-center text-xs font-semibold tabular-nums leading-tight text-foreground sm:text-sm">
+        <span className="text-center text-base font-semibold tabular-nums leading-tight text-foreground">
           {totalLabel}
         </span>
       </div>
@@ -829,7 +1006,7 @@ function Donut({
 
 function EmptyChart() {
   return (
-    <div className="flex min-h-24 items-center justify-center text-sm text-muted-2">
+    <div className="flex min-h-24 items-center justify-center py-6 text-base text-muted">
       표시할 데이터가 없습니다
     </div>
   );

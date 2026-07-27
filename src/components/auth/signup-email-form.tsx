@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+
+import { Input } from "@/components/ui/input";
 
 export function SignupEmailForm({ initialError }: { initialError?: string }) {
   const router = useRouter();
@@ -55,11 +56,11 @@ export function SignupEmailForm({ initialError }: { initialError?: string }) {
       <div>
         <label
           htmlFor="email"
-          className="mb-1.5 block text-[13px] font-medium text-foreground"
+          className="mb-1.5 block text-base font-semibold text-foreground"
         >
           이메일
         </label>
-        <input
+        <Input
           id="email"
           name="email"
           type="email"
@@ -68,25 +69,19 @@ export function SignupEmailForm({ initialError }: { initialError?: string }) {
           placeholder="name@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="flex h-11 w-full rounded-xl border border-border-strong bg-white px-3 text-[15px] outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="h-12 border-border bg-card focus-visible:ring-primary/30"
         />
         {error ? (
-          <p className="mt-1.5 text-[12px] text-red-600">{error}</p>
+          <p className="mt-1.5 text-base text-masked">{error}</p>
         ) : null}
       </div>
       <button
         type="submit"
         disabled={pending}
-        className="flex h-11 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-primary-foreground disabled:opacity-60"
+        className="flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
       >
         {pending ? "처리 중…" : "계속하기"}
       </button>
-      <Link
-        href="/signup"
-        className="mt-4 block text-center text-[13px] text-muted hover:text-foreground"
-      >
-        돌아가기
-      </Link>
     </form>
   );
 }

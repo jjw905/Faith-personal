@@ -1,5 +1,3 @@
-import { Gauge } from "lucide-react";
-
 import {
   AiUsageDashboard,
   type AiUsageUserOption,
@@ -39,20 +37,12 @@ export default async function AiUsagePage() {
   }));
 
   return (
-    <PageContainer>
-      <div className="mx-auto w-full max-w-6xl">
-        <header className="mb-4 flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-            <Gauge className="h-5 w-5" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold tracking-wide text-muted-2">
-              운영
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              AI 사용량
-            </h1>
-          </div>
+    <PageContainer soft>
+      <div className="mx-auto w-full max-w-6xl space-y-6">
+        <header className="min-w-0">
+          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+            AI 사용량
+          </h1>
         </header>
 
         <AiUsageDashboard initial={summary} initialUsers={initialUsers} />
