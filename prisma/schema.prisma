@@ -57,51 +57,62 @@ enum TeamMeetingEndReason {
   ORGANIZER_ABSENT
 }
 
+enum RealtimeSttSessionStatus {
+  ACTIVE
+  COMPLETED
+  FAILED
+}
+
 model User {
-  id                        String              @id @default(cuid())
+  id                        String                 @id @default(cuid())
   name                      String?
-  email                     String?             @unique
-  emailVerified             DateTime?           @map("email_verified")
+  email                     String?                @unique
+  emailVerified             DateTime?              @map("email_verified")
   image                     String?
-  passwordHash              String?             @map("password_hash")
+  passwordHash              String?                @map("password_hash")
   /**
    * 최초 가입 수단: credentials | google | naver | twitter
    */
-  signupProvider            String?             @map("signup_provider")
-  role                      Role                @default(USER)
-  plan                      Plan                @default(FREE)
-  disabled                  Boolean             @default(false)
-  /** 수동 등급 변경 만료. 지나면 FREE로 복귀. */
-  planUntil                 DateTime?           @map("plan_until")
-  /** 정지 만료. 지나면 disabled=false. */
-  disabledUntil             DateTime?           @map("disabled_until")
-  notificationRetentionDays Int                 @default(90) @map("notification_retention_days")
+  signupProvider            String?                @map("signup_provider")
+  role                      Role                   @default(USER)
+  plan                      Plan                   @default(FREE)
+  disabled                  Boolean                @default(false)
+  /**
+   * 수동 등급 변경 만료. 지나면 FREE로 복귀.
+   */
+  planUntil                 DateTime?              @map("plan_until")
+  /**
+   * 정지 만료. 지나면 disabled=false.
+   */
+  disabledUntil             DateTime?              @map("disabled_until")
+  notificationRetentionDays Int                    @default(90) @map("notification_retention_days")
   accounts                  Account[]
   sessions                  Session[]
   vaultFiles                VaultFile[]
-  handle                    String?             @unique
-  inviteCode                String?             @unique @map("invite_code")
-  ownedTeams                Team[]              @relation("TeamOwner")
+  handle                    String?                @unique
+  inviteCode                String?                @unique @map("invite_code")
+  ownedTeams                Team[]                 @relation("TeamOwner")
   teamMemberships           TeamMember[]
-  teamInvites               TeamInvite[]        @relation("InvitedUser")
-  sentTeamInvites           TeamInvite[]        @relation("InviteSender")
-  teamEntitlement           TeamEntitlement?    @relation("EntitledUser")
-  entitlementsGranted       TeamEntitlement[]   @relation("EntitlementGrantor")
-  createdTeamMeetings       TeamMeeting[]       @relation("MeetingCreator")
-  organizedTeamMeetings     TeamMeeting[]       @relation("MeetingOrganizer")
-  backupHostMeetings        TeamMeeting[]       @relation("MeetingBackupHost")
-  currentHostMeetings       TeamMeeting[]       @relation("MeetingCurrentHost")
+  teamInvites               TeamInvite[]           @relation("InvitedUser")
+  sentTeamInvites           TeamInvite[]           @relation("InviteSender")
+  teamEntitlement           TeamEntitlement?       @relation("EntitledUser")
+  entitlementsGranted       TeamEntitlement[]      @relation("EntitlementGrantor")
+  createdTeamMeetings       TeamMeeting[]          @relation("MeetingCreator")
+  organizedTeamMeetings     TeamMeeting[]          @relation("MeetingOrganizer")
+  backupHostMeetings        TeamMeeting[]          @relation("MeetingBackupHost")
+  currentHostMeetings       TeamMeeting[]          @relation("MeetingCurrentHost")
   teamMeetingAccess         TeamMeetingAccess[]
   authoredAnnouncements     TeamAnnouncement[]
   announcementReads         TeamAnnouncementRead[]
   notifications             Notification[]
-  auditActions              TeamAuditLog[]      @relation("AuditActor")
-  auditTargets              TeamAuditLog[]      @relation("AuditTarget")
-  adminAuditActions         AdminAuditLog[]     @relation("AdminAuditActor")
-  adminAuditTargets         AdminAuditLog[]     @relation("AdminAuditTarget")
+  auditActions              TeamAuditLog[]         @relation("AuditActor")
+  auditTargets              TeamAuditLog[]         @relation("AuditTarget")
+  adminAuditActions         AdminAuditLog[]        @relation("AdminAuditActor")
+  adminAuditTargets         AdminAuditLog[]        @relation("AdminAuditTarget")
   personalSettings          UserPersonalSettings?
-  createdAt                 DateTime            @default(now()) @map("created_at")
-  updatedAt                 DateTime            @updatedAt @map("updated_at")
+  realtimeSttSessions       RealtimeSttSession[]
+  createdAt                 DateTime               @default(now()) @map("created_at")
+  updatedAt                 DateTime               @updatedAt @map("updated_at")
 
   @@index([role, disabled])
   @@map("users")
@@ -228,12 +239,14 @@ model TeamMeeting {
   canceledAt               DateTime?             @map("canceled_at")
   endReason                TeamMeetingEndReason? @map("end_reason")
   recordingActive          Boolean               @default(false) @map("recording_active")
+  sttRunId                 String?               @map("stt_run_id")
   sttStartedAt             DateTime?             @map("stt_started_at")
   sttAccumulatedSeconds    Int                   @default(0) @map("stt_accumulated_seconds")
   preHostRecordingOverride Boolean?              @map("pre_host_recording_override")
   hostPresentAt            DateTime?             @map("host_present_at")
   absenceWarnedAt          DateTime?             @map("absence_warned_at")
   access                   TeamMeetingAccess[]
+  realtimeSttSessions      RealtimeSttSession[]
   startedAt                DateTime?             @map("started_at")
   endedAt                  DateTime?             @map("ended_at")
   createdAt                DateTime              @default(now()) @map("created_at")
@@ -286,12 +299,12 @@ model TeamAnnouncement {
 }
 
 model TeamAnnouncementRead {
-  id             String          @id @default(cuid())
-  announcementId String          @map("announcement_id")
+  id             String           @id @default(cuid())
+  announcementId String           @map("announcement_id")
   announcement   TeamAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
-  userId         String          @map("user_id")
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  readAt         DateTime        @default(now()) @map("read_at")
+  userId         String           @map("user_id")
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime         @default(now()) @map("read_at")
 
   @@unique([announcementId, userId])
   @@index([userId, readAt])
@@ -299,16 +312,77 @@ model TeamAnnouncementRead {
 }
 
 model UserPersonalSettings {
-  userId                    String   @id @map("user_id")
-  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  defaultMicrophoneOn       Boolean  @default(false) @map("default_microphone_on")
-  preferredInputDeviceId    String?  @map("preferred_input_device_id")
-  notificationSoundEnabled  Boolean  @default(true) @map("notification_sound_enabled")
-  displayPrefs              Json     @default("{}") @map("display_prefs")
-  createdAt                 DateTime @default(now()) @map("created_at")
-  updatedAt                 DateTime @updatedAt @map("updated_at")
+  userId                   String   @id @map("user_id")
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultMicrophoneOn      Boolean  @default(false) @map("default_microphone_on")
+  preferredInputDeviceId   String?  @map("preferred_input_device_id")
+  notificationSoundEnabled Boolean  @default(true) @map("notification_sound_enabled")
+  displayPrefs             Json     @default("{}") @map("display_prefs")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
 
   @@map("user_personal_settings")
+}
+
+model RealtimeSttSession {
+  id                 String                   @id @default(cuid())
+  meetingId          String                   @map("meeting_id")
+  runId              String                   @map("run_id")
+  userId             String                   @map("user_id")
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamMeetingId      String?                  @map("team_meeting_id")
+  teamMeeting        TeamMeeting?             @relation(fields: [teamMeetingId], references: [id], onDelete: Cascade)
+  title              String
+  status             RealtimeSttSessionStatus @default(ACTIVE)
+  startedAt          DateTime                 @default(now()) @map("started_at")
+  endedAt            DateTime?                @map("ended_at")
+  billedAudioSeconds Int                      @default(0) @map("billed_audio_seconds")
+  estimatedUsd       Decimal                  @default(0) @map("estimated_usd") @db.Decimal(12, 6)
+  utterances         RealtimeSttUtterance[]
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([meetingId])
+  @@index([runId, status])
+  @@index([teamMeetingId, status])
+  @@map("realtime_stt_sessions")
+}
+
+model RealtimeSttUtterance {
+  id          String             @id @default(cuid())
+  sessionId   String             @map("session_id")
+  session     RealtimeSttSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  itemId      String             @map("item_id")
+  sequence    Int
+  text        String             @db.Text
+  startSec    Float              @map("start_sec")
+  endSec      Float?             @map("end_sec")
+  confidence  Float?
+  corrections Json?
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+
+  @@unique([sessionId, itemId])
+  @@index([sessionId, sequence])
+  @@map("realtime_stt_utterances")
+}
+
+model KoreanDictionaryCache {
+  word      String   @id
+  exists    Boolean
+  checkedAt DateTime @default(now()) @map("checked_at")
+
+  @@index([checkedAt])
+  @@map("korean_dictionary_cache")
+}
+
+model KoreanDictionaryUsage {
+  day       String   @id
+  callCount Int      @default(0) @map("call_count")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("korean_dictionary_usage")
 }
 
 model Notification {
@@ -356,7 +430,9 @@ model TeamAuditLog {
   @@map("team_audit_logs")
 }
 
-/** 관리자 오버라이드 감사. 앱에서 삭제·퍼지하지 않음. */
+/**
+ * 관리자 오버라이드 감사. 앱에서 삭제·퍼지하지 않음.
+ */
 model AdminAuditLog {
   id           String   @id @default(cuid())
   actorId      String?  @map("actor_id")

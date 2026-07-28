@@ -24,7 +24,7 @@ export type MeetingProcessPhase =
 export type UserMeetingRecord = {
   id: string;
   userId: string;
-  vaultFileId: string;
+  vaultFileId?: string;
   model: SttModel;
   phase: MeetingProcessPhase;
   /** 0–100. 파이프라인 실제 단계·청크 진행과 동기. */

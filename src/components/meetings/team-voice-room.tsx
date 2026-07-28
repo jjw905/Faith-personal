@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -7,6 +8,7 @@ import {
   useParticipants,
   useRoomContext,
 } from "@livekit/components-react";
+import { RoomEvent, Track } from "livekit-client";
 import {
   LoaderCircle,
   LogOut,
@@ -16,14 +18,17 @@ import {
   UserRoundX,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CorrectionHint } from "@/components/meetings/correction-hint";
 import {
   PersonAvatar,
   displayPersonName,
 } from "@/components/people/person-avatar";
 import { Button } from "@/components/ui/button";
+import { useRealtimeTranscription } from "@/hooks/use-realtime-transcription";
 import { cn } from "@/lib/utils";
+import type { TranscriptCorrection } from "@/types/transcript";
 
 type TokenPayload = {
   token: string;
@@ -323,6 +328,23 @@ export function TeamVoiceRoom({
   );
 }
 
+type TeamLiveTranscriptLine = {
+  key: string;
+  speaker: string;
+  text: string;
+  corrections?: TranscriptCorrection[];
+};
+
+type TeamDataMessage =
+  | { type: "recording"; active: boolean }
+  | {
+      type: "transcript";
+      itemId: string;
+      speaker: string;
+      text: string;
+      corrections?: TranscriptCorrection[];
+    };
+
 function VoiceRoomBody({
   meetingId,
   title,
@@ -341,6 +363,161 @@ function VoiceRoomBody({
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const [busy, setBusy] = useState(false);
   const [recordingNote, setRecordingNote] = useState<string | null>(null);
+  const [liveLines, setLiveLines] = useState<TeamLiveTranscriptLine[]>([]);
+  const {
+    status: realtimeStatus,
+    utterances: realtimeUtterances,
+    partialText,
+    error: realtimeError,
+    meetingHref,
+    start: startRealtime,
+    stop: stopRealtime,
+  } = useRealtimeTranscription();
+  const sharedUtterancesRef = useRef(new Map<string, string>());
+
+  const localMicrophoneTrack = useCallback((): MediaStreamTrack | undefined => {
+    return localParticipant.getTrackPublication(Track.Source.Microphone)?.track
+      ?.mediaStreamTrack;
+  }, [localParticipant]);
+
+  const upsertLiveLine = useCallback((line: TeamLiveTranscriptLine) => {
+    setLiveLines((current) => {
+      const index = current.findIndex((row) => row.key === line.key);
+      if (index < 0) return [...current, line];
+      const next = [...current];
+      next[index] = line;
+      return next;
+    });
+  }, []);
+
+  const publishTeamMessage = useCallback(
+    async (
+      message: TeamDataMessage,
+      topic: "faith-control" | "faith-stt",
+    ) => {
+      await room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(message)),
+        { reliable: true, topic },
+      );
+    },
+    [room.localParticipant],
+  );
+  const visibleRecordingNote = recordingNote ?? realtimeError;
+
+  useEffect(() => {
+    const onData = (
+      payload: Uint8Array,
+      participant?: { identity: string },
+      _kind?: unknown,
+      topic?: string,
+    ) => {
+      if (topic !== "faith-control" && topic !== "faith-stt") return;
+      let message: TeamDataMessage;
+      try {
+        message = JSON.parse(
+          new TextDecoder().decode(payload),
+        ) as TeamDataMessage;
+      } catch {
+        return;
+      }
+      if (message.type === "recording") {
+        onRecordingChange(message.active);
+        if (!message.active) void stopRealtime();
+        return;
+      }
+      if (message.type === "transcript" && participant) {
+        upsertLiveLine({
+          key: `${participant.identity}:${message.itemId}`,
+          speaker: message.speaker,
+          text: message.text,
+          corrections: message.corrections,
+        });
+      }
+    };
+    room.on(RoomEvent.DataReceived, onData);
+    return () => {
+      room.off(RoomEvent.DataReceived, onData);
+    };
+  }, [onRecordingChange, room, stopRealtime, upsertLiveLine]);
+
+  useEffect(() => {
+    if (
+      !recordingActive ||
+      !isMicrophoneEnabled ||
+      (realtimeStatus !== "idle" && realtimeStatus !== "completed")
+    ) {
+      return;
+    }
+    const track = localMicrophoneTrack();
+    if (!track) return;
+    void startRealtime({
+      title,
+      teamMeetingId: meetingId,
+      mediaStreamTrack: track,
+    });
+  }, [
+    isMicrophoneEnabled,
+    localMicrophoneTrack,
+    meetingId,
+    recordingActive,
+    realtimeStatus,
+    startRealtime,
+    title,
+  ]);
+
+  useEffect(() => {
+    if (
+      recordingActive &&
+      !isMicrophoneEnabled &&
+      (realtimeStatus === "recording" || realtimeStatus === "connecting")
+    ) {
+      void stopRealtime();
+    }
+  }, [
+    isMicrophoneEnabled,
+    recordingActive,
+    realtimeStatus,
+    stopRealtime,
+  ]);
+
+  useEffect(() => {
+    const speaker = displayPersonName(
+      localParticipant.name,
+      localParticipant.identity,
+    );
+    for (const utterance of realtimeUtterances) {
+      const signature = JSON.stringify([
+        utterance.text,
+        utterance.corrections ?? [],
+      ]);
+      if (sharedUtterancesRef.current.get(utterance.itemId) === signature) {
+        continue;
+      }
+      sharedUtterancesRef.current.set(utterance.itemId, signature);
+      upsertLiveLine({
+        key: `${localParticipant.identity}:${utterance.itemId}`,
+        speaker,
+        text: utterance.text,
+        corrections: utterance.corrections,
+      });
+      void publishTeamMessage(
+        {
+          type: "transcript",
+          itemId: utterance.itemId,
+          speaker,
+          text: utterance.text,
+          corrections: utterance.corrections,
+        },
+        "faith-stt",
+      );
+    }
+  }, [
+    localParticipant.identity,
+    localParticipant.name,
+    publishTeamMessage,
+    realtimeUtterances,
+    upsertLiveLine,
+  ]);
 
   async function toggleMicrophone() {
     setBusy(true);
@@ -353,10 +530,16 @@ function VoiceRoomBody({
     if (!isHost) return;
     setBusy(true);
     setRecordingNote(null);
+    const action = recordingActive ? "stop" : "start";
+    if (action === "start" && !isMicrophoneEnabled) {
+      setRecordingNote("마이크를 켠 뒤 기록을 시작해 주세요.");
+      setBusy(false);
+      return;
+    }
     const response = await fetch(`/api/team-meetings/${meetingId}/recording`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: recordingActive ? "stop" : "start" }),
+      body: JSON.stringify({ action }),
     });
     const data = (await response.json()) as {
       ok?: boolean;
@@ -365,7 +548,46 @@ function VoiceRoomBody({
       code?: string;
     };
     if (response.ok && data.ok) {
-      onRecordingChange(Boolean(data.recordingActive));
+      const active = Boolean(data.recordingActive);
+      onRecordingChange(active);
+      if (active) {
+        await publishTeamMessage(
+          { type: "recording", active: true },
+          "faith-control",
+        );
+        const track = localMicrophoneTrack();
+        if (track) {
+          const started = await startRealtime({
+            title,
+            teamMeetingId: meetingId,
+            mediaStreamTrack: track,
+          });
+          if (!started) {
+            setRecordingNote(
+              "내 마이크 전사를 시작하지 못했습니다. 다른 참가자 기록은 계속됩니다.",
+            );
+          }
+        }
+      } else {
+        await publishTeamMessage(
+          { type: "recording", active: false },
+          "faith-control",
+        );
+        await stopRealtime();
+        const completeResponse = await fetch(
+          `/api/stt/realtime/team/${meetingId}/complete`,
+          { method: "POST" },
+        );
+        const completeData = (await completeResponse.json()) as {
+          ok?: boolean;
+          message?: string;
+        };
+        if (!completeResponse.ok || !completeData.ok) {
+          setRecordingNote(
+            completeData.message ?? "팀 기록을 완료하지 못했습니다.",
+          );
+        }
+      }
     } else {
       onRecordingChange(false);
       if (data.code === "LIVE_STT_UNAVAILABLE" || response.status === 503) {
@@ -414,8 +636,18 @@ function VoiceRoomBody({
           >
             {recordingActive ? "기록 중" : "기록 전"}
           </p>
-          {recordingNote ? (
-            <p className="mt-2 max-w-md text-sm text-muted">{recordingNote}</p>
+          {visibleRecordingNote ? (
+            <p className="mt-2 max-w-md text-base text-muted">
+              {visibleRecordingNote}
+            </p>
+          ) : null}
+          {meetingHref && !recordingActive ? (
+            <Link
+              href={meetingHref}
+              className="mt-2 inline-flex min-h-12 items-center rounded-xl px-3 text-base font-semibold text-primary hover:bg-primary-soft"
+            >
+              기록 보기
+            </Link>
           ) : null}
         </div>
         <span className="inline-flex min-h-12 items-center gap-2 rounded-full bg-primary-soft px-3 text-sm font-semibold">
@@ -423,6 +655,38 @@ function VoiceRoomBody({
           {participants.length}
         </span>
       </header>
+
+      {(liveLines.length > 0 || partialText) && (
+        <section
+          aria-label="실시간 대화기록"
+          aria-live="polite"
+          className="mt-5 max-h-72 space-y-3 overflow-y-auto rounded-3xl bg-surface p-4"
+        >
+          {liveLines.slice(-8).map((line) => (
+            <div key={line.key} className="rounded-2xl bg-card px-4 py-3">
+              <p className="text-base font-semibold text-foreground">
+                {line.speaker}
+              </p>
+              <p className="mt-1 text-base leading-relaxed text-foreground">
+                {line.text}
+              </p>
+              {line.corrections?.length ? (
+                <CorrectionHint
+                  corrections={line.corrections}
+                  className="mt-2"
+                />
+              ) : null}
+            </div>
+          ))}
+          {partialText ? (
+            <div className="rounded-2xl bg-card px-4 py-3">
+              <p className="text-base leading-relaxed text-muted">
+                {partialText}
+              </p>
+            </div>
+          ) : null}
+        </section>
+      )}
 
       <div className="grid flex-1 content-center gap-3 py-8 sm:grid-cols-2 lg:grid-cols-3">
         {participants.map((participant) => {

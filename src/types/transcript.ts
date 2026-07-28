@@ -23,6 +23,10 @@ export type TranscriptCorrection = {
   wrong: string;
   suggestion: string;
   reason?: string;
+  /** 발음 유사도 0~1 */
+  similarity?: number;
+  /** 추천 후보 출처 */
+  source?: "glossary" | "ourmalsam" | "second-pass";
 };
 
 /** 회의 다시보기용 대화 한 줄. */

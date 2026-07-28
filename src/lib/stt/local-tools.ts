@@ -1,6 +1,9 @@
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
+import ffmpegStatic from "ffmpeg-static";
+import ffprobeStatic from "ffprobe-static";
+
 /**
  * 이 서버에 그 프로그램이 있는지.
  *
@@ -23,10 +26,33 @@ export function commandExists(command: string): boolean {
 
 let audioToolsReady: boolean | null = null;
 
+export function audioToolPath(command: "ffmpeg" | "ffprobe"): string | null {
+  const bundled =
+    command === "ffmpeg"
+      ? ffmpegStatic
+      : typeof ffprobeStatic === "object" &&
+          ffprobeStatic &&
+          "path" in ffprobeStatic
+        ? ffprobeStatic.path
+        : null;
+  if (typeof bundled === "string" && commandExists(bundled)) return bundled;
+  return commandExists(command) ? command : null;
+}
+
+export function requireAudioToolPath(command: "ffmpeg" | "ffprobe"): string {
+  const path = audioToolPath(command);
+  if (!path) {
+    throw new Error(`${command}가 없어 오디오를 처리할 수 없습니다.`);
+  }
+  return path;
+}
+
 /** 청크 분할에는 ffmpeg와 ffprobe가 둘 다 있어야 한다. */
 export function hasAudioTools(): boolean {
   if (audioToolsReady === null) {
-    audioToolsReady = commandExists("ffmpeg") && commandExists("ffprobe");
+    audioToolsReady = Boolean(
+      audioToolPath("ffmpeg") && audioToolPath("ffprobe"),
+    );
   }
   return audioToolsReady;
 }

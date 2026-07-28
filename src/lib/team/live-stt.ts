@@ -5,20 +5,17 @@
  * - upload / file STT (`process-upload`, chunked-transcribe)
  * - file-fed realtime evaluation (`realtimeTranscribeFile`)
  *
- * Missing for team voice rooms:
- * - LiveKit room egress or client audio publish → continuous STT session
- * - per-meeting model session lifecycle tied to host start/stop
- *
- * Until that bridge exists, recording start must not flip `recordingActive`
- * or charge STT quota. Voice transport remains independent.
+ * 각 참가자의 로컬 LiveKit 마이크 트랙을 OpenAI WebRTC 전사 세션에 복제한다.
+ * 음성 통화 트랙은 그대로 두고 전사 결과만 Faith 서버에 순차 저장한다.
  */
 export const LIVE_TEAM_STT_INTEGRATION =
-  "livekit-egress-or-client-stream → OpenAI realtime/file STT session";
+  "LiveKit local track → OpenAI WebRTC mini transcription";
 
 export function isLiveTeamSttRuntimeAvailable() {
-  return false;
+  const key = process.env.OPENAI_API_KEY?.trim();
+  return Boolean(key && key !== "your_openai_api_key_here");
 }
 
 export function liveTeamSttUnavailableMessage() {
-  return "실시간 팀 회의 STT 파이프라인이 아직 연결되지 않았습니다. 음성 통화는 계속 사용할 수 있습니다.";
+  return "실시간 기록 설정을 확인해 주세요. 음성 통화는 계속 사용할 수 있습니다.";
 }

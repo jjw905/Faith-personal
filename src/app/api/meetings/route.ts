@@ -44,7 +44,9 @@ function toActivityItem(
           : ("done" as const);
   const title = meetingDisplayTitle({
     title: row.meeting.title,
-    vaultFileName: vaultNames.get(row.vaultFileId),
+    vaultFileName: row.vaultFileId
+      ? vaultNames.get(row.vaultFileId)
+      : undefined,
   });
   const detail = meetingProcessDetail(row.phase, row.errorMessage);
   return {
@@ -95,7 +97,11 @@ export async function GET(request: Request) {
   const rows = [...activeRows, ...settledRows];
 
   const vaultIds = [
-    ...new Set(rows.map((r) => r.vaultFileId).filter(Boolean)),
+    ...new Set(
+      rows
+        .map((r) => r.vaultFileId)
+        .filter((id): id is string => Boolean(id)),
+    ),
   ];
   const vaultNames = new Map<string, string>();
   if (vaultIds.length > 0) {

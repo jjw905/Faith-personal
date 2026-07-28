@@ -32,9 +32,9 @@ export function CorrectionHint({
         <span
           key={`${c.wrong}-${c.suggestion}`}
           title={c.reason ? `${c.reason}` : "발음이 비슷한 말"}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 text-xs text-muted"
+          className="inline-flex min-h-12 max-w-full items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 text-base text-muted"
         >
-          <WandSparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+          <WandSparkles className="h-5 w-5 shrink-0" strokeWidth={1.75} />
           <span className="min-w-0 truncate">
             <span className="line-through">{c.wrong}</span>
             <span className="px-1">→</span>

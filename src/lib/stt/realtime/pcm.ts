@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
-import { commandExists } from "@/lib/stt/local-tools";
+import { requireAudioToolPath } from "@/lib/stt/local-tools";
 
 /** 오디오 → 24kHz mono PCM s16le */
 export function audioToPcm24k(audioPath: string, workDir: string): {
@@ -14,14 +14,10 @@ export function audioToPcm24k(audioPath: string, workDir: string): {
   if (!existsSync(audioPath)) {
     throw new Error(`오디오 없음: ${audioPath}`);
   }
-  // 이 경로는 로컬 평가용이다. ENOENT 대신 무엇이 없는지 알려 준다.
-  if (!commandExists("ffmpeg")) {
-    throw new Error("ffmpeg가 없어 PCM으로 바꿀 수 없습니다.");
-  }
   mkdirSync(workDir, { recursive: true });
   const pcmPath = join(workDir, `${randomUUID()}.pcm`);
   execFileSync(
-    "ffmpeg",
+    requireAudioToolPath("ffmpeg"),
     [
       "-y",
       "-i",

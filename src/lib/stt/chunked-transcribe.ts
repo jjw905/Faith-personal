@@ -11,13 +11,18 @@ import { basename, join } from "node:path";
 import { toFile } from "openai/uploads";
 
 import { stripHallucination } from "@/lib/stt/hallucination-guard";
-import { hasAudioTools } from "@/lib/stt/local-tools";
+import {
+  hasAudioTools,
+  requireAudioToolPath,
+} from "@/lib/stt/local-tools";
 import {
   assertUploadAudioBytes,
   assertUploadAudioDuration,
 } from "@/lib/stt/upload-limits";
 import { getOpenAIClient } from "@/lib/stt/openai";
 import type { SttModel } from "@/lib/stt/models";
+import { realtimeTranscribeFile } from "@/lib/stt/realtime/transcribe-session";
+import { REALTIME_STT_MINI } from "@/lib/stt/realtime/types";
 import {
   estimateSttUsdFromMinutes,
   estimateSttUsdFromTokens,
@@ -75,7 +80,7 @@ function parseTranscriptionUsage(res: unknown): {
 
 export function probeDurationSec(audioPath: string): number {
   const out = execFileSync(
-    "ffprobe",
+    requireAudioToolPath("ffprobe"),
     [
       "-v",
       "error",
@@ -163,7 +168,7 @@ type SilenceSpan = { startSec: number; endSec: number };
 function detectSilences(audioPath: string): SilenceSpan[] {
   // silencedetect 결과는 stderr로 나온다.
   const res = spawnSync(
-    "ffmpeg",
+    requireAudioToolPath("ffmpeg"),
     [
       "-v",
       "info",
@@ -254,7 +259,7 @@ function prepareChunks(
 
   const listPath = join(workDir, "segments.csv");
   execFileSync(
-    "ffmpeg",
+    requireAudioToolPath("ffmpeg"),
     [
       "-y",
       "-i",
@@ -386,25 +391,27 @@ async function transcribeChunkText(
   };
 }
 
-/** 4o 계열 텍스트 STT 후, whisper로 실측 구간 시각만 수집. */
-async function timeChunkWithWhisper(
-  bytes: Buffer,
-  filename: string,
+/**
+ * REST mini 본문과 독립된 mini Realtime 출력에서 발화 시각만 수집한다.
+ * whisper 타이밍 패스보다 분당 비용이 절반이고 본문 모델도 mini로 고정된다.
+ */
+async function timeChunkWithRealtimeMini(
+  audioPath: string,
 ): Promise<{ timed: TimedSegment[]; durationBillSec: number }> {
   try {
-    const client = getOpenAIClient();
-    const file = await toFile(bytes, filename);
-    const res = await client.audio.transcriptions.create({
-      model: "whisper-1",
-      file,
-      response_format: "verbose_json",
-      timestamp_granularities: ["segment"],
+    const res = await realtimeTranscribeFile(audioPath, {
+      model: REALTIME_STT_MINI,
+      language: "ko",
     });
-    const durationBillSec =
-      typeof (res as { duration?: number }).duration === "number"
-        ? Number((res as { duration: number }).duration)
-        : 0;
-    const timed = parseVerboseSegments(res, 0);
+    const durationBillSec = res.billedAudioSec || res.durationSec;
+    const timed = res.utterances.map((utterance, index) => ({
+      startSec: utterance.startSec,
+      endSec:
+        utterance.endSec ??
+        res.utterances[index + 1]?.startSec ??
+        res.durationSec,
+      text: utterance.text,
+    }));
     if (timed.length === 0) {
       throw new Error(
         "실측 시각(타이밍) 결과가 비어 있습니다. 잠시 후 다시 시도하거나 다른 파일로 올려 주세요.",
@@ -419,14 +426,14 @@ async function timeChunkWithWhisper(
       throw err;
     }
     const detail = err instanceof Error ? err.message : String(err);
-    console.error("[stt] whisper 타이밍 패스 실패", detail);
+    console.error("[stt] mini Realtime 타이밍 패스 실패", detail);
     throw new Error(
       `실측 시각(타이밍) 전사에 실패했습니다. ${detail}`,
     );
   }
 }
 
-/** 오디오 분 단위 요금과 토큰 요금을 합친다. 타이밍 패스는 whisper 요금이 따로 붙는다. */
+/** 오디오 분 단위 요금과 토큰 요금을 합친다. 타이밍 패스는 mini 요금이 따로 붙는다. */
 function usageTotals(params: {
   model: SttModel;
   durationSec: number;
@@ -448,7 +455,7 @@ function usageTotals(params: {
     params.model === "whisper-1"
       ? 0
       : estimateSttUsdFromMinutes(
-          "whisper-1",
+          "gpt-4o-mini-transcribe",
           params.timingAudioSec > 0 ? params.timingAudioSec : params.durationSec,
         );
 
@@ -476,7 +483,7 @@ export type ChunkedTranscribeResult = {
   durationSec: number;
   chunkCount: number;
   usage: SttUsageTotals;
-  /** whisper verbose 실측 세그먼트 (절대 초). */
+  /** STT 모델이 낸 실측 세그먼트 (절대 초). */
   timedSegments: TimedSegment[];
 };
 
@@ -500,9 +507,8 @@ type StepReporter = (
 /**
  * ffmpeg 없이 원본을 한 번에 전사한다.
  *
- * 배포 서버(빌드팩 이미지)에는 ffmpeg, ffprobe가 없어 길이 측정도 청크 분할도
- * 못 한다. 전사 API는 파일 하나를 그대로 받으므로 상한 안쪽이면 나눌 필요가
- * 없다. 길이는 whisper verbose 응답의 duration을 쓴다.
+ * ffmpeg, ffprobe가 없을 때 원본을 한 번에 전사한다. mini Realtime 타이밍은
+ * PCM 변환이 필요하므로 오디오 도구가 없는 배포는 시작 전에 차단한다.
  */
 async function transcribeWholeFile(params: {
   audioPath: string;
@@ -515,11 +521,16 @@ async function transcribeWholeFile(params: {
 
   const name = basename(params.audioPath) || "source.mp3";
   const needsTiming = params.model !== "whisper-1";
+  if (needsTiming && !hasAudioTools()) {
+    throw new Error(
+      "mini 실측 시각을 만들 오디오 도구가 없습니다. 서버 배포 설정을 확인해 주세요.",
+    );
+  }
   params.report(0.08, "prepare");
 
-  // 4o 계열은 시각을 주지 않는다. 길이도 여기서만 알 수 있어 먼저 받는다.
+  // REST 4o 계열은 시각을 주지 않으므로 mini Realtime에서 발화 시각을 받는다.
   const timingPass = needsTiming
-    ? await timeChunkWithWhisper(bytes, `time_${name}`)
+    ? await timeChunkWithRealtimeMini(params.audioPath)
     : null;
   if (timingPass) params.report(0.5, "timing");
 
@@ -581,8 +592,8 @@ async function transcribeWholeFile(params: {
 
 /**
  * 길이 확인 → N분 청크 → 직전 문맥 prompt 이어전사 → 연결.
- * 시각: whisper-1은 본전사 verbose, 그 외 모델은 별도 whisper 타이밍 패스.
- * ffmpeg가 없는 서버에서는 나누지 않고 한 번에 전사한다.
+ * 시각: whisper-1은 본전사 verbose, 그 외 모델은 mini Realtime 타이밍 패스.
+ * ffmpeg가 없는 서버에서는 whisper-1만 한 번에 전사할 수 있다.
  */
 export async function chunkedTranscribe(params: {
   audioPath: string;
@@ -741,7 +752,7 @@ export async function chunkedTranscribe(params: {
     }));
 
     if (needsTiming) {
-      const timedPass = await timeChunkWithWhisper(bytes, `time_${i}.mp3`);
+      const timedPass = await timeChunkWithRealtimeMini(chunk.path);
       timingAudioSec += timedPass.durationBillSec || chunkDur;
       chunkTimed = timedPass.timed.map((s) => ({
         ...s,

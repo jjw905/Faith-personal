@@ -1,165 +1,309 @@
 /**
  * 오인식 낱말 보정 추천.
  *
- * 대화기록을 고치지 않는다. 소리는 맞는데 글자가 틀린 곳을 찾아
- * "이 말이었을 수 있다"만 붙인다 (803 국립공원 → 팔공산국립공원).
- * 모델이 뜻을 판단하고, 발음 유사도가 낮은 제안은 서버가 버린다.
+ * 본문은 바꾸지 않는다. 신뢰된 회의 용어와 우리말샘 등록어 중 발음이 매우
+ * 가까운 후보만 말풍선에 붙인다. 정답 후보 생성에 별도 언어 모델을 쓰지 않는다.
  */
-import { getOpenAIClient } from "@/lib/stt/openai";
-import { estimateStructureUsd, STRUCTURE_MODEL } from "@/lib/stt/pricing";
-import { pronunciationSimilarity } from "@/lib/stt/pronunciation";
+import {
+  findDictionaryPronunciationCandidates,
+  getKoreanDictionaryStats,
+  sourceInKoreanDictionary,
+} from "@/lib/stt/korean-dictionary";
+import { pronunciationSimilarity, toJamo } from "@/lib/stt/pronunciation";
 import type { TranscriptCorrection, TranscriptLine } from "@/types/transcript";
 
-/** 제안을 받아들이는 최소 발음 유사도. 0.82 미만은 다른 말로 본다. */
-const MIN_SIMILARITY = 0.82;
-/** 회의당 추천 상한. 너무 많으면 읽는 데 방해된다. */
+const MIN_GLOSSARY_SIMILARITY = 0.8;
+const MIN_GLOSSARY_MARGIN = 0.04;
+const MIN_DICTIONARY_SIMILARITY = 0.93;
+const MIN_DICTIONARY_MARGIN = 0.025;
+const MIN_JAMO = 6;
 const MAX_SUGGESTIONS = 24;
-/** 한 번에 모델에 넣는 대화기록 글자 수. */
-const BATCH_CHARS = 6000;
+const MAX_GENERIC_WORDS = 8;
+const GENERIC_SOURCE_CHECK_BUDGET = 96;
+const GENERIC_QUERY_BUDGET = 96;
+const WORD_CONCURRENCY = 2;
+
+const STOP = new Set([
+  "그리고",
+  "그러나",
+  "그래서",
+  "하지만",
+  "때문에",
+  "위해서",
+  "대해서",
+  "관련해서",
+  "있습니다",
+  "했습니다",
+  "합니다",
+  "됩니다",
+  "드립니다",
+  "말씀",
+  "생각",
+  "경우",
+  "내용",
+  "부분",
+  "정도",
+  "우리",
+  "저희",
+  "여러분",
+  "지금",
+  "오늘",
+  "이번",
+  "다음",
+  "먼저",
+  "또한",
+  "특히",
+  "모두",
+  "많이",
+  "조금",
+]);
+
+const PARTICLES = [
+  "으로써",
+  "에서는",
+  "에게서",
+  "으로는",
+  "이라는",
+  "라는",
+  "에서",
+  "에게",
+  "으로",
+  "부터",
+  "까지",
+  "보다",
+  "처럼",
+  "마다",
+  "이나",
+  "이란",
+  "라고",
+  "은",
+  "는",
+  "이",
+  "가",
+  "을",
+  "를",
+  "에",
+  "의",
+  "와",
+  "과",
+  "도",
+  "만",
+  "로",
+] as const;
+
+const INFLECTED_OR_FUNCTIONAL_ENDING =
+  /(습니다|습니까|합니다|했습니다|됩니다|됐습니다|드립니다|한다|된다|했다|됐다|하다|되다|라고|고요|는데|은데|지만|으면|으며|면서|해서|하여|되고|하고)$/;
 
 export type TermSuggestion = {
-  /** 대화기록 줄 번호 (0부터). */
   lineIndex: number;
-  /** 줄 안의 잘못 받은 구간, 원문 그대로. */
   wrong: string;
-  /** 추천 낱말. */
   suggestion: string;
-  /** 왜 그렇게 보는지 한 구절. */
   reason: string;
-  /** 발음 유사도 0~1. */
   similarity: number;
+  source: "glossary" | "ourmalsam";
 };
 
 export type TermSuggestResult = {
   suggestions: TermSuggestion[];
   usage: {
-    model: typeof STRUCTURE_MODEL;
-    inputTokens: number;
-    outputTokens: number;
-    estimatedUsd: number;
+    model: "ourmalsam";
+    inputTokens: 0;
+    outputTokens: 0;
+    estimatedUsd: 0;
+    apiCalls: number;
+    cacheHits: number;
+    failures: number;
   };
 };
 
-const SYSTEM = `너는 한국어 회의 STT의 오인식을 찾아내는 검수 모델이다.
-대화기록을 고치지 않는다. 잘못 받아썼을 가능성이 큰 낱말만 골라 추천 낱말을 제시한다.
-
-반드시 JSON만 출력:
-{ "items": [ { "line": 3, "wrong": "803 국립공원", "suggestion": "팔공산국립공원", "reason": "소리가 같은 국립공원 이름" } ] }
-
-규칙:
-- 소리는 맞는데 글자가 틀린 것만 고른다. 고유명사, 기관명, 지명, 법령명, 사람 직함이 주 대상이다.
-- wrong은 그 줄에 있는 글자 그대로 옮긴다. 한 글자도 바꾸지 않는다.
-- suggestion은 wrong과 소리가 거의 같아야 한다. 뜻만 비슷한 다른 말은 금지.
-- 문장을 다듬거나 말투를 고치는 제안 금지. 맞춤법, 띄어쓰기만의 차이도 금지.
-- 같은 낱말이 여러 줄에서 틀렸으면 줄마다 각각 넣는다.
-- 확신이 없으면 넣지 않는다. 빈 배열이어도 된다.
-- 한 회의에서 최대 12개.
-
-예: "803 국립공원" → "팔공산국립공원", "센테 탐방로" → "생태탐방로", "차간" → "차관".`;
-
-type RawItem = {
-  line?: number;
-  wrong?: string;
-  suggestion?: string;
-  reason?: string;
+type WordOccurrence = {
+  lineIndex: number;
+  text: string;
 };
 
-/**
- * 이미 맞다고 확인된 말은 고치라고 하지 않는다.
- * 화자 실명처럼 다른 근거로 확정한 낱말을 발음만 보고 흔들면 오히려 틀린다.
- */
-function isProtected(wrong: string, keep: string[]): boolean {
-  const w = wrong.replace(/\s/g, "");
-  return keep.some((term) => {
-    const t = term.replace(/\s/g, "");
-    return t.length >= 2 && (w.includes(t) || t.includes(w));
+function clean(value: string): string {
+  return value.replace(/[^0-9A-Za-z가-힣]/g, "");
+}
+
+function bare(value: string): string {
+  return clean(value).replace(/\s/g, "");
+}
+
+function isProtected(value: string, keepTerms: string[]): boolean {
+  const word = bare(value);
+  return keepTerms.some((term) => {
+    const protectedWord = bare(term);
+    return (
+      protectedWord.length >= 2 &&
+      (word.includes(protectedWord) || protectedWord.includes(word))
+    );
   });
 }
 
-function validate(
-  item: RawItem,
-  lines: string[],
-  offset: number,
-  keep: string[],
-): TermSuggestion | null {
-  const lineIndex = Number(item.line);
-  const wrong = String(item.wrong ?? "").trim();
-  const suggestion = String(item.suggestion ?? "").trim();
-  if (!Number.isInteger(lineIndex) || !wrong || !suggestion) return null;
+function addSourceParticle(source: string, candidate: string): string {
+  for (const particle of PARTICLES) {
+    if (
+      source.length > particle.length + 1 &&
+      source.endsWith(particle) &&
+      !candidate.endsWith(particle)
+    ) {
+      return `${candidate}${particle}`;
+    }
+  }
+  return candidate;
+}
 
-  const absolute = lineIndex + offset;
-  const text = lines[absolute];
-  if (!text || !text.includes(wrong)) return null;
-  if (wrong === suggestion) return null;
-  if (isProtected(wrong, keep)) return null;
-  // 띄어쓰기만 다른 것은 오인식이 아니다. 추천으로 띄우면 잔소리가 된다.
-  if (wrong.replace(/\s/g, "") === suggestion.replace(/\s/g, "")) return null;
-  // 문장 통째 교체 방지
-  if (wrong.length > 40 || suggestion.length > 40) return null;
-  if (suggestion.length > wrong.length * 2 + 4) return null;
+function bestGlossaryCandidate(
+  source: string,
+  glossary: string[],
+): { word: string; similarity: number } | null {
+  const matches: Array<{ word: string; similarity: number }> = [];
+  for (const rawTerm of glossary) {
+    const term = clean(rawTerm);
+    if (term.length < 2) continue;
+    const candidate = addSourceParticle(source, term);
+    if (bare(source) === bare(candidate)) continue;
+    if (bare(source).includes(bare(candidate)) || bare(candidate).includes(bare(source))) {
+      continue;
+    }
+    const similarity = pronunciationSimilarity(source, candidate);
+    if (similarity >= MIN_GLOSSARY_SIMILARITY) {
+      matches.push({ word: candidate, similarity });
+    }
+  }
+  matches.sort((a, b) => b.similarity - a.similarity);
+  const best = matches[0];
+  const second = matches[1];
+  if (!best) return null;
+  if (second && best.similarity - second.similarity < MIN_GLOSSARY_MARGIN) {
+    return null;
+  }
+  return best;
+}
 
-  const similarity = pronunciationSimilarity(wrong, suggestion);
-  if (similarity < MIN_SIMILARITY) return null;
+async function glossarySuggestion(
+  occurrence: WordOccurrence,
+  glossary: string[],
+  keepTerms: string[],
+  cacheOnly: boolean,
+): Promise<TermSuggestion | null> {
+  if (isProtected(occurrence.text, keepTerms)) return null;
+  const candidate = bestGlossaryCandidate(occurrence.text, glossary);
+  if (!candidate) return null;
+
+  const sourceExists = await sourceInKoreanDictionary(occurrence.text, {
+    cacheOnly,
+  });
+  if (sourceExists !== false) return null;
 
   return {
-    lineIndex: absolute,
-    wrong,
-    suggestion,
-    reason: String(item.reason ?? "").trim().slice(0, 60),
-    similarity,
+    lineIndex: occurrence.lineIndex,
+    wrong: occurrence.text,
+    suggestion: candidate.word,
+    reason: "회의 용어와 발음이 비슷함",
+    similarity: candidate.similarity,
+    source: "glossary",
   };
 }
 
-const bare = (s: string) => s.replace(/\s/g, "");
+async function dictionarySuggestion(
+  occurrence: WordOccurrence,
+  keepTerms: string[],
+  cacheOnly: boolean,
+  sourceMissing = false,
+): Promise<TermSuggestion | null> {
+  const word = clean(occurrence.text);
+  if (!isGenericCandidate(word, keepTerms)) return null;
 
-/**
- * 서로 반대로 고치라는 추천을 걷어낸다.
- *
- * 전사가 한 이름을 두 가지로 적으면(임의자, 임미자) 모델은 갈린 것은 알아채지만
- * 어느 쪽이 옳은지는 못 고른다. 그래서 A를 B로, B를 A로 바꾸라고 같이 낸다.
- * 그대로 보이면 맞는 표기를 틀린 쪽으로 고치라고 권하는 꼴이다.
- * 본문에 많이 나온 쪽으로 몰아주고, 수가 같아 못 고르면 둘 다 뺀다.
- */
-/**
- * 실제로 바뀌는 낱말만 꺼낸다.
- *
- * 추천 구간은 "임의자 의원입니다."처럼 주변 말을 달고 온다. 구간을 통째로
- * 비교하면 같은 이름을 두고 다투는 것을 알아채지 못한다.
- */
-function changedWord(
-  wrong: string,
-  suggestion: string,
-): { from: string; to: string } | null {
-  const a = wrong.split(/\s+/).filter(Boolean);
-  const b = suggestion.split(/\s+/).filter(Boolean);
-  if (a.length !== b.length) return null;
-  const diff = a.map((w, i) => (w === b[i] ? -1 : i)).filter((i) => i >= 0);
-  if (diff.length !== 1) return null;
-  const i = diff[0]!;
-  return { from: a[i]!, to: b[i]! };
+  if (!sourceMissing) {
+    const sourceExists = await sourceInKoreanDictionary(word, { cacheOnly });
+    if (sourceExists !== false) return null;
+  }
+
+  const candidates = await findDictionaryPronunciationCandidates(word, {
+    limit: 3,
+    queryBudget: GENERIC_QUERY_BUDGET,
+    cacheOnly,
+  });
+  const best = candidates[0];
+  if (!best || best.similarity < MIN_DICTIONARY_SIMILARITY) return null;
+  const second = candidates[1];
+  if (
+    second &&
+    best.similarity - second.similarity < MIN_DICTIONARY_MARGIN
+  ) {
+    return null;
+  }
+
+  return {
+    lineIndex: occurrence.lineIndex,
+    wrong: occurrence.text,
+    suggestion: best.word,
+    reason: "발음이 가까운 우리말샘 등록어",
+    similarity: best.similarity,
+    source: "ourmalsam",
+  };
 }
 
-function dropContradictions(
-  items: TermSuggestion[],
-  lines: string[],
-): TermSuggestion[] {
-  const cores = items.map((s) => changedWord(s.wrong, s.suggestion));
-  const asked = new Set(
-    cores.filter(Boolean).map((c) => `${bare(c!.from)}>${bare(c!.to)}`),
+function isGenericCandidate(word: string, keepTerms: string[]): boolean {
+  return !(
+    word.length < 3 ||
+    word.length > 12 ||
+    STOP.has(word) ||
+    INFLECTED_OR_FUNCTIONAL_ENDING.test(word) ||
+    !/^[가-힣]+$/.test(word) ||
+    toJamo(word).length < MIN_JAMO ||
+    isProtected(word, keepTerms)
   );
+}
 
-  const body = bare(lines.join(" "));
-  const countOf = (term: string) =>
-    term ? body.split(bare(term)).length - 1 : 0;
+function wordOccurrences(lines: string[]): WordOccurrence[] {
+  const out: WordOccurrence[] = [];
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    const line = lines[lineIndex] ?? "";
+    for (const match of line.matchAll(/[0-9A-Za-z가-힣]+/g)) {
+      const text = match[0];
+      if (text) out.push({ lineIndex, text });
+    }
+  }
+  return out;
+}
 
-  return items.filter((s, i) => {
-    const core = cores[i];
-    if (!core) return true;
-    const reversed = `${bare(core.to)}>${bare(core.from)}`;
-    if (!asked.has(reversed)) return true;
-    // 서로 반대로 고치라고 한다. 본문에 더 많이 쓰인 표기로만 몰아준다.
-    return countOf(core.to) > countOf(core.from);
-  });
+function uniqueGenericWords(occurrences: WordOccurrence[]): WordOccurrence[] {
+  const counts = new Map<string, number>();
+  const first = new Map<string, WordOccurrence>();
+  for (const occurrence of occurrences) {
+    const key = clean(occurrence.text);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (!first.has(key)) first.set(key, occurrence);
+  }
+  return [...first.entries()]
+    .sort((a, b) => {
+      const countGap = (counts.get(a[0]) ?? 0) - (counts.get(b[0]) ?? 0);
+      if (countGap !== 0) return countGap;
+      return b[0].length - a[0].length;
+    })
+    .map(([, occurrence]) => occurrence);
+}
+
+async function mapLimited<T, R>(
+  values: T[],
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(values.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(WORD_CONCURRENCY, values.length) },
+    async () => {
+      while (next < values.length) {
+        const index = next;
+        next += 1;
+        out[index] = await mapper(values[index]!);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return out;
 }
 
 /** 추천을 대화기록 줄에 붙인다. 본문은 그대로 둔다. */
@@ -169,10 +313,16 @@ export function attachCorrections(
 ): TranscriptLine[] {
   if (suggestions.length === 0) return lines;
   const byLine = new Map<number, TranscriptCorrection[]>();
-  for (const s of suggestions) {
-    const list = byLine.get(s.lineIndex) ?? [];
-    list.push({ wrong: s.wrong, suggestion: s.suggestion, reason: s.reason });
-    byLine.set(s.lineIndex, list);
+  for (const suggestion of suggestions) {
+    const list = byLine.get(suggestion.lineIndex) ?? [];
+    list.push({
+      wrong: suggestion.wrong,
+      suggestion: suggestion.suggestion,
+      reason: suggestion.reason,
+      similarity: suggestion.similarity,
+      source: suggestion.source,
+    });
+    byLine.set(suggestion.lineIndex, list);
   }
   return lines.map((line, index) => {
     const corrections = byLine.get(index);
@@ -180,101 +330,99 @@ export function attachCorrections(
   });
 }
 
-/** 대화기록에서 오인식 후보를 찾는다. 원문은 건드리지 않는다. */
+/**
+ * 전사에서 오인식 후보를 찾는다. 정답 전사나 생성형 후보는 받지 않는다.
+ * API 오류, 일일 한도, 사전 판정 불명은 모두 추천하지 않는 쪽으로 처리한다.
+ */
 export async function suggestTermCorrections(
   lines: string[],
-  options: { glossary?: string[]; keepTerms?: string[] } = {},
+  options: {
+    glossary?: string[];
+    keepTerms?: string[];
+    cacheOnly?: boolean;
+    genericDictionary?: boolean;
+  } = {},
 ): Promise<TermSuggestResult> {
-  const usable = lines.map((l) => l ?? "");
-  const empty: TermSuggestResult = {
-    suggestions: [],
+  const before = getKoreanDictionaryStats();
+  const usable = lines.map((line) => line ?? "");
+  const glossary = [...new Set((options.glossary ?? []).map(clean).filter(Boolean))];
+  const keepTerms = [
+    ...new Set((options.keepTerms ?? []).map(clean).filter(Boolean)),
+  ];
+  const occurrences = wordOccurrences(usable);
+  const suggestions: TermSuggestion[] = [];
+
+  if (glossary.length > 0) {
+    const glossaryResults = await mapLimited(occurrences, (occurrence) =>
+      glossarySuggestion(
+        occurrence,
+        glossary,
+        keepTerms,
+        options.cacheOnly === true,
+      ),
+    );
+    suggestions.push(
+      ...glossaryResults.filter(
+        (value): value is TermSuggestion => value !== null,
+      ),
+    );
+  }
+
+  if (options.genericDictionary !== false) {
+    const sourcePool = uniqueGenericWords(occurrences)
+      .filter((occurrence) =>
+        isGenericCandidate(clean(occurrence.text), keepTerms),
+      )
+      .slice(0, GENERIC_SOURCE_CHECK_BUDGET);
+    const sourceChecks = await mapLimited(sourcePool, async (occurrence) => ({
+      occurrence,
+      exists: await sourceInKoreanDictionary(clean(occurrence.text), {
+        cacheOnly: options.cacheOnly === true,
+      }),
+    }));
+    const missingWords = sourceChecks
+      .filter((row) => row.exists === false)
+      .map((row) => row.occurrence)
+      .slice(0, MAX_GENERIC_WORDS);
+    const genericResults = await mapLimited(
+      missingWords,
+      (occurrence) =>
+        dictionarySuggestion(
+          occurrence,
+          keepTerms,
+          options.cacheOnly === true,
+          true,
+        ),
+    );
+    suggestions.push(
+      ...genericResults.filter(
+        (value): value is TermSuggestion => value !== null,
+      ),
+    );
+  }
+
+  const seen = new Set<string>();
+  const unique = suggestions
+    .sort((a, b) => b.similarity - a.similarity)
+    .filter((suggestion) => {
+      const key = `${suggestion.lineIndex}:${suggestion.wrong}:${suggestion.suggestion}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, MAX_SUGGESTIONS);
+
+  const after = getKoreanDictionaryStats();
+  return {
+    suggestions: unique,
     usage: {
-      model: STRUCTURE_MODEL,
+      model: "ourmalsam",
       inputTokens: 0,
       outputTokens: 0,
       estimatedUsd: 0,
-    },
-  };
-  if (usable.every((l) => !l.trim())) return empty;
-
-  const client = getOpenAIClient();
-  const glossary = (options.glossary ?? []).filter(Boolean);
-  const keepTerms = (options.keepTerms ?? [])
-    .flatMap((t) => t.split(/\s+/))
-    .map((t) => t.trim())
-    .filter((t) => t.length >= 2);
-  const suggestions: TermSuggestion[] = [];
-  let inputTokens = 0;
-  let outputTokens = 0;
-
-  let start = 0;
-  while (start < usable.length) {
-    let end = start;
-    let chars = 0;
-    while (end < usable.length && chars < BATCH_CHARS) {
-      chars += usable[end]!.length + 8;
-      end += 1;
-    }
-
-    const body = usable
-      .slice(start, end)
-      .map((text, i) => `${i}: ${text}`)
-      .join("\n");
-
-    const res = await client.chat.completions.create({
-      model: STRUCTURE_MODEL,
-      response_format: { type: "json_object" },
-      temperature: 0,
-      messages: [
-        { role: "system", content: SYSTEM },
-        {
-          role: "user",
-          content:
-            (glossary.length
-              ? `이 회의에서 쓰는 말: ${glossary.join(", ")}\n\n`
-              : "") +
-            (keepTerms.length
-              ? `이미 맞다고 확인한 말 (고치라고 하지 마라): ${keepTerms.join(", ")}\n\n`
-              : "") +
-            `대화기록:\n${body}`,
-        },
-      ],
-    });
-
-    inputTokens += res.usage?.prompt_tokens ?? 0;
-    outputTokens += res.usage?.completion_tokens ?? 0;
-
-    let parsed: { items?: RawItem[] } = {};
-    try {
-      parsed = JSON.parse(res.choices[0]?.message?.content || "{}");
-    } catch {
-      parsed = {};
-    }
-
-    for (const item of parsed.items ?? []) {
-      const ok = validate(item, usable, start, keepTerms);
-      if (ok) suggestions.push(ok);
-    }
-
-    start = end;
-  }
-
-  // 같은 낱말 반복 추천은 처음 것만 남긴다.
-  const seen = new Set<string>();
-  const unique = suggestions.filter((s) => {
-    const key = `${s.lineIndex}:${s.wrong}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  return {
-    suggestions: dropContradictions(unique, lines).slice(0, MAX_SUGGESTIONS),
-    usage: {
-      model: STRUCTURE_MODEL,
-      inputTokens,
-      outputTokens,
-      estimatedUsd: estimateStructureUsd(inputTokens, outputTokens),
+      apiCalls: after.apiCalls - before.apiCalls,
+      cacheHits: after.cacheHits - before.cacheHits,
+      failures: after.failures - before.failures,
     },
   };
 }

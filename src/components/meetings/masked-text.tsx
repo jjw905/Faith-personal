@@ -101,7 +101,7 @@ export function MaskedText({
             }}
             title={open ? "다시 가리기" : "클릭하여 원문 보기"}
             className={cn(
-              "mx-0.5 inline-block rounded-md px-1.5 font-mono text-[0.85em] font-semibold transition-colors",
+              "mx-0.5 inline-flex min-h-12 items-center rounded-md px-1.5 font-mono text-base font-semibold transition-colors md:inline-block md:min-h-0 md:text-[0.85em]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               open
                 ? onPrimary

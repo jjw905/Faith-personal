@@ -1,4 +1,5 @@
 import { buildSemanticStructure } from "@/lib/stt/semantic-structure";
+import { buildGlossary } from "@/lib/stt/glossary";
 import { buildMeetingFromStt } from "@/lib/stt/to-meeting";
 import { realtimeTranscribeFile } from "@/lib/stt/realtime/transcribe-session";
 import type {
@@ -216,9 +217,14 @@ export async function processRealtimeMeeting(params: {
   // 오인식 보정 추천. 표시만 하고 본문은 그대로 둔다.
   let suggestUsd = 0;
   try {
+    const glossary = buildGlossary({
+      userId: params.userId,
+      title: params.title,
+      participantNames: confirmedNames,
+    });
     const suggested = await suggestTermCorrections(
       built.transcript.lines.map((line) => line.text ?? ""),
-      { keepTerms: confirmedNames },
+      { glossary, keepTerms: confirmedNames },
     );
     built.transcript.lines = attachCorrections(
       built.transcript.lines,

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -91,6 +93,7 @@ export async function POST(request: Request, context: RouteContext) {
       where: { id: meetingId },
       data: {
         recordingActive: true,
+        sttRunId: randomUUID(),
         sttStartedAt: now,
       },
     });

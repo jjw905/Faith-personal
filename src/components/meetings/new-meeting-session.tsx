@@ -30,14 +30,16 @@ import {
 } from "react";
 
 import { MaskedText } from "@/components/meetings/masked-text";
+import { CorrectionHint } from "@/components/meetings/correction-hint";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { useAppContext } from "@/context/app-context";
 import { useMeetingChrome } from "@/context/meeting-chrome-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
-import { useRecording } from "@/hooks/use-recording";
+import { useRealtimeTranscription } from "@/hooks/use-realtime-transcription";
 import { maskPii, type MaskStyle } from "@/lib/masking";
 import { cn } from "@/lib/utils";
+import type { TranscriptCorrection } from "@/types/transcript";
 
 type Side = "left" | "right";
 
@@ -53,6 +55,7 @@ type ChatMessage = {
     sizeLabel: string;
     isTest?: boolean;
   };
+  corrections?: TranscriptCorrection[];
 };
 
 type ScenarioBeat = {
@@ -288,6 +291,7 @@ export function ChatBubble({
   team,
   content,
   attachment,
+  corrections,
   maskStyle,
 }: {
   side: Side;
@@ -296,6 +300,7 @@ export function ChatBubble({
   team?: string;
   content: string;
   attachment?: ChatMessage["attachment"];
+  corrections?: TranscriptCorrection[];
   maskStyle: MaskStyle;
 }) {
   const isMe = side === "left";
@@ -370,6 +375,13 @@ export function ChatBubble({
             />
           </div>
         )}
+        {corrections?.length ? (
+          <CorrectionHint
+            corrections={corrections}
+            align={isMe ? "end" : "start"}
+            className="mt-2"
+          />
+        ) : null}
       </div>
       </div>
     </div>
@@ -543,7 +555,7 @@ function ToolAction({
         aria-label={ariaLabel}
         title={label}
         className={cn(
-          "relative inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all",
+          "relative inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all md:h-10 md:w-10",
           pressed
             ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
             : "bg-surface-2 text-foreground/70 ring-1 ring-border-strong hover:bg-[#e4e6eb] hover:text-foreground",
@@ -763,7 +775,7 @@ function ScenarioPanel({
             type="button"
             onClick={onClose}
             aria-label="타임라인 숨기기"
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            className="inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:h-8 md:w-8"
           >
             <X className="h-4 w-4" strokeWidth={1.75} />
           </button>
@@ -889,7 +901,7 @@ function MeetingMemoPanel({
           type="button"
           onClick={onClose}
           aria-label="메모 닫기"
-          className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground"
+          className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground md:h-8 md:w-8"
         >
           <X className="h-4 w-4" strokeWidth={1.75} />
         </button>
@@ -952,7 +964,16 @@ function MeetingMemoPanel({
 export function NewMeetingSession() {
   const { setFocusMode } = useMeetingChrome();
   const { autoOpenTimelineOnStart } = useAppContext();
-  const { isRecording, toggleRecording, resetRecording } = useRecording();
+  const {
+    isRecording,
+    partialText,
+    utterances: realtimeUtterances,
+    error: realtimeError,
+    meetingHref,
+    start: startRealtime,
+    stop: stopRealtime,
+    reset: resetRealtime,
+  } = useRealtimeTranscription();
   const {
     acceptedFormats,
     handleFileSelect,
@@ -999,6 +1020,22 @@ export function NewMeetingSession() {
 
   const canSend = draft.trim().length > 0;
   const elapsedLabel = formatElapsed(elapsedSec);
+  const visibleMessages = useMemo(
+    () => [
+      ...messages,
+      ...realtimeUtterances.map(
+        (utterance): ChatMessage => ({
+          id: `live-${utterance.itemId}`,
+          side: "left",
+          name: "나",
+          initial: "나",
+          content: utterance.text,
+          corrections: utterance.corrections,
+        }),
+      ),
+    ],
+    [messages, realtimeUtterances],
+  );
 
   useEffect(() => {
     setFocusMode(true);
@@ -1022,7 +1059,7 @@ export function NewMeetingSession() {
       el.scrollTop = el.scrollHeight;
     });
     return () => cancelAnimationFrame(frame);
-  }, [messages]);
+  }, [partialText, visibleMessages]);
 
   useEffect(() => {
     if (!inMeeting) return;
@@ -1215,16 +1252,18 @@ export function NewMeetingSession() {
     }
   }
 
-  function handleRecordToggle() {
+  async function handleRecordToggle() {
     if (isRecording) {
       setInMeeting(false);
+      await stopRealtime();
     } else {
       setInMeeting(true);
       if (autoOpenTimelineOnStart) {
         setTimelineOpen(true);
       }
+      const started = await startRealtime({ title: meetingTitle });
+      if (!started) setInMeeting(false);
     }
-    toggleRecording();
   }
 
   function requestReset() {
@@ -1232,14 +1271,15 @@ export function NewMeetingSession() {
     setResetConfirmOpen(true);
   }
 
-  function handleReset() {
+  async function handleReset() {
+    if (isRecording) await stopRealtime();
     clearStreamTimer();
     setStreaming(false);
     setInMeeting(false);
     setMemoOpen(false);
     setAttachMenuOpen(false);
     setResetConfirmOpen(false);
-    resetRecording();
+    resetRealtime();
     setMessages([]);
     setDraft("");
     setElapsedSec(0);
@@ -1270,16 +1310,23 @@ export function NewMeetingSession() {
             <div className="justify-self-start">
               <Link
                 href="/dashboard"
-                onClick={() => {
+                onClick={(event) => {
                   clearStreamTimer();
                   setStreaming(false);
                   setInMeeting(false);
                   setMemoOpen(false);
                   setAttachMenuOpen(false);
                   setTimelineOpen(false);
-                  resetRecording();
+                  if (isRecording) {
+                    event.preventDefault();
+                    void stopRealtime().finally(() => {
+                      window.location.assign("/dashboard");
+                    });
+                  } else {
+                    resetRealtime();
+                  }
                 }}
-                className="-ml-1 inline-flex items-center gap-1.5 px-1 py-1 text-sm font-bold text-foreground transition-opacity hover:opacity-70"
+                className="-ml-1 inline-flex min-h-12 items-center gap-1.5 px-1 text-base font-bold text-foreground transition-opacity hover:opacity-70 md:min-h-0 md:py-1 md:text-sm"
               >
                 <ArrowLeft className="h-4 w-4" strokeWidth={2.25} />
                 기록 종료
@@ -1310,7 +1357,7 @@ export function NewMeetingSession() {
                       setEditingTitle(false);
                     }
                   }}
-                  className="w-full max-w-[14rem] rounded-xl bg-surface-2 px-3 py-1.5 text-center text-lg font-bold tracking-tight text-foreground outline-none ring-2 ring-primary/25"
+                  className="min-h-12 w-full max-w-[14rem] rounded-xl bg-surface-2 px-3 py-1.5 text-center text-lg font-bold tracking-tight text-foreground outline-none ring-2 ring-primary/25 md:min-h-0"
                 />
               </>
             ) : (
@@ -1319,7 +1366,7 @@ export function NewMeetingSession() {
                 onClick={() => setEditingTitle(true)}
                 title="제목 수정"
                 aria-label={`기록 제목 수정, 현재 ${meetingTitle}`}
-                className="max-w-[14rem] cursor-pointer truncate rounded-xl px-2 py-1 text-center transition-colors hover:bg-surface-2"
+                className="min-h-12 max-w-[14rem] cursor-pointer truncate rounded-xl px-2 py-1 text-center transition-colors hover:bg-surface-2 md:min-h-0"
               >
                 <h1 className="truncate text-lg font-bold tracking-tight text-foreground">
                   {meetingTitle}
@@ -1334,7 +1381,7 @@ export function NewMeetingSession() {
                 aria-pressed={timelineOpen}
                 aria-label={timelineOpen ? "타임라인 숨기기" : "타임라인 보기"}
                 className={cn(
-                  "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full transition-all sm:h-10 sm:w-10",
+                  "inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full transition-all md:h-10 md:w-10",
                   timelineOpen
                     ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
                     : "bg-surface-2 text-foreground/70 ring-1 ring-border-strong hover:bg-[#e4e6eb] hover:text-foreground",
@@ -1360,7 +1407,7 @@ export function NewMeetingSession() {
             <div ref={listRef} className="absolute inset-0 overflow-y-auto">
               <div className="flex min-h-full flex-col gap-3.5 pb-1">
                 <div className="min-h-0 flex-1 shrink-0" aria-hidden />
-                {messages.map((msg) => (
+                {visibleMessages.map((msg) => (
                   <ChatBubble
                     key={msg.id}
                     side={msg.side}
@@ -1369,12 +1416,39 @@ export function NewMeetingSession() {
                     team={msg.team}
                     content={msg.content}
                     attachment={msg.attachment}
+                    corrections={msg.corrections}
                     maskStyle={maskStyle}
                   />
                 ))}
+                {partialText ? (
+                  <ChatBubble
+                    side="left"
+                    name="나"
+                    initial="나"
+                    content={partialText}
+                    maskStyle={maskStyle}
+                  />
+                ) : null}
               </div>
             </div>
           </div>
+
+          {realtimeError ? (
+            <p
+              role="alert"
+              className="mt-3 rounded-xl bg-warning-soft px-3 py-2 text-base text-foreground"
+            >
+              {realtimeError}
+            </p>
+          ) : null}
+          {meetingHref && !isRecording ? (
+            <Link
+              href={meetingHref}
+              className="mt-3 inline-flex min-h-12 items-center self-end rounded-xl px-3 text-base font-semibold text-primary hover:bg-primary-soft"
+            >
+              기록 보기
+            </Link>
+          ) : null}
 
           {/* 메시지 입력 섹션: 모바일은 2행(입력+녹음 / 도구), sm+는 입력·도구·녹음 1행 */}
           <div className="relative z-20 mt-3 flex shrink-0 flex-col gap-2 overflow-visible border-t border-border pb-4 pt-3 sm:flex-row sm:items-center sm:gap-2">
@@ -1397,14 +1471,14 @@ export function NewMeetingSession() {
                   }}
                   onKeyDown={onInputKeyDown}
                   placeholder="메시지 입력"
-                  className="max-h-10 min-h-10 w-full resize-none overflow-y-auto bg-transparent py-2 text-[15px] font-medium leading-5 text-foreground outline-none placeholder:text-foreground/55"
+                  className="max-h-12 min-h-12 w-full resize-none overflow-y-auto bg-transparent py-3 text-base font-medium leading-6 text-foreground outline-none placeholder:text-foreground/55 md:max-h-10 md:min-h-10 md:py-2 md:text-[15px] md:leading-5"
                 />
                 <button
                   type="submit"
                   disabled={!canSend}
                   aria-label="전송"
                   className={cn(
-                    "inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors",
+                    "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors md:h-10 md:w-10",
                     canSend
                       ? "bg-primary text-primary-foreground hover:bg-primary-hover"
                       : "cursor-not-allowed bg-foreground/10 text-foreground/40",
@@ -1471,7 +1545,7 @@ export function NewMeetingSession() {
               >
                 <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
               </ToolAction>
-              <div ref={attachMenuRef} className="relative flex w-10 flex-col items-center">
+              <div ref={attachMenuRef} className="relative flex w-12 flex-col items-center md:w-10">
                 <AttachMenuPopup
                   open={attachMenuOpen}
                   onAttach={() => {
@@ -1493,7 +1567,7 @@ export function NewMeetingSession() {
                   aria-label="파일 첨부"
                   title="파일 첨부"
                   className={cn(
-                    "relative inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all",
+                    "relative inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all md:h-10 md:w-10",
                     attachMenuOpen
                       ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
                       : "bg-surface-2 text-foreground/70 ring-1 ring-border-strong hover:bg-[#e4e6eb] hover:text-foreground",

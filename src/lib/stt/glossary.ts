@@ -81,8 +81,8 @@ function fromTitle(title: string): string[] {
 /**
  * 이 사용자의 지난 회의에서 쌓인 말.
  *
- * 참석자 이름과, 지난번에 보정 추천으로 올라온 올바른 표기를 쓴다.
- * 같은 사람들이 같은 주제로 다시 모이는 경우가 많아 재현율이 높다.
+ * 참석자 이름만 쓴다. 화면에 표시된 보정 추천은 사용자가 확인한 값이 아니므로
+ * 다음 회의 용어로 다시 넣지 않는다.
  */
 function fromPastMeetings(userId: string, limit: number): string[] {
   const rows = listUserMeetings(userId)
@@ -95,12 +95,6 @@ function fromPastMeetings(userId: string, limit: number): string[] {
     for (const p of row.meeting?.participants ?? []) {
       const name = clean(p.name ?? "");
       if (usable(name)) out.push(name);
-    }
-    for (const line of row.transcript?.lines ?? []) {
-      for (const c of line.corrections ?? []) {
-        const fixed = clean(c.suggestion ?? "");
-        if (usable(fixed)) out.push(fixed);
-      }
     }
   }
   return out;

@@ -20,7 +20,7 @@ const JONG = [
   "ㅆ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
 ];
 
-const DIGIT_SINO = ["영", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+const DIGIT_SINO = ["공", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
 
 const ALPHA_KO: Record<string, string> = {
   a: "에이", b: "비", c: "씨", d: "디", e: "이", f: "에프", g: "지",
@@ -29,7 +29,7 @@ const ALPHA_KO: Record<string, string> = {
   v: "브이", w: "더블유", x: "엑스", y: "와이", z: "제트",
 };
 
-/** 숫자, 영문을 한글 소리로. 803 → 팔공삼이 아니라 팔영삼이지만 공/영 모두 허용. */
+/** 숫자, 영문을 한글 소리로. 코드형 숫자는 한 자리씩 읽는다. */
 export function toSpokenKorean(text: string): string {
   let out = "";
   for (const ch of text.toLowerCase()) {
@@ -76,7 +76,38 @@ export function toJamo(text: string): string {
   return out;
 }
 
-function levenshtein(a: string, b: string): number {
+const SOUND_GROUPS = [
+  new Set(["ㄱ", "ㄲ", "ㅋ"]),
+  new Set(["ㄷ", "ㄸ", "ㅌ"]),
+  new Set(["ㅂ", "ㅃ", "ㅍ"]),
+  new Set(["ㅅ", "ㅆ", "ㅈ", "ㅉ", "ㅊ"]),
+  new Set(["ㄴ", "ㅇ"]),
+  new Set(["ㅏ", "ㅑ"]),
+  new Set(["ㅓ", "ㅕ"]),
+  new Set(["ㅗ", "ㅛ"]),
+  new Set(["ㅜ", "ㅠ"]),
+  new Set(["ㅡ", "ㅣ", "ㅢ"]),
+] as const;
+
+/**
+ * 한국어 STT에서 자주 생기는 가까운 소리는 한 글자 전체 오류보다 싸게 센다.
+ * 특히 초성 ㄴ 탈락은 뉴시스 → 유시스 같은 고유명사 오류를 잡는 데 필요하다.
+ */
+function substitutionCost(a: string, b: string): number {
+  if (a === b) return 0;
+  if (
+    (a === "ㄴ" && b === "ㅇ") ||
+    (a === "ㅇ" && b === "ㄴ")
+  ) {
+    return 0.35;
+  }
+  if (SOUND_GROUPS.some((group) => group.has(a) && group.has(b))) {
+    return 0.55;
+  }
+  return 1;
+}
+
+function weightedLevenshtein(a: string, b: string): number {
   if (a === b) return 0;
   if (!a.length) return b.length;
   if (!b.length) return a.length;
@@ -87,7 +118,7 @@ function levenshtein(a: string, b: string): number {
       cur[j] = Math.min(
         prev[j]! + 1,
         cur[j - 1]! + 1,
-        prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
+        prev[j - 1]! + substitutionCost(a[i - 1]!, b[j - 1]!),
       );
     }
     prev = cur;
@@ -100,6 +131,6 @@ export function pronunciationSimilarity(a: string, b: string): number {
   const ja = toJamo(a);
   const jb = toJamo(b);
   if (!ja || !jb) return 0;
-  const distance = levenshtein(ja, jb);
+  const distance = weightedLevenshtein(ja, jb);
   return 1 - distance / Math.max(ja.length, jb.length);
 }

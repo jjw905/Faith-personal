@@ -356,7 +356,7 @@ async function callSummaryMerge(params: {
  * 구간 대화기록이 원문 글자 수의 이 비율에 못 미치면 내용이 빠진 것으로 본다.
  * 모델이 말줄임이나 요약을 하면 여기서 걸린다.
  */
-const DIALOGUE_MIN_COVERAGE = 0.75;
+const DIALOGUE_MIN_COVERAGE = 0.9;
 
 function denseChars(text: string): number {
   return text.replace(/\s+/g, "").length;

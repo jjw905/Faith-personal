@@ -318,7 +318,7 @@ export async function processUploadedMeeting(params: {
     try {
       const suggested = await suggestTermCorrections(
         built.transcript.lines.map((line) => line.text ?? ""),
-        { keepTerms: confirmedNames },
+        { glossary, keepTerms: confirmedNames },
       );
       built.transcript.lines = attachCorrections(
         built.transcript.lines,
