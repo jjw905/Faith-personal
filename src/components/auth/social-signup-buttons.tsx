@@ -4,6 +4,10 @@ import { signIn } from "next-auth/react";
 import { useState, useTransition } from "react";
 
 import {
+  AUTH_ALERT_ERROR,
+  AuthSectionHeader,
+} from "@/components/auth/auth-shell";
+import {
   GoogleIcon,
   NaverIcon,
   XIcon,
@@ -37,10 +41,16 @@ export function SocialSignupButtons({
   title = "간편 소셜 회원가입",
   dense = false,
   showPrivacyNote = true,
+  /** 카드 안에 다른 진한 제목 선이 있으면 끈다. */
+  showTitleRule = true,
+  /** 페이지에 이미 h1이 있으면 카드 안 제목 생략 (중복 크롬↓). */
+  showHeading = true,
 }: {
   title?: string;
   dense?: boolean;
   showPrivacyNote?: boolean;
+  showTitleRule?: boolean;
+  showHeading?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -56,14 +66,12 @@ export function SocialSignupButtons({
             return;
           }
           if (id === "twitter") {
-            setError(
-              "X 로그인에 실패했습니다. Developer Portal의 OAuth 2.0 Client ID/Secret과 콜백 URL을 확인해 주세요.",
-            );
+            setError("X 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.");
             return;
           }
           if (id === "google") {
             setError(
-              "Google 로그인에 실패했습니다. 리디렉션 URI와 테스트 사용자를 확인해 주세요.",
+              "Google 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.",
             );
             return;
           }
@@ -74,26 +82,29 @@ export function SocialSignupButtons({
           );
         })
         .catch(() => {
-          setError(
-            id === "twitter"
-              ? "X 로그인 설정에 문제가 있습니다. OAuth 2.0 키를 확인해 주세요."
-              : "소셜 로그인 설정에 문제가 있습니다. 잠시 후 다시 시도해 주세요.",
-          );
+          setError("소셜 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         });
     });
   }
 
   return (
     <div>
-      <p className="text-left text-xl font-bold tracking-tight text-foreground">
-        {title}
-      </p>
-      <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+      {showHeading ? (
+        showTitleRule ? (
+          <AuthSectionHeader title={title} />
+        ) : (
+          <p className="text-left text-xl font-bold tracking-tight text-foreground">
+            {title}
+          </p>
+        )
+      ) : null}
       <div
         className={
-          dense
-            ? "mt-4 flex w-full flex-col gap-3"
-            : "mt-5 flex w-full flex-col gap-3"
+          !showHeading
+            ? "flex w-full flex-col gap-3"
+            : dense || !showTitleRule
+              ? "mt-4 flex w-full flex-col gap-3"
+              : "mt-5 flex w-full flex-col gap-3"
         }
       >
         {PROVIDERS.map(({ id, label, className, Icon }) => (
@@ -113,9 +124,7 @@ export function SocialSignupButtons({
           </button>
         ))}
       </div>
-      {error ? (
-        <p className="mt-3 text-center text-base text-destructive">{error}</p>
-      ) : null}
+      {error ? <p className={`mt-3 ${AUTH_ALERT_ERROR}`}>{error}</p> : null}
       {showPrivacyNote && (
         <p className="mt-3 text-center text-base leading-relaxed text-muted">
           이름과 이메일만 제공받으며, 동의 없이 게시하지 않습니다.

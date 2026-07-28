@@ -7,7 +7,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata: Metadata = {
-  title: "로그인 · Faith",
+  title: "로그인, Faith",
   description: "Faith 계정으로 로그인하고 안전한 회의록 관리를 이어가세요.",
 };
 

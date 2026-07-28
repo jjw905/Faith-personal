@@ -144,48 +144,21 @@ body {
 /* 회의 처리 단계 문구 */
 @keyframes process-rise {
   from {
-    transform: translateY(120%);
     opacity: 0;
   }
   to {
-    transform: translateY(0);
     opacity: 1;
   }
-}
-
-/* 분석 중 원형 진행: 살짝 숨 쉬는 느낌 */
-@keyframes process-ring-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.03);
-    opacity: 0.92;
-  }
-}
-
-.process-progress-ring {
-  animation: process-ring-breathe 2.4s ease-in-out infinite;
-  transform-origin: center;
-  will-change: transform, opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {
   @keyframes process-rise {
     from {
-      transform: none;
       opacity: 1;
     }
     to {
-      transform: none;
       opacity: 1;
     }
-  }
-
-  .process-progress-ring {
-    animation: none;
   }
 }
 
@@ -218,22 +191,18 @@ body {
 @keyframes mask-chip-in {
   from {
     opacity: 0;
-    transform: translateY(4px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes vault-menu-in {
   from {
     opacity: 0;
-    transform: translateY(-4px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
@@ -245,11 +214,9 @@ body {
 @keyframes chat-more-drop {
   from {
     opacity: 0;
-    transform: translateY(-10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -261,11 +228,9 @@ body {
 @keyframes vault-select-actions-in {
   from {
     opacity: 0;
-    transform: translateX(8px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
   }
 }
 
@@ -281,11 +246,10 @@ body {
 @keyframes vault-search-pop-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 10px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, 0) scale(1);
+    transform: translate(-50%, 0);
   }
 }
 
@@ -298,11 +262,9 @@ body {
 @keyframes replay-panel-up {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
@@ -314,11 +276,9 @@ body {
 @keyframes replay-volume-rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -330,22 +290,18 @@ body {
 @keyframes replay-speaker-in {
   from {
     opacity: 0;
-    transform: translateY(110%);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 @keyframes replay-speaker-out {
   from {
     opacity: 1;
-    transform: translateY(0);
   }
   to {
     opacity: 0;
-    transform: translateY(-110%);
   }
 }
 
@@ -360,11 +316,9 @@ body {
 @keyframes chat-tool-slide {
   from {
     opacity: 0;
-    transform: translateX(14px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
   }
 }
 
@@ -393,22 +347,18 @@ body {
 @keyframes bubble-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 @keyframes fab-item-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -462,11 +412,9 @@ body {
   80%,
   100% {
     opacity: 0.35;
-    transform: translateY(0);
   }
   40% {
     opacity: 1;
-    transform: translateY(-2px);
   }
 }
 
@@ -515,6 +463,17 @@ body {
   .faith-loading-ring {
     animation: none;
     border-top-color: var(--muted);
+    opacity: 0.7;
+  }
+
+  .record-beat-bars > span {
+    animation: none;
+    opacity: 0.7;
+    transform: scaleY(0.65);
+  }
+
+  .running-dots > span {
+    animation: none;
     opacity: 0.7;
   }
 }
@@ -602,30 +561,15 @@ body {
 .hero-chat-glass {
   display: block;
   filter: drop-shadow(0 10px 18px rgba(17, 22, 46, 0.12));
-  animation:
-    hero-chat-glass-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both,
-    hero-chat-glass-float 5.4s ease-in-out 0.9s infinite;
-  will-change: transform, opacity;
+  animation: hero-chat-glass-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes hero-chat-glass-in {
   from {
     opacity: 0;
-    transform: translate3d(0.6rem, 0.35rem, 0) scale(0.88);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes hero-chat-glass-float {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(0.08rem, -0.28rem, 0);
   }
 }
 
@@ -633,6 +577,39 @@ body {
   .hero-chat-glass {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* Auth: fade-up entrance (stagger) — Linear / Notion / shadcn login patterns */
+@keyframes auth-enter-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0.5rem, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .auth-enter {
+    animation: auth-enter-rise 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .auth-enter-d1 {
+    animation-delay: 0.05s;
+  }
+  .auth-enter-d2 {
+    animation-delay: 0.1s;
+  }
+  .auth-enter-d3 {
+    animation-delay: 0.16s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-enter {
+    animation: none;
   }
 }
 

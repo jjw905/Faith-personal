@@ -1,12 +1,19 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { isEmailTaken } from "@/lib/auth-store";
+import { AUTH_PASSWORD_INVALID } from "@/lib/auth-messages";
 import {
   isValidEmail,
   isValidKoreanName,
   isValidPassword,
+  normalizeAuthEmail,
 } from "@/lib/auth-validation";
-import { consumeSignupProof } from "@/lib/otp";
+import {
+  consumeSignupProof,
+  hashSignupProof,
+  SIGNUP_PROOF_COOKIE,
+} from "@/lib/otp";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
@@ -14,8 +21,8 @@ import { sendWelcomeEmail } from "@/lib/resend-mail";
 
 export async function POST(request: Request) {
   try {
-  const limited = enforceAuthRateLimit(request, "signup", 5, 15 * 60_000);
-  if (limited) return limited;
+    const limited = enforceAuthRateLimit(request, "signup", 5, 15 * 60_000);
+    if (limited) return limited;
 
     let body: unknown;
     try {
@@ -33,7 +40,7 @@ export async function POST(request: Request) {
         : {};
 
     const email =
-      typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+      typeof data.email === "string" ? normalizeAuthEmail(data.email) : "";
     const password = typeof data.password === "string" ? data.password : "";
     const passwordConfirm =
       typeof data.passwordConfirm === "string" ? data.passwordConfirm : "";
@@ -53,6 +60,19 @@ export async function POST(request: Request) {
           ok: false,
           message: "이메일 인증이 필요합니다. 인증을 다시 진행해 주세요.",
           code: "proof_required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const jar = await cookies();
+    const bind = jar.get(SIGNUP_PROOF_COOKIE)?.value;
+    if (!bind || bind !== hashSignupProof(proof)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "이메일 인증이 만료되었습니다. 인증을 다시 진행해 주세요.",
+          code: "proof_expired",
         },
         { status: 400 },
       );
@@ -99,8 +119,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           ok: false,
-          message:
-            "비밀번호는 8~72자, 영문 대소문자와 특수문자를 각각 1자 이상 포함해야 합니다.",
+          message: AUTH_PASSWORD_INVALID,
         },
         { status: 400 },
       );
@@ -151,6 +170,16 @@ export async function POST(request: Request) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       console.error("[signup] create", msg.slice(0, 300));
+      if (/P2002|Unique constraint/i.test(msg)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message:
+              "가입을 완료할 수 없습니다. 로그인을 시도하거나 잠시 후 다시 시도해 주세요.",
+          },
+          { status: 409 },
+        );
+      }
       return NextResponse.json(
         {
           ok: false,
@@ -170,10 +199,18 @@ export async function POST(request: Request) {
       );
     });
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       message: "회원가입이 완료되었습니다. 바로 로그인할 수 있습니다.",
     });
+    res.cookies.set(SIGNUP_PROOF_COOKIE, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+    return res;
   } catch (err) {
     console.error(
       "[signup] unhandled",

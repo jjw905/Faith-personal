@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAppContext } from "@/context/app-context";
+import { AUTH_MAIL_CHECK } from "@/lib/auth-messages";
 import { cn } from "@/lib/utils";
 
 type Panel = "name" | "email" | "password" | null;
@@ -173,7 +174,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
         return;
       }
       setEmailStep("code");
-      setEmailMsg("인증번호를 발송했습니다.");
+      setEmailMsg(AUTH_MAIL_CHECK);
     } finally {
       setEmailPending(false);
     }
@@ -393,7 +394,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                     <div className="flex flex-wrap items-center gap-2">
                       <Input
                         type="password"
-                        placeholder="새 비밀번호"
+                        placeholder="비밀번호"
                         autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}

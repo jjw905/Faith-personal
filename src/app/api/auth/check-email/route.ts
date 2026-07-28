@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { withAuthTiming } from "@/lib/auth-timing";
-import { isValidEmail } from "@/lib/auth-validation";
+import { isValidEmail, normalizeAuthEmail } from "@/lib/auth-validation";
 import { enforceAuthDualRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       body !== null &&
       "email" in body &&
       typeof (body as { email: unknown }).email === "string"
-        ? (body as { email: string }).email.trim()
+        ? normalizeAuthEmail((body as { email: string }).email)
         : "";
 
     if (!email) {

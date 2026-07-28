@@ -5,7 +5,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { SignupEmailPageClient } from "@/components/auth/signup-email-page-client";
 
 export const metadata = {
-  title: "이메일 입력 · Faith",
+  title: "이메일 입력, Faith",
 };
 
 export default async function SignupEmailPage({

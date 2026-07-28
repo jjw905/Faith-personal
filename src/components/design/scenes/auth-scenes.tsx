@@ -1,44 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense } from "react";
 
+import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
+import { LoginForm } from "@/components/auth/login-form";
+import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 import { SignupEmailVerify } from "@/components/auth/signup-email-verify";
+import {
+  EmailSignupForm,
+  SignupSocialStep,
+} from "@/components/auth/signup-flow";
+import {
+  DesignViewportPicker,
+  DesignViewportStage,
+  useDesignViewport,
+} from "@/components/design/use-design-viewport";
 import {
   FIXTURE_SIGNUP_VERIFY_CODE,
   FIXTURE_SIGNUP_VERIFY_EMAIL,
 } from "@/lib/page-ux-fixtures";
-import { cn } from "@/lib/utils";
 
-const VIEWPORTS = [
-  { id: "mobile", label: "모바일", width: 390 },
-  { id: "tablet", label: "태블릿", width: 768 },
-  { id: "desktop", label: "데스크톱", width: 1024 },
-] as const;
-
-type ViewportId = (typeof VIEWPORTS)[number]["id"];
-
-/** AuthShell 시각만 복제 (html/body 배경 부작용 없음). */
-function AuthPreviewShell({
-  width,
-  children,
-}: {
-  width: number;
-  children: React.ReactNode;
-}) {
+/** AuthShell 시각만 복제 (html/body 배경 부작용 없음).
+ *  Faith 바는 스크롤 밖(불투명) — NN/g: 본문과 대비, 반투명 겹침 금지.
+ */
+function AuthPreviewShell({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="mx-auto flex min-h-full flex-col overflow-hidden rounded-xl bg-background ring-1 ring-border/60"
-      style={{ width: `min(100%, ${width}px)` }}
-    >
-      <header className="shrink-0 border-b border-border bg-background">
-        <div className="flex h-16 items-center px-4 sm:px-6">
+    <div className="flex h-full min-h-full flex-col overflow-hidden bg-background">
+      <header className="z-10 shrink-0 bg-background">
+        <div className="flex h-12 items-center px-4 sm:h-14 sm:px-6">
           <span className="text-xl font-bold tracking-tight text-foreground">
             Faith
           </span>
         </div>
       </header>
-      <main className="flex flex-1 justify-center px-4 sm:px-6">
-        <div className="flex w-full max-w-md flex-col justify-center pb-16 pt-4 sm:pb-24 sm:pt-6">
+      <main className="flex min-h-0 flex-1 justify-center overflow-y-auto overscroll-y-contain px-4 sm:px-6">
+        <div className="flex w-full max-w-md flex-col justify-start pb-16 pt-1 sm:pb-24 sm:pt-3">
           {children}
         </div>
       </main>
@@ -46,60 +42,81 @@ function AuthPreviewShell({
   );
 }
 
-function ViewportPicker({
-  value,
-  onChange,
-}: {
-  value: ViewportId;
-  onChange: (id: ViewportId) => void;
-}) {
-  return (
-    <div
-      className="flex flex-wrap items-center gap-2 px-4 py-3"
-      role="group"
-      aria-label="미리보기 너비"
-    >
-      <span className="text-base text-muted">창 크기</span>
-      <div className="flex flex-wrap gap-2">
-        {VIEWPORTS.map((v) => {
-          const active = v.id === value;
-          return (
-            <button
-              key={v.id}
-              type="button"
-              aria-pressed={active}
-              onClick={() => onChange(v.id)}
-              className={cn(
-                "inline-flex min-h-12 items-center rounded-xl px-4 text-base font-semibold transition-colors",
-                active
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted ring-1 ring-border hover:bg-surface hover:text-foreground",
-              )}
-            >
-              {v.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function AuthSceneFrame({ children }: { children: React.ReactNode }) {
-  const [viewport, setViewport] = useState<ViewportId>("mobile");
-  const width = VIEWPORTS.find((v) => v.id === viewport)?.width ?? 390;
+  const { viewport, setViewport, width } = useDesignViewport();
 
   return (
     <div className="flex h-full min-h-full flex-col bg-surface">
-      <ViewportPicker value={viewport} onChange={setViewport} />
-      <div className="min-h-0 flex-1 overflow-auto px-4 pb-6">
-        <AuthPreviewShell width={width}>{children}</AuthPreviewShell>
+      <DesignViewportPicker value={viewport} onChange={setViewport} />
+      <div className="min-h-0 min-w-0 flex-1 px-4 pb-6">
+        <div className="mx-auto h-full min-h-[28rem] w-full min-w-0 overflow-hidden rounded-xl ring-1 ring-border/60">
+          <DesignViewportStage width={width} className="h-full">
+            <AuthPreviewShell>{children}</AuthPreviewShell>
+          </DesignViewportStage>
+        </div>
       </div>
     </div>
   );
 }
 
-/** 디자인 랩: 이메일 인증 (이메일 입력). */
+function withSuspense(node: React.ReactNode) {
+  return (
+    <Suspense fallback={<p className="text-base text-muted">불러오는 중…</p>}>
+      {node}
+    </Suspense>
+  );
+}
+
+/* —— 로그인 —— */
+
+export function SceneLogin() {
+  return (
+    <AuthSceneFrame>
+      {withSuspense(
+        <LoginForm preview initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL} />,
+      )}
+    </AuthSceneFrame>
+  );
+}
+
+export function SceneLoginRegistered() {
+  return (
+    <AuthSceneFrame>
+      {withSuspense(
+        <LoginForm
+          preview
+          initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
+          initialInfo="회원가입이 완료되었습니다. 로그인해 주세요."
+        />,
+      )}
+    </AuthSceneFrame>
+  );
+}
+
+export function SceneLoginErrorCredentials() {
+  return (
+    <AuthSceneFrame>
+      {withSuspense(
+        <LoginForm
+          preview
+          initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
+          initialError="이메일 또는 비밀번호가 올바르지 않습니다."
+        />,
+      )}
+    </AuthSceneFrame>
+  );
+}
+
+/* —— 회원가입 —— */
+
+export function SceneSignupSocial() {
+  return (
+    <AuthSceneFrame>
+      <SignupSocialStep onEmailClick={() => undefined} />
+    </AuthSceneFrame>
+  );
+}
+
 export function SceneSignupEmailVerify() {
   return (
     <AuthSceneFrame>
@@ -113,7 +130,6 @@ export function SceneSignupEmailVerify() {
   );
 }
 
-/** 디자인 랩: 이메일 인증 확인 (인증번호 입력). */
 export function SceneSignupEmailVerifyCode() {
   return (
     <AuthSceneFrame>
@@ -121,30 +137,14 @@ export function SceneSignupEmailVerifyCode() {
         preview
         forcedStep="code"
         initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
-        initialMessage="해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요."
-        onBack={() => undefined}
-      />
-    </AuthSceneFrame>
-  );
-}
-
-/** 디자인 랩: 인증번호가 채워진 확인 단계. */
-export function SceneSignupEmailVerifyCodeFilled() {
-  return (
-    <AuthSceneFrame>
-      <SignupEmailVerify
-        preview
-        forcedStep="code"
-        initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
         initialCode={FIXTURE_SIGNUP_VERIFY_CODE}
-        initialMessage="해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요."
+        initialMessage="메일을 확인해 주세요."
         onBack={() => undefined}
       />
     </AuthSceneFrame>
   );
 }
 
-/** 디자인 랩: 이메일 인증 완료. */
 export function SceneSignupEmailVerifyConfirm() {
   return (
     <AuthSceneFrame>
@@ -155,6 +155,68 @@ export function SceneSignupEmailVerifyConfirm() {
         onBack={() => undefined}
         onVerified={() => undefined}
       />
+    </AuthSceneFrame>
+  );
+}
+
+export function SceneSignupAccount() {
+  return (
+    <AuthSceneFrame>
+      <EmailSignupForm
+        email={FIXTURE_SIGNUP_VERIFY_EMAIL}
+        proof="preview-proof"
+        preview
+        onBack={() => undefined}
+      />
+    </AuthSceneFrame>
+  );
+}
+
+/* —— 비밀번호 찾기 / 재설정 —— */
+
+export function SceneForgotPassword() {
+  return (
+    <AuthSceneFrame>
+      <ForgotPasswordForm
+        preview
+        initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
+      />
+    </AuthSceneFrame>
+  );
+}
+
+export function SceneForgotPasswordSent() {
+  return (
+    <AuthSceneFrame>
+      <ForgotPasswordForm
+        preview
+        forcedView="sent"
+        initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
+        mailEnabled
+        sentMessage="메일을 확인해 주세요."
+      />
+    </AuthSceneFrame>
+  );
+}
+
+export function SceneResetPassword() {
+  return (
+    <AuthSceneFrame>
+      {withSuspense(
+        <ResetPasswordForm
+          preview
+          linkOk
+          email={FIXTURE_SIGNUP_VERIFY_EMAIL}
+        />,
+      )}
+    </AuthSceneFrame>
+  );
+}
+
+export function SceneResetPasswordInvalid() {
+  return (
+    <AuthSceneFrame>
+      {withSuspense(<ResetPasswordForm preview linkOk={false} />)}
     </AuthSceneFrame>
   );
 }

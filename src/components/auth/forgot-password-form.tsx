@@ -1,30 +1,63 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
-import { AUTH_CARD } from "@/components/auth/auth-shell";
+import {
+  AUTH_ALERT_ERROR,
+  AUTH_CARD_OFFSET,
+  AUTH_FIELD_INPUT,
+  AUTH_LABEL,
+  AUTH_PRIMARY_BTN,
+  AuthCard,
+  AuthFlowHeading,
+  authEnter,
+  authEnterDelay,
+} from "@/components/auth/auth-shell";
+import { RecaptchaLegalNote } from "@/components/auth/recaptcha-legal-note";
+import { getRecaptchaToken } from "@/components/auth/recaptcha-v3";
 import { Input } from "@/components/ui/input";
-import { isValidEmail } from "@/lib/auth-validation";
+import {
+  AUTH_MAIL_UNAVAILABLE,
+  AUTH_RESET_CHECK,
+  AUTH_RESET_CHECK_HINT,
+} from "@/lib/auth-messages";
+import { isValidEmail, normalizeAuthEmail } from "@/lib/auth-validation";
+import { cn } from "@/lib/utils";
 
-const fieldInputClass =
-  "h-12 border-border bg-card focus-visible:ring-primary/30";
+export type ForgotPasswordFormProps = {
+  preview?: boolean;
+  initialEmail?: string;
+  initialError?: string;
+  forcePending?: boolean;
+  forcedView?: "form" | "sent";
+  mailEnabled?: boolean;
+  sentMessage?: string;
+};
 
-export function ForgotPasswordForm() {
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
+export function ForgotPasswordForm({
+  preview = false,
+  initialEmail = "",
+  initialError = "",
+  forcePending = false,
+  forcedView,
+  mailEnabled: mailEnabledProp = true,
+  sentMessage = AUTH_RESET_CHECK,
+}: ForgotPasswordFormProps = {}) {
+  const [email, setEmail] = useState(initialEmail);
+  const [error, setError] = useState(initialError);
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<null | {
-    mailEnabled: boolean;
-    message: string;
-  }>(null);
+  const [sent, setSent] = useState(forcedView === "sent");
+  const [mailEnabled, setMailEnabled] = useState(mailEnabledProp);
+  const [message, setMessage] = useState(sentMessage);
+  const busy = forcePending || submitting;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (preview) return;
     setError("");
 
-    const trimmed = email.trim().toLowerCase();
+    const trimmed = normalizeAuthEmail(email);
     if (!trimmed) {
       setError("이메일을 입력해 주세요.");
       return;
@@ -36,142 +69,121 @@ export function ForgotPasswordForm() {
 
     setSubmitting(true);
     try {
+      let captchaToken: string | null = null;
+      try {
+        captchaToken = await getRecaptchaToken("forgot_password");
+      } catch {
+        setError("보안 확인에 실패했습니다. 다시 시도해 주세요.");
+        return;
+      }
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({
+          email: trimmed,
+          captchaToken: captchaToken ?? "",
+        }),
       });
       const data = (await res.json()) as {
         ok?: boolean;
         message?: string;
         mailEnabled?: boolean;
+        code?: string;
       };
-      if (res.status === 429) {
-        setError(data.message ?? "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.");
+      if (res.status === 429 || data.code === "rate_limited") {
+        setError(
+          data.message ?? "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+        );
         return;
       }
       if (!res.ok || !data.ok) {
         setError(data.message ?? "요청에 실패했습니다.");
         return;
       }
-      setResult({
-        mailEnabled: data.mailEnabled !== false,
-        message: data.message ?? "가입된 이메일이면 재설정 안내를 보냈습니다.",
-      });
+      setMailEnabled(data.mailEnabled !== false);
+      setMessage(data.message ?? AUTH_RESET_CHECK);
+      setSent(true);
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (result) {
+  if (sent || forcedView === "sent") {
     return (
       <div className="w-full">
-        <Link
-          href="/login"
-          className="mb-4 inline-flex min-h-12 items-center gap-1.5 text-base font-medium text-muted transition-colors hover:text-foreground"
+        <AuthFlowHeading
+          title={mailEnabled ? "메일을 확인하세요" : "지금은 보낼 수 없습니다"}
+          subtitle={message}
+          backHref="/login"
+          className={authEnter}
+        />
+        <AuthCard
+          className={cn(AUTH_CARD_OFFSET, authEnter, authEnterDelay(2))}
         >
-          <ArrowLeft className="h-5 w-5" strokeWidth={2} />
-          로그인으로
-        </Link>
-
-        <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            {result.mailEnabled ? "메일을 확인하세요" : "재설정 불가"}
-          </h1>
-          <p className="mt-2 text-base text-muted">{result.message}</p>
-        </div>
-
-        <div className={`mt-5 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            안내
-          </h2>
-          <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
-
-          {result.mailEnabled ? (
-            <p className="mt-5 text-center text-base leading-relaxed text-foreground">
-              <span className="font-semibold">{email.trim()}</span>
-              <br />
-              <span className="text-muted">
-                메일이 오지 않으면 스팸함을 확인하거나, 잠시 후 다시 시도해
-                주세요.
+          {mailEnabled ? (
+            <p className="text-center text-base leading-relaxed text-muted">
+              <span className="font-semibold text-foreground">
+                {normalizeAuthEmail(email) || initialEmail}
               </span>
+              <br />
+              {AUTH_RESET_CHECK_HINT}
             </p>
           ) : (
-            <p className="mt-5 text-center text-base leading-relaxed text-muted">
-              메일 서비스 연결 후 비밀번호 찾기를 이용할 수 있습니다.
+            <p className="text-center text-base leading-relaxed text-muted">
+              {AUTH_MAIL_UNAVAILABLE}
             </p>
           )}
-
-          <Link
-            href="/login"
-            className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
-          >
-            로그인으로 돌아가기
+          <Link href="/login" className={cn("mt-5", AUTH_PRIMARY_BTN)}>
+            로그인으로
           </Link>
-        </div>
+        </AuthCard>
       </div>
     );
   }
 
   return (
     <div className="w-full">
-      <Link
-        href="/login"
-        className="mb-4 inline-flex min-h-12 items-center gap-1.5 text-base font-medium text-muted transition-colors hover:text-foreground"
+      <AuthFlowHeading
+        title="비밀번호 찾기"
+        subtitle="이메일로 재설정 링크를 보냅니다."
+        backHref="/login"
+        className={authEnter}
+      />
+
+      <AuthCard
+        as="form"
+        className={cn(
+          AUTH_CARD_OFFSET,
+          "space-y-5",
+          authEnter,
+          authEnterDelay(2),
+        )}
+        onSubmit={handleSubmit}
       >
-        <ArrowLeft className="h-5 w-5" strokeWidth={2} />
-        로그인으로
-      </Link>
-
-      <div className="text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          비밀번호 찾기
-        </h1>
-        <p className="mt-2 text-base text-muted">
-          가입한 이메일로 재설정 안내를 보냅니다.
-        </p>
-      </div>
-
-      <div className={`mt-4 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
-        <h2 className="text-xl font-bold tracking-tight text-foreground">
-          이메일 확인
-        </h2>
-        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
-
-        <form className="mt-5 space-y-5" onSubmit={handleSubmit}>
-          {error ? (
-            <p className="rounded-xl bg-masked-soft px-3 py-2 text-base text-masked">
-              {error}
-            </p>
-          ) : null}
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1.5 block text-base font-semibold text-foreground"
-            >
-              이메일
-            </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="name@example.com"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={fieldInputClass}
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
-          >
-            {submitting ? "보내는 중…" : "재설정 메일 받기"}
-          </button>
-        </form>
-      </div>
+        {error || initialError ? (
+          <p className={AUTH_ALERT_ERROR}>{error || initialError}</p>
+        ) : null}
+        <div>
+          <label htmlFor="email" className={AUTH_LABEL}>
+            이메일
+          </label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="name@example.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={AUTH_FIELD_INPUT}
+            required
+          />
+        </div>
+        <button type="submit" disabled={busy} className={AUTH_PRIMARY_BTN}>
+          {busy ? "보내는 중…" : "재설정 메일 받기"}
+        </button>
+        <RecaptchaLegalNote />
+      </AuthCard>
     </div>
   );
 }

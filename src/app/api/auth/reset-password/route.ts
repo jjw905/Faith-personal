@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { AUTH_PASSWORD_INVALID } from "@/lib/auth-messages";
 import { isValidEmail, isValidPassword } from "@/lib/auth-validation";
 import { consumeResetToken } from "@/lib/otp";
 import { hashPassword } from "@/lib/password";
@@ -37,8 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          "비밀번호는 8~72자, 영문 대소문자와 특수문자를 각각 1자 이상 포함해야 합니다.",
+        message: AUTH_PASSWORD_INVALID,
       },
       { status: 400 },
     );

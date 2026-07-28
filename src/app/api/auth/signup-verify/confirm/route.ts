@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { withAuthTiming } from "@/lib/auth-timing";
-import { isValidEmail } from "@/lib/auth-validation";
+import { isValidEmail, normalizeAuthEmail } from "@/lib/auth-validation";
 import {
   consumeOtp,
   generateSignupProof,
+  hashSignupProof,
+  SIGNUP_PROOF_COOKIE,
+  SIGNUP_PROOF_COOKIE_MAX_AGE_SEC,
   signupOtpIdentifier,
   storeSignupProof,
 } from "@/lib/otp";
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
         ? (body as Record<string, unknown>)
         : {};
     const email =
-      typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+      typeof data.email === "string" ? normalizeAuthEmail(data.email) : "";
     const code = typeof data.code === "string" ? data.code.trim() : "";
 
     if (!isValidEmail(email) || !/^\d{6}$/.test(code)) {
@@ -54,10 +57,18 @@ export async function POST(request: Request) {
     const proof = generateSignupProof();
     await storeSignupProof(email, proof);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       proof,
       message: "이메일 인증이 완료되었습니다.",
     });
+    res.cookies.set(SIGNUP_PROOF_COOKIE, hashSignupProof(proof), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SIGNUP_PROOF_COOKIE_MAX_AGE_SEC,
+    });
+    return res;
   });
 }

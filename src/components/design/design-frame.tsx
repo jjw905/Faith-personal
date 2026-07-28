@@ -40,8 +40,9 @@ export function DesignFrame({
           <span className="min-w-0 font-medium text-muted">{trigger}</span>
         ) : null}
       </div>
-      <div className="relative h-[min(78vh,48rem)] min-h-[36rem] overflow-hidden rounded-2xl bg-surface ring-1 ring-border/60">
-        <div className="absolute inset-0 overflow-auto">{children}</div>
+      {/* 모바일: 72dvh면 하단 카탈로그와 CTA 히트 겹침 → 여유 확보. */}
+      <div className="relative z-10 h-[min(58dvh,40rem)] min-h-[20rem] overflow-hidden rounded-2xl bg-surface ring-1 ring-border/60 sm:h-[min(72dvh,48rem)] sm:min-h-[28rem] lg:h-[min(78vh,48rem)] lg:min-h-[36rem]">
+        <div className="absolute inset-0 min-w-0 overflow-hidden">{children}</div>
       </div>
     </div>
   );

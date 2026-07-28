@@ -151,26 +151,45 @@ const ADMIN_LIST_SCENARIOS: PageUxScenario[] = [
   ...CHROME_POPUPS,
 ];
 
-/** 회원가입 이메일 인증 (메일 없이 미리보기). 디자인 랩 cat=auth 와 동일 id. */
-const AUTH_SIGNUP_VERIFY = {
+/** 로그인/회원가입/비번찾기 — 로컬 제품 화면만. */
+const AUTH_SCENARIOS = {
+  login: { id: "login", label: "로그인" },
+  loginRegistered: { id: "login-registered", label: "로그인, 가입 완료" },
+  loginError: { id: "login-error", label: "로그인, 자격 오류" },
+  signupSocial: { id: "signup-social", label: "회원가입, 소셜" },
   email: { id: "signup-email-verify", label: "이메일 인증" },
   code: { id: "signup-email-code", label: "이메일 인증 확인" },
-  codeFilled: {
-    id: "signup-email-code-filled",
-    label: "인증번호 입력됨",
-  },
   confirmed: {
     id: "signup-email-confirmed",
     label: "이메일 인증 완료",
+  },
+  account: { id: "signup-account", label: "계정 정보 입력" },
+  forgot: { id: "forgot-password", label: "비밀번호 찾기" },
+  forgotSent: {
+    id: "forgot-password-sent",
+    label: "비밀번호 찾기, 발송",
+  },
+  reset: { id: "reset-password", label: "비밀번호 재설정" },
+  resetInvalid: {
+    id: "reset-password-invalid",
+    label: "재설정, 링크 무효",
   },
 } as const satisfies Record<string, PageUxScenario>;
 
 const DESIGN_AUTH_SCENARIOS: PageUxScenario[] = [
   LIVE,
-  AUTH_SIGNUP_VERIFY.email,
-  AUTH_SIGNUP_VERIFY.code,
-  AUTH_SIGNUP_VERIFY.codeFilled,
-  AUTH_SIGNUP_VERIFY.confirmed,
+  AUTH_SCENARIOS.login,
+  AUTH_SCENARIOS.loginRegistered,
+  AUTH_SCENARIOS.loginError,
+  AUTH_SCENARIOS.signupSocial,
+  AUTH_SCENARIOS.email,
+  AUTH_SCENARIOS.code,
+  AUTH_SCENARIOS.confirmed,
+  AUTH_SCENARIOS.account,
+  AUTH_SCENARIOS.forgot,
+  AUTH_SCENARIOS.forgotSent,
+  AUTH_SCENARIOS.reset,
+  AUTH_SCENARIOS.resetInvalid,
 ];
 
 export type PageUxSurface = {
@@ -365,4 +384,6 @@ export function isPageUxNotificationScenario(scenarioId: string): boolean {
 export const DEFAULT_PAGE_UX_SCENARIOS = LIST_SCENARIOS;
 export const PAGE_UX_LIVE_SCENARIO = LIVE;
 export const PAGE_UX_POPUPS = POPUP;
-export const PAGE_UX_AUTH_SIGNUP_VERIFY = AUTH_SIGNUP_VERIFY;
+export const PAGE_UX_AUTH_SCENARIOS = AUTH_SCENARIOS;
+/** @deprecated PAGE_UX_AUTH_SCENARIOS 사용 */
+export const PAGE_UX_AUTH_SIGNUP_VERIFY = AUTH_SCENARIOS;

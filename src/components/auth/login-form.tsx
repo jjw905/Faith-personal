@@ -5,12 +5,29 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getSession, signIn } from "next-auth/react";
 import { useState, type FormEvent } from "react";
 
-import { AUTH_CARD } from "@/components/auth/auth-shell";
+import {
+  AUTH_ALERT_ERROR,
+  AUTH_ALERT_SUCCESS,
+  AUTH_CARD_OFFSET,
+  AUTH_FIELD_INPUT,
+  AUTH_LABEL,
+  AUTH_PRIMARY_BTN,
+  AuthCard,
+  AuthPageTitle,
+  AuthPasswordField,
+  AuthSectionHeader,
+  authEnter,
+  authEnterDelay,
+} from "@/components/auth/auth-shell";
 import {
   AuthOrDivider,
   SocialSignupButtons,
 } from "@/components/auth/social-signup-buttons";
+import { RecaptchaLegalNote } from "@/components/auth/recaptcha-legal-note";
+import { getRecaptchaToken } from "@/components/auth/recaptcha-v3";
 import { Input } from "@/components/ui/input";
+import { normalizeAuthEmail } from "@/lib/auth-validation";
+import { cn } from "@/lib/utils";
 
 const ERROR_MESSAGES: Record<string, string> = {
   CredentialsSignin: "이메일 또는 비밀번호가 올바르지 않습니다.",
@@ -33,41 +50,67 @@ const CODE_MESSAGES: Record<string, string> = {
   email_unverified:
     "이메일 인증이 완료되지 않은 계정입니다. 고객지원에 문의해 주세요.",
   credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
+  captcha_failed: "보안 확인에 실패했습니다. 다시 시도해 주세요.",
 };
 
-const fieldInputClass =
-  "h-12 border-border bg-card focus-visible:ring-primary/30";
+export type LoginFormProps = {
+  /** 디자인/UX 미리보기: API·라우팅 없이 상태만 표시. */
+  preview?: boolean;
+  initialEmail?: string;
+  initialPassword?: string;
+  initialError?: string;
+  initialInfo?: string;
+  forcePending?: boolean;
+};
 
 /** 로그인 패널 — Credentials + 소셜. */
-export function LoginForm() {
+export function LoginForm({
+  preview = false,
+  initialEmail = "",
+  initialPassword = "",
+  initialError = "",
+  initialInfo = "",
+  forcePending = false,
+}: LoginFormProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(initialEmail);
+  const [password, setPassword] = useState(initialPassword);
   const [remember, setRemember] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [pending, setPending] = useState(false);
 
-  const urlError = searchParams.get("error");
-  const urlCode = searchParams.get("code");
-  const registered = searchParams.get("registered") === "1";
+  const urlError = preview ? null : searchParams.get("error");
+  const urlCode = preview ? null : searchParams.get("code");
+  const registered = preview ? false : searchParams.get("registered") === "1";
   const displayError =
     error ||
+    initialError ||
     (urlCode && CODE_MESSAGES[urlCode]) ||
     (urlError ? ERROR_MESSAGES[urlError] || "로그인에 실패했습니다." : "");
-  const displayInfo = registered
-    ? "회원가입이 완료되었습니다. 로그인해 주세요."
-    : "";
+  const displayInfo =
+    initialInfo ||
+    (registered ? "회원가입이 완료되었습니다. 로그인해 주세요." : "");
+  const busy = forcePending || pending;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (preview) return;
     setError("");
     setPending(true);
     try {
       document.cookie = `faith.remember=${remember ? "1" : "0"}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+      let captchaToken: string | null = null;
+      try {
+        captchaToken = await getRecaptchaToken("login");
+      } catch {
+        setError("보안 확인에 실패했습니다. 다시 시도해 주세요.");
+        return;
+      }
       const res = await signIn("credentials", {
-        email: email.trim().toLowerCase(),
+        email: normalizeAuthEmail(email),
         password,
+        captchaToken: captchaToken ?? "",
         redirect: false,
         callbackUrl: "/dashboard",
       });
@@ -105,16 +148,15 @@ export function LoginForm() {
 
   return (
     <div className="w-full">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          로그인
-        </h1>
-      </div>
+      <AuthPageTitle title="로그인" className={authEnter} />
 
-      <div className={`mt-4 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
+      <AuthCard
+        className={cn(AUTH_CARD_OFFSET, authEnter, authEnterDelay(1))}
+      >
         <SocialSignupButtons
           title="간편 소셜 로그인"
           showPrivacyNote={false}
+          showTitleRule={false}
         />
 
         <div className="mt-6">
@@ -122,27 +164,17 @@ export function LoginForm() {
         </div>
 
         <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            이메일 로그인
-          </h2>
-          <div className="-mt-2 h-0.5 w-full bg-foreground" aria-hidden />
+          <AuthSectionHeader title="이메일 로그인" />
 
           {displayInfo ? (
-            <p className="rounded-xl bg-surface px-3 py-2 text-base text-foreground">
-              {displayInfo}
-            </p>
+            <p className={AUTH_ALERT_SUCCESS}>{displayInfo}</p>
           ) : null}
           {displayError ? (
-            <p className="rounded-xl bg-masked-soft px-3 py-2 text-base text-masked">
-              {displayError}
-            </p>
+            <p className={AUTH_ALERT_ERROR}>{displayError}</p>
           ) : null}
 
           <div>
-            <label
-              htmlFor="email"
-              className="mb-1.5 block text-base font-semibold text-foreground"
-            >
+            <label htmlFor="email" className={AUTH_LABEL}>
               이메일
             </label>
             <Input
@@ -153,33 +185,28 @@ export function LoginForm() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={fieldInputClass}
+              className={AUTH_FIELD_INPUT}
               required
             />
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="mb-1.5 block text-base font-semibold text-foreground"
-            >
+            <label htmlFor="password" className={AUTH_LABEL}>
               비밀번호
             </label>
-            <Input
+            <AuthPasswordField
               id="password"
               name="password"
-              type="password"
               placeholder="비밀번호를 입력하세요"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={fieldInputClass}
+              onChange={setPassword}
               required
             />
           </div>
 
-          <div className="flex flex-nowrap items-center justify-between gap-2 border-t border-border pt-4 text-base">
-            <label className="flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap text-muted">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-base">
+            <label className="flex min-h-12 shrink-0 items-center gap-2 text-muted">
               <input
                 type="checkbox"
                 name="remember"
@@ -191,23 +218,26 @@ export function LoginForm() {
             </label>
             <Link
               href="/forgot-password"
-              className="inline-flex min-h-12 shrink-0 items-center whitespace-nowrap font-medium text-muted transition-colors hover:text-foreground"
+              className="inline-flex min-h-12 shrink-0 items-center font-medium text-muted transition-colors hover:text-foreground"
             >
               비밀번호 찾기
             </Link>
           </div>
 
-          <button
-            type="submit"
-            disabled={pending}
-            className="flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
-          >
-            {pending ? "로그인 중…" : "로그인"}
+          <button type="submit" disabled={busy} className={AUTH_PRIMARY_BTN}>
+            {busy ? "로그인 중…" : "로그인"}
           </button>
+          <RecaptchaLegalNote className="pt-1" />
         </form>
-      </div>
+      </AuthCard>
 
-      <p className="mt-5 text-center text-base text-muted whitespace-nowrap">
+      <p
+        className={cn(
+          "mt-5 text-center text-base text-muted",
+          authEnter,
+          authEnterDelay(2),
+        )}
+      >
         아직 계정이 없으신가요?{" "}
         <Link
           href="/signup"

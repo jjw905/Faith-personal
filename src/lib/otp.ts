@@ -1,18 +1,30 @@
 import { createHash, randomBytes, randomInt } from "crypto";
 
 import { prisma } from "@/lib/prisma";
-import { rateLimit } from "@/lib/rate-limit";
+import {
+  durableRateLimit,
+  durableResetRateLimit,
+} from "@/lib/rate-limit";
 
 const OTP_TTL_MS = 1000 * 60 * 10;
 /** 가입용 이메일 인증 증명. OTP 확인 후 가입 완료까지. */
-const SIGNUP_PROOF_TTL_MS = 1000 * 60 * 30;
+const SIGNUP_PROOF_TTL_MS = 1000 * 60 * 15;
 /** 비밀번호 재설정 링크. OTP와 동일하게 10분. */
 const RESET_TOKEN_TTL_MS = 1000 * 60 * 10;
-/** identifier당 검증 시도 상한 (무차별 방지). 초과 시 OTP 폐기. */
-const OTP_MAX_ATTEMPTS = 5;
+/** identifier당 검증 시도 상한 (OWASP: 3회 권장). 초과 시 OTP 폐기. */
+const OTP_MAX_ATTEMPTS = 3;
+
+export const SIGNUP_PROOF_COOKIE = "faith_signup_proof";
+export const SIGNUP_PROOF_COOKIE_MAX_AGE_SEC = Math.floor(
+  SIGNUP_PROOF_TTL_MS / 1000,
+);
 
 function hashCode(code: string) {
   return createHash("sha256").update(code).digest("hex");
+}
+
+export function hashSignupProof(rawProof: string) {
+  return hashCode(rawProof);
 }
 
 export function generateOtpCode() {
@@ -39,11 +51,13 @@ export async function storeOtp(identifier: string, code: string) {
   await prisma.verificationToken.create({
     data: { identifier, token, expires },
   });
+  // 새 OTP면 이전 실패 시도 카운트 초기화 (재전송 후에도 즉시 잠기는 문제 방지)
+  await durableResetRateLimit(`otp:${identifier}`);
 }
 
 export async function consumeOtp(identifier: string, code: string) {
   // TTL 내 시도 횟수 제한. 초과하면 현재 OTP 무효화.
-  const attempt = rateLimit({
+  const attempt = await durableRateLimit({
     key: `otp:${identifier}`,
     limit: OTP_MAX_ATTEMPTS,
     windowMs: OTP_TTL_MS,

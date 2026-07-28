@@ -8,16 +8,22 @@ import type { Plan, Role } from "@prisma/client";
 import type { Provider } from "next-auth/providers";
 import { cookies, headers } from "next/headers";
 
-import { isValidEmail } from "@/lib/auth-validation";
+import { authEmailLookupOrder } from "@/lib/auth-store";
+import {
+  isValidEmail,
+  normalizeAuthEmail,
+} from "@/lib/auth-validation";
 import { expireManualOverridesForUser } from "@/lib/admin-expire";
 import { prisma } from "@/lib/prisma";
 import { platformAdminEmails } from "@/lib/platform-admin";
 import { verifyPassword } from "@/lib/password";
 import {
+  clientIpFromHeaders,
   hashRateLimitEmail,
   rateLimit,
   resetRateLimit,
 } from "@/lib/rate-limit";
+import { verifyRecaptchaToken } from "@/lib/recaptcha";
 
 class InvalidCredentials extends CredentialsSignin {
   code = "invalid_credentials";
@@ -30,6 +36,9 @@ class DisabledCredentials extends CredentialsSignin {
 }
 class UnverifiedEmailCredentials extends CredentialsSignin {
   code = "email_unverified";
+}
+class CaptchaFailedCredentials extends CredentialsSignin {
+  code = "captcha_failed";
 }
 
 function adminEmails() {
@@ -191,6 +200,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        captchaToken: { label: "Captcha", type: "text" },
       },
       async authorize(credentials) {
         try {
@@ -204,17 +214,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
 
           const h = await headers();
-          const ip =
-            h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-            h.get("x-real-ip")?.trim() ||
-            "unknown";
+          const ip = clientIpFromHeaders(h);
 
-          const email = String(credentials?.email ?? "")
-            .trim()
-            .toLowerCase();
+          const email = normalizeAuthEmail(
+            String(credentials?.email ?? ""),
+          );
           const password = String(credentials?.password ?? "");
+          const captchaToken = String(credentials?.captchaToken ?? "");
           if (!isValidEmail(email) || !password) {
             throw new InvalidCredentials();
+          }
+
+          const captcha = await verifyRecaptchaToken({
+            token: captchaToken,
+            action: "login",
+          });
+          if (!captcha.ok) {
+            throw new CaptchaFailedCredentials();
           }
 
           const emailHash = hashRateLimitEmail(email);
@@ -235,19 +251,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             throw new RateLimitedCredentials();
           }
 
-          const user = await prisma.user.findUnique({
-            where: { email },
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              image: true,
-              role: true,
-              disabled: true,
-              passwordHash: true,
-              emailVerified: true,
-            },
-          });
+          const select = {
+            id: true,
+            email: true,
+            name: true,
+            image: true,
+            role: true,
+            disabled: true,
+            passwordHash: true,
+            emailVerified: true,
+          } as const;
+          let user = null as null | {
+            id: string;
+            email: string | null;
+            name: string | null;
+            image: string | null;
+            role: Role;
+            disabled: boolean;
+            passwordHash: string | null;
+            emailVerified: Date | null;
+          };
+          for (const candidate of authEmailLookupOrder(email)) {
+            user = await prisma.user.findUnique({
+              where: { email: candidate },
+              select,
+            });
+            if (user) break;
+          }
           if (!user || !user.passwordHash) {
             throw new InvalidCredentials();
           }
@@ -268,15 +298,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!fresh || !fresh.passwordHash) {
             throw new InvalidCredentials();
           }
+          // OWASP: 비밀번호 검증 전에는 계정 상태(비활성·미인증)를 노출하지 않음
+          const ok = await verifyPassword(password, fresh.passwordHash);
+          if (!ok) {
+            throw new InvalidCredentials();
+          }
           if (fresh.disabled) {
             throw new DisabledCredentials();
           }
           if (!fresh.emailVerified) {
             throw new UnverifiedEmailCredentials();
-          }
-          const ok = await verifyPassword(password, fresh.passwordHash);
-          if (!ok) {
-            throw new InvalidCredentials();
           }
 
           resetRateLimit(`login:ip:${ip}`, `login:email:${emailHash}`);

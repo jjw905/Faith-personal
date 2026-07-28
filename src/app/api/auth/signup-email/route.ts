@@ -1,8 +1,14 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
-import { isValidEmail } from "@/lib/auth-validation";
-import { consumeSignupProof } from "@/lib/otp";
+import { isEmailTaken } from "@/lib/auth-store";
+import { isValidEmail, normalizeAuthEmail } from "@/lib/auth-validation";
+import {
+  consumeSignupProof,
+  hashSignupProof,
+  SIGNUP_PROOF_COOKIE,
+} from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
 
@@ -44,7 +50,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const email = emailRaw.toLowerCase();
+  const email = normalizeAuthEmail(emailRaw);
 
   if (!proof) {
     return NextResponse.json(
@@ -57,19 +63,34 @@ export async function POST(request: Request) {
     );
   }
 
-  const taken = await prisma.user.findFirst({
-    where: { email, NOT: { id: session.user.id } },
-    select: { id: true },
-  });
-  if (taken) {
+  const jar = await cookies();
+  const bind = jar.get(SIGNUP_PROOF_COOKIE)?.value;
+  if (!bind || bind !== hashSignupProof(proof)) {
     return NextResponse.json(
       {
         ok: false,
-        message: "이 이메일은 사용할 수 없습니다.",
-        code: "unavailable",
+        message: "이메일 인증이 만료되었습니다. 다시 인증해 주세요.",
+        code: "proof_expired",
       },
-      { status: 409 },
+      { status: 400 },
     );
+  }
+
+  if (await isEmailTaken(email)) {
+    const self = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { email: true },
+    });
+    if (normalizeAuthEmail(self?.email || "") !== email) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "이 이메일은 사용할 수 없습니다.",
+          code: "unavailable",
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const proofOk = await consumeSignupProof(email, proof);
@@ -89,8 +110,16 @@ export async function POST(request: Request) {
     data: { email, emailVerified: new Date() },
   });
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     ok: true,
     redirect: "/dashboard",
   });
+  res.cookies.set(SIGNUP_PROOF_COOKIE, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+  return res;
 }

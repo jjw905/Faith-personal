@@ -7,7 +7,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { SignupFlow } from "@/components/auth/signup-flow";
 
 export const metadata: Metadata = {
-  title: "회원가입 · Faith",
+  title: "회원가입, Faith",
   description: "Faith 계정을 만들어 안전한 회의록 관리를 시작하세요.",
 };
 
@@ -22,7 +22,7 @@ export default async function SignupPage() {
       <div className="flex w-full flex-col">
         <SignupFlow />
 
-        <p className="mt-6 text-center text-base text-muted whitespace-nowrap">
+        <p className="mt-6 text-center text-base text-muted">
           이미 계정이 있으신가요?{" "}
           <Link
             href="/login"

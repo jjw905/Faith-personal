@@ -5,7 +5,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { ResetPasswordForm } from "@/components/auth/reset-password-form";
 
 export const metadata: Metadata = {
-  title: "비밀번호 재설정 · Faith",
+  title: "비밀번호 재설정, Faith",
   description: "새 비밀번호를 설정합니다.",
 };
 

@@ -2,6 +2,7 @@ export { MAIL_BRAND, MAIL_GLOBAL_CSS } from "@/lib/mail/styles";
 export { appUrl, escapeHtml, isMailAppUrlSafe, renderMailShell } from "@/lib/mail/shell";
 export {
   emailChangeOtpEmailHtml,
+  emailChangedNoticeEmailHtml,
   otpEmailHtml,
   resetPasswordEmailHtml,
   signupOtpEmailHtml,

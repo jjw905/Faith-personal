@@ -4,32 +4,25 @@ import { useMemo, useState } from "react";
 
 import { SignupEmailVerify } from "@/components/auth/signup-email-verify";
 import {
-  FIXTURE_SIGNUP_VERIFY_CODE,
-  FIXTURE_SIGNUP_VERIFY_EMAIL,
-} from "@/lib/page-ux-fixtures";
+  DesignViewportPicker,
+  DesignViewportStage,
+  useDesignViewport,
+} from "@/components/design/use-design-viewport";
+import { FIXTURE_SIGNUP_VERIFY_EMAIL } from "@/lib/page-ux-fixtures";
 import { PAGE_UX_AUTH_SIGNUP_VERIFY } from "@/lib/page-ux-registry";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
   PAGE_UX_AUTH_SIGNUP_VERIFY.email,
   PAGE_UX_AUTH_SIGNUP_VERIFY.code,
-  PAGE_UX_AUTH_SIGNUP_VERIFY.codeFilled,
   PAGE_UX_AUTH_SIGNUP_VERIFY.confirmed,
 ] as const;
 
-const VIEWPORTS = [
-  { id: "mobile", label: "모바일", width: 390 },
-  { id: "tablet", label: "태블릿", width: 768 },
-  { id: "desktop", label: "데스크톱", width: 1024 },
-] as const;
-
 type StepId = (typeof STEPS)[number]["id"];
-type ViewportId = (typeof VIEWPORTS)[number]["id"];
 
 export function SignupEmailPreviewClient() {
   const [stepId, setStepId] = useState<StepId>("signup-email-verify");
-  const [viewport, setViewport] = useState<ViewportId>("mobile");
-  const width = VIEWPORTS.find((v) => v.id === viewport)?.width ?? 390;
+  const { viewport, setViewport, width } = useDesignViewport();
 
   const body = useMemo(() => {
     if (stepId === "signup-email-confirmed") {
@@ -47,18 +40,7 @@ export function SignupEmailPreviewClient() {
           preview
           forcedStep="code"
           initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
-          initialMessage="해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요."
-        />
-      );
-    }
-    if (stepId === "signup-email-code-filled") {
-      return (
-        <SignupEmailVerify
-          preview
-          forcedStep="code"
-          initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
-          initialCode={FIXTURE_SIGNUP_VERIFY_CODE}
-          initialMessage="해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요."
+          initialMessage="메일을 확인해 주세요."
         />
       );
     }
@@ -117,46 +99,23 @@ export function SignupEmailPreviewClient() {
           })}
         </div>
 
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label="미리보기 너비"
-        >
-          {VIEWPORTS.map((v) => {
-            const active = v.id === viewport;
-            return (
-              <button
-                key={v.id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setViewport(v.id)}
-                className={cn(
-                  "inline-flex min-h-12 items-center rounded-xl px-4 text-base font-semibold transition-colors",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-card text-muted ring-1 ring-border hover:bg-surface hover:text-foreground",
-                )}
-              >
-                {v.label}
-              </button>
-            );
-          })}
-        </div>
+        <DesignViewportPicker value={viewport} onChange={setViewport} />
 
-        <div
-          className="mx-auto overflow-hidden rounded-2xl bg-background ring-1 ring-border/60"
-          style={{ width: `min(100%, ${width}px)` }}
-        >
-          <header className="border-b border-border">
-            <div className="flex h-16 items-center px-4 sm:px-6">
-              <span className="text-xl font-bold tracking-tight text-foreground">
-                Faith
-              </span>
+        <div className="h-[min(70vh,40rem)] min-h-[28rem] w-full min-w-0 overflow-hidden rounded-2xl ring-1 ring-border/60">
+          <DesignViewportStage width={width} className="h-full">
+            <div className="flex h-full min-h-full w-full flex-col overflow-hidden bg-background">
+              <header className="shrink-0 border-b border-border">
+                <div className="flex h-16 items-center px-4 sm:px-6">
+                  <span className="text-xl font-bold tracking-tight text-foreground">
+                    Faith
+                  </span>
+                </div>
+              </header>
+              <main className="flex min-h-0 flex-1 justify-center overflow-y-auto px-4 py-6 sm:px-6 sm:py-8">
+                <div className="w-full max-w-md">{body}</div>
+              </main>
             </div>
-          </header>
-          <main className="flex justify-center px-4 py-6 sm:px-6 sm:py-8">
-            <div className="w-full max-w-md">{body}</div>
-          </main>
+          </DesignViewportStage>
         </div>
       </div>
     </div>

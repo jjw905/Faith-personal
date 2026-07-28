@@ -1,5 +1,6 @@
 import {
   emailChangeOtpEmailHtml,
+  emailChangedNoticeEmailHtml,
   resetPasswordEmailHtml,
   signupOtpEmailHtml,
   signupRequestNoticeEmailHtml,
@@ -10,6 +11,7 @@ import { appUrl } from "@/lib/mail/shell";
 export type MailTemplateId =
   | "signup-otp"
   | "email-change-otp"
+  | "email-changed-notice"
   | "password-reset"
   | "welcome"
   | "signup-request-notice";
@@ -48,6 +50,14 @@ export const MAIL_TEMPLATE_CATALOG: MailTemplateEntry[] = [
     subject: "[Faith] 이메일 변경 인증번호",
     description: "계정 설정에서 이메일 변경 OTP",
     render: () => emailChangeOtpEmailHtml({ code: FIXTURE_CODE }),
+  },
+  {
+    id: "email-changed-notice",
+    label: "이메일 변경 알림",
+    subject: "[Faith] 계정 이메일이 변경되었습니다",
+    description: "변경 완료 후 기존 주소 알림",
+    render: () =>
+      emailChangedNoticeEmailHtml({ newEmail: "new@example.com" }),
   },
   {
     id: "password-reset",

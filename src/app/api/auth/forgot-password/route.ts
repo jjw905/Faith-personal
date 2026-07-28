@@ -3,13 +3,20 @@ import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 
 import { withAuthTiming } from "@/lib/auth-timing";
-import { isValidEmail } from "@/lib/auth-validation";
+import { authEmailLookupOrder } from "@/lib/auth-store";
+import { isValidEmail, normalizeAuthEmail } from "@/lib/auth-validation";
+import { maskEmail } from "@/lib/mask-email";
 import { storeResetToken } from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
-import { enforceAuthDualRateLimit } from "@/lib/rate-limit";
+import { beginMailSendLimits } from "@/lib/rate-limit";
+import {
+  AUTH_MAIL_UNAVAILABLE,
+  AUTH_RESET_CHECK,
+} from "@/lib/auth-messages";
+import { verifyRecaptchaToken } from "@/lib/recaptcha";
 import { isResendConfigured, sendPasswordResetEmail } from "@/lib/resend-mail";
 
-const UNIFORM_MESSAGE = "가입된 이메일이면 재설정 안내를 보냈습니다.";
+const UNIFORM_MESSAGE = AUTH_RESET_CHECK;
 
 export async function POST(request: Request) {
   return withAuthTiming(480, async () => {
@@ -26,7 +33,9 @@ export async function POST(request: Request) {
         : {};
 
     const email =
-      typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+      typeof data.email === "string" ? normalizeAuthEmail(data.email) : "";
+    const captchaToken =
+      typeof data.captchaToken === "string" ? data.captchaToken : "";
 
     if (!isValidEmail(email)) {
       return NextResponse.json(
@@ -35,42 +44,81 @@ export async function POST(request: Request) {
       );
     }
 
-    const limited = enforceAuthDualRateLimit(request, "forgot-password", {
-      ipLimit: 5,
-      ipWindowMs: 60_000,
-      email,
-      emailLimit: 3,
-      emailWindowMs: 15 * 60_000,
+    const captcha = await verifyRecaptchaToken({
+      token: captchaToken,
+      action: "forgot_password",
     });
-    if (limited) return limited;
+    if (!captcha.ok) {
+      return NextResponse.json(
+        { ok: false, message: captcha.message },
+        { status: 400 },
+      );
+    }
+
+    const gate = await beginMailSendLimits(request, "forgot-password", email, {
+      emailPerDay: 5,
+      ipPerHour: 10,
+    });
+    if (!gate.ok) return gate.response;
 
     const mailEnabled = isResendConfigured();
 
     if (!mailEnabled) {
+      await gate.rollback();
       return NextResponse.json({
         ok: true,
         mailEnabled: false,
-        message:
-          "현재 이메일 재설정 기능을 사용할 수 없습니다. 관리자에게 문의해 주세요.",
+        message: AUTH_MAIL_UNAVAILABLE,
       });
     }
 
     try {
-      const user = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, passwordHash: true, disabled: true },
-      });
-
-      if (user && !user.disabled && user.passwordHash) {
-        const raw = randomBytes(32).toString("base64url");
-        await storeResetToken(email, raw);
-        await sendPasswordResetEmail(email, raw);
+      let user: {
+        id: string;
+        passwordHash: string | null;
+        disabled: boolean;
+        email: string | null;
+      } | null = null;
+      for (const candidate of authEmailLookupOrder(email)) {
+        user = await prisma.user.findUnique({
+          where: { email: candidate },
+          select: {
+            id: true,
+            passwordHash: true,
+            disabled: true,
+            email: true,
+          },
+        });
+        if (user) break;
       }
+
+      if (user?.email && !user.disabled && user.passwordHash) {
+        const raw = randomBytes(32).toString("base64url");
+        await storeResetToken(user.email, raw);
+        const sent = await sendPasswordResetEmail(user.email, raw);
+        if (!sent.ok) {
+          await gate.rollback();
+          return NextResponse.json({
+            ok: true,
+            mailEnabled: true,
+            message: UNIFORM_MESSAGE,
+          });
+        }
+      }
+      await gate.commitCooldown();
     } catch (err) {
+      await gate.rollback();
       console.error(
         "[forgot-password]",
+        maskEmail(email),
         err instanceof Error ? err.message.slice(0, 300) : err,
       );
+      // 존재 여부 비공개: 실패해도 동일 성공 메시지
+      return NextResponse.json({
+        ok: true,
+        mailEnabled: true,
+        message: UNIFORM_MESSAGE,
+      });
     }
 
     return NextResponse.json({

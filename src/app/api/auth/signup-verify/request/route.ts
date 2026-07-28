@@ -2,21 +2,24 @@ import { NextResponse } from "next/server";
 
 import { withAuthTiming } from "@/lib/auth-timing";
 import { isEmailTaken } from "@/lib/auth-store";
-import { isValidEmail } from "@/lib/auth-validation";
+import { isValidEmail, normalizeAuthEmail } from "@/lib/auth-validation";
+import { isDisposableEmailDomain } from "@/lib/disposable-email";
+import { maskEmail } from "@/lib/mask-email";
 import {
   generateOtpCode,
   signupOtpIdentifier,
   storeOtp,
 } from "@/lib/otp";
-import { enforceAuthDualRateLimit } from "@/lib/rate-limit";
+import { beginMailSendLimits } from "@/lib/rate-limit";
+import { AUTH_MAIL_CHECK } from "@/lib/auth-messages";
+import { verifyRecaptchaToken } from "@/lib/recaptcha";
 import {
   isResendConfigured,
   sendSignupOtp,
   sendSignupRequestNotice,
 } from "@/lib/resend-mail";
 
-const UNIFORM_OK_MESSAGE =
-  "해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요.";
+const UNIFORM_OK_MESSAGE = AUTH_MAIL_CHECK;
 
 export async function POST(request: Request) {
   return withAuthTiming(480, async () => {
@@ -33,7 +36,9 @@ export async function POST(request: Request) {
         : {};
 
     const email =
-      typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+      typeof data.email === "string" ? normalizeAuthEmail(data.email) : "";
+    const captchaToken =
+      typeof data.captchaToken === "string" ? data.captchaToken : "";
 
     if (!isValidEmail(email)) {
       return NextResponse.json(
@@ -42,19 +47,37 @@ export async function POST(request: Request) {
       );
     }
 
-    const limited = enforceAuthDualRateLimit(request, "signup-verify-request", {
-      ipLimit: 8,
-      ipWindowMs: 60_000,
-      email,
-      emailLimit: 3,
-      emailWindowMs: 15 * 60_000,
+    // OWASP: 임시메일 남용 완화 (계정 존재와 무관한 거절)
+    if (isDisposableEmailDomain(email)) {
+      return NextResponse.json(
+        { ok: false, message: "이 이메일은 사용할 수 없습니다." },
+        { status: 400 },
+      );
+    }
+
+    const captcha = await verifyRecaptchaToken({
+      token: captchaToken,
+      action: "signup_otp",
     });
-    if (limited) return limited;
+    if (!captcha.ok) {
+      return NextResponse.json(
+        { ok: false, message: captcha.message },
+        { status: 400 },
+      );
+    }
+
+    const gate = await beginMailSendLimits(
+      request,
+      "signup-verify-request",
+      email,
+    );
+    if (!gate.ok) return gate.response;
 
     let taken = false;
     try {
       taken = await isEmailTaken(email);
     } catch (err) {
+      await gate.rollback();
       console.error(
         "[signup-verify/request] email check",
         err instanceof Error ? err.message.slice(0, 300) : err,
@@ -67,15 +90,29 @@ export async function POST(request: Request) {
 
     const mailEnabled = isResendConfigured();
 
-    // 기가입: OTP 없이 로그인 안내 메일. UI 응답은 신규와 동일.
     if (taken) {
       if (mailEnabled) {
         const sent = await sendSignupRequestNotice(email);
         if (!sent.ok) {
+          await gate.rollback();
           console.error("[signup-verify/request] signup notice failed");
+          return NextResponse.json(
+            {
+              ok: false,
+              message: "안내 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+            },
+            { status: 500 },
+          );
         }
+        await gate.commitCooldown();
       } else if (process.env.NODE_ENV !== "production") {
-        console.info("[signup-otp] existing account notice (dev, no mail)", email);
+        console.info(
+          "[signup-otp] existing account notice (dev, no mail)",
+          maskEmail(email),
+        );
+        await gate.commitCooldown();
+      } else {
+        await gate.commitCooldown();
       }
       return NextResponse.json({
         ok: true,
@@ -88,6 +125,7 @@ export async function POST(request: Request) {
 
     if (!mailEnabled) {
       if (process.env.NODE_ENV === "production") {
+        await gate.rollback();
         const { prisma } = await import("@/lib/prisma");
         await prisma.verificationToken
           .deleteMany({ where: { identifier: signupOtpIdentifier(email) } })
@@ -101,7 +139,8 @@ export async function POST(request: Request) {
           { status: 503 },
         );
       }
-      console.info("[signup-otp] dev code", email, code);
+      console.info("[signup-otp] dev code", maskEmail(email), code);
+      await gate.commitCooldown();
       return NextResponse.json({
         ok: true,
         message: UNIFORM_OK_MESSAGE,
@@ -110,6 +149,7 @@ export async function POST(request: Request) {
 
     const sent = await sendSignupOtp(email, code);
     if (!sent.ok) {
+      await gate.rollback();
       const { prisma } = await import("@/lib/prisma");
       await prisma.verificationToken
         .deleteMany({ where: { identifier: signupOtpIdentifier(email) } })
@@ -123,6 +163,7 @@ export async function POST(request: Request) {
       );
     }
 
+    await gate.commitCooldown();
     return NextResponse.json({
       ok: true,
       message: UNIFORM_OK_MESSAGE,
