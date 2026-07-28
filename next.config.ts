@@ -12,6 +12,27 @@ const nextConfig: NextConfig = {
     process.env.COMMIT_SHA ||
     process.env.GITHUB_SHA ||
     undefined,
+  // STT/로컬 디스크 경로가 NFT에 저장소 전체를 넣지 않게 제외
+  outputFileTracingExcludes: {
+    "*": [
+      "./.data/**/*",
+      "./.venv*/**/*",
+      "./Faith-office/**/*",
+      "./.local-wip/**/*",
+      "./.cursor/**/*",
+      "./.playwright-cli/**/*",
+      "./ml/**/*",
+      "./scripts/**/*",
+    ],
+  },
+  turbopack: {
+    ignoreIssue: [
+      {
+        path: "./next.config.ts",
+        title: /unexpected file in NFT list/i,
+      },
+    ],
+  },
   experimental: {
     // lucide 전체 번들 스캔 줄여 빌드 시간 단축
     optimizePackageImports: ["lucide-react"],

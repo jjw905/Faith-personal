@@ -11,10 +11,14 @@ import { delimiter, join } from "node:path";
 export function commandExists(command: string): boolean {
   const value = command.trim();
   if (!value) return false;
-  if (value.includes("/") || value.includes("\\")) return existsSync(value);
-  return (process.env.PATH || "")
-    .split(delimiter)
-    .some((dir) => dir && existsSync(join(dir, value)));
+  if (value.includes("/") || value.includes("\\")) {
+    return existsSync(/* turbopackIgnore: true */ value);
+  }
+  return (process.env.PATH || "").split(delimiter).some((dir) => {
+    if (!dir) return false;
+    const candidate = join(dir, value);
+    return existsSync(/* turbopackIgnore: true */ candidate);
+  });
 }
 
 let audioToolsReady: boolean | null = null;

@@ -36,26 +36,35 @@ export type SpeakerUtterance = RealtimeUtterance & {
 };
 
 /**
- * 실행 시점에만 알 수 있는 경로다.
- *
- * join(process.cwd(), "...") 형태로 쓰면 번들러가 그 폴더를 빌드 자원으로 보고
- * 통째로 훑는다. 가상환경 폴더에는 시스템 파이썬을 가리키는 심볼릭 링크가 있어
- * 훑는 순간 빌드가 깨진다. 경로를 함수 뒤에 숨겨 정적 분석 대상에서 뺀다.
+ * 프로젝트 루트. 빌드 시 process.cwd()를 정적으로 두면 Turbopack NFT가
+ * 저장소 전체(.data, Faith-office, .venv 심볼릭 링크)를 끌어와 배포 빌드가
+ * 커지거나 깨진다. env 우선, cwd는 간접 호출로만 읽는다.
  */
+function projectRoot(): string {
+  const fromEnv = process.env.FAITH_ROOT?.trim();
+  if (fromEnv) return fromEnv;
+  return Reflect.apply(process.cwd, process, []) as string;
+}
+
 function runtimePath(...parts: string[]): string {
-  return join(process.env.FAITH_ROOT || process.cwd(), ...parts);
+  return join(projectRoot(), ...parts);
+}
+
+/** NFT가 경로 트리를 펼치지 않도록 existsSync 인자에 ignore를 붙인다. */
+function pathExists(target: string): boolean {
+  return existsSync(/* turbopackIgnore: true */ target);
 }
 
 function pythonExecutable(): string {
   const explicit = process.env.DIARIZATION_PYTHON?.trim();
   if (explicit) return explicit;
   const local = runtimePath(".venv-diarization", "bin", "python3");
-  return existsSync(local) ? local : "python3";
+  return pathExists(local) ? local : "python3";
 }
 
 function modelsReady(): boolean {
   const publicModelsReady =
-    existsSync(
+    pathExists(
       runtimePath(
         ".data",
         "models",
@@ -64,7 +73,7 @@ function modelsReady(): boolean {
         "model.onnx",
       ),
     ) &&
-    existsSync(
+    pathExists(
       runtimePath(
         ".data",
         "models",
@@ -95,7 +104,7 @@ export function diarizationAvailability(): DiarizationAvailability {
   if (toggle === "0" || toggle === "false" || toggle === "off") {
     return { ok: false, reason: "DIARIZATION_ENABLED로 꺼져 있습니다." };
   }
-  if (!existsSync(runtimePath("ml", "diarization", "diarize.py"))) {
+  if (!pathExists(runtimePath("ml", "diarization", "diarize.py"))) {
     return { ok: false, reason: "화자분리 스크립트가 없습니다." };
   }
   const python = pythonExecutable();
@@ -137,8 +146,9 @@ export async function diarizeAudio(params: {
   }
 
   try {
+    const workDir = projectRoot();
     const { stdout } = await execFileAsync(pythonExecutable(), args, {
-      cwd: process.cwd(),
+      cwd: workDir,
       env: process.env,
       maxBuffer: 16 * 1024 * 1024,
       timeout: TIMEOUT_MS,
