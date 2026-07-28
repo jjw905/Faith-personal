@@ -209,6 +209,6 @@ export const PAGE_TITLES: Record<
   },
   "/plan": {
     title: "플랜",
-    description: "현재 플랜, 할당량, 요금제를 확인합니다.",
+    description: "현재 플랜, 포함 기능, 한도를 확인합니다.",
   },
 };

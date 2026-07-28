@@ -5,81 +5,26 @@ import { useState } from "react";
 
 import { Container } from "@/components/marketing/container";
 import { CtaButton } from "@/components/marketing/cta-button";
+import {
+  PLAN_CATALOG,
+  formatPlanWon,
+  type CatalogPlanId,
+  type PlanCatalogEntry,
+} from "@/lib/plans";
 import { SUPPORT_EMAIL } from "@/lib/support-email";
 import { cn } from "@/lib/utils";
 
 type Billing = "monthly" | "yearly";
 
-type Tier = {
-  name: string;
-  tagline: string;
-  /** 월 정가. null이면 문의. */
-  monthlyPrice: number | null;
-  /** 연간 결제 시 월 환산가. */
-  yearlyMonthlyPrice?: number | null;
-  yearlyTotal?: number | null;
-  priceUnit?: string;
-  /** 카드 우상단 배지. 추천과 동일 스타일. */
-  badges?: string[];
-  features: string[];
-  cta: { label: string; href?: string; contact?: boolean };
-  featured?: boolean;
+type TierCta = { label: string; href?: string; contact?: boolean };
+
+const TIER_ORDER: CatalogPlanId[] = ["FREE", "PRO", "TEAM"];
+
+const TIER_CTA: Record<CatalogPlanId, TierCta> = {
+  FREE: { label: "무료로 시작", href: "/signup" },
+  PRO: { label: "Pro 시작", href: "/signup" },
+  TEAM: { label: "Team 시작", href: "/signup?plan=team" },
 };
-
-const TIERS: Tier[] = [
-  {
-    name: "Free",
-    tagline: "개인 시작",
-    monthlyPrice: 0,
-    yearlyMonthlyPrice: 0,
-    yearlyTotal: 0,
-    features: [
-      "회의 월 5회",
-      "보관함 500MB",
-      "음성 텍스트 추출",
-      "개인정보 자동 마스킹",
-    ],
-    cta: { label: "무료로 시작", href: "/signup" },
-  },
-  {
-    name: "Pro",
-    tagline: "개인 회의록",
-    monthlyPrice: 19_000,
-    yearlyMonthlyPrice: 15_833,
-    yearlyTotal: 190_000,
-    badges: ["연 결제 시 2개월 무료", "추천"],
-    features: [
-      "회의 무제한",
-      "보관함 20GB",
-      "고급 요약, 타임라인",
-      "우선 처리 대기열",
-      "개인 워크스페이스",
-    ],
-    cta: { label: "Pro 시작", href: "/signup" },
-    featured: true,
-  },
-  {
-    name: "Team",
-    tagline: "팀 2명 이상",
-    monthlyPrice: 15_200,
-    yearlyMonthlyPrice: 15_200,
-    priceUnit: "/ 인 / 월",
-    badges: ["Pro 월간 대비 20% 할인"],
-    features: [
-      "팀 워크스페이스, 초대",
-      "역할, 기록 열람 권한",
-      "온라인 팀 회의",
-      "예정 회의, 알림, 팀 공지",
-      "감사 로그",
-      "팀 보안 정책",
-    ],
-    cta: { label: "Team 시작", href: "/signup?plan=team" },
-  },
-];
-
-function formatWon(n: number) {
-  return `₩${n.toLocaleString("ko-KR")}`;
-}
 
 function BillingSwitch({
   value,
@@ -134,19 +79,27 @@ function BillingSwitch({
   );
 }
 
-function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
+function TierCard({
+  tier,
+  billing,
+  cta,
+}: {
+  tier: PlanCatalogEntry;
+  billing: Billing;
+  cta: TierCta;
+}) {
   const isInquiry = tier.monthlyPrice === null;
   const monthly =
     billing === "yearly"
       ? (tier.yearlyMonthlyPrice ?? tier.monthlyPrice)
       : tier.monthlyPrice;
 
-  const priceLabel = isInquiry ? "문의" : formatWon(monthly ?? 0);
+  const priceLabel = isInquiry ? "문의" : formatPlanWon(monthly ?? 0);
 
   const note = isInquiry
     ? ""
     : billing === "yearly" && tier.yearlyTotal != null && tier.yearlyTotal > 0
-      ? `연 ${formatWon(tier.yearlyTotal)} 청구`
+      ? `연 ${formatPlanWon(tier.yearlyTotal)} 청구`
       : billing === "yearly" && tier.monthlyPrice === 0
         ? "항상 무료"
         : "";
@@ -202,7 +155,7 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
       </div>
       <p className="mt-1.5 min-h-5 text-sm font-medium text-muted-2">{note}</p>
 
-      {tier.cta.contact ? (
+      {cta.contact ? (
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
           className={cn(
@@ -211,15 +164,15 @@ function TierCard({ tier, billing }: { tier: Tier; billing: Billing }) {
             ctaClass,
           )}
         >
-          {tier.cta.label}
+          {cta.label}
         </a>
       ) : (
         <CtaButton
-          href={tier.cta.href ?? "/signup"}
+          href={cta.href ?? "/signup"}
           variant={tier.featured ? "primary" : "ghost"}
           className={ctaClass}
         >
-          {tier.cta.label}
+          {cta.label}
         </CtaButton>
       )}
 
@@ -259,13 +212,16 @@ export function PricingTiers() {
         </div>
 
         <div className="mx-auto mt-5 grid w-full max-w-lg gap-4 sm:mt-6 sm:gap-5 lg:max-w-5xl lg:grid-cols-3 lg:items-stretch">
-          {TIERS.map((tier) => (
-            <div key={tier.name} className="min-w-0">
-              <TierCard tier={tier} billing={billing} />
+          {TIER_ORDER.map((id) => (
+            <div key={id} className="min-w-0">
+              <TierCard
+                tier={PLAN_CATALOG[id]}
+                billing={billing}
+                cta={TIER_CTA[id]}
+              />
             </div>
           ))}
         </div>
-
       </Container>
     </section>
   );

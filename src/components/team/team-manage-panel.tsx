@@ -87,14 +87,88 @@ type TeamDetail = {
 
 const ROLE_LABEL = { OWNER: "팀 대표", ADMIN: "팀장", MEMBER: "팀원" };
 
+const PAGE_MEMBERS = 10;
+const PAGE_MEETINGS = 8;
+
 const CARD_SHADOW =
   "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
 
 const FIELD_CLASS =
-  "min-h-11 rounded-xl bg-surface-2 px-3 text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+  "min-h-12 rounded-xl bg-surface-2 px-3 text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
 function initials(name: string | null, email?: string | null) {
   return (name || email || "?").trim().slice(0, 1).toUpperCase();
+}
+
+function useListPage(pageSize: number, resetKey: string) {
+  const [visible, setVisible] = useState(pageSize);
+  useEffect(() => {
+    setVisible(pageSize);
+  }, [resetKey, pageSize]);
+  return {
+    visible,
+    showMore: (total: number) =>
+      setVisible((v) => Math.min(v + pageSize, total)),
+    collapse: () => setVisible(pageSize),
+  };
+}
+
+function ListPager({
+  total,
+  visible,
+  pageSize,
+  onMore,
+  onCollapse,
+  padded = false,
+}: {
+  total: number;
+  visible: number;
+  pageSize: number;
+  onMore: () => void;
+  onCollapse: () => void;
+  padded?: boolean;
+}) {
+  if (total <= pageSize) return null;
+
+  const shown = Math.min(visible, total);
+  const hasMore = shown < total;
+  const remaining = total - shown;
+  const expanded = visible > pageSize;
+
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-stretch gap-2 border-t border-border py-4 sm:items-center",
+        padded && "px-6",
+      )}
+    >
+      <p className="text-center text-base text-muted">
+        {shown} / {total}
+      </p>
+      <div className="flex flex-wrap justify-center gap-2">
+        {hasMore ? (
+          <button
+            type="button"
+            onClick={onMore}
+            className="inline-flex h-12 min-w-12 items-center justify-center rounded-full border border-border-strong bg-surface px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2"
+          >
+            더 보기 ({remaining})
+          </button>
+        ) : (
+          <p className="self-center text-base text-muted">모두 표시됨</p>
+        )}
+        {expanded ? (
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="inline-flex h-12 min-w-12 items-center justify-center rounded-full border border-border px-5 text-base font-semibold text-muted transition-colors hover:bg-surface hover:text-foreground"
+          >
+            접기
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function SettingRow({
@@ -107,15 +181,13 @@ function SettingRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5">
+    <div className="flex min-h-12 items-center justify-between gap-4 py-3.5">
       <div className="min-w-0 flex-1 pr-3">
         <p className="text-base font-semibold leading-5 text-foreground">
           {label}
         </p>
         {description ? (
-          <p className="mt-1 text-base leading-relaxed text-muted">
-            {description}
-          </p>
+          <p className="mt-1 text-base text-muted">{description}</p>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center">{children}</div>
@@ -181,7 +253,7 @@ function Segmented({
           disabled={disabled}
           onClick={() => onChange(option.value)}
           className={cn(
-            "cursor-pointer rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            "cursor-pointer rounded-lg px-3.5 py-2 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
             value === option.value
               ? "bg-card text-foreground shadow-soft"
               : "text-muted hover:text-foreground",
@@ -233,23 +305,25 @@ function ManageCard({
     </section>
   );
 }
+
 type TeamManageView = "members" | "security" | "records" | "invite";
 
+/** Sheet 전용. 목록에는 노출하지 않음. */
 const PERMISSION_META: Record<
   "canInvite" | "canCreateMeeting" | "canManageRecordAccess",
   { label: string; description: string }
 > = {
   canInvite: {
-    label: "멤버 초대",
+    label: "초대",
     description: "팀에 멤버를 초대합니다.",
   },
   canCreateMeeting: {
-    label: "회의 만들기",
-    description: "팀 일정을 만듭니다.",
+    label: "회의 생성",
+    description: "팀 회의를 만듭니다.",
   },
   canManageRecordAccess: {
-    label: "기록 열람 관리",
-    description: "마스킹 기록 열람을 조정합니다.",
+    label: "기록 열람",
+    description: "마스킹 기록 열람을 회의별로 허용합니다.",
   },
 };
 
@@ -281,11 +355,11 @@ function MemberPermissionsSheet({
   const title = member.user.name || member.user.handle || "권한";
 
   return (
-    <TeamSheet open={open} title={title} onClose={onClose}>
-      <div className="flex items-center gap-4 py-4">
-        <Avatar className="h-14 w-14 shrink-0 ring-1 ring-border">
+    <TeamSheet open={open} title={title} onClose={onClose} closeMode="back">
+      <div className="flex items-center gap-4 py-2">
+        <Avatar className="h-12 w-12 shrink-0 ring-1 ring-border">
           <AvatarImage src={member.user.image ?? undefined} />
-          <AvatarFallback className="bg-white text-lg font-semibold text-foreground">
+          <AvatarFallback className="bg-white text-base font-semibold text-foreground">
             {initials(member.user.name, member.user.email)}
           </AvatarFallback>
         </Avatar>
@@ -293,41 +367,40 @@ function MemberPermissionsSheet({
           <p className="truncate text-lg font-semibold text-foreground">
             {member.user.name || member.user.handle || "이름 없음"}
           </p>
-          {member.user.handle ? (
-            <p className="truncate text-base text-muted">
-              @{member.user.handle}
-            </p>
-          ) : null}
-          <span className="mt-2 inline-flex rounded-lg bg-surface px-2.5 py-1 text-sm font-semibold text-foreground">
+          <p className="mt-0.5 truncate text-base text-muted">
             {ROLE_LABEL[member.role]}
-          </span>
+            {member.user.handle ? `, @${member.user.handle}` : ""}
+          </p>
         </div>
       </div>
 
-      <div className="mt-2 border-t border-border pt-4">
-        <p className="mb-2 text-base font-semibold text-foreground">역할</p>
-        {isOwner ? (
-          <p className="text-base text-muted">팀 대표 역할은 변경할 수 없습니다.</p>
-        ) : (
-          <Segmented
-            ariaLabel="역할"
-            value={member.role === "ADMIN" ? "ADMIN" : "MEMBER"}
-            disabled={!canManage || saving}
-            onChange={(value) => onUpdateRole(value as "MEMBER" | "ADMIN")}
-            options={[
-              { value: "MEMBER", label: "팀원" },
-              ...(canPromoteToAdmin
-                ? [{ value: "ADMIN", label: "팀장" }]
-                : []),
-            ]}
-          />
-        )}
+      <div className="mt-4 border-t border-border">
+        <SettingRow
+          label="역할"
+          description={isOwner ? "변경할 수 없습니다." : undefined}
+        >
+          {isOwner ? (
+            <span className="text-base text-muted">{ROLE_LABEL.OWNER}</span>
+          ) : (
+            <Segmented
+              ariaLabel="역할"
+              value={member.role === "ADMIN" ? "ADMIN" : "MEMBER"}
+              disabled={!canManage || saving}
+              onChange={(value) => onUpdateRole(value as "MEMBER" | "ADMIN")}
+              options={[
+                { value: "MEMBER", label: "팀원" },
+                ...(canPromoteToAdmin
+                  ? [{ value: "ADMIN", label: "팀장" }]
+                  : []),
+              ]}
+            />
+          )}
+        </SettingRow>
       </div>
 
-      <div className="mt-6 border-t border-border pt-4">
-        <p className="mb-1 text-base font-semibold text-foreground">위임 권한</p>
+      <div className="border-t border-border">
         {isOwner ? (
-          <p className="mt-2 text-base text-muted">팀 대표는 모든 권한을 가집니다.</p>
+          <p className="py-3.5 text-base text-muted">대표는 모든 권한을 가집니다.</p>
         ) : (
           <div className="divide-y divide-border">
             {(
@@ -378,16 +451,22 @@ function MemberRecordAccessSheet({
   onToggleMeeting: (meetingId: string, canReadMasked: boolean) => void;
   onApplyAll: (canReadMasked: boolean) => void;
 }) {
+  const meetingPage = useListPage(
+    PAGE_MEETINGS,
+    `${member?.userId ?? ""}|${meetings.length}`,
+  );
+
   if (!member) return null;
 
   const title = member.user.name || member.user.handle || "기록 열람";
+  const visibleMeetings = meetings.slice(0, meetingPage.visible);
 
   return (
-    <TeamSheet open={open} title={title} onClose={onClose}>
-      <div className="flex items-center gap-4 py-4">
+    <TeamSheet open={open} title={title} onClose={onClose} closeMode="back">
+      <div className="flex items-center gap-4 py-2">
         <Avatar className="h-12 w-12 shrink-0 ring-1 ring-border">
           <AvatarImage src={member.user.image ?? undefined} />
-          <AvatarFallback className="bg-white text-sm font-semibold text-foreground">
+          <AvatarFallback className="bg-white text-base font-semibold text-foreground">
             {initials(member.user.name, member.user.email)}
           </AvatarFallback>
         </Avatar>
@@ -395,18 +474,20 @@ function MemberRecordAccessSheet({
           <p className="truncate text-lg font-semibold text-foreground">
             {member.user.name || member.user.handle}
           </p>
-          <p className="text-base text-muted">{ROLE_LABEL[member.role]}</p>
+          <p className="mt-0.5 text-base text-muted">
+            {ROLE_LABEL[member.role]}, 마스킹 기록
+          </p>
         </div>
       </div>
 
       {meetings.length === 0 ? (
-        <p className="mt-4 border-t border-border px-0 py-8 text-center text-base text-muted">
-          열람을 설정할 회의 기록이 없습니다.
+        <p className="mt-4 border-t border-border py-8 text-center text-base text-muted">
+          설정할 회의가 없습니다.
         </p>
       ) : (
         <>
-          <div className="mt-2 divide-y divide-border border-t border-border">
-            {meetings.map((meeting) => {
+          <div className="mt-4 divide-y divide-border border-t border-border">
+            {visibleMeetings.map((meeting) => {
               const meetingAccess = meeting.access?.find(
                 (access) => access.userId === member.userId,
               );
@@ -428,15 +509,22 @@ function MemberRecordAccessSheet({
               );
             })}
           </div>
+          <ListPager
+            total={meetings.length}
+            visible={meetingPage.visible}
+            pageSize={PAGE_MEETINGS}
+            onMore={() => meetingPage.showMore(meetings.length)}
+            onCollapse={meetingPage.collapse}
+          />
 
-          <label className="mt-4 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl bg-surface px-4 text-base">
+          <label className="mt-2 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl bg-surface px-4 text-base">
             <input
               type="checkbox"
               checked={bulkConfirmed}
               onChange={(event) => onBulkConfirmChange(event.target.checked)}
               className="h-5 w-5 accent-primary"
             />
-            기존 회의 {meetings.length}건 일괄 적용
+            {meetings.length}건 일괄 적용
           </label>
           {bulkConfirmed ? (
             <div className="mt-3 flex gap-2">
@@ -636,6 +724,12 @@ export function TeamManagePanel({
     return detail.meetings;
   }, [detail, scenarioId]);
 
+  const memberListPage = useListPage(
+    PAGE_MEMBERS,
+    `${activeTeamId ?? ""}|${view}|${scenarioId}`,
+  );
+  const visibleMembers = previewMembers.slice(0, memberListPage.visible);
+
   useEffect(() => {
     if (scenarioId === "popup-invite" || scenarioId === "popup-invite-search") {
       setShowInvite(true);
@@ -821,13 +915,13 @@ export function TeamManagePanel({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {message ? (
         <div className="flex min-h-12 items-center justify-between gap-3 rounded-2xl bg-primary-soft px-4 py-3 text-base text-foreground">
           <span className="min-w-0 flex-1">{message}</span>
           <button
             type="button"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-card/60 hover:text-foreground"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-card/60 hover:text-foreground"
             onClick={() => setMessage("")}
             aria-label="닫기"
           >
@@ -871,15 +965,9 @@ export function TeamManagePanel({
 
           {detail ? (
             view === "security" ? (
-              <ManageCard
-                title="팀 보안 정책"
-                description="팀 워크스페이스에 적용되며, 개인 설정보다 우선할 수 있습니다."
-              >
+              <ManageCard title="보안 정책" description="팀 전체에 적용됩니다.">
                 <div className="divide-y divide-border px-6 pb-2">
-                  <SettingRow
-                    label="데이터 보존 기간"
-                    description="회의 기록과 알림 보관에 적용됩니다."
-                  >
+                  <SettingRow label="보존 기간">
                     <Segmented
                       ariaLabel="데이터 보존 기간"
                       value={String(detail.team.policy?.retentionDays ?? 90)}
@@ -896,7 +984,7 @@ export function TeamManagePanel({
                   </SettingRow>
                   <SettingRow
                     label="팀장 언마스크"
-                    description="마스킹된 개인정보를 팀장이 원문으로 볼 수 있습니다."
+                    description="마스킹 원문 열람"
                   >
                     <Toggle
                       label="팀장 언마스크"
@@ -907,10 +995,7 @@ export function TeamManagePanel({
                       }
                     />
                   </SettingRow>
-                  <SettingRow
-                    label="외부 공유"
-                    description="팀 밖 공유를 허용합니다."
-                  >
+                  <SettingRow label="외부 공유">
                     <Toggle
                       label="외부 공유"
                       checked={Boolean(detail.team.policy?.allowExternalSharing)}
@@ -927,8 +1012,8 @@ export function TeamManagePanel({
                 title={view === "records" ? "기록 열람" : "구성원"}
                 description={
                   view === "records"
-                    ? "멤버를 선택해 마스킹 기록 열람을 켭니다."
-                    : "역할과 위임 권한을 설정합니다."
+                    ? "멤버를 눌러 회의별 열람을 설정합니다."
+                    : undefined
                 }
                 action={
                   canInvite && view === "members" ? (
@@ -948,10 +1033,10 @@ export function TeamManagePanel({
                 <div className="divide-y divide-border">
                   {previewMembers.length === 0 ? (
                     <p className="px-6 py-10 text-center text-base text-muted">
-                      표시할 멤버가 없습니다.
+                      멤버가 없습니다.
                     </p>
                   ) : (
-                    previewMembers.map((member) => (
+                    visibleMembers.map((member) => (
                       <button
                         type="button"
                         key={member.userId}
@@ -959,11 +1044,11 @@ export function TeamManagePanel({
                           setSelectedUserId(member.userId);
                           setBulkConfirmed(false);
                         }}
-                        className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-6 py-4 text-left transition-colors hover:bg-surface/70 sm:gap-4 sm:py-5"
+                        className="grid min-h-14 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-6 py-3.5 text-left transition-colors hover:bg-surface/70 sm:gap-4"
                       >
-                        <Avatar className="h-11 w-11 shrink-0 ring-1 ring-border">
+                        <Avatar className="h-12 w-12 shrink-0 ring-1 ring-border">
                           <AvatarImage src={member.user.image ?? undefined} />
-                          <AvatarFallback className="bg-white text-sm font-semibold text-foreground">
+                          <AvatarFallback className="bg-white text-base font-semibold text-foreground">
                             {initials(member.user.name, member.user.email)}
                           </AvatarFallback>
                         </Avatar>
@@ -971,11 +1056,8 @@ export function TeamManagePanel({
                           <span className="block truncate text-lg font-semibold text-foreground">
                             {member.user.name || member.user.handle}
                           </span>
-                          <span className="mt-1 block text-base text-muted">
+                          <span className="mt-0.5 block truncate text-base text-muted">
                             {ROLE_LABEL[member.role]}
-                            {member.user.handle
-                              ? `, @${member.user.handle}`
-                              : ""}
                           </span>
                         </span>
                         <ChevronRight
@@ -987,6 +1069,14 @@ export function TeamManagePanel({
                     ))
                   )}
                 </div>
+                <ListPager
+                  total={previewMembers.length}
+                  visible={memberListPage.visible}
+                  pageSize={PAGE_MEMBERS}
+                  onMore={() => memberListPage.showMore(previewMembers.length)}
+                  onCollapse={memberListPage.collapse}
+                  padded
+                />
               </ManageCard>
             )
           ) : null}
@@ -1242,18 +1332,14 @@ function InviteDialog({
               </SettingRow>
               {(
                 [
-                  ["canInvite", "멤버 초대"],
-                  ["canCreateMeeting", "회의 만들기"],
-                  ["canManageRecordAccess", "기록 열람 관리"],
+                  "canInvite",
+                  "canCreateMeeting",
+                  "canManageRecordAccess",
                 ] as const
-              ).map(([key, label]) => (
-                <SettingRow
-                  key={key}
-                  label={label}
-                  description={PERMISSION_META[key].description}
-                >
+              ).map((key) => (
+                <SettingRow key={key} label={PERMISSION_META[key].label}>
                   <Toggle
-                    label={label}
+                    label={PERMISSION_META[key].label}
                     checked={permissions[key]}
                     onChange={(value) =>
                       setPermissions((current) => ({
@@ -1264,9 +1350,7 @@ function InviteDialog({
                   />
                 </SettingRow>
               ))}
-              <p className="py-3.5 text-base text-muted">
-                초대는 1시간 후 만료됩니다.
-              </p>
+              <p className="py-3.5 text-base text-muted">1시간 후 만료</p>
             </div>
           )}
         </div>

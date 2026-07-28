@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ export function TeamSheet({
   children,
   footer,
   dismissOnScrim = true,
+  closeMode = "close",
   className,
 }: {
   open: boolean;
@@ -24,6 +25,8 @@ export function TeamSheet({
   children: ReactNode;
   footer?: ReactNode;
   dismissOnScrim?: boolean;
+  /** close: X, back: ChevronLeft + 돌아가기 (detail entry) */
+  closeMode?: "close" | "back";
   className?: string;
 }) {
   const titleId = useId();
@@ -107,23 +110,44 @@ export function TeamSheet({
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
-          <h2
-            id={titleId}
-            className="min-w-0 truncate text-xl font-semibold tracking-tight text-foreground"
-          >
-            {title}
-          </h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-10 w-10 shrink-0 rounded-full text-muted hover:bg-surface hover:text-foreground"
-            aria-label="닫기"
-            onClick={onClose}
-          >
-            <X className="h-5 w-5" strokeWidth={1.75} />
-          </Button>
+        <header className="shrink-0 border-b border-border px-5 py-3 sm:px-6">
+          {closeMode === "back" ? (
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex min-h-12 items-center gap-1.5 rounded-xl px-1 text-base text-muted transition-colors hover:bg-surface hover:text-foreground"
+              >
+                <ChevronLeft className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                돌아가기
+              </button>
+              <h2
+                id={titleId}
+                className="mt-1 truncate text-xl font-semibold tracking-tight text-foreground"
+              >
+                {title}
+              </h2>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <h2
+                id={titleId}
+                className="min-w-0 truncate text-xl font-semibold tracking-tight text-foreground"
+              >
+                {title}
+              </h2>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-12 w-12 shrink-0 rounded-full text-muted hover:bg-surface hover:text-foreground"
+                aria-label="닫기"
+                onClick={onClose}
+              >
+                <X className="h-5 w-5" strokeWidth={1.75} />
+              </Button>
+            </div>
+          )}
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {children}

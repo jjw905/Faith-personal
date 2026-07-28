@@ -1,12 +1,18 @@
 "use client";
 
-import { Download, Search, Trash2, Upload, X } from "lucide-react";
+import {
+  Download,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
 
-/** 모바일: 검색+액션 한 덩어리. 검색은 바 위로 팝업. */
+/** 모바일: 검색+액션 한 덩어리. 검색은 바 위로 팝업. 페이지는 섹션 푸터. */
 export function VaultMobileActionBar({
   query,
   onQueryChange,
@@ -76,12 +82,12 @@ export function VaultMobileActionBar({
   if (!mounted) return null;
 
   const actionClass =
-    "inline-flex h-11 min-w-11 cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 text-[15px] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50";
+    "inline-flex min-h-12 min-w-12 cursor-pointer items-center justify-center gap-1 rounded-full px-2 text-base font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50";
   const hasQuery = query.trim().length > 0;
 
   return createPortal(
     <div
-      className="pointer-events-none fixed inset-x-0 z-[55] sm:hidden"
+      className="pointer-events-none fixed inset-x-0 z-[55] md:hidden"
       style={{
         bottom: "calc(env(safe-area-inset-bottom, 0px) + 1.25rem)",
       }}
@@ -95,9 +101,9 @@ export function VaultMobileActionBar({
             className="vault-search-pop-in absolute bottom-full left-1/2 mb-2 w-[min(18rem,calc(100vw-1.5rem))]"
             role="search"
           >
-            <div className="flex h-11 items-center gap-1 rounded-full border border-border bg-card/95 px-3 shadow-float backdrop-blur-md">
+            <div className="flex min-h-12 items-center gap-1 rounded-full border border-border bg-card/95 px-3 shadow-float backdrop-blur-md">
               <Search
-                className="h-4 w-4 shrink-0 text-muted"
+                className="h-5 w-5 shrink-0 text-muted"
                 strokeWidth={1.75}
                 aria-hidden
               />
@@ -110,7 +116,7 @@ export function VaultMobileActionBar({
                   value={query}
                   onChange={(e) => onQueryChange(e.target.value)}
                   placeholder="파일 검색"
-                  className="w-full bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted-2 [&::-webkit-search-cancel-button]:hidden"
+                  className="w-full bg-transparent py-2 text-base text-foreground outline-none placeholder:text-muted-2 [&::-webkit-search-cancel-button]:hidden"
                   autoComplete="off"
                   enterKeyHint="search"
                 />
@@ -119,26 +125,29 @@ export function VaultMobileActionBar({
                 <button
                   type="button"
                   onClick={() => onQueryChange("")}
-                  className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-foreground"
+                  className="inline-flex min-h-12 min-w-12 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-foreground"
                   aria-label="검색어 지우기"
                 >
-                  <X className="h-3.5 w-3.5" strokeWidth={2} />
+                  <X className="h-5 w-5" strokeWidth={2} />
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => setSearchOpen(false)}
-                  className="inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-foreground"
+                  className="inline-flex min-h-12 min-w-12 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-foreground"
                   aria-label="검색 닫기"
                 >
-                  <X className="h-3.5 w-3.5" strokeWidth={2} />
+                  <X className="h-5 w-5" strokeWidth={2} />
                 </button>
               )}
             </div>
           </div>
         ) : null}
 
-        <div className="flex items-center gap-0.5 rounded-full border border-border bg-card/95 p-1.5 shadow-float backdrop-blur-md">
+        <div
+          className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full border border-border bg-card/95 p-1.5 shadow-float backdrop-blur-md [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="보관함 도구"
+        >
           <button
             type="button"
             className={cn(

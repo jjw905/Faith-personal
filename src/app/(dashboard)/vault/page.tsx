@@ -12,7 +12,14 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { PageContainer } from "@/components/layout/page-container";
@@ -45,7 +52,28 @@ import {
 } from "@/lib/vault";
 import { cn } from "@/lib/utils";
 
-const PAGE_SIZE = 12;
+/** Desktop: one page + pager fits without inner list scroll. Mobile: fewer taller rows. */
+const PAGE_SIZE_DESKTOP = 8;
+const PAGE_SIZE_MOBILE = 5;
+
+/**
+ * List body floor ≈ full page so short lists do not shrink the card.
+ * Row: more-btn + py (72 / 76 / 68). + ~1 date-group header (36 / 40).
+ */
+const LIST_BODY_MIN_CLASS =
+  "min-h-[calc(5*4.5rem+2.25rem)] sm:min-h-[calc(5*4.75rem+2.5rem)] md:min-h-[calc(8*4.25rem+2.5rem)]";
+
+function useIsNarrowMobile() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia("(max-width: 767px)");
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia("(max-width: 767px)").matches,
+    () => false,
+  );
+}
 
 const CARD_SHADOW =
   "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
@@ -93,6 +121,8 @@ function groupVaultByDay(
 /** 유저별 스토리지 보관함 (한도 500MB). */
 export default function VaultPage() {
   const { scenarioId, isLive } = usePageUxPreview();
+  const isMobile = useIsNarrowMobile();
+  const pageSize = isMobile ? PAGE_SIZE_MOBILE : PAGE_SIZE_DESKTOP;
   const pageRef = useRef<HTMLDivElement>(null);
   const chromeRef = useRef<HTMLDivElement>(null);
   const [items, setItems] = useState<VaultItemMeta[]>([]);
@@ -195,7 +225,7 @@ export default function VaultPage() {
     return viewItems.filter((item) => item.name.toLowerCase().includes(q));
   }, [viewItems, query]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, totalPages);
 
   useEffect(() => {
@@ -210,9 +240,9 @@ export default function VaultPage() {
   }, [page, totalPages]);
 
   const pageItems = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, currentPage]);
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
 
   const grouped = useMemo(() => groupVaultByDay(pageItems), [pageItems]);
 
@@ -430,31 +460,29 @@ export default function VaultPage() {
   }
 
   return (
-    <PageContainer soft>
+    <PageContainer soft className="min-h-0">
       <div
         ref={pageRef}
-        className="mx-auto flex w-full max-w-5xl flex-col gap-4 pb-24 sm:pb-0"
+        className="mx-auto flex w-full max-w-5xl flex-col gap-2 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:gap-3 md:pb-0"
       >
-        <header className="min-w-0 space-y-2.5 sm:space-y-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <h1 className="shrink-0 text-2xl font-bold leading-none tracking-tight text-foreground">
-              보관함
-            </h1>
-            <div className="min-w-0 flex-1 sm:hidden">
-              <VaultQuotaGauge usage={viewUsage} compact />
-            </div>
+        <header className="relative z-20 flex min-w-0 shrink-0 flex-col gap-1.5 md:gap-2.5">
+          <h1 className="shrink-0 text-2xl font-bold leading-none tracking-tight text-foreground">
+            보관함
+          </h1>
+          <div className="min-w-0 md:hidden">
+            <VaultQuotaGauge usage={viewUsage} />
           </div>
           <div
             ref={chromeRef}
-            className="hidden min-w-0 items-center gap-2.5 sm:flex"
+            className="hidden min-w-0 items-center gap-2.5 md:flex"
           >
-            <div className="min-w-0 sm:w-[15rem] sm:shrink-0">
+            <div className="min-w-0 flex-1 md:max-w-md md:flex-none md:w-[20rem]">
               <VaultQuotaGauge usage={viewUsage} />
             </div>
             <VaultRoundSearch
               query={query}
               onQueryChange={setQuery}
-              className="min-w-0 sm:flex-none"
+              className="min-w-0 md:flex-none"
             />
             <div className="ml-auto flex shrink-0 items-center gap-2">
               {selectMode ? (
@@ -660,12 +688,12 @@ export default function VaultPage() {
             void ingestFiles(event.dataTransfer.files);
           }}
           className={cn(
-            "flex min-h-[36rem] flex-col overflow-hidden bg-card transition-[box-shadow,background-color] sm:min-h-[42rem]",
+            "flex min-h-[16rem] flex-col bg-card transition-[box-shadow,background-color]",
             CARD_SHADOW,
             dragOver && !quotaFull && "bg-primary-soft ring-2 ring-primary",
           )}
         >
-          <div className="shrink-0 space-y-0 px-4 pb-0 pt-5 sm:px-6 sm:pt-6">
+          <div className="space-y-0 px-4 pb-0 pt-3 sm:px-6 sm:pt-5">
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               {selectMode ? (
                 <button
@@ -710,9 +738,9 @@ export default function VaultPage() {
                 </p>
               ) : null}
             </div>
-            <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+            <div className="mt-2 h-0.5 w-full bg-foreground sm:mt-2.5" aria-hidden />
             {viewItems.length > 0 && !dragOver ? (
-              <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-border px-0 sm:gap-3">
+              <div className="flex h-9 shrink-0 items-center gap-2.5 border-b border-border px-0 sm:h-11 sm:gap-3">
                 {selectMode ? (
                   <span className="w-6 shrink-0" aria-hidden />
                 ) : null}
@@ -727,15 +755,20 @@ export default function VaultPage() {
                   <span className="w-[3.75rem] text-center text-base font-medium text-muted sm:w-[4.5rem]">
                     용량
                   </span>
-                  <span className="w-10 shrink-0" aria-hidden />
+                  <span className="w-12 shrink-0 md:w-10" aria-hidden />
                 </div>
               </div>
             ) : null}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div
+            className={cn(
+              "flex flex-col md:flex-1",
+              LIST_BODY_MIN_CLASS,
+            )}
+          >
             {viewItems.length === 0 ? (
-              <div className="flex h-full min-h-0 items-center justify-center px-4 py-10">
+              <div className="flex flex-1 items-center justify-center px-4 py-8">
                 <div className="flex items-center gap-3 text-muted">
                   <Inbox
                     className="h-6 w-6 shrink-0"
@@ -746,13 +779,13 @@ export default function VaultPage() {
                 </div>
               </div>
             ) : filtered.length === 0 ? (
-              <p className="px-4 py-6 text-base leading-5 text-muted sm:px-6">
+              <p className="flex flex-1 items-center px-4 py-5 text-base leading-5 text-muted sm:px-6">
                 검색 결과가 없습니다.
               </p>
             ) : (
               grouped.map((group) => (
                 <div key={group.key}>
-                  <p className="sticky top-0 z-10 bg-card px-4 pb-1.5 pt-3 text-base font-semibold tracking-wide text-muted sm:px-6">
+                  <p className="bg-card px-4 pb-1 pt-2 text-base font-semibold tracking-wide text-muted sm:px-6 sm:pb-1.5 sm:pt-2.5">
                     {group.label}
                   </p>
                   <ul className="divide-y divide-border">
@@ -785,7 +818,7 @@ export default function VaultPage() {
           </div>
 
           <nav
-            className="flex shrink-0 items-center justify-center gap-1 px-2 py-2.5"
+            className="flex min-w-0 flex-wrap items-center justify-center gap-1 border-t border-border bg-card px-2 py-2"
             aria-label="보관 파일 페이지"
           >
             <button
@@ -794,7 +827,7 @@ export default function VaultPage() {
               disabled={currentPage <= 1 || filtered.length === 0}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className={cn(
-                "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                "inline-flex min-h-12 min-w-12 items-center justify-center rounded-full transition-colors md:h-10 md:min-h-0 md:w-10 md:min-w-0",
                 currentPage <= 1 || filtered.length === 0
                   ? "cursor-default text-muted-2"
                   : "cursor-pointer text-foreground hover:bg-surface",
@@ -813,7 +846,7 @@ export default function VaultPage() {
                   disabled={filtered.length === 0}
                   onClick={() => setPage(num)}
                   className={cn(
-                    "inline-flex h-10 min-w-10 items-center justify-center rounded-full px-2 text-base tabular-nums transition-colors",
+                    "inline-flex min-h-12 min-w-12 items-center justify-center rounded-full px-2 text-base tabular-nums transition-colors md:h-10 md:min-h-0 md:min-w-10",
                     filtered.length === 0
                       ? "cursor-default font-medium text-muted-2"
                       : active
@@ -831,7 +864,7 @@ export default function VaultPage() {
               disabled={currentPage >= totalPages || filtered.length === 0}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className={cn(
-                "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                "inline-flex min-h-12 min-w-12 items-center justify-center rounded-full transition-colors md:h-10 md:min-h-0 md:w-10 md:min-w-0",
                 currentPage >= totalPages || filtered.length === 0
                   ? "cursor-default text-muted-2"
                   : "cursor-pointer text-foreground hover:bg-surface",
@@ -846,32 +879,25 @@ export default function VaultPage() {
   );
 }
 
-/** 타이틀 옆 용량 게이지. 사용량 / 한도. */
-function VaultQuotaGauge({
-  usage,
-  compact = false,
-}: {
-  usage: VaultUsage | null;
-  compact?: boolean;
-}) {
+/** 타이틀 아래(모바일) / 크롬 좌측(데스크톱) 용량 게이지. 사용량 / 한도. */
+function VaultQuotaGauge({ usage }: { usage: VaultUsage | null }) {
   const quota = usage?.quota ?? VAULT_QUOTA_BYTES;
   const used = usage?.used ?? 0;
   const ratio = quota > 0 ? Math.min(1, used / quota) : 0;
   const pct = Math.round(ratio * 1000) / 10;
-  const barPct = Math.max(2, Math.round(ratio * 100));
+  const barPct = Math.min(100, Math.max(0, (used / Math.max(quota, 1)) * 100));
   const tight = ratio >= 0.9;
 
   return (
     <div
       className={cn(
-        "flex h-11 w-full min-w-0 items-center gap-2 rounded-full bg-card ring-1 ring-border",
+        "flex h-11 w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full bg-card px-3.5 ring-1 ring-border sm:gap-3 sm:px-4",
         "shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)]",
-        compact ? "px-3" : "gap-2.5 px-3.5 sm:px-4",
       )}
-      title={`${pct}% 사용`}
+      title={`${pct}% 사용, ${formatVaultSize(used)} / ${formatVaultSize(quota)}`}
     >
       <div
-        className="relative h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2"
+        className="relative h-2 min-w-[7rem] flex-1 overflow-hidden rounded-full bg-surface-2"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -888,8 +914,7 @@ function VaultQuotaGauge({
       </div>
       <p
         className={cn(
-          "shrink-0 whitespace-nowrap text-base font-semibold tabular-nums",
-          compact && "text-sm",
+          "min-w-0 max-w-[48%] shrink-0 truncate text-right text-base font-semibold tabular-nums leading-none",
           tight ? "text-warning" : "text-foreground",
         )}
       >
@@ -1019,7 +1044,7 @@ function VaultItemMoreMenu({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-10 w-10 cursor-pointer rounded-full text-muted hover:bg-surface-2 hover:text-foreground"
+        className="h-12 w-12 cursor-pointer rounded-full text-muted hover:bg-surface-2 hover:text-foreground md:h-10 md:w-10"
         aria-label={`${fileName} 더보기`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -1058,7 +1083,7 @@ function VaultListItem({
   return (
     <li
       className={cn(
-        "flex min-h-14 min-w-0 items-center gap-2.5 px-4 py-3.5 transition-colors sm:gap-3 sm:px-6",
+        "flex min-h-12 min-w-0 items-center gap-2.5 px-4 py-3 transition-colors sm:min-h-14 sm:gap-3 sm:px-6 sm:py-3.5",
         selecting && "cursor-pointer",
         selecting && checked
           ? "bg-primary/15"
@@ -1125,7 +1150,7 @@ function VaultListItem({
           {formatVaultSize(item.size)}
         </span>
         {selecting ? (
-          <span className="w-10 shrink-0" aria-hidden />
+          <span className="w-12 shrink-0 md:w-10" aria-hidden />
         ) : (
           <VaultItemMoreMenu
             fileName={item.name}

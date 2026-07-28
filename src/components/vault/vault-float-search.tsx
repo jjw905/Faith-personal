@@ -214,7 +214,7 @@ export function VaultFloatSearch({
 
   return createPortal(
     <div
-      className="pointer-events-none fixed z-[60] max-sm:hidden"
+      className="pointer-events-none fixed z-[60] max-md:hidden"
       style={{ left: floatBox.left, top: floatBox.top }}
     >
       <div className="pointer-events-auto">
