@@ -6,7 +6,7 @@ import { VoiceStage } from "@/components/marketing/voice-stage";
 /** 랜딩 히어로 — xl+ 2열 / 그 아래 1열. 배치 전환만 FLIP으로 부드럽게. */
 export function Hero() {
   return (
-    <section className="relative -mt-16 flex flex-col overflow-x-clip bg-[#f0f1f4] pt-16">
+    <section className="relative -mt-16 flex flex-col overflow-x-clip bg-background pt-16">
       <VoiceStage />
 
       <HeroLayout intro={<HeroIntro />} chat={<ChatMock />} />

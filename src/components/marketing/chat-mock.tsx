@@ -577,11 +577,8 @@ export function ChatMock() {
   return (
     <div
       data-chat-mock
-      className="w-full rounded-3xl bg-card p-5 xl:p-6"
-      style={{
-        boxShadow: "0 12px 40px rgba(17, 24, 39, 0.1)",
-        contain: "layout paint",
-      }}
+      className="w-full rounded-3xl bg-card p-5 shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border xl:p-6"
+      style={{ contain: "layout paint" }}
     >
       <div className="flex h-[400px] flex-col xl:h-[440px]">
         <div

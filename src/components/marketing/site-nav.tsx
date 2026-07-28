@@ -29,7 +29,7 @@ export function SiteNav() {
     "shrink-0 text-base font-semibold text-foreground/80 transition-colors hover:text-foreground";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-[#f0f1f4] shadow-[0_1px_0_rgba(17,24,39,0.04)]">
+    <header className="sticky top-0 z-40 border-b border-border/60 bg-background shadow-[0_1px_0_rgba(17,24,39,0.04)]">
       <Container className="flex h-16 items-center justify-between gap-2 px-[clamp(1rem,3.5vw,3rem)]">
         <div className="flex min-w-0 items-center gap-[clamp(0.875rem,2.5vw,1.75rem)]">
           <Link

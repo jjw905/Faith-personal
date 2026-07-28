@@ -9,6 +9,7 @@ import {
   findDesignScene,
 } from "@/components/design/design-catalog";
 import { DesignFrame } from "@/components/design/design-frame";
+import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { cn } from "@/lib/utils";
 
 /** 개발전용. 현재 코드의 제품 컴포넌트만 재현. */
@@ -16,6 +17,13 @@ export function DesignLab() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const {
+    enabled: uxEnabled,
+    supported: uxSupported,
+    surface: uxSurface,
+    scenarioId: uxScenarioId,
+    isLive: uxLive,
+  } = usePageUxPreview();
 
   const initial = findDesignScene(
     searchParams.get("cat"),
@@ -31,8 +39,6 @@ export function DesignLab() {
     if (s) setSceneId(s);
   }, [searchParams]);
 
-  const { category, scene } = findDesignScene(catId, sceneId);
-
   const select = useCallback(
     (nextCat: string, nextScene: string) => {
       setCatId(nextCat);
@@ -44,6 +50,25 @@ export function DesignLab() {
     },
     [pathname, router],
   );
+
+  /** 상단 UX 미리보기 컨트롤 → 인증 씬 동기화. */
+  useEffect(() => {
+    if (!uxEnabled || !uxSupported || uxSurface.id !== "design.auth") return;
+    if (uxLive) return;
+    if (catId === "auth" && sceneId === uxScenarioId) return;
+    select("auth", uxScenarioId);
+  }, [
+    uxEnabled,
+    uxSupported,
+    uxSurface.id,
+    uxLive,
+    uxScenarioId,
+    catId,
+    sceneId,
+    select,
+  ]);
+
+  const { category, scene } = findDesignScene(catId, sceneId);
 
   const Preview = scene.Preview;
 

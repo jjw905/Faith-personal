@@ -9,6 +9,7 @@ import {
   FileAudio,
   FileWarning,
   LayoutDashboard,
+  Mail,
   MessageSquare,
   Sparkles,
 } from "lucide-react";
@@ -20,6 +21,12 @@ import {
   SceneAnimRecordBeat,
   SceneAnimRunningDots,
 } from "@/components/design/scenes/animation-scenes";
+import {
+  SceneSignupEmailVerify,
+  SceneSignupEmailVerifyCode,
+  SceneSignupEmailVerifyCodeFilled,
+  SceneSignupEmailVerifyConfirm,
+} from "@/components/design/scenes/auth-scenes";
 import {
   SceneDuplicateVaultName,
   SceneMaskStylePopup,
@@ -75,6 +82,45 @@ export const DESIGN_KIND_LABEL: Record<DesignSceneKind, string> = {
 };
 
 export const DESIGN_CATEGORIES: DesignCategory[] = [
+  {
+    id: "auth",
+    label: "인증",
+    icon: Mail,
+    scenes: [
+      {
+        id: "signup-email-verify",
+        label: "이메일 인증",
+        route: "/signup",
+        kind: "trigger",
+        trigger: "SignupEmailVerify step=email",
+        Preview: SceneSignupEmailVerify,
+      },
+      {
+        id: "signup-email-code",
+        label: "이메일 인증 확인",
+        route: "/signup",
+        kind: "trigger",
+        trigger: "SignupEmailVerify step=code",
+        Preview: SceneSignupEmailVerifyCode,
+      },
+      {
+        id: "signup-email-code-filled",
+        label: "인증번호 입력됨",
+        route: "/signup",
+        kind: "trigger",
+        trigger: "SignupEmailVerify code=filled",
+        Preview: SceneSignupEmailVerifyCodeFilled,
+      },
+      {
+        id: "signup-email-confirmed",
+        label: "이메일 인증 완료",
+        route: "/signup",
+        kind: "trigger",
+        trigger: "SignupEmailVerify step=confirmed",
+        Preview: SceneSignupEmailVerifyConfirm,
+      },
+    ],
+  },
   {
     id: "processing",
     label: "처리중",

@@ -35,7 +35,7 @@ const linkCls =
 /** 하단 푸터 — 제품/회사/법률 3열(가운데 기준). 아주 좁을 때만 세로. */
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border bg-[#f0f1f4]">
+    <footer className="border-t border-border bg-background">
       <Container className="py-12 sm:py-14">
         <div className="mx-auto grid w-full max-w-3xl grid-cols-3 justify-items-center gap-x-[clamp(1.25rem,4vw,5.5rem)] gap-y-8 max-[359px]:grid-cols-1">
           {COLUMNS.map((col) => (

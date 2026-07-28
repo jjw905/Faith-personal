@@ -99,7 +99,7 @@ export function FeatureTimeline() {
   return (
     <section
       id="features"
-      className="scroll-mt-20 bg-[#f0f1f4] pb-20 pt-0 xl:pb-28"
+      className="scroll-mt-20 bg-background pb-20 pt-0 xl:pb-28"
     >
       <Container>
         <FeaturesHeadline />

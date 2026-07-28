@@ -64,13 +64,17 @@ export function AuthShell({
   children,
   mainClassName,
   contentAlign = "default",
+  embedded = false,
 }: {
   children: ReactNode;
   mainClassName?: string;
   /** `raised` = less top / more bottom pad (signup, forgot, reset). */
   contentAlign?: keyof typeof contentPad;
+  /** 디자인 랩 등 임베드: document 배경 조작 없이 min-h-full. */
+  embedded?: boolean;
 }) {
   useEffect(() => {
+    if (embedded) return;
     const html = document.documentElement;
     const body = document.body;
     const prevHtml = html.style.backgroundColor;
@@ -89,18 +93,30 @@ export function AuthShell({
       html.style.overscrollBehaviorY = prevHtmlOverscroll;
       body.style.overscrollBehaviorY = prevBodyOverscroll;
     };
-  }, []);
+  }, [embedded]);
 
   return (
-    <div className="flex min-h-dvh flex-col overflow-x-hidden bg-background">
+    <div
+      className={cn(
+        "flex flex-col overflow-x-hidden bg-background",
+        embedded ? "min-h-full" : "min-h-dvh",
+      )}
+      style={embedded ? { backgroundColor: AUTH_BG } : undefined}
+    >
       <header className="shrink-0 border-b border-border bg-background">
         <Container className="flex h-16 items-center">
-          <Link
-            href="/"
-            className="text-xl font-bold tracking-tight text-foreground"
-          >
-            Faith
-          </Link>
+          {embedded ? (
+            <span className="text-xl font-bold tracking-tight text-foreground">
+              Faith
+            </span>
+          ) : (
+            <Link
+              href="/"
+              className="text-xl font-bold tracking-tight text-foreground"
+            >
+              Faith
+            </Link>
+          )}
         </Container>
       </header>
 
@@ -114,7 +130,7 @@ export function AuthShell({
         <div
           className={cn(
             "flex w-full max-w-md flex-col justify-center",
-            contentPad[contentAlign],
+            embedded ? "pb-16 pt-4 sm:pb-20" : contentPad[contentAlign],
           )}
         >
           {children}

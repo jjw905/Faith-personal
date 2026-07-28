@@ -3,7 +3,7 @@ export function VoiceStage() {
   return (
     <div
       aria-hidden
-      className="absolute inset-0 overflow-hidden bg-[#f0f1f4]"
+      className="absolute inset-0 overflow-hidden bg-background"
     />
   );
 }

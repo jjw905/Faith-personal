@@ -2,7 +2,8 @@
 
 import { useEffect, type ReactNode } from "react";
 
-const MARKETING_BG = "#f0f1f4";
+/** Soft canvas — matches account/settings (`--background` #fbfbfd). */
+const MARKETING_BG = "#fbfbfd";
 
 /** 마케팅 페이지 — 하단/오버스크롤 흰 여백이 보이지 않도록 html/body 배경을 맞춤. */
 export function MarketingShell({ children }: { children: ReactNode }) {
@@ -28,6 +29,6 @@ export function MarketingShell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[#f0f1f4]">{children}</div>
+    <div className="flex min-h-dvh flex-col bg-background">{children}</div>
   );
 }

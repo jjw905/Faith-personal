@@ -151,6 +151,28 @@ const ADMIN_LIST_SCENARIOS: PageUxScenario[] = [
   ...CHROME_POPUPS,
 ];
 
+/** 회원가입 이메일 인증 (메일 없이 미리보기). 디자인 랩 cat=auth 와 동일 id. */
+const AUTH_SIGNUP_VERIFY = {
+  email: { id: "signup-email-verify", label: "이메일 인증" },
+  code: { id: "signup-email-code", label: "이메일 인증 확인" },
+  codeFilled: {
+    id: "signup-email-code-filled",
+    label: "인증번호 입력됨",
+  },
+  confirmed: {
+    id: "signup-email-confirmed",
+    label: "이메일 인증 완료",
+  },
+} as const satisfies Record<string, PageUxScenario>;
+
+const DESIGN_AUTH_SCENARIOS: PageUxScenario[] = [
+  LIVE,
+  AUTH_SIGNUP_VERIFY.email,
+  AUTH_SIGNUP_VERIFY.code,
+  AUTH_SIGNUP_VERIFY.codeFilled,
+  AUTH_SIGNUP_VERIFY.confirmed,
+];
+
 export type PageUxSurface = {
   /** 기억/구분용. 실제 앱 경로·쿼리에 대응 (가짜 /team/desk 없음). */
   id: string;
@@ -161,7 +183,11 @@ export type PageUxSurface = {
 
 type SurfaceRule = PageUxSurface & {
   /** 더 구체적인 규칙이 앞에 오도록 나열. */
-  match: (pathname: string, manage: string | null) => boolean;
+  match: (
+    pathname: string,
+    manage: string | null,
+    cat: string | null,
+  ) => boolean;
 };
 
 /**
@@ -169,6 +195,13 @@ type SurfaceRule = PageUxSurface & {
  * 목록 상태 + 그 페이지에서 뜨는 팝업/시트 + 로딩 애니메이션까지 포함.
  */
 const SURFACE_RULES: SurfaceRule[] = [
+  {
+    id: "design.auth",
+    label: "인증",
+    scenarios: DESIGN_AUTH_SCENARIOS,
+    match: (pathname, _manage, cat) =>
+      pathname === "/design" && cat === "auth",
+  },
   {
     id: "team.members",
     label: "팀 구성원",
@@ -271,15 +304,23 @@ function manageFromSearch(search: string): string | null {
   return value && value.length > 0 ? value : null;
 }
 
-/** pathname + ?manage= 기준 현재 화면. */
+function catFromSearch(search: string): string | null {
+  if (!search) return null;
+  const raw = search.startsWith("?") ? search.slice(1) : search;
+  const value = new URLSearchParams(raw).get("cat");
+  return value && value.length > 0 ? value : null;
+}
+
+/** pathname + ?manage= / ?cat= 기준 현재 화면. */
 export function resolvePageUxSurface(
   pathname: string,
   search = "",
 ): PageUxSurface {
   const path = pathname.replace(/\/+$/, "") || "/";
   const manage = manageFromSearch(search);
+  const cat = catFromSearch(search);
   for (const rule of SURFACE_RULES) {
-    if (rule.match(path, manage)) {
+    if (rule.match(path, manage, cat)) {
       return {
         id: rule.id,
         label: rule.label,
@@ -324,3 +365,4 @@ export function isPageUxNotificationScenario(scenarioId: string): boolean {
 export const DEFAULT_PAGE_UX_SCENARIOS = LIST_SCENARIOS;
 export const PAGE_UX_LIVE_SCENARIO = LIVE;
 export const PAGE_UX_POPUPS = POPUP;
+export const PAGE_UX_AUTH_SIGNUP_VERIFY = AUTH_SIGNUP_VERIFY;

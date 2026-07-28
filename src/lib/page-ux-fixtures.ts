@@ -685,3 +685,21 @@ export function fixtureAdminTeamsFull(count = 9): FixtureAdminTeam[] {
     };
   });
 }
+
+/** UX 미리보기: 회원가입 이메일 인증. */
+export type SignupEmailVerifyFixture = {
+  email: string;
+  otp: string;
+  message: string;
+};
+
+export const FIXTURE_SIGNUP_VERIFY_EMAIL = "preview@faith.local";
+export const FIXTURE_SIGNUP_VERIFY_CODE = "123456";
+
+export function fixtureSignupEmailVerify(): SignupEmailVerifyFixture {
+  return {
+    email: FIXTURE_SIGNUP_VERIFY_EMAIL,
+    otp: FIXTURE_SIGNUP_VERIFY_CODE,
+    message: "인증번호를 발송했습니다.",
+  };
+}

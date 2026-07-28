@@ -17,14 +17,14 @@ export function HeroIntro() {
       <div className="mt-8 flex flex-wrap items-center gap-3 xl:mt-10 xl:gap-5">
         <CtaButton
           href="/dashboard"
-          className="min-h-12 rounded-2xl px-7 py-3.5 text-base xl:min-h-14 xl:rounded-[1.25rem] xl:px-10 xl:py-5 xl:text-xl"
+          className="min-h-12 rounded-2xl px-7 py-3.5 text-base shadow-soft xl:min-h-14 xl:rounded-[1.25rem] xl:px-10 xl:py-5 xl:text-xl"
         >
           시작하기
         </CtaButton>
         <CtaButton
           href="#features"
           variant="ghost"
-          className="min-h-12 rounded-2xl bg-[#ebe4d8] px-7 py-3.5 text-base text-foreground hover:bg-[#e0d8c8] xl:min-h-14 xl:rounded-[1.25rem] xl:px-10 xl:py-5 xl:text-xl"
+          className="min-h-12 rounded-2xl bg-[#ebe4d8] px-7 py-3.5 text-base text-foreground shadow-soft hover:bg-[#e0d8c8] xl:min-h-14 xl:rounded-[1.25rem] xl:px-10 xl:py-5 xl:text-xl"
         >
           둘러보기
         </CtaButton>
