@@ -42,6 +42,8 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "32mb",
       allowedOrigins: [
         "faith-web-r9q5i.ondigitalocean.app",
+        "dofaith.net",
+        "www.dofaith.net",
         "localhost:3000",
       ],
     },

@@ -700,6 +700,6 @@ export function fixtureSignupEmailVerify(): SignupEmailVerifyFixture {
   return {
     email: FIXTURE_SIGNUP_VERIFY_EMAIL,
     otp: FIXTURE_SIGNUP_VERIFY_CODE,
-    message: "인증번호를 발송했습니다.",
+    message: "해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요.",
   };
 }

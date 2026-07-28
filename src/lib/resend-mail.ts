@@ -2,9 +2,13 @@ import { Resend } from "resend";
 
 import {
   appUrl,
-  otpEmailHtml,
+  emailChangeOtpEmailHtml,
+  isMailAppUrlSafe,
   resetPasswordEmailHtml,
-} from "@/lib/mail-templates";
+  signupOtpEmailHtml,
+  signupRequestNoticeEmailHtml,
+  welcomeEmailHtml,
+} from "@/lib/mail";
 
 function fromAddress() {
   return process.env.AUTH_EMAIL_FROM || "Faith <onboarding@resend.dev>";
@@ -16,6 +20,13 @@ export function isResendConfigured() {
 }
 
 async function send(params: { to: string; subject: string; html: string }) {
+  if (!isMailAppUrlSafe()) {
+    console.error(
+      "[resend] refusing mail: AUTH_URL/app base is localhost or invalid in production",
+      appUrl(),
+    );
+    return { ok: false as const, reason: "invalid_app_url" as const };
+  }
   const key = process.env.AUTH_RESEND_KEY;
   if (!key) {
     return { ok: false as const, reason: "missing_key" as const };
@@ -34,16 +45,39 @@ async function send(params: { to: string; subject: string; html: string }) {
   return { ok: true as const };
 }
 
+/** 회원가입, 이메일 인증용 6자리 인증번호 */
+export async function sendSignupOtp(email: string, code: string) {
+  return send({
+    to: email,
+    subject: "[Faith] 이메일 인증번호",
+    html: signupOtpEmailHtml({ code }),
+  });
+}
+
+/** 기가입 주소로 가입 OTP 요청 시 — 로그인 안내 (UI는 동일하게 보냄) */
+export async function sendSignupRequestNotice(email: string) {
+  return send({
+    to: email,
+    subject: "[Faith] 로그인 안내",
+    html: signupRequestNoticeEmailHtml(),
+  });
+}
+
 /** 이메일 변경용 6자리 인증번호 */
 export async function sendEmailChangeOtp(email: string, code: string) {
   return send({
     to: email,
     subject: "[Faith] 이메일 변경 인증번호",
-    html: otpEmailHtml({
-      title: "이메일 변경 인증",
-      intro: "계정 이메일을 변경하려면 아래 인증번호를 입력해 주세요.",
-      code,
-    }),
+    html: emailChangeOtpEmailHtml({ code }),
+  });
+}
+
+/** 가입 완료 안내 (실패해도 가입은 유지) */
+export async function sendWelcomeEmail(email: string, name?: string | null) {
+  return send({
+    to: email,
+    subject: "[Faith] 가입을 환영합니다",
+    html: welcomeEmailHtml({ name }),
   });
 }
 

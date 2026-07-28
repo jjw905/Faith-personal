@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { isValidEmail } from "@/lib/auth-validation";
+import { consumeSignupProof } from "@/lib/otp";
 import { prisma } from "@/lib/prisma";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
 
-/** 소셜 가입 후 이메일 직접 등록 (Server Action 대신). */
+/** 소셜 가입 후 이메일 등록. 이메일 OTP 증명 필수. */
 export async function POST(request: Request) {
-  const limited = enforceAuthRateLimit(request, "signup-email", 10, 60_000);
+  const limited = enforceAuthRateLimit(request, "signup-email", 5, 15 * 60_000);
   if (limited) return limited;
 
   const session = await auth();
@@ -28,13 +29,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const data =
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>)
+      : {};
+
   const emailRaw =
-    typeof body === "object" &&
-    body !== null &&
-    "email" in body &&
-    typeof (body as { email: unknown }).email === "string"
-      ? (body as { email: string }).email.trim()
-      : "";
+    typeof data.email === "string" ? data.email.trim() : "";
+  const proof = typeof data.proof === "string" ? data.proof.trim() : "";
 
   if (!isValidEmail(emailRaw)) {
     return NextResponse.json(
@@ -44,14 +46,41 @@ export async function POST(request: Request) {
   }
   const email = emailRaw.toLowerCase();
 
+  if (!proof) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "이메일 인증이 필요합니다.",
+        code: "proof_required",
+      },
+      { status: 400 },
+    );
+  }
+
   const taken = await prisma.user.findFirst({
     where: { email, NOT: { id: session.user.id } },
     select: { id: true },
   });
   if (taken) {
     return NextResponse.json(
-      { ok: false, message: "이미 사용 중인 이메일입니다.", code: "taken" },
+      {
+        ok: false,
+        message: "이 이메일은 사용할 수 없습니다.",
+        code: "unavailable",
+      },
       { status: 409 },
+    );
+  }
+
+  const proofOk = await consumeSignupProof(email, proof);
+  if (!proofOk) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "이메일 인증이 만료되었습니다. 다시 인증해 주세요.",
+        code: "proof_expired",
+      },
+      { status: 400 },
     );
   }
 

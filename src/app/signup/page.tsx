@@ -22,7 +22,7 @@ export default async function SignupPage() {
       <div className="flex w-full flex-col">
         <SignupFlow />
 
-        <p className="mt-6 text-center text-base text-muted">
+        <p className="mt-6 text-center text-base text-muted whitespace-nowrap">
           이미 계정이 있으신가요?{" "}
           <Link
             href="/login"

@@ -58,7 +58,7 @@ export function SignupEmailVerifyRequestView({
           이메일 인증
         </h1>
         <p className="mt-2 text-base text-muted">
-          가입에 사용할 이메일로 인증번호를 받습니다
+          가입에 사용할 이메일로 안내를 받습니다
         </p>
       </div>
 
@@ -125,7 +125,7 @@ export function SignupEmailVerifyCodeView({
   email,
   otp = "",
   onOtpChange,
-  message = "인증번호를 발송했습니다.",
+  message = "해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요.",
   pending = false,
   error = "",
   onConfirm,

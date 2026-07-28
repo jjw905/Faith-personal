@@ -103,7 +103,7 @@ export function AuthShell({
       )}
       style={embedded ? { backgroundColor: AUTH_BG } : undefined}
     >
-      <header className="shrink-0 border-b border-border bg-background">
+      <header className="shrink-0 bg-background">
         <Container className="flex h-16 items-center">
           {embedded ? (
             <span className="text-xl font-bold tracking-tight text-foreground">
@@ -112,7 +112,7 @@ export function AuthShell({
           ) : (
             <Link
               href="/"
-              className="text-xl font-bold tracking-tight text-foreground"
+              className="inline-flex min-h-12 items-center text-xl font-bold tracking-tight text-foreground"
             >
               Faith
             </Link>

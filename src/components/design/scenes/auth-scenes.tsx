@@ -121,7 +121,7 @@ export function SceneSignupEmailVerifyCode() {
         preview
         forcedStep="code"
         initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
-        initialMessage="인증번호를 발송했습니다."
+        initialMessage="해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요."
         onBack={() => undefined}
       />
     </AuthSceneFrame>
@@ -137,7 +137,7 @@ export function SceneSignupEmailVerifyCodeFilled() {
         forcedStep="code"
         initialEmail={FIXTURE_SIGNUP_VERIFY_EMAIL}
         initialCode={FIXTURE_SIGNUP_VERIFY_CODE}
-        initialMessage="인증번호를 발송했습니다."
+        initialMessage="해당 이메일로 안내를 보냈습니다. 메일을 확인해 주세요."
         onBack={() => undefined}
       />
     </AuthSceneFrame>

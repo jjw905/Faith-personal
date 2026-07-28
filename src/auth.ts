@@ -13,7 +13,11 @@ import { expireManualOverridesForUser } from "@/lib/admin-expire";
 import { prisma } from "@/lib/prisma";
 import { platformAdminEmails } from "@/lib/platform-admin";
 import { verifyPassword } from "@/lib/password";
-import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
+import {
+  hashRateLimitEmail,
+  rateLimit,
+  resetRateLimit,
+} from "@/lib/rate-limit";
 
 class InvalidCredentials extends CredentialsSignin {
   code = "invalid_credentials";
@@ -23,6 +27,9 @@ class RateLimitedCredentials extends CredentialsSignin {
 }
 class DisabledCredentials extends CredentialsSignin {
   code = "disabled";
+}
+class UnverifiedEmailCredentials extends CredentialsSignin {
+  code = "email_unverified";
 }
 
 function adminEmails() {
@@ -210,19 +217,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             throw new InvalidCredentials();
           }
 
-          // IP + 이메일 단위 제한 (무차별 대입 완화)
+          const emailHash = hashRateLimitEmail(email);
+
+          // IP + 이메일 해시 제한 (서버 전용)
           const ipLimit = rateLimit({
             key: `login:ip:${ip}`,
-            limit: 10,
-            windowMs: 60_000,
-          });
-          const emailLimit = rateLimit({
-            key: `login:email:${email}`,
             limit: 8,
             windowMs: 15 * 60_000,
           });
+          const emailLimit = rateLimit({
+            key: `login:email:${emailHash}`,
+            limit: 5,
+            windowMs: 15 * 60_000,
+          });
           if (!ipLimit.ok || !emailLimit.ok) {
-            console.warn("[auth] login rate limited", ip, email);
+            console.warn("[auth] login rate limited", ip, emailHash);
             throw new RateLimitedCredentials();
           }
 
@@ -236,6 +245,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               role: true,
               disabled: true,
               passwordHash: true,
+              emailVerified: true,
             },
           });
           if (!user || !user.passwordHash) {
@@ -252,6 +262,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               role: true,
               disabled: true,
               passwordHash: true,
+              emailVerified: true,
             },
           });
           if (!fresh || !fresh.passwordHash) {
@@ -260,12 +271,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (fresh.disabled) {
             throw new DisabledCredentials();
           }
+          if (!fresh.emailVerified) {
+            throw new UnverifiedEmailCredentials();
+          }
           const ok = await verifyPassword(password, fresh.passwordHash);
           if (!ok) {
             throw new InvalidCredentials();
           }
 
-          resetRateLimit(`login:ip:${ip}`, `login:email:${email}`);
+          resetRateLimit(`login:ip:${ip}`, `login:email:${emailHash}`);
 
           return {
             id: fresh.id,

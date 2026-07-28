@@ -6,14 +6,16 @@ import {
   isValidKoreanName,
   isValidPassword,
 } from "@/lib/auth-validation";
+import { consumeSignupProof } from "@/lib/otp";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
+import { sendWelcomeEmail } from "@/lib/resend-mail";
 
 export async function POST(request: Request) {
   try {
-    const limited = enforceAuthRateLimit(request, "signup", 5, 60_000);
-    if (limited) return limited;
+  const limited = enforceAuthRateLimit(request, "signup", 5, 15 * 60_000);
+  if (limited) return limited;
 
     let body: unknown;
     try {
@@ -36,6 +38,7 @@ export async function POST(request: Request) {
     const passwordConfirm =
       typeof data.passwordConfirm === "string" ? data.passwordConfirm : "";
     const name = typeof data.name === "string" ? data.name.trim() : "";
+    const proof = typeof data.proof === "string" ? data.proof.trim() : "";
 
     if (!isValidEmail(email)) {
       return NextResponse.json(
@@ -44,10 +47,25 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!proof) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "이메일 인증이 필요합니다. 인증을 다시 진행해 주세요.",
+          code: "proof_required",
+        },
+        { status: 400 },
+      );
+    }
+
     try {
       if (await isEmailTaken(email)) {
         return NextResponse.json(
-          { ok: false, message: "이미 사용 중인 이메일입니다." },
+          {
+            ok: false,
+            message:
+              "가입을 완료할 수 없습니다. 로그인을 시도하거나 잠시 후 다시 시도해 주세요.",
+          },
           { status: 409 },
         );
       }
@@ -62,6 +80,18 @@ export async function POST(request: Request) {
             : "회원가입에 실패했습니다. 다시 시도해 주세요.",
         },
         { status: 503 },
+      );
+    }
+
+    const proofOk = await consumeSignupProof(email, proof);
+    if (!proofOk) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "이메일 인증이 만료되었습니다. 인증을 다시 진행해 주세요.",
+          code: "proof_expired",
+        },
+        { status: 400 },
       );
     }
 
@@ -132,6 +162,13 @@ export async function POST(request: Request) {
         { status: 503 },
       );
     }
+
+    void sendWelcomeEmail(email, name).catch((err) => {
+      console.error(
+        "[signup] welcome email",
+        err instanceof Error ? err.message.slice(0, 300) : err,
+      );
+    });
 
     return NextResponse.json({
       ok: true,

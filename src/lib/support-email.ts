@@ -1,5 +1,5 @@
 /** Faith 문의 수신 주소. 기본 메일 앱(mailto)으로 엽니다. */
-export const SUPPORT_EMAIL = "support@faith.app";
+export const SUPPORT_EMAIL = "support@support.dofaith.net";
 
 export type ClientOs = "mac" | "windows" | "other";
 

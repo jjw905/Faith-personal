@@ -30,6 +30,8 @@ const CODE_MESSAGES: Record<string, string> = {
   invalid_credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
   rate_limited: "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
   disabled: "비활성화된 계정입니다. 관리자에게 문의해 주세요.",
+  email_unverified:
+    "이메일 인증이 완료되지 않은 계정입니다. 고객지원에 문의해 주세요.",
   credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
 };
 
@@ -82,8 +84,6 @@ export function LoginForm() {
         return;
       }
 
-      // Auth.js credentials callback은 실패여도 HTTP 200일 수 있다.
-      // 실제 세션이 발급됐는지 확인한 뒤 보호 페이지로 이동한다.
       let session = await getSession();
       for (let attempt = 0; !session?.user?.id && attempt < 4; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 100));
@@ -178,8 +178,8 @@ export function LoginForm() {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 border-t border-border pt-4 text-base">
-            <label className="flex min-h-12 items-center gap-2 text-muted">
+          <div className="flex flex-nowrap items-center justify-between gap-2 border-t border-border pt-4 text-base">
+            <label className="flex min-h-12 shrink-0 items-center gap-2 whitespace-nowrap text-muted">
               <input
                 type="checkbox"
                 name="remember"
@@ -191,7 +191,7 @@ export function LoginForm() {
             </label>
             <Link
               href="/forgot-password"
-              className="inline-flex min-h-12 items-center font-medium text-muted transition-colors hover:text-foreground"
+              className="inline-flex min-h-12 shrink-0 items-center whitespace-nowrap font-medium text-muted transition-colors hover:text-foreground"
             >
               비밀번호 찾기
             </Link>
@@ -207,7 +207,7 @@ export function LoginForm() {
         </form>
       </div>
 
-      <p className="mt-5 text-center text-base text-muted">
+      <p className="mt-5 text-center text-base text-muted whitespace-nowrap">
         아직 계정이 없으신가요?{" "}
         <Link
           href="/signup"

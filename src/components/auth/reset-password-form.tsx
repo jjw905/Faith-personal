@@ -16,6 +16,7 @@ export function ResetPasswordForm() {
   const params = useSearchParams();
   const email = (params.get("email") || "").trim().toLowerCase();
   const token = params.get("token") || "";
+  const linkOk = Boolean(email && token);
 
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
@@ -25,7 +26,7 @@ export function ResetPasswordForm() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (!email || !token) {
+    if (!linkOk) {
       setError("재설정 링크가 올바르지 않습니다.");
       return;
     }
@@ -61,13 +62,50 @@ export function ResetPasswordForm() {
     }
   }
 
+  if (!linkOk) {
+    return (
+      <div className="w-full">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            새 비밀번호
+          </h1>
+          <p className="mt-2 text-base text-muted">
+            재설정 링크가 올바르지 않거나 만료되었습니다
+          </p>
+        </div>
+
+        <div className={`mt-4 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>
+          <p className="text-base text-muted">
+            메일에서 받은 링크로 다시 열어 주세요. 없거나 만료되었다면 비밀번호
+            찾기를 다시 요청해 주세요.
+          </p>
+          <Link
+            href="/forgot-password"
+            className="mt-5 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-semibold text-primary-foreground hover:bg-primary-hover"
+          >
+            비밀번호 찾기
+          </Link>
+        </div>
+
+        <p className="mt-5 text-center text-base text-muted">
+          <Link
+            href="/login"
+            className="font-semibold text-foreground hover:underline"
+          >
+            로그인으로
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full">
       <div className="text-center">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
           새 비밀번호
         </h1>
-        <p className="mt-2 text-base text-muted">{email || "재설정"}</p>
+        <p className="mt-2 text-base text-muted">{email}</p>
       </div>
 
       <div className={`mt-4 ${AUTH_CARD} px-6 py-6 sm:px-[30px] sm:py-7`}>

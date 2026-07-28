@@ -30,8 +30,9 @@ export type SignupEmailVerifyProps = {
   onConfirmCode?: (
     email: string,
     code: string,
-  ) => Promise<{ ok: boolean; message?: string }>;
-  onVerified?: () => void;
+  ) => Promise<{ ok: boolean; message?: string; proof?: string }>;
+  /** 인증 완료 화면에서 계속하기 시 호출. */
+  onVerified?: (payload: { email: string; proof?: string }) => void;
 };
 
 /** 회원가입 이메일 인증 / 인증 확인 플로우. */
@@ -56,6 +57,7 @@ export function SignupEmailVerify({
     initialEmail || (preview ? FIXTURE_SIGNUP_VERIFY_EMAIL : ""),
   );
   const [code, setCode] = useState(initialCode);
+  const [proof, setProof] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState(initialMessage);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -87,7 +89,7 @@ export function SignupEmailVerify({
     try {
       const result = await onRequestCode(trimmed);
       if (!result.ok) {
-        setError(result.message ?? "인증번호 발송에 실패했습니다.");
+        setError(result.message ?? "안내 발송에 실패했습니다.");
         return;
       }
       setEmail(trimmed);
@@ -109,8 +111,8 @@ export function SignupEmailVerify({
 
     if (preview || !onConfirmCode) {
       setMessage("이메일 인증이 완료되었습니다.");
+      setProof(undefined);
       if (!forcedStep) setStep("confirmed");
-      onVerified?.();
       return;
     }
 
@@ -127,8 +129,8 @@ export function SignupEmailVerify({
         return;
       }
       setMessage(result.message ?? "이메일 인증이 완료되었습니다.");
+      setProof(result.proof);
       if (!forcedStep) setStep("confirmed");
-      onVerified?.();
     } finally {
       setPending(false);
     }
@@ -138,6 +140,7 @@ export function SignupEmailVerify({
     if (forcedStep) return;
     setStep("email");
     setCode("");
+    setProof(undefined);
     setError("");
     setMessage("");
   }
@@ -148,7 +151,12 @@ export function SignupEmailVerify({
         email={email || fixture.email}
         onBack={onBack ?? (forcedStep ? undefined : goBackToEmail)}
         backHref={backHref}
-        onContinue={onVerified}
+        onContinue={() =>
+          onVerified?.({
+            email: email.trim().toLowerCase() || fixture.email,
+            proof,
+          })
+        }
       />
     );
   }

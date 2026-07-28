@@ -9,6 +9,7 @@ import {
   AuthBackButton,
   AuthBackLink,
 } from "@/components/auth/auth-shell";
+import { SignupEmailVerify } from "@/components/auth/signup-email-verify";
 import {
   SocialSignupButtons,
   AuthOrDivider,
@@ -16,24 +17,79 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   getPasswordErrors,
-  isValidEmail,
   isValidKoreanName,
   isValidPassword,
 } from "@/lib/auth-validation";
 import { cn } from "@/lib/utils";
 
-type Step = "social" | "email";
-type EmailCheck = "idle" | "checking" | "available" | "taken" | "invalid";
+type Step = "social" | "verify" | "email";
 
 const fieldInputClass =
   "h-12 border-border bg-card focus-visible:ring-primary/30";
 
-/** 회원가입 플로우 — 소셜 선택 / 일반(수동) 가입 분리. */
+async function requestSignupOtp(email: string) {
+  const res = await fetch("/api/auth/signup-verify/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = (await res.json()) as { ok?: boolean; message?: string };
+  return { ok: Boolean(res.ok && data.ok), message: data.message };
+}
+
+async function confirmSignupOtp(email: string, code: string) {
+  const res = await fetch("/api/auth/signup-verify/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  const data = (await res.json()) as {
+    ok?: boolean;
+    message?: string;
+    proof?: string;
+  };
+  return {
+    ok: Boolean(res.ok && data.ok),
+    message: data.message,
+    proof: data.proof,
+  };
+}
+
+/** 회원가입 플로우 — 소셜 / 이메일 인증 / 계정 정보. */
 export function SignupFlow() {
   const [step, setStep] = useState<Step>("social");
+  const [verifiedEmail, setVerifiedEmail] = useState("");
+  const [signupProof, setSignupProof] = useState("");
+
+  if (step === "verify") {
+    return (
+      <SignupEmailVerify
+        onBack={() => setStep("social")}
+        onRequestCode={requestSignupOtp}
+        onConfirmCode={confirmSignupOtp}
+        onVerified={({ email, proof }) => {
+          if (!proof) {
+            return;
+          }
+          setVerifiedEmail(email);
+          setSignupProof(proof);
+          setStep("email");
+        }}
+      />
+    );
+  }
 
   if (step === "email") {
-    return <EmailSignupForm onBack={() => setStep("social")} />;
+    return (
+      <EmailSignupForm
+        email={verifiedEmail}
+        proof={signupProof}
+        onBack={() => {
+          setSignupProof("");
+          setStep("verify");
+        }}
+      />
+    );
   }
 
   return (
@@ -58,7 +114,7 @@ export function SignupFlow() {
 
         <button
           type="button"
-          onClick={() => setStep("email")}
+          onClick={() => setStep("verify")}
           className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl border border-border bg-card text-base font-semibold text-foreground transition-colors hover:bg-surface"
         >
           이메일로 가입
@@ -68,16 +124,21 @@ export function SignupFlow() {
   );
 }
 
-function EmailSignupForm({ onBack }: { onBack: () => void }) {
+function EmailSignupForm({
+  email,
+  proof,
+  onBack,
+}: {
+  email: string;
+  proof: string;
+  onBack: () => void;
+}) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
-  const [emailCheck, setEmailCheck] = useState<EmailCheck>("idle");
-  const [emailMessage, setEmailMessage] = useState("");
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -86,50 +147,12 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
     passwordConfirm.length > 0 && password !== passwordConfirm;
   const nameInvalid = name.length > 0 && !isValidKoreanName(name);
 
-  async function handleCheckEmail() {
-    setFormError("");
-    const trimmed = email.trim();
-    if (!trimmed) {
-      setEmailCheck("invalid");
-      setEmailMessage("이메일을 입력해 주세요.");
-      return;
-    }
-    if (!isValidEmail(trimmed)) {
-      setEmailCheck("invalid");
-      setEmailMessage("올바른 이메일 형식이 아닙니다.");
-      return;
-    }
-
-    setEmailCheck("checking");
-    try {
-      const res = await fetch("/api/auth/check-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
-      });
-      const data = (await res.json()) as {
-        available?: boolean;
-        message?: string;
-      };
-      if (data.available) {
-        setEmailCheck("available");
-        setEmailMessage(data.message ?? "사용 가능한 이메일입니다.");
-      } else {
-        setEmailCheck(res.ok ? "taken" : "invalid");
-        setEmailMessage(data.message ?? "사용할 수 없는 이메일입니다.");
-      }
-    } catch {
-      setEmailCheck("invalid");
-      setEmailMessage("중복 확인에 실패했습니다. 다시 시도해 주세요.");
-    }
-  }
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError("");
 
-    if (emailCheck !== "available") {
-      setFormError("이메일 중복 확인을 완료해 주세요.");
+    if (!proof) {
+      setFormError("이메일 인증이 필요합니다. 처음부터 다시 진행해 주세요.");
       return;
     }
     if (!isValidPassword(password)) {
@@ -153,16 +176,21 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: email.trim(),
+          email,
           password,
           passwordConfirm,
           name: name.trim(),
+          proof,
         }),
       });
       const raw = await res.text();
-      let data: { ok?: boolean; message?: string } = {};
+      let data: { ok?: boolean; message?: string; code?: string } = {};
       try {
-        data = JSON.parse(raw) as { ok?: boolean; message?: string };
+        data = JSON.parse(raw) as {
+          ok?: boolean;
+          message?: string;
+          code?: string;
+        };
       } catch {
         setFormError(
           res.status >= 500
@@ -172,6 +200,12 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
         return;
       }
       if (!res.ok || !data.ok) {
+        if (data.code === "proof_expired" || data.code === "proof_required") {
+          setFormError(
+            data.message ?? "이메일 인증이 만료되었습니다. 다시 인증해 주세요.",
+          );
+          return;
+        }
         if (res.status === 429) {
           setFormError(
             data.message ?? "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
@@ -179,10 +213,6 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
           return;
         }
         setFormError(data.message ?? "회원가입에 실패했습니다.");
-        if (res.status === 409) {
-          setEmailCheck("taken");
-          setEmailMessage("이미 사용 중인 이메일입니다.");
-        }
         return;
       }
       router.push("/login?registered=1");
@@ -222,41 +252,15 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
             >
               아이디 (이메일)
             </label>
-            <div className="flex gap-2">
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="name@example.com"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setEmailCheck("idle");
-                  setEmailMessage("");
-                }}
-                className={cn("min-w-0 flex-1", fieldInputClass)}
-                required
-              />
-              <button
-                type="button"
-                onClick={handleCheckEmail}
-                disabled={emailCheck === "checking"}
-                className="min-h-12 shrink-0 rounded-xl bg-primary px-3.5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-50"
-              >
-                {emailCheck === "checking" ? "확인 중" : "중복확인"}
-              </button>
-            </div>
-            {emailMessage ? (
-              <p
-                className={cn(
-                  "mt-1.5 text-base",
-                  emailCheck === "available" ? "text-success" : "text-masked",
-                )}
-              >
-                {emailMessage}
-              </p>
-            ) : null}
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              value={email}
+              readOnly
+              className={cn(fieldInputClass, "bg-surface text-muted")}
+            />
+            <p className="mt-1.5 text-base text-success">이메일 인증 완료</p>
           </div>
 
           <div>
@@ -304,7 +308,10 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
               </div>
             </div>
             <p className="mt-1.5 text-base text-muted">
-              영문 대문자, 소문자, 특수문자를 각각 1자 이상 포함 (8자 이상)
+              <span className="whitespace-nowrap">
+                영문 대문자, 소문자, 특수문자를 각각 1자 이상 포함
+              </span>{" "}
+              <span className="whitespace-nowrap">(8자 이상)</span>
             </p>
             {passwordErrors.length > 0 ? (
               <p className="mt-1 text-base text-masked">
@@ -383,7 +390,8 @@ function EmailSignupForm({ onBack }: { onBack: () => void }) {
               required
             />
             <p className="mt-1.5 text-base text-muted">
-              정확한 한글 이름만 입력 (2~5자, 공백/영문 불가)
+              <span className="whitespace-nowrap">정확한 한글 이름만 입력</span>{" "}
+              <span className="whitespace-nowrap">(2~5자, 공백/영문 불가)</span>
             </p>
             {nameInvalid ? (
               <p className="mt-1 text-base text-masked">
