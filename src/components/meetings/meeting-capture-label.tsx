@@ -34,15 +34,20 @@ function MeetingCaptureBadge({
     <span
       className={cn(
         "inline-flex w-fit max-w-full items-center bg-primary font-medium tracking-wide text-primary-foreground",
+        // 모바일 본문 최소 text-base. sm은 데스크탑 밀도용으로만 축소.
         compact
-          ? "h-7 gap-1 rounded-md px-2 text-sm leading-none"
+          ? "h-8 gap-1.5 rounded-md px-2.5 text-base leading-none md:h-7 md:gap-1 md:px-2 md:text-sm"
           : "h-8 gap-1.5 rounded-lg px-2.5 text-[15px] leading-none",
         className,
       )}
       aria-label={`기록 방식 ${label}`}
     >
       <Icon
-        className={compact ? "h-3.5 w-3.5 shrink-0" : "h-4 w-4 shrink-0"}
+        className={
+          compact
+            ? "h-4 w-4 shrink-0 md:h-3.5 md:w-3.5"
+            : "h-4 w-4 shrink-0"
+        }
         strokeWidth={2}
         aria-hidden
       />

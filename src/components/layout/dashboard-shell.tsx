@@ -5,11 +5,13 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { DemandSurveyConsentGate } from "@/components/layout/demand-survey-consent-gate";
 import { PageUxPreviewControl } from "@/components/layout/page-ux-preview-control";
 import {
   MeetingChromeProvider,
   useMeetingChrome,
 } from "@/context/meeting-chrome-context";
+import { NotificationsUiProvider } from "@/context/notifications-ui-context";
 import { PageUxPreviewProvider } from "@/context/page-ux-preview-context";
 import { TeamRolePreviewProvider } from "@/context/team-role-preview-context";
 import { notifyDocsSectionScroll } from "@/lib/docs-section-spy";
@@ -31,6 +33,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     pathname === "/account" ||
     pathname === "/settings" ||
     pathname === "/ai-usage" ||
+    pathname === "/pipeline-stats" ||
+    pathname === "/survey" ||
+    pathname === "/survey-stats" ||
     pathname === "/dashboard" ||
     pathname === "/team" ||
     pathname === "/audit" ||
@@ -97,6 +102,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         {!focusMode ? <PageUxPreviewControl /> : null}
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       </div>
+      <DemandSurveyConsentGate />
     </div>
   );
 }
@@ -107,7 +113,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <PageUxPreviewProvider>
           <TeamRolePreviewProvider>
-            <DashboardShellInner>{children}</DashboardShellInner>
+            <NotificationsUiProvider>
+              <DashboardShellInner>{children}</DashboardShellInner>
+            </NotificationsUiProvider>
           </TeamRolePreviewProvider>
         </PageUxPreviewProvider>
       </Suspense>

@@ -19,7 +19,13 @@ export type UpcomingItem = {
   workspace: WorkspaceId;
 };
 
-export type ProcessStatus = "masking" | "transcribing" | "structuring" | "done" | "error";
+export type ProcessStatus =
+  | "masking"
+  | "transcribing"
+  | "structuring"
+  | "done"
+  | "error"
+  | "empty";
 
 export type ProcessItem = {
   id: string;

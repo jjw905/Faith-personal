@@ -36,6 +36,27 @@ function readPos(): Pos {
   }
 }
 
+/** useSyncExternalStore: getSnapshot은 값이 같으면 동일 참조를 돌려야 한다. */
+let posCacheRaw: string | null | undefined;
+let posCache: Pos = DEFAULT;
+
+function getPosSnapshot(): Pos {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === posCacheRaw) return posCache;
+    posCacheRaw = raw;
+    posCache = readPos();
+    return posCache;
+  } catch {
+    return DEFAULT;
+  }
+}
+
+function subscribePos(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
 function useEditMode() {
   return useSyncExternalStore(
     (onChange) => {
@@ -63,11 +84,8 @@ export function FeaturesHeadline() {
   const [boxH, setBoxH] = useState<number | undefined>(undefined);
   // 서버는 DEFAULT, 클라이언트는 localStorage. 드래그 중에는 draft가 이긴다.
   const storedPos = useSyncExternalStore(
-    (onChange) => {
-      window.addEventListener("storage", onChange);
-      return () => window.removeEventListener("storage", onChange);
-    },
-    () => readPos(),
+    subscribePos,
+    getPosSnapshot,
     () => DEFAULT,
   );
   const [draft, setDraft] = useState<Pos | null>(null);
@@ -91,7 +109,10 @@ export function FeaturesHeadline() {
 
   useEffect(() => {
     if (!edit) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+    const raw = JSON.stringify(pos);
+    window.localStorage.setItem(STORAGE_KEY, raw);
+    posCacheRaw = raw;
+    posCache = pos;
   }, [pos, edit]);
 
   useLayoutEffect(() => {
@@ -100,13 +121,15 @@ export function FeaturesHeadline() {
     if (!wrap || !inner) return;
     const measure = () => {
       const s = Math.min(1, wrap.clientWidth / DESIGN_W);
-      setScale(s);
-      setBoxH(inner.offsetHeight * s);
+      const h = inner.offsetHeight * s;
+      setScale((prev) => (Math.abs(prev - s) < 0.001 ? prev : s));
+      setBoxH((prev) =>
+        prev !== undefined && Math.abs(prev - h) < 0.5 ? prev : h,
+      );
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
-    ro.observe(inner);
     return () => ro.disconnect();
   }, []);
 
@@ -240,7 +263,7 @@ export function FeaturesHeadline() {
               className="pointer-events-none relative z-10 w-[15rem] select-none"
             >
               <Image
-                src="/hero-chat-glass-01.png"
+                src="/hero-chat-glass-charcoal.png"
                 alt=""
                 width={533}
                 height={619}

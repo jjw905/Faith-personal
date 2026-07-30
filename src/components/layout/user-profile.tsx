@@ -259,7 +259,7 @@ export function UserProfile({
             role="menuitem"
             onClick={() => {
               if (!previewForceOpen) setOpen(false);
-              void signOut({ callbackUrl: "/login" });
+              void signOut({ callbackUrl: "/" });
             }}
             className="flex w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-sm whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card"
           >

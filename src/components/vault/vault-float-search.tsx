@@ -94,8 +94,8 @@ function ExpandableRoundSearch({
     <div
       ref={rootRef}
       className={cn(
-        "relative flex h-11 min-w-0 items-center overflow-hidden rounded-full border border-border bg-card shadow-soft",
-        floating && "bg-card/95 shadow-float backdrop-blur-md",
+        "relative flex h-11 min-w-0 items-center overflow-hidden rounded-full border border-border bg-card",
+        floating && "bg-card/95 shadow-soft backdrop-blur-md",
         className,
       )}
     >

@@ -158,7 +158,7 @@ export async function diarizeAudio(params: {
     if (!Array.isArray(result.segments)) {
       throw new Error("화자분리 결과 형식이 올바르지 않습니다.");
     }
-    return prunePhantomSpeakers(result);
+    return glueBoundaryFragmentSpeakers(prunePhantomSpeakers(result));
   } catch (error) {
     const detail =
       error && typeof error === "object" && "stderr" in error
@@ -203,6 +203,137 @@ export function prunePhantomSpeakers(
 
   const segments = result.segments.filter((s) => keep.has(s.speaker));
   return { ...result, segments, speakerCount: keep.size };
+}
+
+/**
+ * 화자 전환부에서 생기는 "유령 화자" 잡음.
+ *
+ * 진행자가 말을 마치는 순간과 다음 화자가 입을 떼는 순간 사이는 짧고
+ * 발화 특징이 흐릿해 임베딩이 불안정하다. 그 결과 "네, 안녕하세요" 같은
+ * 짧은 인사말이 매번 다른 사람 것인데도 하나의 낯선 클러스터로 뭉치는
+ * 경우가 있다 — 실제 KTV 브리핑 녹취에서 반복 확인됨(전환마다 등장,
+ * 매번 다른 화자 앞뒤로 거의 틈 없이 붙음, 발화량은 매번 몇 초뿐).
+ *
+ * 이런 클러스터는 "화자"가 아니라 경계 잡음으로 보고, 각 조각을 실제
+ * 이웃 화자에게 돌려준다. 뒤에 진짜 침묵(화자 교대)이 있으면 그 인사말은
+ * 다음에 말할 사람의 발화 시작으로 본다 — 내용도 대개 인사말이라 이 쪽이
+ * 맞다. 양쪽 다 거의 붙어 있으면 더 가까운 쪽으로 준다.
+ */
+const FRAGMENT_MAX_SEGMENT_SEC = 6;
+const FRAGMENT_MAX_TOTAL_SEC = 40;
+const FRAGMENT_GLUE_GAP_SEC = 1;
+const FRAGMENT_MIN_OCCURRENCES = 2;
+
+export function glueBoundaryFragmentSpeakers(
+  result: DiarizationResult,
+): DiarizationResult {
+  const segments = [...result.segments].sort((a, b) => a.startSec - b.startSec);
+  if (segments.length < 3) return result;
+
+  const bySpeaker = new Map<string, DiarizationSegment[]>();
+  for (const s of segments) {
+    const list = bySpeaker.get(s.speaker) ?? [];
+    list.push(s);
+    bySpeaker.set(s.speaker, list);
+  }
+
+  /**
+   * s 직전/직후, 다른(제외 대상이 아닌) 화자의 가장 가까운 구간.
+   * 겹침은 틈이 아니라 붙어 있는 것으로 본다(음수 틈은 0으로 자른다) —
+   * 화자분리 경계가 살짝 겹치는 것은 흔한 반올림 오차다.
+   */
+  const nearestBefore = (
+    s: { startSec: number },
+    exclude: (speaker: string) => boolean,
+  ): DiarizationSegment | undefined => {
+    let best: DiarizationSegment | undefined;
+    for (const o of segments) {
+      if (exclude(o.speaker) || o.startSec >= s.startSec) continue;
+      if (!best || o.startSec > best.startSec) best = o;
+    }
+    return best;
+  };
+
+  const nearestAfter = (
+    s: { startSec: number },
+    exclude: (speaker: string) => boolean,
+  ): DiarizationSegment | undefined => {
+    let best: DiarizationSegment | undefined;
+    for (const o of segments) {
+      if (exclude(o.speaker) || o.startSec <= s.startSec) continue;
+      if (!best || o.startSec < best.startSec) best = o;
+    }
+    return best;
+  };
+
+  const gapTo = (edgeSec: number, otherEndSec: number): number =>
+    Math.max(0, edgeSec - otherEndSec);
+
+  /** 같은 화자끼리 틈이 좁으면 하나의 등장으로 묶는다(경계 판정 단위). */
+  const OCCURRENCE_MERGE_GAP_SEC = 2;
+  function mergeIntoOccurrences(
+    segs: DiarizationSegment[],
+  ): Array<{ startSec: number; endSec: number }> {
+    const sorted = [...segs].sort((a, b) => a.startSec - b.startSec);
+    const out: Array<{ startSec: number; endSec: number }> = [];
+    for (const s of sorted) {
+      const last = out[out.length - 1];
+      if (last && s.startSec - last.endSec <= OCCURRENCE_MERGE_GAP_SEC) {
+        last.endSec = Math.max(last.endSec, s.endSec);
+      } else {
+        out.push({ startSec: s.startSec, endSec: s.endSec });
+      }
+    }
+    return out;
+  }
+
+  const fragmentSpeakers = new Set<string>();
+  for (const [speaker, segs] of bySpeaker) {
+    if (segs.length < FRAGMENT_MIN_OCCURRENCES) continue;
+    const maxDur = Math.max(...segs.map((s) => s.endSec - s.startSec));
+    const totalDur = segs.reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
+    if (maxDur > FRAGMENT_MAX_SEGMENT_SEC || totalDur > FRAGMENT_MAX_TOTAL_SEC) {
+      continue;
+    }
+    const isSelf = (sp: string) => sp === speaker;
+    const occurrences = mergeIntoOccurrences(segs);
+    const allBoundaryAdjacent = occurrences.every((occ) => {
+      const before = nearestBefore(occ, isSelf);
+      const after = nearestAfter(occ, isSelf);
+      const gapBefore = before ? gapTo(occ.startSec, before.endSec) : Infinity;
+      const gapAfter = after ? gapTo(after.startSec, occ.endSec) : Infinity;
+      return gapBefore <= FRAGMENT_GLUE_GAP_SEC || gapAfter <= FRAGMENT_GLUE_GAP_SEC;
+    });
+    if (allBoundaryAdjacent) fragmentSpeakers.add(speaker);
+  }
+  if (fragmentSpeakers.size === 0) return result;
+
+  const isFragment = (sp: string) => fragmentSpeakers.has(sp);
+  const glued = segments.map((s) => {
+    if (!isFragment(s.speaker)) return s;
+    const before = nearestBefore(s, isFragment);
+    const after = nearestAfter(s, isFragment);
+    const gapBefore = before ? gapTo(s.startSec, before.endSec) : Infinity;
+    const gapAfter = after ? gapTo(after.startSec, s.endSec) : Infinity;
+
+    // 기본은 "붙어 있는 쪽"(끊김 없는 오디오는 대개 같은 사람이 이어 말한
+    // 것)이다. 인사말처럼 다음 화자 것으로 봐야 하는 예외는, 본문 텍스트를
+    // 아는 speaker-attach 쪽에서 내용을 보고 다시 넘겨준다(attachSpeakersToText
+    // 의 reassignGreetingFragments).
+    let target: DiarizationSegment | undefined;
+    if (before && gapBefore <= FRAGMENT_GLUE_GAP_SEC) {
+      target = before;
+    } else if (after && gapAfter <= FRAGMENT_GLUE_GAP_SEC) {
+      target = after;
+    } else if (before && gapBefore <= gapAfter) {
+      target = before;
+    } else {
+      target = after ?? before;
+    }
+    return target ? { ...s, speaker: target.speaker } : s;
+  });
+
+  return { ...result, segments: glued };
 }
 
 function speakerLabels(segments: DiarizationSegment[]): Map<string, string> {

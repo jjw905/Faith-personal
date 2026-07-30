@@ -99,9 +99,9 @@ export function emailChangedNoticeEmailHtml(params: { newEmail: string }) {
   return renderMailShell(
     "계정 이메일이 변경되었습니다",
     sections(
-      `계정 로그인 이메일이 <strong>${escapeHtml(params.newEmail)}</strong> 로 변경되었습니다.<br />본인이 요청하지 않았다면 즉시 비밀번호를 바꾸고 문의해 주세요.`,
+      `계정 로그인 이메일이 <strong>${escapeHtml(params.newEmail)}</strong> 로 변경되었습니다.<br />본인이 요청하지 않았다면 비밀번호를 바꾸고 고객지원에 문의해 주세요.`,
       buttonHero(settingsUrl, "계정 설정"),
-      "보안을 위해 이 안내를 보냅니다.",
+      "계정 보호를 위해 이 안내를 보냅니다.",
     ),
   );
 }

@@ -9,19 +9,18 @@ import {
 } from "@/components/auth/auth-shell";
 import {
   GoogleIcon,
-  NaverIcon,
   XIcon,
 } from "@/components/auth/social-icons";
 
-/** 소셜 회원가입 — SaaS/국내 서비스형 풀폭 스택 버튼. */
+/**
+ * 소셜 회원가입 — SaaS/국내 서비스형 풀폭 스택 버튼.
+ *
+ * 네이버는 임시 중단 중(src/auth.ts NAVER_LOGIN_ENABLED). 재개 시 이 배열에
+ * { id: "naver", label: "네이버", className: "bg-[#03C75A] text-white
+ * hover:brightness-[0.96]", Icon: NaverIcon } 항목을 되돌리면 된다.
+ */
 
 const PROVIDERS = [
-  {
-    id: "naver",
-    label: "네이버",
-    className: "bg-[#03C75A] text-white hover:brightness-[0.96]",
-    Icon: NaverIcon,
-  },
   {
     id: "google",
     label: "Google",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { NAVER_LOGIN_ENABLED } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 
@@ -50,8 +51,10 @@ export async function GET() {
         );
       }
       if (p === "naver") {
+        // 임시 중단: 새 연결은 막되, 이미 연동된 계정은 계속 보이고 해제도 된다.
         return Boolean(
-          process.env.AUTH_NAVER_ID?.trim() &&
+          NAVER_LOGIN_ENABLED &&
+            process.env.AUTH_NAVER_ID?.trim() &&
             process.env.AUTH_NAVER_SECRET?.trim(),
         );
       }

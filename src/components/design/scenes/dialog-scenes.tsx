@@ -3,40 +3,14 @@
 import { useState } from "react";
 
 import { FIXTURE_MEETING_DONE } from "@/components/design/fixtures";
+import { PreviewStage } from "@/components/design/preview-stage";
 import { NotificationPanel } from "@/components/layout/notification-panel";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { DuplicateVaultNameDialog } from "@/components/vault/duplicate-name-dialog";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
-import { Button } from "@/components/ui/button";
 import { fixtureNotificationsExpand } from "@/lib/page-ux-fixtures";
 import type { MaskStyle } from "@/lib/masking/types";
-
-function PreviewStage({
-  hint,
-  open,
-  onReopen,
-  children,
-}: {
-  hint: string;
-  open: boolean;
-  onReopen: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative flex h-full min-h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
-        <p className="text-sm text-muted">{hint}</p>
-        {!open ? (
-          <Button type="button" size="sm" onClick={onReopen}>
-            다시 열기
-          </Button>
-        ) : null}
-      </div>
-      <div className="relative min-h-0 flex-1">{children}</div>
-    </div>
-  );
-}
 
 /** 업로드: 중복 파일명 */
 export function SceneDuplicateVaultName() {
@@ -64,7 +38,7 @@ export function SceneRecordsDeleteConfirm() {
   const [open, setOpen] = useState(true);
   return (
     <PreviewStage
-      hint="목록·상세에서 삭제할 때."
+      hint="목록, 상세에서 삭제할 때."
       open={open}
       onReopen={() => setOpen(true)}
     >
@@ -86,7 +60,7 @@ export function SceneRecordsDownloadConfirm() {
   const [open, setOpen] = useState(true);
   return (
     <PreviewStage
-      hint="목록·상세에서 받을 때."
+      hint="목록, 상세에서 받을 때."
       open={open}
       onReopen={() => setOpen(true)}
     >
@@ -135,13 +109,14 @@ export function SceneVaultPicker() {
   const [open, setOpen] = useState(true);
   return (
     <PreviewStage
-      hint="업로드·첨부에서 보관함 파일 고를 때."
+      hint="업로드, 첨부에서 보관함 파일 고를 때."
       open={open}
       onReopen={() => setOpen(true)}
     >
       <VaultPickerDialog
         open={open}
         contained
+        audioOnly
         onClose={() => setOpen(false)}
         onPick={() => setOpen(false)}
       />
@@ -154,7 +129,7 @@ export function SceneNotificationPanel() {
   const [open, setOpen] = useState(true);
   return (
     <PreviewStage
-      hint="행 클릭으로 본문 확인. 확인·수락·바로가기."
+      hint="행 클릭으로 본문 확인. 확인, 수락, 바로가기."
       open={open}
       onReopen={() => setOpen(true)}
     >

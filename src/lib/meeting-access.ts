@@ -1,7 +1,14 @@
 import "server-only";
 
+import { Role } from "@prisma/client";
+
+import { getRecentMeetings as getMockRecentMeetings } from "@/lib/meetings-mock";
 import { prisma } from "@/lib/prisma";
 import { getUserMeeting } from "@/lib/user-meetings-store";
+
+function isCatalogMock(meetingId: string) {
+  return getMockRecentMeetings().some((m) => m.id === meetingId);
+}
 
 export async function canReadMeeting(meetingId: string, userId: string) {
   const teamMeeting = await prisma.teamMeeting.findFirst({
@@ -37,9 +44,27 @@ export async function canReadMeeting(meetingId: string, userId: string) {
   }
 
   const legacy = getUserMeeting(meetingId);
-  // store에 있으면 소유자만. 없으면 목/카탈로그 회의로 열람 허용.
+  if (legacy) {
+    return {
+      allowed: legacy.userId === userId,
+      teamMeeting: null,
+      maskedOnly: false,
+    };
+  }
+
+  // 목/카탈로그: 로컬 데모는 로그인 사용자, 프로덕션은 관리자만.
+  if (!isCatalogMock(meetingId)) {
+    return { allowed: false, teamMeeting: null, maskedOnly: false };
+  }
+  if (process.env.NODE_ENV !== "production") {
+    return { allowed: true, teamMeeting: null, maskedOnly: false };
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
   return {
-    allowed: !legacy || legacy.userId === userId,
+    allowed: user?.role === Role.ADMIN,
     teamMeeting: null,
     maskedOnly: false,
   };

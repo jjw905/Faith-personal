@@ -33,13 +33,13 @@ export async function GET(request: Request) {
   const q = url.searchParams.get("q") ?? undefined;
   const memberId = url.searchParams.get("memberId") ?? undefined;
   const page = Number(url.searchParams.get("page") ?? "1");
-  const pageSize = Number(url.searchParams.get("pageSize") ?? "9");
+  const pageSize = Number(url.searchParams.get("pageSize") ?? "2");
 
   const result = await listTeamsPage({
     q,
     memberId: memberId || undefined,
     page: Number.isFinite(page) ? page : 1,
-    pageSize: Number.isFinite(pageSize) ? pageSize : 9,
+    pageSize: Number.isFinite(pageSize) ? pageSize : 2,
   });
 
   return NextResponse.json({

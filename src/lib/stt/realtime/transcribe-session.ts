@@ -29,6 +29,28 @@ const TAIL_WAIT_MS = 60_000;
 /** 이 시간 동안 새 이벤트가 없으면 전사가 끝난 것으로 본다. */
 const TAIL_QUIET_MS = 3_000;
 
+function eventConfidence(event: Record<string, unknown>): {
+  meanLogprob?: number;
+  confidence?: number;
+} {
+  const logprobs = event.logprobs;
+  if (!Array.isArray(logprobs)) return {};
+  const values = logprobs
+    .map((row) =>
+      row && typeof row === "object"
+        ? Number((row as { logprob?: unknown }).logprob)
+        : Number.NaN,
+    )
+    .filter(Number.isFinite);
+  if (values.length === 0) return {};
+  const meanLogprob =
+    values.reduce((sum, value) => sum + value, 0) / values.length;
+  return {
+    meanLogprob,
+    confidence: Math.max(0, Math.min(1, Math.exp(meanLogprob))),
+  };
+}
+
 function getApiKey() {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key || key === "your_openai_api_key_here") {
@@ -238,6 +260,7 @@ export async function realtimeTranscribeFile(
             startSec: window.startSec,
             endSec:
               window.endSec > window.startSec ? window.endSec : undefined,
+            ...eventConfidence(event),
             completedAtMs: Date.now() - wallStart,
           });
         }
@@ -254,6 +277,7 @@ export async function realtimeTranscribeFile(
           type: "session.update",
           session: {
             type: "transcription",
+            include: ["item.input_audio_transcription.logprobs"],
             audio: {
               input: {
                 format: { type: "audio/pcm", rate: 24000 },

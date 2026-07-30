@@ -59,6 +59,46 @@ export function buildObjectKey(userId: string, fileId: string, name: string) {
   return `users/${userId}/${fileId}/${safe}`;
 }
 
+/**
+ * 업로드 완료 키 검증.
+ * `users/{userId}/{fileId}/../other/...`처럼 prefix는 맞지만 resolve 시
+ * 타 사용자 디렉터리로 빠지는 상대경로 탈출을 막는다.
+ */
+export function assertOwnedVaultObjectKey(
+  userId: string,
+  fileId: string,
+  key: string,
+) {
+  const id = String(userId || "");
+  const fid = String(fileId || "");
+  const raw = String(key || "");
+  if (!id || !fid || !raw) {
+    throw new Error("잘못된 저장 경로입니다.");
+  }
+  if (
+    raw.includes("\0") ||
+    raw.includes("\\") ||
+    raw.split("/").some((part) => part === "." || part === "..")
+  ) {
+    throw new Error("잘못된 저장 경로입니다.");
+  }
+  const expectedPrefix = `users/${id}/${fid}/`;
+  if (!raw.startsWith(expectedPrefix)) {
+    throw new Error("잘못된 저장 경로입니다.");
+  }
+  // normalize 후에도 동일 접두어·동일 문자열이어야 한다.
+  const normalized = raw.replace(/\/{2,}/g, "/");
+  if (normalized !== raw || !normalized.startsWith(expectedPrefix)) {
+    throw new Error("잘못된 저장 경로입니다.");
+  }
+  const rest = normalized.slice(expectedPrefix.length);
+  if (!rest || rest.includes("/")) {
+    // 파일명은 한 세그먼트만 허용 (중첩 디렉터리·탈출 여지 축소)
+    throw new Error("잘못된 저장 경로입니다.");
+  }
+}
+
+
 export async function putObject(params: {
   key: string;
   body: Buffer;

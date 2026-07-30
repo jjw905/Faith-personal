@@ -1,11 +1,21 @@
 import type { SemanticDialogueLine } from "@/lib/stt/semantic-structure";
 import type { TimelineSegment, TimelineSegmentKind } from "@/types/timeline";
+import type { TranscriptLine, TranscriptWordTiming } from "@/types/transcript";
 import { formatClock } from "@/lib/diarize-meeting";
 
 export type TimedSegment = {
   startSec: number;
   endSec: number;
   text: string;
+  /** 0~1. STT가 이 구간을 얼마나 자신 있어 했는지 (모델이 안 주면 없음). */
+  confidence?: number;
+};
+
+/** 단어 하나의 실측 시각(절대 초). STT가 준 원문 그대로, 아직 줄에 배정 전. */
+export type WordTiming = {
+  text: string;
+  startSec: number;
+  endSec: number;
 };
 
 function tokenize(s: string): Set<string> {
@@ -381,6 +391,58 @@ export function alignDialogueToTimedSegments(
     const startSec = Math.max(floor, snapped);
     prevSec = startSec;
     return { ...d, startSec };
+  });
+}
+
+/**
+ * 실측 단어 시각을 각 대화 줄에 배정한다.
+ *
+ * 구조화 모델이 문장부호, 띄어쓰기를 다듬어 STT 원문과 줄 텍스트가 완전히
+ * 같지 않을 수 있다. 그래서 위치를 그대로 믿지 않고, 줄 시간대에 걸리는
+ * 단어부터 순서대로 줄 텍스트에서 다시 찾는다 — 못 찾으면 그 단어는 건너뛴다
+ * (하이라이트가 한 박자 밀리는 대신 엉뚱한 자리를 가리키지 않는다).
+ */
+export function assignWordTimingsToLines(
+  lines: TranscriptLine[],
+  words: WordTiming[],
+  durationSec: number,
+): TranscriptLine[] {
+  if (words.length === 0 || lines.length === 0) return lines;
+  const sorted = [...words].sort((a, b) => a.startSec - b.startSec);
+  const starts = lines.map((line) =>
+    typeof line.startSec === "number" ? line.startSec : 0,
+  );
+
+  let cursor = 0;
+  return lines.map((line, i) => {
+    const from = starts[i]!;
+    const to = i + 1 < lines.length ? starts[i + 1]! : Math.max(from, durationSec);
+    while (cursor < sorted.length && sorted[cursor]!.startSec < from) cursor += 1;
+
+    const text = line.text ?? "";
+    if (!text) return line;
+
+    const assigned: TranscriptWordTiming[] = [];
+    let textCursor = 0;
+    let k = cursor;
+    while (k < sorted.length && sorted[k]!.startSec < to) {
+      const w = sorted[k]!;
+      k += 1;
+      const needle = w.text.trim();
+      if (!needle) continue;
+      const at = text.indexOf(needle, textCursor);
+      if (at < 0) continue;
+      assigned.push({
+        text: needle,
+        startSec: w.startSec,
+        endSec: w.endSec,
+        startOffset: at,
+        endOffset: at + needle.length,
+      });
+      textCursor = at + needle.length;
+    }
+    if (assigned.length === 0) return line;
+    return { ...line, words: assigned };
   });
 }
 

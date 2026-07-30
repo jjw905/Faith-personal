@@ -4,7 +4,10 @@ config({ path: ".env.local" });
 config();
 
 import { pronunciationSimilarity } from "../src/lib/stt/pronunciation";
-import { suggestTermCorrections } from "../src/lib/stt/term-suggest";
+import {
+  suggestSecondPassCorrections,
+  suggestTermCorrections,
+} from "../src/lib/stt/term-suggest";
 
 async function main() {
   const similar = pronunciationSimilarity("유시스", "뉴시스");
@@ -65,6 +68,20 @@ async function main() {
     throw new Error("활용형을 사전 후보로 잘못 추천했습니다.");
   }
 
+  const secondPass = suggestSecondPassCorrections({
+    original: "유시스 기자입니다.",
+    secondPass: "뉴시스 기자입니다.",
+    glossary: ["뉴시스"],
+    sttLogprob: -1.2,
+  });
+  if (
+    secondPass[0]?.suggestion !== "뉴시스" ||
+    secondPass[0]?.source !== "second-pass" ||
+    secondPass[0]?.startOffset !== 0
+  ) {
+    throw new Error("조건부 mini 재전사 추천이 생성되지 않았습니다.");
+  }
+
   console.log(
     JSON.stringify(
       {
@@ -74,6 +91,7 @@ async function main() {
         participantNameSuggestion: participantName.suggestions[0],
         protectedSuggestionCount: protectedWord.suggestions.length,
         inflectedSuggestionCount: inflected.suggestions.length,
+        secondPassSuggestion: secondPass[0],
         dictionaryUsage: known.usage,
       },
       null,

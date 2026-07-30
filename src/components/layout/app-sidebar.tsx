@@ -4,20 +4,23 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
+  Bell,
   ChevronDown,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Gift,
   Plus,
   UserRound,
   UsersRound,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserProfile } from "@/components/layout/user-profile";
 import { useAppContext } from "@/context/app-context";
+import { useNotificationsUi } from "@/context/notifications-ui-context";
 import {
   TEAM_PREVIEW_ROLE_LABEL,
   useTeamRolePreview,
@@ -31,6 +34,8 @@ import {
   TEAM_NAV_ITEMS,
   type NavItem,
 } from "@/lib/constants";
+import { DEMAND_SURVEY_ACTIVE, TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
+import { SURVEY_COMPLETED_EVENT } from "@/lib/stt/survey";
 import { cn } from "@/lib/utils";
 import { isMeetingsRoute, isTeamRoute } from "@/lib/workspace-route";
 
@@ -65,11 +70,13 @@ function NavLink({
   active,
   onNavigate,
   collapsed = false,
+  trailing = null,
 }: {
   item: NavItem;
   active: boolean;
   onNavigate?: () => void;
   collapsed?: boolean;
+  trailing?: ReactNode;
 }) {
   const Icon = item.icon;
 
@@ -79,7 +86,7 @@ function NavLink({
       onClick={onNavigate}
       title={item.title}
       className={cn(
-        "group flex cursor-pointer items-center gap-2.5 rounded-xl py-2.5 text-base font-medium outline-none transition-colors",
+        "group relative flex cursor-pointer items-center gap-2.5 rounded-xl py-2.5 text-base font-medium outline-none transition-colors",
         "hover:bg-surface-2 hover:text-foreground",
         "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
         "active:bg-surface-2",
@@ -96,6 +103,14 @@ function NavLink({
       <span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>
         {item.title}
       </span>
+      {!collapsed && trailing ? (
+        <span className="inline-flex shrink-0 items-center">{trailing}</span>
+      ) : null}
+      {collapsed && trailing ? (
+        <span className="absolute right-1 top-1 inline-flex items-center">
+          {trailing}
+        </span>
+      ) : null}
       {!collapsed && item.badge ? (
         <Badge
           variant="sidebar"
@@ -143,6 +158,7 @@ function MeetingsNav({
   teamRouteActiveRef.current = teamRouteActive;
 
   useEffect(() => {
+    if (!TEAM_FEATURE_ENABLED) return;
     let cancelled = false;
 
     async function loadTeams() {
@@ -267,7 +283,24 @@ function MeetingsNav({
       {open ? (
         <ul className="mt-0.5 space-y-0.5 border-l border-border ml-5 pl-2">
           <li>
-            {teams.length === 0 ? (
+            {!TEAM_FEATURE_ENABLED ? (
+              <span
+                aria-disabled="true"
+                title="수요조사 기간에는 제공하지 않습니다"
+                className="flex min-h-12 cursor-not-allowed items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-2 opacity-50"
+              >
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-muted-2">
+                  <UsersRound className="h-4 w-4" strokeWidth={1.75} />
+                </span>
+                <span className="flex-1">팀</span>
+                <Badge
+                  variant="sidebar"
+                  className="min-w-fit justify-center px-1.5 py-0 text-xs"
+                >
+                  준비중
+                </Badge>
+              </span>
+            ) : teams.length === 0 ? (
               <Link
                 href="/team"
                 onClick={() => {
@@ -474,14 +507,46 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { setWorkspaceId } = useAppContext();
+  const { setWorkspaceId, notificationCount } = useAppContext();
+  const { open: notificationsOpen, openNotifications } = useNotificationsUi();
   const isAdmin = session?.user?.role === "ADMIN";
   const [collapsed, setCollapsed] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [surveyGiftAvailable, setSurveyGiftAvailable] = useState(false);
 
   useEffect(() => {
     onMobileClose?.();
   }, [pathname, onMobileClose]);
+
+  useEffect(() => {
+    if (!DEMAND_SURVEY_ACTIVE || !session?.user?.id) {
+      setSurveyGiftAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/survey", { cache: "no-store" });
+        const data = (await res.json()) as { ok?: boolean; completed?: boolean };
+        if (!cancelled && data.ok) setSurveyGiftAvailable(!data.completed);
+      } catch {
+        if (!cancelled) setSurveyGiftAvailable(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, pathname]);
+
+  useEffect(() => {
+    function onSurveyCompleted() {
+      setSurveyGiftAvailable(false);
+    }
+    window.addEventListener(SURVEY_COMPLETED_EVENT, onSurveyCompleted);
+    return () => {
+      window.removeEventListener(SURVEY_COMPLETED_EVENT, onSurveyCompleted);
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -587,6 +652,18 @@ export function AppSidebar({
                   active={isNavActive(pathname, item.href)}
                   onNavigate={onMobileClose}
                   collapsed={rail}
+                  trailing={
+                    item.href === "/plan" && surveyGiftAvailable ? (
+                      <Gift
+                        className={cn(
+                          "text-primary",
+                          rail ? "h-3.5 w-3.5" : "h-4 w-4",
+                        )}
+                        strokeWidth={1.75}
+                        aria-label="설문 선물 가능"
+                      />
+                    ) : null
+                  }
                 />
               ),
             )}
@@ -640,7 +717,55 @@ export function AppSidebar({
           ) : null}
         </nav>
 
-        <div className={cn("shrink-0 p-3", rail && "lg:px-2")}>
+        <div className={cn("shrink-0 space-y-1 p-3", rail && "lg:px-2")}>
+          <button
+            type="button"
+            title="알림 센터"
+            aria-label="알림 센터"
+            aria-expanded={notificationsOpen}
+            onClick={() => {
+              onMobileClose?.();
+              openNotifications();
+            }}
+            className={cn(
+              "group flex w-full cursor-pointer items-center gap-2.5 rounded-xl py-2.5 text-base font-medium text-muted outline-none transition-colors",
+              "hover:bg-surface-2 hover:text-foreground",
+              "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
+              "active:bg-surface-2",
+              notificationsOpen ? "bg-surface text-foreground" : "text-muted",
+              rail ? "justify-center px-2" : "px-3",
+            )}
+          >
+            <span className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center">
+              <Bell
+                className={cn(
+                  "h-5 w-5 transition-colors",
+                  notificationsOpen
+                    ? "text-primary"
+                    : "text-muted-2 group-hover:text-foreground",
+                )}
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              {notificationCount > 0 ? (
+                <span
+                  className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card"
+                  aria-hidden
+                />
+              ) : null}
+            </span>
+            <span className={cn("min-w-0 flex-1 truncate text-left", rail && "sr-only")}>
+              알림
+            </span>
+            {!rail && notificationCount > 0 ? (
+              <Badge
+                variant="sidebar"
+                className="min-w-5 justify-center px-1.5 py-0 text-xs"
+              >
+                {notificationCount}
+              </Badge>
+            ) : null}
+          </button>
           <UserProfile onNavigate={onMobileClose} compact={rail} />
         </div>
       </aside>

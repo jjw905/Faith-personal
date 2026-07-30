@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 import {
@@ -69,6 +70,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!TEAM_FEATURE_ENABLED) {
+    return NextResponse.json(
+      { ok: false, message: "현재 수요조사 기간에는 팀 기능을 제공하지 않습니다." },
+      { status: 403 },
+    );
+  }
   const session = await requireUser();
   if (!session) {
     return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });

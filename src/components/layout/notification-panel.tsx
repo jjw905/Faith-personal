@@ -390,9 +390,10 @@ export function NotificationPanel({
 
   return (
     <>
+      {/* M3: 모바일은 full-screen dialog라 스크림 없음. md+ side sheet만 스크림. */}
       <div
         className={cn(
-          "bg-black/40 transition-opacity duration-200",
+          "hidden bg-black/40 transition-opacity duration-200 md:block",
           contained ? "absolute inset-0 z-10" : "fixed inset-0 z-50",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
@@ -410,7 +411,9 @@ export function NotificationPanel({
         aria-label="알림 센터"
         inert={!open}
         className={cn(
-          "flex w-full max-w-md flex-col bg-card shadow-[0_0_40px_rgba(17,24,46,0.12)] transition-transform duration-200 ease-out",
+          // 모바일: edge-to-edge full-screen dialog. md+: 우측 side sheet.
+          "flex w-full flex-col bg-card transition-transform duration-200 ease-out",
+          "md:max-w-md md:shadow-[0_0_40px_rgba(17,24,46,0.12)]",
           contained
             ? "absolute inset-y-0 right-0 z-10"
             : "fixed inset-y-0 right-0 z-50",
@@ -500,17 +503,17 @@ export function NotificationPanel({
                 strokeWidth={1.75}
                 aria-hidden
               />
-              <p className="text-sm text-muted">불러오는 중…</p>
+              <p className="text-base text-muted md:text-sm">불러오는 중…</p>
             </div>
           ) : empty ? (
             <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface text-muted-2">
                 <MaterialSymbol name="notifications_off" size={28} weight={300} />
               </span>
-              <p className="mt-3 text-sm font-medium text-foreground">
+              <p className="mt-3 text-base font-semibold text-foreground md:text-sm">
                 새 알림이 없습니다
               </p>
-              <p className="mt-1 text-xs text-muted">
+              <p className="mt-1 text-base text-muted md:text-xs">
                 확인한 알림은 {NOTIFICATION_RECENT_DISPLAY_DAYS}일간 최근 내역에
                 남습니다.
               </p>
@@ -655,7 +658,7 @@ function NotificationGroup({
               >
                 <div
                   className={cn(
-                    "mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl md:h-10 md:w-10 md:rounded-xl",
+                    "flex h-12 w-12 shrink-0 items-center justify-center self-start rounded-2xl md:h-10 md:w-10 md:rounded-xl",
                     urgent
                       ? n.unread
                         ? "bg-red-600 text-white"
@@ -691,7 +694,7 @@ function NotificationGroup({
                         {n.title}
                       </p>
                     </div>
-                    <span className="shrink-0 pt-1 text-sm tabular-nums text-muted-2 md:text-xs">
+                    <span className="inline-flex h-7 shrink-0 items-center text-sm tabular-nums leading-none text-muted-2 md:text-xs">
                       {n.time}
                     </span>
                   </div>

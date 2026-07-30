@@ -1,9 +1,18 @@
 "use client";
 
-import { Check, Eye, EyeOff } from "lucide-react";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { Check } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 
+import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { labelFor } from "@/lib/masking/mask-style";
 import type { MaskStyle } from "@/lib/masking/types";
 import { cn } from "@/lib/utils";
@@ -33,13 +42,53 @@ const MASK_STYLE_SAMPLES = {
   },
 } as const;
 
-const MASK_OPTIONS: Array<{ value: MaskStyle; label: string }> = [
-  { value: "partial", label: "부분 가림" },
-  { value: "label", label: "유형 표시" },
-  { value: "off", label: "가리지 않음" },
+const MASK_OPTIONS: Array<{
+  value: MaskStyle;
+  label: string;
+  /** Material Symbol name */
+  symbol: string;
+}> = [
+  {
+    value: "partial",
+    label: "부분 가림",
+    symbol: "password",
+  },
+  {
+    value: "label",
+    label: "유형 표시",
+    symbol: "label",
+  },
+  {
+    value: "off",
+    label: "가리지 않음",
+    symbol: "visibility",
+  },
 ];
 
-/** 부분 가림 / 유형 표시 선택. 실시간 기록 UI용. */
+function MaskStyleIcon({
+  symbol,
+  active,
+  size = 24,
+}: {
+  symbol: string;
+  active?: boolean;
+  size?: number;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "bg-surface-2 text-foreground",
+      )}
+    >
+      <MaterialSymbol name={symbol} size={size} weight={active ? 500 : 400} />
+    </span>
+  );
+}
+
+/** 부분 가림 / 유형 표시 / 가리지 않음. */
 export function MaskStylePicker({
   value,
   onChange,
@@ -51,17 +100,21 @@ export function MaskStylePicker({
   onChange: (next: MaskStyle) => void;
   className?: string;
   showHeading?: boolean;
-  /** 실시간 세션용 — 한 줄 + 샘플 칩 하나 */
+  /** 한 줄 요약 + 아이콘 강조 */
   compact?: boolean;
 }) {
   return (
     <div className={cn(className)}>
       {showHeading ? (
-        <p className="mb-1.5 text-xs font-semibold text-muted-2">
+        <p className="mb-1.5 text-sm font-semibold text-muted">
           개인정보 가림
         </p>
       ) : null}
-      <div role="radiogroup" aria-label="개인정보 가림 방식" className="flex flex-col">
+      <div
+        role="radiogroup"
+        aria-label="개인정보 가림 방식"
+        className="flex flex-col gap-0.5"
+      >
         {MASK_OPTIONS.map((option) => {
           const selected = value === option.value;
           return (
@@ -72,17 +125,16 @@ export function MaskStylePicker({
               aria-checked={selected}
               onClick={() => onChange(option.value)}
               className={cn(
-                "flex w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-xl text-left transition-colors",
-                compact
-                  ? "min-h-12 px-2.5 py-2 md:min-h-0"
-                  : "px-3 py-2.5",
+                "flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-2xl text-left transition-colors",
+                compact ? "min-h-14 px-2 py-2" : "min-h-14 px-2.5 py-2.5",
                 selected ? "bg-surface-2" : "hover:bg-surface-2/60",
               )}
             >
-              <span className="flex min-w-0 flex-col gap-1">
+              <MaskStyleIcon symbol={option.symbol} active={selected} />
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span
                   className={cn(
-                    "text-sm font-semibold",
+                    "text-base font-semibold",
                     selected ? "text-foreground" : "text-muted",
                   )}
                 >
@@ -94,7 +146,7 @@ export function MaskStylePicker({
               </span>
               {selected ? (
                 <Check
-                  className="h-4 w-4 shrink-0 text-foreground"
+                  className="h-5 w-5 shrink-0 text-foreground"
                   strokeWidth={2.25}
                 />
               ) : null}
@@ -121,120 +173,59 @@ export function MaskStylePickerLegacy({
   compact?: boolean;
 }) {
   return (
-    <div className={cn(className)}>
-      {showHeading ? (
-        <p className="mb-1.5 text-xs font-semibold text-muted-2">
-          개인정보 가림
-        </p>
-      ) : null}
-      <div
-        role="tablist"
-        aria-label="개인정보 가림 방식"
-        className={cn(
-          "grid grid-cols-2",
-          compact ? "gap-0.5 rounded-xl bg-surface-2 p-0.5" : "gap-1.5",
-        )}
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={value === "partial"}
-          onClick={() => onChange("partial")}
-          className={cn(
-            "flex min-w-0 text-left transition-colors",
-            compact
-              ? "flex-col items-start gap-0.5 rounded-[10px] px-2.5 py-1.5"
-              : "flex-col items-start gap-1.5 rounded-xl px-3 py-2.5",
-            value === "partial"
-              ? compact
-                ? "bg-card text-foreground shadow-sm"
-                : "bg-card text-foreground shadow-soft ring-1 ring-foreground/15"
-              : "text-muted hover:text-foreground",
-            !compact && value !== "partial" && "bg-surface-2",
-          )}
-        >
-          <span
-            className={cn(
-              "text-xs font-bold",
-              value === "partial" ? "text-foreground" : "text-muted",
-            )}
-          >
-            부분 가림
-          </span>
-          {compact ? (
-            <MaskPreviewChip>{MASK_STYLE_SAMPLES.partial.phone}</MaskPreviewChip>
-          ) : (
-            <span className="flex w-full min-w-0 flex-col gap-1">
-              <MaskPreviewChip>
-                {MASK_STYLE_SAMPLES.partial.phone}
-              </MaskPreviewChip>
-              <MaskPreviewChip>
-                {MASK_STYLE_SAMPLES.partial.email}
-              </MaskPreviewChip>
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={value === "label"}
-          onClick={() => onChange("label")}
-          className={cn(
-            "flex min-w-0 text-left transition-colors",
-            compact
-              ? "flex-col items-start gap-0.5 rounded-[10px] px-2.5 py-1.5"
-              : "flex-col items-start gap-1.5 rounded-xl px-3 py-2.5",
-            value === "label"
-              ? compact
-                ? "bg-card text-foreground shadow-sm"
-                : "bg-card text-foreground shadow-soft ring-1 ring-foreground/15"
-              : "text-muted hover:text-foreground",
-            !compact && value !== "label" && "bg-surface-2",
-          )}
-        >
-          <span
-            className={cn(
-              "text-xs font-bold",
-              value === "label" ? "text-foreground" : "text-muted",
-            )}
-          >
-            유형 표시
-          </span>
-          {compact ? (
-            <MaskPreviewChip>{MASK_STYLE_SAMPLES.label.phone}</MaskPreviewChip>
-          ) : (
-            <span className="flex w-full min-w-0 flex-col gap-1">
-              <MaskPreviewChip>{MASK_STYLE_SAMPLES.label.phone}</MaskPreviewChip>
-              <MaskPreviewChip>{MASK_STYLE_SAMPLES.label.email}</MaskPreviewChip>
-            </span>
-          )}
-        </button>
-      </div>
-    </div>
+    <MaskStylePicker
+      value={value}
+      onChange={onChange}
+      className={className}
+      showHeading={showHeading}
+      compact={compact}
+    />
   );
 }
 
-/** 필요할 때만 여는 가림 방식 팝업. */
+/** 필요할 때만 여는 가림 방식 팝업. 트리거=아이콘 버튼. */
 export function MaskStylePopup({
   value,
   onChange,
   className,
   forceOpen,
+  open: openProp,
+  onOpenChange,
+  hideTrigger = false,
+  anchorRef,
 }: {
   value: MaskStyle;
   onChange: (next: MaskStyle) => void;
   className?: string;
   /** 디자인 랩: 패널 항상 열림 */
   forceOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** 트리거 숨김. 외부에서 open으로만 연다 */
+  hideTrigger?: boolean;
+  /** hideTrigger일 때 위치 기준 */
+  anchorRef?: RefObject<HTMLElement | null>;
 }) {
-  const [open, setOpen] = useState(Boolean(forceOpen));
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(Boolean(forceOpen));
   const [mounted, setMounted] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
-  const panelOpen = forceOpen || open;
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 256 });
+  const controlled = openProp !== undefined;
+  const panelOpen =
+    forceOpen || (controlled ? Boolean(openProp) : uncontrolledOpen);
+
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (forceOpen) return;
+      if (!controlled) setUncontrolledOpen(next);
+      onOpenChange?.(next);
+    },
+    [forceOpen, controlled, onOpenChange],
+  );
+
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 280 });
 
   useEffect(() => {
     setMounted(true);
@@ -243,21 +234,27 @@ export function MaskStylePopup({
   useEffect(() => {
     if (!panelOpen || forceOpen) return;
     function place() {
-      const btn = btnRef.current;
-      if (!btn) return;
+      const btn = hideTrigger ? anchorRef?.current : btnRef.current;
+      const width = Math.min(280, window.innerWidth - 16);
+      if (!btn) {
+        setPos({
+          top: 72,
+          left: Math.max(8, window.innerWidth - width - 12),
+          width,
+        });
+        return;
+      }
       const r = btn.getBoundingClientRect();
-      const width = Math.min(256, window.innerWidth - 16);
       const left = Math.min(
         Math.max(8, r.right - width),
         window.innerWidth - width - 8,
       );
-      const panelH = panelRef.current?.offsetHeight || 220;
+      const panelH = panelRef.current?.offsetHeight || 260;
       const spaceBelow = window.innerHeight - r.bottom - 8;
-      const openUp = spaceBelow < panelH + 16 || r.top > window.innerHeight * 0.55;
+      const openUp =
+        spaceBelow < panelH + 16 || r.top > window.innerHeight * 0.55;
       setPos({
-        top: openUp
-          ? Math.max(8, r.top - 8 - panelH)
-          : r.bottom + 8,
+        top: openUp ? Math.max(8, r.top - 8 - panelH) : r.bottom + 8,
         left,
         width,
       });
@@ -271,7 +268,7 @@ export function MaskStylePopup({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [panelOpen, forceOpen]);
+  }, [panelOpen, forceOpen, hideTrigger, anchorRef]);
 
   useEffect(() => {
     if (!panelOpen || forceOpen) return;
@@ -279,6 +276,7 @@ export function MaskStylePopup({
       const t = e.target as Node;
       if (rootRef.current?.contains(t)) return;
       if (panelRef.current?.contains(t)) return;
+      if (anchorRef?.current?.contains(t)) return;
       setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
@@ -290,7 +288,10 @@ export function MaskStylePopup({
       document.removeEventListener("mousedown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [panelOpen, forceOpen]);
+  }, [panelOpen, forceOpen, anchorRef, setOpen]);
+
+  const activeOption =
+    MASK_OPTIONS.find((o) => o.value === value) ?? MASK_OPTIONS[0];
 
   const panel = panelOpen ? (
     <div
@@ -298,7 +299,7 @@ export function MaskStylePopup({
       id={panelId}
       role="dialog"
       aria-label="개인정보 가림 방식"
-      className="z-[70] rounded-2xl border border-border bg-card p-1.5 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
+      className="z-[70] rounded-2xl border border-border bg-card p-2 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
       style={
         forceOpen
           ? undefined
@@ -323,36 +324,44 @@ export function MaskStylePopup({
   ) : null;
 
   return (
-    <div ref={rootRef} className={cn("relative", className)}>
-      <button
-        ref={btnRef}
-        type="button"
-        aria-expanded={panelOpen}
-        aria-controls={panelId}
-        aria-label="개인정보 가림 방식"
-        title={value === "off" ? "가림 꺼짐" : "가림 방식"}
-        onClick={() => {
-          if (forceOpen) return;
-          setOpen((v) => !v);
-        }}
-        className={cn(
-          "inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full transition-colors md:h-10 md:w-10",
-          panelOpen
-            ? "bg-primary text-primary-foreground shadow-soft"
-            : "bg-card text-muted hover:bg-surface-2 hover:text-foreground",
-        )}
-      >
-        {value === "off" ? (
-          <Eye className="h-6 w-6 md:h-5 md:w-5" strokeWidth={1.75} />
-        ) : (
-          <EyeOff className="h-6 w-6 md:h-5 md:w-5" strokeWidth={1.75} />
-        )}
-      </button>
+    <div
+      ref={rootRef}
+      className={cn(
+        hideTrigger ? "pointer-events-none absolute size-0 overflow-hidden" : "relative",
+        className,
+      )}
+    >
+      {hideTrigger ? null : (
+        <button
+          ref={btnRef}
+          type="button"
+          aria-expanded={panelOpen}
+          aria-controls={panelId}
+          aria-label="개인정보 가림 방식"
+          title={activeOption.label}
+          onClick={() => {
+            if (forceOpen) return;
+            setOpen(!panelOpen);
+          }}
+          className={cn(
+            "inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full transition-colors md:h-10 md:w-10",
+            panelOpen
+              ? "bg-primary text-primary-foreground shadow-soft"
+              : "bg-card text-muted hover:bg-surface-2 hover:text-foreground",
+          )}
+        >
+          <MaterialSymbol
+            name={value === "off" ? "visibility" : "visibility_off"}
+            size={22}
+            weight={panelOpen ? 500 : 400}
+          />
+        </button>
+      )}
 
       {forceOpen
         ? panel
           ? (
-              <div className="absolute right-0 top-[calc(100%+0.4rem)] z-40 w-[min(100vw-2rem,16rem)]">
+              <div className="absolute right-0 top-[calc(100%+0.4rem)] z-40 w-[min(100vw-2rem,17.5rem)]">
                 {panel}
               </div>
             )

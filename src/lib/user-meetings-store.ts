@@ -19,7 +19,9 @@ export type MeetingProcessPhase =
   | "transcribing"
   | "structuring"
   | "done"
-  | "error";
+  | "error"
+  /** 기술적 오류가 아니라 감지된 내용이 없어 저장하지 않은 경우. */
+  | "empty";
 
 export type UserMeetingRecord = {
   id: string;
@@ -29,6 +31,8 @@ export type UserMeetingRecord = {
   phase: MeetingProcessPhase;
   /** 0–100. 파이프라인 실제 단계·청크 진행과 동기. */
   progressPercent?: number;
+  /** "받아쓰는 중", "분석하는 중" 등 진행 중 세부 단계 문구. */
+  stageLabel?: string;
   errorMessage?: string;
   createdAt: string;
   updatedAt: string;
@@ -114,7 +118,10 @@ export function setMeetingProgress(
   id: string,
   percent: number,
   patch: Partial<
-    Pick<UserMeetingRecord, "phase" | "errorMessage" | "rawText">
+    Pick<
+      UserMeetingRecord,
+      "phase" | "errorMessage" | "rawText" | "stageLabel"
+    >
   > = {},
 ): UserMeetingRecord | null {
   const cur = getUserMeeting(id);

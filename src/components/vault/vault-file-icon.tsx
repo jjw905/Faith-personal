@@ -1,7 +1,11 @@
 import { MaterialSymbol } from "@/components/ui/material-symbol";
-import { vaultFileSymbol } from "@/lib/vault-file-icon";
+import { vaultFileExtLabel, vaultFileSymbol } from "@/lib/vault-file-icon";
 import { cn } from "@/lib/utils";
 
+/**
+ * 파일 타일. 확장자를 굵은 글자로 직접 보여주고(MP4, JPG),
+ * 확장자를 못 읽는 파일만 Material 심볼로 대체한다.
+ */
 export function VaultFileIcon({
   name,
   mime,
@@ -13,19 +17,26 @@ export function VaultFileIcon({
   size?: number;
   className?: string;
 }) {
+  const ext = vaultFileExtLabel(name);
+
   return (
     <span
       className={cn(
-        "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground",
+        "inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-surface-2 text-foreground",
         className,
       )}
       aria-hidden
     >
-      <MaterialSymbol
-        name={vaultFileSymbol(name, mime)}
-        size={size}
-        weight={400}
-      />
+      {ext ? (
+        <span
+          className="font-extrabold leading-none tracking-[-0.03em]"
+          style={{ fontSize: Math.round(size * 0.62) }}
+        >
+          {ext}
+        </span>
+      ) : (
+        <MaterialSymbol name={vaultFileSymbol(name, mime)} size={size} weight={500} />
+      )}
     </span>
   );
 }

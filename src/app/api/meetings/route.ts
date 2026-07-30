@@ -41,14 +41,18 @@ function toActivityItem(
         ? ("structuring" as const)
         : row.phase === "error"
           ? ("error" as const)
-          : ("done" as const);
+          : row.phase === "empty"
+            ? ("empty" as const)
+            : ("done" as const);
   const title = meetingDisplayTitle({
     title: row.meeting.title,
     vaultFileName: row.vaultFileId
       ? vaultNames.get(row.vaultFileId)
       : undefined,
   });
-  const detail = meetingProcessDetail(row.phase, row.errorMessage);
+  const detail = active
+    ? row.stageLabel?.trim() || meetingProcessDetail(row.phase, row.errorMessage)
+    : meetingProcessDetail(row.phase, row.errorMessage);
   return {
     id: row.id,
     title,
@@ -62,7 +66,7 @@ function toActivityItem(
           ? row.phase === "structuring"
             ? 72
             : 4
-          : row.phase === "error"
+          : row.phase === "error" || row.phase === "empty"
             ? 0
             : 100,
     detail,

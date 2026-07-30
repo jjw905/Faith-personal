@@ -476,7 +476,7 @@ export function MeetingChatReplayBar({
           </button>
           <button
             type="button"
-            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[#111111] shadow-soft transition-[transform,background-color,box-shadow] duration-150 ease-out hover:scale-[1.04] hover:bg-white hover:shadow-float active:scale-95 motion-reduce:transition-colors motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[#111111] shadow-soft transition-colors duration-150 hover:bg-white active:bg-white/90"
             onClick={onTogglePlay}
             aria-label={playing ? "일시정지" : "재생"}
           >

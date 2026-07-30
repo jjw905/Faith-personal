@@ -7,6 +7,7 @@ export const MEETING_PROCESS_LABEL: Record<MeetingProcessPhase, string> = {
   structuring: "정리하는 중",
   done: "완료",
   error: "실패",
+  empty: "저장되지 않음",
 };
 
 /** 확장자 제거. 회의 제목·리스트 표기와 맞춤. */
@@ -36,8 +37,8 @@ export function meetingProcessDetail(
   phase: MeetingProcessPhase,
   errorMessage?: string | null,
 ): string {
-  if (phase === "error") {
-    return errorMessage?.trim() || MEETING_PROCESS_LABEL.error;
+  if (phase === "error" || phase === "empty") {
+    return errorMessage?.trim() || MEETING_PROCESS_LABEL[phase];
   }
   return MEETING_PROCESS_LABEL[phase];
 }

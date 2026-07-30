@@ -5,6 +5,8 @@ export type RealtimeUtterance = {
   startSec: number;
   /** 발화 끝(초). server_vad에서만 실측값이 들어온다. */
   endSec?: number;
+  meanLogprob?: number;
+  confidence?: number;
   completedAtMs: number;
 };
 

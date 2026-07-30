@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 
 import { AuthSessionProvider } from "@/components/auth/session-provider";
@@ -28,6 +28,14 @@ export const metadata: Metadata = {
     "보안 및 접근 제어 기능이 내재된 AI 기반 회의록 자동화 웹 플랫폼",
 };
 
+/** Android Chrome: 키보드가 레이아웃을 줄여 하단 입력이 가려지지 않게 한다. iOS는 visualViewport로 보정. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -47,7 +55,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0..1,-50..200&icon_names=audio_file,description,draft,image,notifications,notifications_off,picture_as_pdf,slideshow,table_chart,text_snippet,video_file&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0..1,-50..200&icon_names=audio_file,description,draft,edit_note,image,label,notifications,notifications_off,password,picture_as_pdf,slideshow,table_chart,text_snippet,video_file,visibility,visibility_off&display=swap"
           rel="stylesheet"
         />
       </head>

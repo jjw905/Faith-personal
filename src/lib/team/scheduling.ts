@@ -170,9 +170,9 @@ export function validateScheduleInput(body: {
   if (
     !Number.isFinite(durationMinutes) ||
     durationMinutes < 5 ||
-    durationMinutes > 480
+    durationMinutes > 120
   ) {
-    return { ok: false, message: "회의 시간은 5~480분입니다." };
+    return { ok: false, message: "회의 시간은 5~120분입니다." };
   }
   if (!organizerId) return { ok: false, message: "주최자를 지정해 주세요." };
   if (!participantIds.includes(organizerId)) {

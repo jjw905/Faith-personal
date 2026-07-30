@@ -43,6 +43,81 @@ export function isVaultAllowedFile(name: string): boolean {
   return VAULT_ALLOWED_EXT_SET.has(vaultFileExtension(name));
 }
 
+/** 서버 업로드 경로용. 클라이언트 우회 시에도 확장자를 막는다. */
+export function assertVaultAllowedUpload(fileName: string) {
+  const name = String(fileName ?? "").trim();
+  if (!name || !isVaultAllowedFile(name)) {
+    throw new Error("지원하지 않는 파일 형식입니다.");
+  }
+}
+
+/**
+ * 저장·응답 MIME은 확장자 기준으로만 정한다.
+ * 클라이언트가 text/html 등을 넣어도 동일 출처 XSS가 나지 않게 한다.
+ */
+export function safeVaultMime(fileName: string, _claimedMime?: string): string {
+  assertVaultAllowedUpload(fileName);
+  const ext = vaultFileExtension(fileName);
+  switch (ext) {
+    case ".mp3":
+      return "audio/mpeg";
+    case ".wav":
+      return "audio/wav";
+    case ".m4a":
+      return "audio/mp4";
+    case ".ogg":
+      return "audio/ogg";
+    case ".flac":
+      return "audio/flac";
+    case ".webm":
+      return "audio/webm";
+    case ".pdf":
+      return "application/pdf";
+    case ".doc":
+      return "application/msword";
+    case ".docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case ".xls":
+      return "application/vnd.ms-excel";
+    case ".xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case ".ppt":
+      return "application/vnd.ms-powerpoint";
+    case ".pptx":
+      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    case ".hwp":
+    case ".hwpx":
+      return "application/x-hwp";
+    case ".txt":
+      return "text/plain; charset=utf-8";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".png":
+      return "image/png";
+    case ".webp":
+      return "image/webp";
+    case ".heic":
+      return "image/heic";
+    case ".heif":
+      return "image/heif";
+    case ".gif":
+      return "image/gif";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+/** audio/image만 인라인, 그 외는 다운로드로 강제. */
+export function vaultContentDisposition(
+  fileName: string,
+  mime: string,
+): "inline" | "attachment" {
+  const type = mime.toLowerCase().split(";")[0]!.trim();
+  if (type.startsWith("audio/") || type.startsWith("image/")) return "inline";
+  return "attachment";
+}
+
 /** 형식·단일 용량·보관함 한도. 문제 있으면 안내 문구. */
 export function validateVaultUploadFiles(
   files: File[],

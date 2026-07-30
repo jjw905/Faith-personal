@@ -57,22 +57,156 @@ function foldJamo(j: string): string {
   return j;
 }
 
+type PronunciationSyllable = {
+  cho: string;
+  jung: string;
+  jong: string;
+};
+
+const LIAISON_JONG: Record<string, [string, string]> = {
+  ㄱ: ["", "ㄱ"],
+  ㄲ: ["", "ㄲ"],
+  ㄳ: ["ㄱ", "ㅅ"],
+  ㄴ: ["", "ㄴ"],
+  ㄵ: ["ㄴ", "ㅈ"],
+  ㄶ: ["ㄴ", "ㅎ"],
+  ㄷ: ["", "ㄷ"],
+  ㄹ: ["", "ㄹ"],
+  ㄺ: ["ㄹ", "ㄱ"],
+  ㄻ: ["ㄹ", "ㅁ"],
+  ㄼ: ["ㄹ", "ㅂ"],
+  ㄽ: ["ㄹ", "ㅅ"],
+  ㄾ: ["ㄹ", "ㅌ"],
+  ㄿ: ["ㄹ", "ㅍ"],
+  ㅀ: ["ㄹ", "ㅎ"],
+  ㅁ: ["", "ㅁ"],
+  ㅂ: ["", "ㅂ"],
+  ㅄ: ["ㅂ", "ㅅ"],
+  ㅅ: ["", "ㅅ"],
+  ㅆ: ["", "ㅆ"],
+  ㅇ: ["", "ㅇ"],
+  ㅈ: ["", "ㅈ"],
+  ㅊ: ["", "ㅊ"],
+  ㅋ: ["", "ㅋ"],
+  ㅌ: ["", "ㅌ"],
+  ㅍ: ["", "ㅍ"],
+  ㅎ: ["", "ㅎ"],
+};
+
+const CODA_NEUTRAL: Record<string, string> = {
+  ㄲ: "ㄱ",
+  ㄳ: "ㄱ",
+  ㅋ: "ㄱ",
+  ㄵ: "ㄴ",
+  ㄶ: "ㄴ",
+  ㅅ: "ㄷ",
+  ㅆ: "ㄷ",
+  ㅈ: "ㄷ",
+  ㅊ: "ㄷ",
+  ㅌ: "ㄷ",
+  ㅎ: "ㄷ",
+  ㄺ: "ㄱ",
+  ㄻ: "ㅁ",
+  ㄼ: "ㄹ",
+  ㄽ: "ㄹ",
+  ㄾ: "ㄹ",
+  ㄿ: "ㅂ",
+  ㅀ: "ㄹ",
+  ㅄ: "ㅂ",
+  ㅍ: "ㅂ",
+};
+
+function decomposePronunciation(text: string): PronunciationSyllable[] {
+  const out: PronunciationSyllable[] = [];
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    if (code < 0xac00 || code > 0xd7a3) continue;
+    const index = code - 0xac00;
+    out.push({
+      cho: CHO[Math.floor(index / 588)]!,
+      jung: JUNG[Math.floor((index % 588) / 28)]!,
+      jong: JONG[index % 28]!,
+    });
+  }
+  return out;
+}
+
+/**
+ * 추천용 표준 발음 규칙. 연음, 비음화, 유음화, 격음화, 경음화와 대표
+ * 구개음화를 먼저 적용해 표기 거리가 아니라 실제 발음 거리를 비교한다.
+ */
+function applyStandardPronunciation(
+  source: PronunciationSyllable[],
+): PronunciationSyllable[] {
+  const syllables = source.map((syllable) => ({ ...syllable }));
+  for (let index = 0; index < syllables.length - 1; index++) {
+    const current = syllables[index]!;
+    const next = syllables[index + 1]!;
+
+    if (
+      next.cho === "ㅇ" &&
+      next.jung === "ㅣ" &&
+      (current.jong === "ㄷ" || current.jong === "ㅌ")
+    ) {
+      next.cho = current.jong === "ㄷ" ? "ㅈ" : "ㅊ";
+      current.jong = "";
+      continue;
+    }
+
+    if (next.cho === "ㅇ" && current.jong) {
+      const liaison = LIAISON_JONG[current.jong];
+      if (liaison) {
+        current.jong = liaison[0];
+        next.cho = liaison[1];
+        continue;
+      }
+    }
+
+    if (current.jong === "ㅎ" && ["ㄱ", "ㄷ", "ㅈ"].includes(next.cho)) {
+      next.cho = { ㄱ: "ㅋ", ㄷ: "ㅌ", ㅈ: "ㅊ" }[next.cho]!;
+      current.jong = "";
+    } else if (next.cho === "ㅎ" && ["ㄱ", "ㄷ", "ㅂ"].includes(current.jong)) {
+      next.cho = { ㄱ: "ㅋ", ㄷ: "ㅌ", ㅂ: "ㅍ" }[current.jong]!;
+      current.jong = "";
+    }
+
+    current.jong = CODA_NEUTRAL[current.jong] ?? current.jong;
+
+    if (["ㄴ", "ㅁ"].includes(next.cho)) {
+      current.jong =
+        { ㄱ: "ㅇ", ㄷ: "ㄴ", ㅂ: "ㅁ" }[current.jong] ?? current.jong;
+    }
+    if (
+      (current.jong === "ㄴ" && next.cho === "ㄹ") ||
+      (current.jong === "ㄹ" && next.cho === "ㄴ")
+    ) {
+      current.jong = "ㄹ";
+      next.cho = "ㄹ";
+    }
+    if (
+      ["ㄱ", "ㄷ", "ㅂ"].includes(current.jong) &&
+      ["ㄱ", "ㄷ", "ㅂ", "ㅅ", "ㅈ"].includes(next.cho)
+    ) {
+      next.cho =
+        { ㄱ: "ㄲ", ㄷ: "ㄸ", ㅂ: "ㅃ", ㅅ: "ㅆ", ㅈ: "ㅉ" }[next.cho]!;
+    }
+  }
+  const last = syllables[syllables.length - 1];
+  if (last) last.jong = CODA_NEUTRAL[last.jong] ?? last.jong;
+  return syllables;
+}
+
 /** 한글 문자열 → 자모열. 숫자, 영문은 읽는 소리로 먼저 바꾼다. */
 export function toJamo(text: string): string {
   const spoken = toSpokenKorean(text).replace(/[^가-힣ㄱ-ㅎㅏ-ㅣ]/g, "");
   let out = "";
-  for (const ch of spoken) {
-    const code = ch.charCodeAt(0);
-    if (code >= 0xac00 && code <= 0xd7a3) {
-      const index = code - 0xac00;
-      out += foldJamo(CHO[Math.floor(index / 588)]!);
-      out += foldJamo(JUNG[Math.floor((index % 588) / 28)]!);
-      const jong = JONG[index % 28]!;
-      if (jong) out += foldJamo(jong);
-    } else {
-      out += foldJamo(ch);
-    }
+  const syllables = applyStandardPronunciation(decomposePronunciation(spoken));
+  for (const syllable of syllables) {
+    out += foldJamo(syllable.cho);
+    out += foldJamo(syllable.jung);
+    if (syllable.jong) out += foldJamo(syllable.jong);
   }
+  for (const ch of spoken.replace(/[가-힣]/g, "")) out += foldJamo(ch);
   return out;
 }
 

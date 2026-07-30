@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { normalizeMeetingDateIso } from "@/lib/meeting-date";
 import { renameParticipantInRecord } from "@/lib/rename-meeting-participant";
 import { requireUser } from "@/lib/require-user";
+import { applyLineCorrection, setLineMemo } from "@/lib/transcript-line-edit";
 import {
   deleteUserMeeting,
   getUserMeeting,
@@ -15,6 +16,14 @@ type PatchBody = {
   title?: string;
   date?: string;
   renameParticipant?: { id?: string; name?: string };
+  applyCorrection?: {
+    lineId?: string;
+    wrong?: string;
+    suggestion?: string;
+    startOffset?: number;
+    endOffset?: number;
+  };
+  setMemo?: { lineId?: string; memo?: string };
 };
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -74,6 +83,56 @@ export async function PATCH(request: Request, { params }: Params) {
       semantic: renamed.record.semantic,
     });
     return NextResponse.json({ ok: true, meeting: next?.meeting });
+  }
+
+  if (body.applyCorrection) {
+    const { lineId, wrong, suggestion, startOffset, endOffset } =
+      body.applyCorrection;
+    if (
+      typeof lineId !== "string" ||
+      !lineId ||
+      typeof wrong !== "string" ||
+      typeof suggestion !== "string"
+    ) {
+      return NextResponse.json(
+        { ok: false, message: "잘못된 요청입니다." },
+        { status: 400 },
+      );
+    }
+    const applied = applyLineCorrection(row, {
+      lineId,
+      wrong,
+      suggestion,
+      startOffset: typeof startOffset === "number" ? startOffset : undefined,
+      endOffset: typeof endOffset === "number" ? endOffset : undefined,
+    });
+    if (!applied.ok) {
+      return NextResponse.json(
+        { ok: false, message: applied.message },
+        { status: 400 },
+      );
+    }
+    const next = updateUserMeeting(id, { transcript: applied.record.transcript });
+    return NextResponse.json({ ok: true, transcript: next?.transcript });
+  }
+
+  if (body.setMemo) {
+    const { lineId, memo } = body.setMemo;
+    if (typeof lineId !== "string" || !lineId || typeof memo !== "string") {
+      return NextResponse.json(
+        { ok: false, message: "잘못된 요청입니다." },
+        { status: 400 },
+      );
+    }
+    const updated = setLineMemo(row, lineId, memo);
+    if (!updated.ok) {
+      return NextResponse.json(
+        { ok: false, message: updated.message },
+        { status: 400 },
+      );
+    }
+    const next = updateUserMeeting(id, { transcript: updated.record.transcript });
+    return NextResponse.json({ ok: true, transcript: next?.transcript });
   }
 
   const patch: { title?: string; date?: string } = {};

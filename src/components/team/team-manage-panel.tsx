@@ -88,7 +88,7 @@ type TeamDetail = {
 const ROLE_LABEL = { OWNER: "팀 대표", ADMIN: "팀장", MEMBER: "팀원" };
 
 const PAGE_MEMBERS = 10;
-const PAGE_MEETINGS = 8;
+const PAGE_MEETINGS = 5;
 
 const CARD_SHADOW =
   "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";

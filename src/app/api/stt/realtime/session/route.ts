@@ -2,20 +2,33 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import { REALTIME_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 import { buildGlossary } from "@/lib/stt/glossary";
+import { seoulDateKey } from "@/lib/meeting-date";
 import {
   createLiveMeetingId,
   ensureLiveMeetingRecord,
 } from "@/lib/stt/realtime/live-session-store";
 import { REALTIME_STT_MINI } from "@/lib/stt/realtime/types";
 import { effectiveHostId } from "@/lib/team/meeting-lifecycle";
+import { listUserMeetings } from "@/lib/user-meetings-store";
 
 const CLIENT_SECRET_ENDPOINT =
   "https://api.openai.com/v1/realtime/client_secrets";
 
 export async function POST(request: Request) {
+  if (!REALTIME_FEATURE_ENABLED) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "수요조사 기간에는 실시간 기록을 제공하지 않습니다. 업로드 분석을 이용해 주세요.",
+      },
+      { status: 403 },
+    );
+  }
+
   const userSession = await requireUser();
   if (!userSession) {
     return NextResponse.json(
@@ -24,7 +37,11 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { title?: string; teamMeetingId?: string };
+  let body: {
+    title?: string;
+    teamMeetingId?: string;
+    reconnectSessionId?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -42,8 +59,39 @@ export async function POST(request: Request) {
     );
   }
 
+  const reconnectRequested = Boolean(body.reconnectSessionId?.trim());
+  if (!reconnectRequested) {
+    const activeSessions = await prisma.realtimeSttSession.count({
+      where: { userId: userSession.user.id, status: "ACTIVE" },
+    });
+    if (activeSessions > 0) {
+      return NextResponse.json(
+        { ok: false, message: "이미 진행 중인 실시간 기록이 있습니다." },
+        { status: 409 },
+      );
+    }
+    // ADMIN은 개발·검증용이라 월 무료 한도에서 제외한다.
+    if (
+      !body.teamMeetingId?.trim() &&
+      userSession.user.role !== "ADMIN" &&
+      userSession.user.plan === "FREE"
+    ) {
+      const month = seoulDateKey(new Date().toISOString()).slice(0, 7);
+      const meetingsThisMonth = listUserMeetings(userSession.user.id).filter(
+        (meeting) => seoulDateKey(meeting.createdAt).startsWith(month),
+      ).length;
+      if (meetingsThisMonth >= 5) {
+        return NextResponse.json(
+          { ok: false, message: "이번 달 무료 회의 사용량을 모두 사용했습니다." },
+          { status: 429 },
+        );
+      }
+    }
+  }
+
   const requestedTitle = body.title?.trim().slice(0, 120) || "실시간 회의";
-  const teamMeetingId = body.teamMeetingId?.trim();
+  let teamMeetingId = body.teamMeetingId?.trim();
+  const reconnectSessionId = body.reconnectSessionId?.trim();
   let meetingId = createLiveMeetingId();
   let runId: string = randomUUID();
   let title = requestedTitle;
@@ -53,7 +101,46 @@ export async function POST(request: Request) {
     ? [userSession.user.name]
     : [];
 
-  if (teamMeetingId) {
+  if (reconnectSessionId) {
+    const existing = await prisma.realtimeSttSession.findFirst({
+      where: {
+        id: reconnectSessionId,
+        userId: userSession.user.id,
+        status: "ACTIVE",
+      },
+      include: {
+        teamMeeting: {
+          include: {
+            access: {
+              where: { isParticipant: true },
+              select: { user: { select: { name: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!existing) {
+      return NextResponse.json(
+        { ok: false, message: "재연결할 기록 세션을 찾을 수 없습니다." },
+        { status: 404 },
+      );
+    }
+    meetingId = existing.meetingId;
+    runId = existing.runId;
+    title = existing.title;
+    teamMeetingId = existing.teamMeetingId ?? undefined;
+    workspace = existing.teamMeetingId ? "team" : "personal";
+    participantNames = [
+      ...new Set(
+        [
+          userSession.user.name?.trim(),
+          ...(existing.teamMeeting?.access.map((access) =>
+            access.user.name?.trim(),
+          ) ?? []),
+        ].filter((name): name is string => Boolean(name)),
+      ),
+    ];
+  } else if (teamMeetingId) {
     const teamMeeting = await prisma.teamMeeting.findUnique({
       where: { id: teamMeetingId },
       include: {
@@ -134,6 +221,7 @@ export async function POST(request: Request) {
     body: JSON.stringify({
       session: {
         type: "transcription",
+        include: ["item.input_audio_transcription.logprobs"],
         audio: {
           input: {
             noise_reduction: { type: "near_field" },
@@ -172,25 +260,29 @@ export async function POST(request: Request) {
     );
   }
 
-  ensureLiveMeetingRecord({
-    meetingId,
-    userId: ownerUserId,
-    title,
-    workspace,
-  });
-  const liveSession = await prisma.realtimeSttSession.create({
-    data: {
+  let liveSessionId = reconnectSessionId;
+  if (!liveSessionId) {
+    ensureLiveMeetingRecord({
       meetingId,
-      runId,
-      userId: userSession.user.id,
-      teamMeetingId: teamMeetingId || null,
       title,
-    },
-  });
+      userId: ownerUserId,
+      workspace,
+    });
+    const liveSession = await prisma.realtimeSttSession.create({
+      data: {
+        meetingId,
+        runId,
+        userId: userSession.user.id,
+        teamMeetingId: teamMeetingId || null,
+        title,
+      },
+    });
+    liveSessionId = liveSession.id;
+  }
 
   return NextResponse.json({
     ok: true,
-    sessionId: liveSession.id,
+    sessionId: liveSessionId,
     meetingId,
     clientSecret,
     model: REALTIME_STT_MINI,

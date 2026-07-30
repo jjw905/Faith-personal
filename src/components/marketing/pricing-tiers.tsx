@@ -5,8 +5,12 @@ import { useState } from "react";
 
 import { Container } from "@/components/marketing/container";
 import { CtaButton } from "@/components/marketing/cta-button";
+import { PAID_PLANS_ENABLED, TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 import {
   PLAN_CATALOG,
+  PLAN_OVERAGE_NOTE,
+  TOPUP_PACKS,
+  formatPlanMinutes,
   formatPlanWon,
   type CatalogPlanId,
   type PlanCatalogEntry,
@@ -24,6 +28,13 @@ const TIER_CTA: Record<CatalogPlanId, TierCta> = {
   FREE: { label: "무료로 시작", href: "/signup" },
   PRO: { label: "Pro 시작", href: "/signup" },
   TEAM: { label: "Team 시작", href: "/signup?plan=team" },
+};
+
+/** 수요조사 기간에는 Free만 가입 가능. Pro/Team은 카드는 그대로 보이되 시작 버튼만 잠근다. */
+const TIER_LOCKED: Record<CatalogPlanId, boolean> = {
+  FREE: false,
+  PRO: !PAID_PLANS_ENABLED,
+  TEAM: !PAID_PLANS_ENABLED || !TEAM_FEATURE_ENABLED,
 };
 
 function BillingSwitch({
@@ -83,10 +94,12 @@ function TierCard({
   tier,
   billing,
   cta,
+  locked,
 }: {
   tier: PlanCatalogEntry;
   billing: Billing;
   cta: TierCta;
+  locked: boolean;
 }) {
   const isInquiry = tier.monthlyPrice === null;
   const monthly =
@@ -155,7 +168,32 @@ function TierCard({
       </div>
       <p className="mt-1.5 min-h-5 text-sm font-medium text-muted-2">{note}</p>
 
-      {cta.contact ? (
+      <div className="mt-4 rounded-2xl bg-surface px-4 py-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold text-muted">포함 분석</span>
+          <span className="text-lg font-bold tabular-nums text-foreground">
+            {formatPlanMinutes(tier)}
+          </span>
+        </div>
+        <p className="mt-1 text-sm leading-relaxed text-muted-2">
+          {PLAN_OVERAGE_NOTE}
+        </p>
+      </div>
+
+      {locked ? (
+        <button
+          type="button"
+          disabled
+          aria-disabled="true"
+          title="준비 중입니다"
+          className={cn(
+            "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-surface text-base font-semibold text-muted-2",
+            ctaClass,
+          )}
+        >
+          준비중
+        </button>
+      ) : cta.contact ? (
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
           className={cn(
@@ -194,6 +232,58 @@ function TierCard({
   );
 }
 
+/** 포함 분을 다 썼을 때 고르는 추가 분 팩. 결제 연동 전이라 안내만 한다. */
+function TopupPacks() {
+  const locked = !PAID_PLANS_ENABLED;
+
+  return (
+    <div className="mx-auto mt-8 w-full max-w-lg lg:max-w-5xl">
+      <div className="rounded-3xl bg-card p-6 shadow-soft ring-1 ring-border/50 sm:p-7">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
+            추가 분 팩
+          </h2>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {TOPUP_PACKS.map((pack) => (
+            <div key={pack.id} className="relative rounded-2xl bg-surface px-4 py-4">
+              {pack.badge ? (
+                <span className="absolute right-3 top-3 rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
+                  {pack.badge}
+                </span>
+              ) : null}
+              <p className="text-lg font-bold tabular-nums text-foreground">
+                {pack.minutes}분
+              </p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
+                {formatPlanWon(pack.priceWon)}
+              </p>
+              <button
+                type="button"
+                disabled={locked}
+                aria-disabled={locked}
+                title={locked ? "준비 중입니다" : undefined}
+                className={cn(
+                  "mt-3 min-h-9 w-full rounded-lg text-sm font-semibold transition-colors",
+                  locked
+                    ? "cursor-not-allowed bg-border/60 text-muted-2"
+                    : "bg-foreground text-background hover:bg-foreground/90",
+                )}
+              >
+                {locked ? "준비중" : "구매"}
+              </button>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-sm text-muted-2">
+          선불 충전, 유효기간 12개월
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** 요금제 3단 — 개인 Free/Pro, 협업 Team. 월간/연간 전환. */
 export function PricingTiers() {
   const [billing, setBilling] = useState<Billing>("monthly");
@@ -218,10 +308,13 @@ export function PricingTiers() {
                 tier={PLAN_CATALOG[id]}
                 billing={billing}
                 cta={TIER_CTA[id]}
+                locked={TIER_LOCKED[id]}
               />
             </div>
           ))}
         </div>
+
+        <TopupPacks />
       </Container>
     </section>
   );

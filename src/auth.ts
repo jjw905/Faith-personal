@@ -19,9 +19,9 @@ import { platformAdminEmails } from "@/lib/platform-admin";
 import { verifyPassword } from "@/lib/password";
 import {
   clientIpFromHeaders,
+  durableRateLimit,
+  durableResetRateLimit,
   hashRateLimitEmail,
-  rateLimit,
-  resetRateLimit,
 } from "@/lib/rate-limit";
 import { verifyRecaptchaToken } from "@/lib/recaptcha";
 
@@ -45,6 +45,15 @@ function adminEmails() {
   return platformAdminEmails();
 }
 
+/**
+ * 네이버 로그인 임시 중단 스위치.
+ *
+ * UI 버튼만 지우면 /api/auth/signin/naver, /api/auth/callback/naver 가
+ * 그대로 살아 있어 취약점이 된다. 여기서 provider 등록 자체를 막아야
+ * 안전하게 끈 것이다. 재개할 때는 true로만 되돌리면 된다.
+ */
+export const NAVER_LOGIN_ENABLED = false;
+
 function oauthProviders(): Provider[] {
   const list: Provider[] = [];
   if (
@@ -61,6 +70,7 @@ function oauthProviders(): Provider[] {
     );
   }
   if (
+    NAVER_LOGIN_ENABLED &&
     process.env.AUTH_NAVER_ID?.trim() &&
     process.env.AUTH_NAVER_SECRET?.trim()
   ) {
@@ -235,13 +245,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const emailHash = hashRateLimitEmail(email);
 
-          // IP + 이메일 해시 제한 (서버 전용)
-          const ipLimit = rateLimit({
+          // IP + 이메일 해시 제한 (다중 인스턴스에서도 공유되도록 DB 백업 사용)
+          const ipLimit = await durableRateLimit({
             key: `login:ip:${ip}`,
             limit: 8,
             windowMs: 15 * 60_000,
           });
-          const emailLimit = rateLimit({
+          const emailLimit = await durableRateLimit({
             key: `login:email:${emailHash}`,
             limit: 5,
             windowMs: 15 * 60_000,
@@ -310,7 +320,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             throw new UnverifiedEmailCredentials();
           }
 
-          resetRateLimit(`login:ip:${ip}`, `login:email:${emailHash}`);
+          await durableResetRateLimit(
+            `login:ip:${ip}`,
+            `login:email:${emailHash}`,
+          );
 
           return {
             id: fresh.id,

@@ -1,10 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AudioUploadZone } from "@/components/dashboard/audio-upload-zone";
+import {
+  AudioUploadZone,
+  type AudioUploadZoneHandle,
+} from "@/components/dashboard/audio-upload-zone";
 import { MeetingMidPanel } from "@/components/dashboard/meeting-mid-panel";
-import { MeetingSearch } from "@/components/dashboard/meeting-search";
+import {
+  MeetingsMobileActionBar,
+  type MeetingsMobilePane,
+} from "@/components/dashboard/meetings-mobile-action-bar";
 import { ProcessingNowSection } from "@/components/dashboard/processing-now";
 import { RecentMeetingsTable } from "@/components/dashboard/recent-meetings-table";
 import { PageContainer } from "@/components/layout/page-container";
@@ -15,6 +21,7 @@ import { fixtureMeetingsFull } from "@/lib/page-ux-fixtures";
 import { getMeetingsByWorkspace } from "@/lib/meetings-mock";
 import { getWorkspaceProfile } from "@/lib/workspaces";
 import type { Meeting } from "@/types/meeting";
+import { cn } from "@/lib/utils";
 
 function TodayHeading({ meetingHeadline }: { meetingHeadline: string }) {
   const now = new Date();
@@ -41,14 +48,22 @@ function TodayHeading({ meetingHeadline }: { meetingHeadline: string }) {
   );
 }
 
+type RecordsBarState = {
+  onExitSelect: () => void;
+};
+
 export default function DashboardPage() {
   const { workspaceId } = useAppContext();
   const { scenarioId } = usePageUxPreview();
   const profile = getWorkspaceProfile(workspaceId);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobilePane, setMobilePane] =
+    useState<MeetingsMobilePane>("upcoming");
   const [meetings, setMeetings] = useState<Meeting[]>(() =>
     getMeetingsByWorkspace(workspaceId),
   );
+  const [recordsBar, setRecordsBar] = useState<RecordsBarState | null>(null);
+  const uploadZoneRef = useRef<AudioUploadZoneHandle>(null);
 
   const refreshMeetings = useCallback(async () => {
     let hidden = new Set<string>();
@@ -126,6 +141,11 @@ export default function DashboardPage() {
     };
   }, [refreshMeetings]);
 
+  useEffect(() => {
+    setSearchQuery("");
+    setMobilePane("upcoming");
+  }, [workspaceId]);
+
   const handleProcessingActiveChange = useCallback(() => {
     void refreshMeetings();
   }, [refreshMeetings]);
@@ -142,23 +162,15 @@ export default function DashboardPage() {
 
   return (
     <PageContainer soft>
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <TodayHeading meetingHeadline={profile.meetingHeadline} />
-          <div className="w-full min-w-0 sm:max-w-sm sm:flex-1">
-            <MeetingSearch
-              value={searchQuery}
-              onChange={setSearchQuery}
-              placeholder={profile.searchPlaceholder}
-              className="bg-card ring-1 ring-border"
-            />
-          </div>
-        </div>
+      <div className="flex flex-col gap-4 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:pb-0">
+        <TodayHeading meetingHeadline={profile.meetingHeadline} />
 
         <section className="space-y-3">
           <AudioUploadZone
+            ref={uploadZoneRef}
             ctaStart={profile.ctaStart}
             ctaUpload={profile.ctaUpload}
+            hideMobileCtas
             onMeetingStarted={() => void refreshMeetings()}
           />
           {scenarioId === "anim-processing" ? (
@@ -173,19 +185,39 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <section>
-          <MeetingMidPanel searchQuery={searchQuery} />
+        <section className={cn(mobilePane !== "upcoming" && "max-md:hidden")}>
+          <MeetingMidPanel
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
         </section>
 
-        <section id="meetings">
+        <section
+          id="meetings"
+          className={cn(mobilePane !== "records" && "max-md:hidden")}
+        >
           <RecentMeetingsTable
             meetings={viewMeetings}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
             onMeetingRemoved={(id) =>
               setMeetings((prev) => prev.filter((m) => m.id !== id))
             }
+            onMobileBarChange={setRecordsBar}
           />
         </section>
       </div>
+
+      <MeetingsMobileActionBar
+        pane={mobilePane}
+        onPaneChange={setMobilePane}
+        startHref={`/meetings/new?workspace=${workspaceId}`}
+        startLabel={profile.ctaStart}
+        onUpload={() => uploadZoneRef.current?.openUpload()}
+        uploadLabel={profile.ctaUpload}
+        createLabel="기록 추가"
+        onLeaveRecords={recordsBar?.onExitSelect}
+      />
     </PageContainer>
   );
 }

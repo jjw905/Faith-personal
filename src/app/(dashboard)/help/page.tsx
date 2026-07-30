@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -70,6 +71,17 @@ function ArticleBlock({
           </p>
         ))}
       </div>
+      {article.image ? (
+        <figure className="mt-5 overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
+          <Image
+            src={article.image.src}
+            alt={article.image.alt}
+            width={1280}
+            height={800}
+            className="h-auto w-full"
+          />
+        </figure>
+      ) : null}
       {article.id === "contact" ? <ContactMailPanel /> : null}
     </article>
   );

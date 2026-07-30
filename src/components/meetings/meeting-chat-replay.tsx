@@ -15,39 +15,32 @@ import { ChatReplayTools } from "@/components/meetings/chat-replay-tools";
 import { CorrectionHint } from "@/components/meetings/correction-hint";
 import { MaskedText } from "@/components/meetings/masked-text";
 import { Button } from "@/components/ui/button";
+import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { useAppContext } from "@/context/app-context";
 import { maskPii, type MaskStyle } from "@/lib/masking";
-import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
+import { activeLineIndexAt, activeWordAt, lineStartSec, estimateTranscriptDurationSec, parseDurationLabelToSec, readMediaDurationSec } from "@/lib/transcript-time";
 import type { Meeting, Participant } from "@/types/meeting";
-import type { MeetingTranscript, TranscriptLine } from "@/types/transcript";
+import type {
+  MeetingTranscript,
+  TranscriptCorrection,
+  TranscriptLine,
+} from "@/types/transcript";
 import { cn } from "@/lib/utils";
 
-const MEMO_KEY_PREFIX = "faith.chat-replay.memos.";
-
-function readLineMemos(meetingId: string): Record<string, string> {
-  if (typeof window === "undefined") return {};
+/** 메모/보정 반영은 실 업로드 회의(사용자 저장소)에만 서버 반영된다.
+ * 목업 미리보기 등은 로컬 화면 상태만 바뀌고 저장은 조용히 건너뛴다. */
+async function patchMeeting(
+  meetingId: string,
+  body: Record<string, unknown>,
+): Promise<void> {
   try {
-    const raw = window.localStorage.getItem(`${MEMO_KEY_PREFIX}${meetingId}`);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const next: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === "string" && value.trim()) next[key] = value;
-    }
-    return next;
+    await fetch(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   } catch {
-    return {};
-  }
-}
-
-function writeLineMemos(meetingId: string, memos: Record<string, string>) {
-  try {
-    window.localStorage.setItem(
-      `${MEMO_KEY_PREFIX}${meetingId}`,
-      JSON.stringify(memos),
-    );
-  } catch {
-    // ignore
+    // 오프라인 등으로 저장 실패해도 화면 상태는 유지한다.
   }
 }
 
@@ -105,32 +98,48 @@ function ReplayBubble({
   meName,
   maskStyle,
   active,
+  currentSec,
   onSeek,
-  memo,
-  memoMode,
   onMemoChange,
+  onApplyCorrection,
 }: {
   line: TranscriptLine;
   participants: Participant[];
   meName: string;
   maskStyle: MaskStyle;
   active: boolean;
+  /** 이 말풍선이 active일 때만 의미 있는 재생 시각(초). 단어 하이라이트용. */
+  currentSec: number;
   onSeek?: () => void;
-  memo?: string;
-  memoMode: boolean;
   onMemoChange: (next: string) => void;
+  onApplyCorrection: (correction: TranscriptCorrection) => void;
 }) {
   const meta = personMeta(line.speaker, participants, meName);
   const text = line.text ?? "";
   const matches = text ? maskPii(text, { style: maskStyle }).matches : [];
   const corrections = line.corrections ?? [];
+  const activeWord = active ? activeWordAt(line.words, currentSec) : null;
+  const activeWordRange = activeWord
+    ? { startOffset: activeWord.startOffset, endOffset: activeWord.endOffset }
+    : null;
+  const memo = line.memo;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(memo ?? "");
   const hasMemo = Boolean(memo?.trim());
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!editing) setDraft(memo ?? "");
   }, [memo, editing]);
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }, [editing]);
 
   function commitMemo() {
     onMemoChange(draft.trim());
@@ -186,57 +195,99 @@ function ReplayBubble({
               hostSide={meta.mine}
             />
           ) : null}
+          {!text && line.attachment && !hasMemo && !editing ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex min-h-12 items-center gap-1.5 rounded-full px-3 text-base font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:min-h-9 md:px-2.5 md:text-sm"
+            >
+              <MaterialSymbol name="edit_note" size={20} weight={500} />
+              메모 추가
+            </button>
+          ) : null}
           {text ? (
-            onSeek ? (
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={onSeek}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onSeek();
-                  }
-                }}
-                className={cn(
-                  "inline-block max-w-full cursor-pointer whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed transition-opacity hover:opacity-90 md:text-[15px]",
-                  meta.mine
-                    ? "rounded-br-md bg-primary text-primary-foreground"
-                    : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
-                )}
-                aria-label={`${meta.label} 대사부터 재생`}
-              >
-                <MaskedText
-                  original={text}
-                  matches={matches}
-                  onPrimary={meta.mine}
-                />
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  "inline-block max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed md:text-[15px]",
-                  meta.mine
-                    ? "rounded-br-md bg-primary text-primary-foreground"
-                    : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
-                )}
-              >
-                <MaskedText
-                  original={text}
-                  matches={matches}
-                  onPrimary={meta.mine}
-                />
-              </div>
-            )
+            <div
+              className={cn(
+                "group/bubble flex max-w-full items-end gap-1",
+                meta.mine ? "flex-row-reverse" : "flex-row",
+              )}
+            >
+              {onSeek ? (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={onSeek}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSeek();
+                    }
+                  }}
+                  className={cn(
+                    "inline-block max-w-full cursor-pointer whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed transition-opacity hover:opacity-90 md:text-[15px]",
+                    meta.mine
+                      ? "rounded-br-md bg-primary text-primary-foreground"
+                      : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
+                  )}
+                  aria-label={`${meta.label} 대사부터 재생`}
+                >
+                  <MaskedText
+                    original={text}
+                    matches={matches}
+                    onPrimary={meta.mine}
+                    activeWordRange={activeWordRange}
+                  />
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    "inline-block max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed md:text-[15px]",
+                    meta.mine
+                      ? "rounded-br-md bg-primary text-primary-foreground"
+                      : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
+                  )}
+                >
+                  <MaskedText
+                    original={text}
+                    matches={matches}
+                    onPrimary={meta.mine}
+                    activeWordRange={activeWordRange}
+                  />
+                </div>
+              )}
+              {!editing ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  aria-label={hasMemo ? "메모 수정" : "메모 추가"}
+                  title={hasMemo ? "메모 수정" : "메모 추가"}
+                  className={cn(
+                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-muted transition-all duration-200 ease-out motion-reduce:transition-none md:h-9 md:w-9",
+                    "hover:bg-surface-2 hover:text-foreground",
+                    "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    hasMemo
+                      ? "opacity-80"
+                      : "scale-90 opacity-0 group-hover/bubble:scale-100 group-hover/bubble:opacity-100 max-md:scale-100 max-md:opacity-50 focus-visible:scale-100",
+                  )}
+                >
+                  <MaterialSymbol
+                    name="edit_note"
+                    size={20}
+                    weight={hasMemo ? 500 : 400}
+                    filled={hasMemo}
+                  />
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {editing ? (
             <div className="w-full min-w-0 rounded-xl bg-amber-50 p-2 ring-1 ring-amber-200/80">
               <textarea
+                ref={textareaRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 rows={3}
-                autoFocus
                 placeholder="이 대사에 메모를 남겨 주세요"
                 aria-label="말풍선 메모"
                 className="w-full resize-none rounded-lg bg-transparent px-1 py-1 text-left text-base font-medium text-foreground outline-none placeholder:text-muted md:text-sm"
@@ -251,44 +302,64 @@ function ReplayBubble({
                   }
                 }}
               />
-              <div className="mt-1 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="min-h-10 rounded-lg px-3 text-sm font-semibold text-muted hover:text-foreground"
-                  onClick={() => {
-                    setDraft(memo ?? "");
-                    setEditing(false);
-                  }}
-                >
-                  취소
-                </button>
-                <button
-                  type="button"
-                  className="min-h-10 rounded-lg bg-foreground px-3 text-sm font-semibold text-background"
-                  onClick={commitMemo}
-                >
-                  저장
-                </button>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                {hasMemo ? (
+                  <button
+                    type="button"
+                    className="min-h-10 rounded-lg px-3 text-sm font-semibold text-masked hover:bg-masked-soft"
+                    onClick={() => {
+                      setDraft("");
+                      onMemoChange("");
+                      setEditing(false);
+                    }}
+                  >
+                    삭제
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="min-h-10 rounded-lg px-3 text-sm font-semibold text-muted hover:text-foreground"
+                    onClick={() => {
+                      setDraft(memo ?? "");
+                      setEditing(false);
+                    }}
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-10 rounded-lg bg-foreground px-3 text-sm font-semibold text-background"
+                    onClick={commitMemo}
+                  >
+                    저장
+                  </button>
+                </div>
               </div>
             </div>
           ) : hasMemo ? (
             <button
               type="button"
               onClick={() => setEditing(true)}
+              aria-label="메모 수정"
+              title="메모 수정"
               className={cn(
-                "max-w-full rounded-xl bg-amber-50 px-3 py-2 text-left text-base font-medium leading-relaxed text-foreground ring-1 ring-amber-200/80 transition-colors hover:bg-amber-100/80 md:text-sm",
-                meta.mine && "text-right",
+                "flex max-w-full min-h-12 items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-left text-base font-medium leading-relaxed text-foreground ring-1 ring-amber-200/80 transition-colors hover:bg-amber-100/80 md:min-h-0 md:text-sm",
+                meta.mine && "flex-row-reverse text-right",
               )}
             >
-              {memo}
-            </button>
-          ) : memoMode ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-            >
-              메모 추가
+              <MaterialSymbol
+                name="edit_note"
+                size={18}
+                weight={500}
+                filled
+                className="mt-0.5 shrink-0 text-amber-800/70"
+              />
+              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+                {memo}
+              </span>
             </button>
           ) : null}
 
@@ -296,12 +367,14 @@ function ReplayBubble({
             corrections={corrections}
             align={meta.mine ? "end" : "start"}
             className="lg:hidden"
+            onApply={onApplyCorrection}
           />
         </div>
         <CorrectionHint
           corrections={corrections}
           align={meta.mine ? "end" : "start"}
           className="hidden w-[12rem] shrink-0 pb-1 lg:flex"
+          onApply={onApplyCorrection}
         />
       </div>
     </div>
@@ -311,7 +384,7 @@ function ReplayBubble({
 /** 실시간 회의와 같은 채팅 UI로 대화기록 다시보기 + 음성 동기 재생. */
 export function MeetingChatReplay({
   meeting,
-  transcript,
+  transcript: initialTranscript,
   audioSrc,
   audioLabel = "다시듣기",
 }: {
@@ -325,8 +398,7 @@ export function MeetingChatReplay({
   const focusLine = searchParams.get("line");
   const focusSegment = searchParams.get("segment");
   const [maskStyle, setMaskStyle] = useState<MaskStyle>("partial");
-  const [memoMode, setMemoMode] = useState(false);
-  const [lineMemos, setLineMemos] = useState<Record<string, string>>({});
+  const [transcript, setTranscript] = useState(initialTranscript);
   const [titleExpanded, setTitleExpanded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(focusLine);
   const [playing, setPlaying] = useState(false);
@@ -344,17 +416,71 @@ export function MeetingChatReplay({
     [transcript.lines],
   );
 
+  const fallbackDurationSec = useMemo(() => {
+    return Math.max(
+      estimateTranscriptDurationSec(transcript.lines),
+      parseDurationLabelToSec(meeting.duration),
+    );
+  }, [transcript.lines, meeting.duration]);
+
   useEffect(() => {
-    setLineMemos(readLineMemos(meeting.id));
-  }, [meeting.id]);
+    setDurationSec((prev) => {
+      if (prev > 0) return prev;
+      return fallbackDurationSec;
+    });
+  }, [fallbackDurationSec]);
+
+  useEffect(() => {
+    setTranscript(initialTranscript);
+  }, [meeting.id, initialTranscript]);
 
   function setLineMemo(lineId: string, next: string) {
-    setLineMemos((prev) => {
-      const copy = { ...prev };
-      if (next.trim()) copy[lineId] = next.trim();
-      else delete copy[lineId];
-      writeLineMemos(meeting.id, copy);
-      return copy;
+    setTranscript((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line) =>
+        line.id === lineId ? { ...line, memo: next.trim() || undefined } : line,
+      ),
+    }));
+    void patchMeeting(meeting.id, { setMemo: { lineId, memo: next } });
+  }
+
+  function applyCorrection(lineId: string, correction: TranscriptCorrection) {
+    setTranscript((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line) => {
+        if (line.id !== lineId) return line;
+        const text = line.text ?? "";
+        const { wrong, suggestion, startOffset, endOffset } = correction;
+        let nextText = text;
+        if (
+          typeof startOffset === "number" &&
+          typeof endOffset === "number" &&
+          text.slice(startOffset, endOffset) === wrong
+        ) {
+          nextText = text.slice(0, startOffset) + suggestion + text.slice(endOffset);
+        } else {
+          const at = text.indexOf(wrong);
+          if (at >= 0) {
+            nextText = text.slice(0, at) + suggestion + text.slice(at + wrong.length);
+          }
+        }
+        return {
+          ...line,
+          text: nextText,
+          corrections: line.corrections?.filter(
+            (c) => !(c.wrong === wrong && c.suggestion === suggestion),
+          ),
+        };
+      }),
+    }));
+    void patchMeeting(meeting.id, {
+      applyCorrection: {
+        lineId,
+        wrong: correction.wrong,
+        suggestion: correction.suggestion,
+        startOffset: correction.startOffset,
+        endOffset: correction.endOffset,
+      },
     });
   }
 
@@ -418,6 +544,9 @@ export function MeetingChatReplay({
       ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [activeId, playing]);
 
+  const displayDurationSec =
+    durationSec > 0 ? durationSec : fallbackDurationSec;
+
   const activeLine = transcript.lines.find((l) => l.id === activeId);
   const activeSpeakerLabel = activeLine
     ? personMeta(activeLine.speaker, meeting.participants, meName).label
@@ -437,7 +566,8 @@ export function MeetingChatReplay({
       return;
     }
     const lineSec = lineStartSec(line);
-    const dur = a.duration || durationSec;
+    const dur =
+      readMediaDurationSec(a) || durationSec || fallbackDurationSec;
     if (dur > 0 && lineSec > dur + 0.5) {
       // 녹음 길이 밖 대사 — 재생만 맞추지 않고 하이라이트만.
       setActiveId(line.id);
@@ -456,14 +586,16 @@ export function MeetingChatReplay({
   function seekRatio(ratio: number) {
     const a = audioRef.current;
     if (!a) return;
-    const dur = a.duration || durationSec;
+    const dur =
+      readMediaDurationSec(a) || durationSec || fallbackDurationSec;
     a.currentTime = Math.min(Math.max(0, ratio * dur), Math.max(0, dur - 0.05));
   }
 
   function seekBySec(deltaSec: number) {
     const a = audioRef.current;
     if (!a) return;
-    const dur = a.duration || durationSec;
+    const dur =
+      readMediaDurationSec(a) || durationSec || fallbackDurationSec;
     const next = Math.min(
       Math.max(0, a.currentTime + deltaSec),
       Math.max(0, dur - 0.05),
@@ -485,10 +617,12 @@ export function MeetingChatReplay({
             el.volume = settings.muted
               ? 0
               : Math.min(1, Math.max(0, settings.volume));
-            setDurationSec(el.duration || 0);
+            const mediaDur = readMediaDurationSec(el);
+            setDurationSec(mediaDur > 0 ? mediaDur : fallbackDurationSec);
           }}
           onDurationChange={(e) => {
-            setDurationSec(e.currentTarget.duration || 0);
+            const mediaDur = readMediaDurationSec(e.currentTarget);
+            if (mediaDur > 0) setDurationSec(mediaDur);
           }}
         />
       ) : null}
@@ -530,8 +664,6 @@ export function MeetingChatReplay({
             transcript={transcript}
             maskStyle={maskStyle}
             onMaskChange={setMaskStyle}
-            memoMode={memoMode}
-            onMemoModeChange={setMemoMode}
           />
         </div>
       </div>
@@ -551,10 +683,12 @@ export function MeetingChatReplay({
                   meName={meName}
                   maskStyle={maskStyle}
                   active={activeId === line.id}
+                  currentSec={currentSec}
                   onSeek={hasAudio ? () => seekToLine(line) : undefined}
-                  memo={lineMemos[line.id]}
-                  memoMode={memoMode}
                   onMemoChange={(next) => setLineMemo(line.id, next)}
+                  onApplyCorrection={(correction) =>
+                    applyCorrection(line.id, correction)
+                  }
                 />
               </li>
             ))}
@@ -563,18 +697,20 @@ export function MeetingChatReplay({
       </div>
 
       {hasAudio && audioSrc ? (
-        <MeetingChatReplayBar
-          audioLabel={audioLabel}
-          currentSec={currentSec}
-          durationSec={durationSec}
-          playing={playing}
-          activeLineLabel={activeSpeakerLabel}
-          settings={settings}
-          onSettingsChange={setSettings}
-          onTogglePlay={togglePlay}
-          onSeekRatio={seekRatio}
-          onSeekBySec={seekBySec}
-        />
+        <div className="mr-auto w-full max-w-3xl shrink-0">
+          <MeetingChatReplayBar
+            audioLabel={audioLabel}
+            currentSec={currentSec}
+            durationSec={displayDurationSec}
+            playing={playing}
+            activeLineLabel={activeSpeakerLabel}
+            settings={settings}
+            onSettingsChange={setSettings}
+            onTogglePlay={togglePlay}
+            onSeekRatio={seekRatio}
+            onSeekBySec={seekBySec}
+          />
+        </div>
       ) : null}
     </div>
   );

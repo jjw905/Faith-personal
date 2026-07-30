@@ -1,14 +1,29 @@
 import { randomUUID } from "node:crypto";
 
 import { prisma } from "@/lib/prisma";
+import { sourceInDictionary } from "@/lib/stt/dict-exists";
 import { buildGlossary } from "@/lib/stt/glossary";
+import {
+  whisperWordTimingsForBytes,
+  transcribeMiniAudioOnce,
+} from "@/lib/stt/chunked-transcribe";
 import { DEFAULT_STT_MODEL } from "@/lib/stt/models";
+import { estimateSttUsdFromMinutes } from "@/lib/stt/pricing";
 import { buildSemanticStructure } from "@/lib/stt/semantic-structure";
 import {
+  applySpeakerNames,
+  identifySpeakerNames,
+} from "@/lib/stt/speaker-names";
+import {
   attachCorrections,
+  suggestSecondPassCorrections,
   suggestTermCorrections,
+  type TermSuggestion,
 } from "@/lib/stt/term-suggest";
-import { alignDialogueToTimedSegments } from "@/lib/stt/timed-segments";
+import {
+  alignDialogueToTimedSegments,
+  type WordTiming,
+} from "@/lib/stt/timed-segments";
 import {
   buildMeetingFromStt,
   placeholderMeeting,
@@ -20,11 +35,83 @@ import {
   updateUserMeeting,
   type UserMeetingRecord,
 } from "@/lib/user-meetings-store";
+import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
 import type { WorkspaceId } from "@/lib/workspaces";
 
 const MINI_USD_PER_MINUTE = 0.003;
 const TEAM_SETTLE_TIMEOUT_MS = 6_000;
 const TEAM_SETTLE_POLL_MS = 200;
+const SECOND_PASS_CONFIDENCE_MAX = 0.72;
+
+type StoredUtteranceWord = {
+  text: string;
+  startSec: number;
+  endSec: number;
+};
+
+function parseStoredWords(value: unknown): StoredUtteranceWord[] {
+  if (!Array.isArray(value)) return [];
+  const out: StoredUtteranceWord[] = [];
+  for (const row of value) {
+    if (!row || typeof row !== "object") continue;
+    const text = String((row as { text?: unknown }).text ?? "").trim();
+    const startSec = Number((row as { startSec?: unknown }).startSec);
+    const endSec = Number((row as { endSec?: unknown }).endSec);
+    if (!text || !Number.isFinite(startSec) || !Number.isFinite(endSec)) continue;
+    out.push({
+      text,
+      startSec: Math.max(0, startSec),
+      endSec: Math.max(startSec, endSec),
+    });
+  }
+  return out;
+}
+
+function parseStoredCorrections(value: unknown): TermSuggestion[] {
+  if (!Array.isArray(value)) return [];
+  const out: TermSuggestion[] = [];
+  for (const row of value) {
+    if (!row || typeof row !== "object") continue;
+    const wrong = String((row as { wrong?: unknown }).wrong ?? "").trim();
+    const suggestion = String(
+      (row as { suggestion?: unknown }).suggestion ?? "",
+    ).trim();
+    if (!wrong || !suggestion) continue;
+    const sourceRaw = String((row as { source?: unknown }).source ?? "");
+    const source: TermSuggestion["source"] =
+      sourceRaw === "glossary" ||
+      sourceRaw === "ourmalsam" ||
+      sourceRaw === "second-pass"
+        ? sourceRaw
+        : "dictionary" === sourceRaw
+          ? "ourmalsam"
+          : "second-pass";
+    out.push({
+      lineIndex: 0,
+      wrong,
+      suggestion,
+      reason: String((row as { reason?: unknown }).reason ?? ""),
+      similarity: Number((row as { similarity?: unknown }).similarity) || 0,
+      dictionaryVerified: Boolean(
+        (row as { dictionaryVerified?: unknown }).dictionaryVerified,
+      ),
+      startOffset:
+        typeof (row as { startOffset?: unknown }).startOffset === "number"
+          ? (row as { startOffset: number }).startOffset
+          : 0,
+      endOffset:
+        typeof (row as { endOffset?: unknown }).endOffset === "number"
+          ? (row as { endOffset: number }).endOffset
+          : Math.max(0, wrong.length),
+      sttLogprob:
+        typeof (row as { sttLogprob?: unknown }).sttLogprob === "number"
+          ? (row as { sttLogprob: number }).sttLogprob
+          : undefined,
+      source,
+    });
+  }
+  return out;
+}
 
 export function createLiveMeetingId(): string {
   return `mtg-live-${randomUUID().slice(0, 12)}`;
@@ -71,6 +158,9 @@ export async function persistRealtimeUtterance(params: {
   startSec: number;
   endSec?: number;
   confidence?: number;
+  meanLogprob?: number;
+  audioBytes?: Buffer;
+  audioFilename?: string;
 }) {
   const session = await prisma.realtimeSttSession.findFirst({
     where: {
@@ -78,33 +168,53 @@ export async function persistRealtimeUtterance(params: {
       userId: params.userId,
       status: "ACTIVE",
     },
-    select: { id: true, title: true },
+    select: {
+      id: true,
+      title: true,
+      meetingId: true,
+      user: { select: { name: true } },
+      teamMeeting: {
+        select: {
+          access: {
+            where: { isParticipant: true },
+            select: { user: { select: { name: true } } },
+          },
+        },
+      },
+    },
   });
   if (!session) throw new Error("실시간 기록 세션을 찾을 수 없습니다.");
 
   const text = params.text.trim().slice(0, 8_000);
   if (!text) throw new Error("전사 내용이 비어 있습니다.");
 
-  const suggested = await suggestTermCorrections([text], {
-    glossary: buildGlossary({ title: session.title }),
-    genericDictionary: true,
-  });
-  const corrections = suggested.suggestions.map((suggestion) => ({
-    wrong: suggestion.wrong,
-    suggestion: suggestion.suggestion,
-    reason: suggestion.reason,
-    similarity: suggestion.similarity,
-    source: suggestion.source,
-  }));
-
-  await prisma.realtimeSttUtterance.upsert({
+  const existing = await prisma.realtimeSttUtterance.findUnique({
     where: {
       sessionId_itemId: {
         sessionId: params.sessionId,
         itemId: params.itemId,
       },
     },
-    create: {
+    select: { corrections: true },
+  });
+  if (existing) {
+    return {
+      corrections: existing.corrections ?? [],
+      dictionaryUsage: {
+        model: "ourmalsam",
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedUsd: 0,
+        apiCalls: 0,
+        cacheHits: 0,
+        failures: 0,
+      },
+    };
+  }
+
+  try {
+    await prisma.realtimeSttUtterance.create({
+      data: {
       sessionId: params.sessionId,
       itemId: params.itemId,
       sequence: Math.max(0, Math.floor(params.sequence)),
@@ -118,23 +228,181 @@ export async function persistRealtimeUtterance(params: {
         typeof params.confidence === "number"
           ? Math.max(0, Math.min(1, params.confidence))
           : null,
-      corrections,
+      meanLogprob:
+        typeof params.meanLogprob === "number" ? params.meanLogprob : null,
+      corrections: [],
     },
-    update: {
-      sequence: Math.max(0, Math.floor(params.sequence)),
-      text,
-      startSec: Math.max(0, params.startSec),
-      endSec:
-        typeof params.endSec === "number"
-          ? Math.max(params.startSec, params.endSec)
-          : null,
-      confidence:
-        typeof params.confidence === "number"
-          ? Math.max(0, Math.min(1, params.confidence))
-          : null,
-      corrections,
-    },
+    });
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+    if (code !== "P2002") throw error;
+    const duplicate = await prisma.realtimeSttUtterance.findUnique({
+      where: {
+        sessionId_itemId: {
+          sessionId: params.sessionId,
+          itemId: params.itemId,
+        },
+      },
+      select: { corrections: true },
+    });
+    return {
+      corrections: duplicate?.corrections ?? [],
+      dictionaryUsage: {
+        model: "ourmalsam",
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedUsd: 0,
+        apiCalls: 0,
+        cacheHits: 0,
+        failures: 0,
+      },
+    };
+  }
+
+  const participantNames = [
+    session.user.name?.trim(),
+    ...(session.teamMeeting?.access.map((access) => access.user.name?.trim()) ??
+      []),
+  ].filter((name): name is string => Boolean(name));
+  const glossary = buildGlossary({
+    title: session.title,
+    participantNames,
   });
+  const suggested = await suggestTermCorrections([text], {
+    glossary,
+    genericDictionary: true,
+  });
+
+  let sourceMissing = false;
+  const candidateWords = [
+    ...new Set(text.match(/[가-힣]{3,12}/g) ?? []),
+  ].slice(0, 8);
+  for (const word of candidateWords) {
+    const exists = await sourceInDictionary(word);
+    if (exists === false) {
+      sourceMissing = true;
+      break;
+    }
+  }
+
+  let secondPassUsed = false;
+  let secondPassSuggestions = [] as ReturnType<
+    typeof suggestSecondPassCorrections
+  >;
+  let wordTimings: StoredUtteranceWord[] = [];
+  let timingAudioSec = 0;
+  const confidenceLow =
+    typeof params.confidence !== "number" ||
+    params.confidence < SECOND_PASS_CONFIDENCE_MAX;
+  if (params.audioBytes && params.audioBytes.length > 44) {
+    try {
+      const timed = await whisperWordTimingsForBytes({
+        audioBytes: params.audioBytes,
+        filename: params.audioFilename || "utterance.wav",
+        glossary,
+        offsetSec: params.startSec,
+      });
+      wordTimings = timed.words;
+      timingAudioSec = Math.max(0.2, timed.durationBillSec || 0);
+      if (timingAudioSec > 0) {
+        appendAiUsage({
+          meetingId: session.meetingId,
+          userId: params.userId,
+          title: session.title,
+          stage: "stt",
+          model: "whisper-1",
+          durationSec: timingAudioSec,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedUsd: estimateSttUsdFromMinutes("whisper-1", timingAudioSec),
+          billSource: "audio_minutes",
+        });
+      }
+    } catch (error) {
+      console.warn("[realtime] 단어 타임스탬프 건너뜀", error);
+    }
+
+    if (confidenceLow || sourceMissing) {
+      try {
+        const retry = await transcribeMiniAudioOnce({
+          audioBytes: params.audioBytes,
+          filename: params.audioFilename || "utterance.wav",
+          glossary,
+        });
+        secondPassUsed = true;
+        secondPassSuggestions = suggestSecondPassCorrections({
+          original: text,
+          secondPass: retry.text,
+          glossary,
+          sttLogprob: params.meanLogprob,
+        });
+      } catch (error) {
+        console.warn("[realtime] 조건부 mini 재전사 건너뜀", error);
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  const corrections = [...suggested.suggestions, ...secondPassSuggestions]
+    .filter((suggestion) => {
+      const key = `${suggestion.wrong}:${suggestion.suggestion}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((suggestion) => ({
+      wrong: suggestion.wrong,
+      suggestion: suggestion.suggestion,
+      reason: suggestion.reason,
+      similarity: suggestion.similarity,
+      dictionaryVerified: suggestion.dictionaryVerified,
+      startOffset: suggestion.startOffset,
+      endOffset: suggestion.endOffset,
+      sttLogprob: suggestion.sttLogprob ?? params.meanLogprob,
+      source: suggestion.source,
+    }));
+
+  const secondPassSeconds = secondPassUsed
+    ? Math.max(
+        1,
+        Math.ceil(
+          Math.min(
+            35,
+            Math.max(0, (params.endSec ?? params.startSec) - params.startSec) +
+              0.45,
+          ),
+        ),
+      )
+    : 0;
+  await prisma.$transaction([
+    prisma.realtimeSttUtterance.update({
+      where: {
+        sessionId_itemId: {
+          sessionId: params.sessionId,
+          itemId: params.itemId,
+        },
+      },
+      data: {
+        corrections,
+        secondPass: secondPassUsed,
+        words: wordTimings,
+      },
+    }),
+    ...(secondPassSeconds > 0
+      ? [
+          prisma.realtimeSttSession.update({
+            where: { id: params.sessionId },
+            data: {
+              secondPassSeconds: { increment: secondPassSeconds },
+            },
+          }),
+        ]
+      : []),
+  ]);
 
   return { corrections, dictionaryUsage: suggested.usage };
 }
@@ -160,7 +428,8 @@ export async function completeRealtimeSession(params: {
   if (!owned) throw new Error("실시간 기록 세션을 찾을 수 없습니다.");
 
   const durationSec = Math.max(0, Math.min(6 * 60 * 60, params.durationSec));
-  const estimatedUsd = (durationSec / 60) * MINI_USD_PER_MINUTE;
+  const estimatedUsd =
+    ((durationSec + owned.secondPassSeconds) / 60) * MINI_USD_PER_MINUTE;
   await prisma.realtimeSttSession.update({
     where: { id: owned.id },
     data: {
@@ -228,6 +497,7 @@ export async function completeRealtimeTeamRun(params: {
       meetingId: true,
       status: true,
       startedAt: true,
+      secondPassSeconds: true,
     },
   });
   if (sessions.length === 0) {
@@ -252,7 +522,9 @@ export async function completeRealtimeTeamRun(params: {
             status: "COMPLETED",
             endedAt,
             billedAudioSeconds: Math.ceil(durationSec),
-            estimatedUsd: (durationSec / 60) * MINI_USD_PER_MINUTE,
+            estimatedUsd:
+              ((durationSec + session.secondPassSeconds) / 60) *
+              MINI_USD_PER_MINUTE,
           },
         });
       }),
@@ -313,21 +585,44 @@ async function finalizeRealtimeRun(params: {
           session.user.name?.trim() ||
           session.user.email?.split("@")[0] ||
           "참석자";
-        return session.utterances.map((utterance) => ({
-          speaker,
-          text: utterance.text.trim(),
-          startSec: offsetSec + utterance.startSec,
-          endSec:
-            offsetSec +
-            (utterance.endSec ??
-              Math.max(utterance.startSec + 0.2, utterance.startSec)),
-        }));
+        return session.utterances.map((utterance) => {
+          const words = parseStoredWords(utterance.words).map((word) => ({
+            text: word.text,
+            startSec: offsetSec + word.startSec,
+            endSec: offsetSec + word.endSec,
+          }));
+          return {
+            speaker,
+            text: utterance.text.trim(),
+            startSec: offsetSec + utterance.startSec,
+            endSec:
+              offsetSec +
+              (utterance.endSec ??
+                Math.max(utterance.startSec + 0.2, utterance.startSec)),
+            confidence:
+              typeof utterance.confidence === "number"
+                ? utterance.confidence
+                : undefined,
+            corrections: parseStoredCorrections(utterance.corrections),
+            words,
+          };
+        });
       })
       .filter((row) => row.text)
       .sort((a, b) => a.startSec - b.startSec);
 
     if (rows.length === 0) {
-      throw new Error("저장된 실시간 발화가 없습니다.");
+      // 실패가 아니라 "감지된 음성 없음". 기술적 오류가 아니므로 error가 아닌
+      // 별도 phase로 남기고, 팀 회의 상태는 이미 ENDED이므로 건드리지 않는다.
+      updateUserMeeting(params.meetingId, {
+        phase: "empty",
+        errorMessage: "감지된 음성이 없어 저장되지 않았습니다.",
+      });
+      return {
+        meetingId: params.meetingId,
+        href: `/meetings/${params.meetingId}`,
+        finalized: true,
+      };
     }
 
     const durationSec = Math.max(
@@ -345,6 +640,7 @@ async function finalizeRealtimeRun(params: {
       startSec: row.startSec,
       endSec: Math.max(row.startSec + 0.2, row.endSec),
       text: row.text,
+      confidence: row.confidence,
     }));
     structure.dialogue = alignDialogueToTimedSegments(
       structure.dialogue,
@@ -355,6 +651,29 @@ async function finalizeRealtimeRun(params: {
       throw new Error("실시간 대화기록 생성에 실패했습니다.");
     }
 
+    try {
+      const named = await identifySpeakerNames({ dialogue: structure.dialogue });
+      applySpeakerNames(structure, named.guesses);
+      if (named.usage.inputTokens > 0) {
+        appendAiUsage({
+          meetingId: params.meetingId,
+          userId: params.ownerUserId,
+          title: params.title,
+          stage: "structure",
+          model: named.usage.model,
+          durationSec,
+          inputTokens: named.usage.inputTokens,
+          outputTokens: named.usage.outputTokens,
+          totalTokens: named.usage.inputTokens + named.usage.outputTokens,
+          estimatedUsd: named.usage.estimatedUsd,
+          billSource: "tokens",
+        });
+      }
+    } catch (err) {
+      console.warn("[realtime] 화자 실명 추정 실패", err);
+    }
+
+    const wordTimings: WordTiming[] = rows.flatMap((row) => row.words);
     const built = buildMeetingFromStt({
       meetingId: params.meetingId,
       title: params.title,
@@ -362,6 +681,7 @@ async function finalizeRealtimeRun(params: {
       rawText,
       semantic: structure,
       timedSegments,
+      wordTimings,
       workspace: params.workspace,
       capture: "live",
       date: existing?.createdAt,
@@ -376,12 +696,23 @@ async function finalizeRealtimeRun(params: {
       {
         glossary,
         keepTerms: rows.map((row) => row.speaker),
+        genericDictionary: true,
       },
     );
-    built.transcript.lines = attachCorrections(
-      built.transcript.lines,
-      suggested.suggestions,
-    );
+    const liveCorrections = rows.flatMap((row) => {
+      const lineIndex = activeLineIndexAt(
+        built.transcript.lines.map(lineStartSec),
+        row.startSec,
+      );
+      return row.corrections.map((correction) => ({
+        ...correction,
+        lineIndex,
+      }));
+    });
+    built.transcript.lines = attachCorrections(built.transcript.lines, [
+      ...suggested.suggestions,
+      ...liveCorrections,
+    ]);
 
     saveUserMeeting({
       id: params.meetingId,

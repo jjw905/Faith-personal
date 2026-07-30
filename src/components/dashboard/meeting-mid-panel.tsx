@@ -1,9 +1,20 @@
 "use client";
 
-import { ArrowRight, LayoutGrid, List, Plus } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarPlus,
+  LayoutGrid,
+  List,
+  Plus,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import { UpcomingDetailPanel } from "@/components/dashboard/upcoming-detail-panel";
+import {
+  RecordsPageNav,
+  UPCOMING_PAGE_SIZE,
+} from "@/components/dashboard/records-page-nav";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/context/app-context";
@@ -26,6 +37,7 @@ import {
   type UpcomingItem,
 } from "@/lib/workspace-data";
 import { getWorkspaceProfile } from "@/lib/workspaces";
+import { TOUCH_ICON_BUTTON, TOUCH_ROW } from "@/lib/touch-target";
 import { cn } from "@/lib/utils";
 
 const LAYOUT_KEY = "faith.upcoming.layout";
@@ -326,8 +338,10 @@ function UpcomingGridItem({
 /** 녹음 영역과 회의 기록 사이 — 워크스페이스별 예정 회의. */
 export function MeetingMidPanel({
   searchQuery = "",
+  onSearchChange,
 }: {
   searchQuery?: string;
+  onSearchChange?: (value: string) => void;
 }) {
   const { workspaceId, currentUser } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
@@ -424,6 +438,25 @@ export function MeetingMidPanel({
     return [...filtered].sort(compareUpcoming);
   }, [sourceItems, searchQuery]);
 
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const upcomingTotalPages = Math.max(
+    1,
+    Math.ceil(visibleItems.length / UPCOMING_PAGE_SIZE),
+  );
+  const pagedUpcoming = useMemo(() => {
+    const page = Math.min(upcomingPage, upcomingTotalPages);
+    const start = (page - 1) * UPCOMING_PAGE_SIZE;
+    return visibleItems.slice(start, start + UPCOMING_PAGE_SIZE);
+  }, [visibleItems, upcomingPage, upcomingTotalPages]);
+
+  useEffect(() => {
+    setUpcomingPage(1);
+  }, [searchQuery, workspaceId]);
+
+  useEffect(() => {
+    setUpcomingPage((p) => Math.min(p, upcomingTotalPages));
+  }, [upcomingTotalPages]);
+
   const setLayoutPersist = useCallback((next: UpcomingLayout) => {
     setLayout(next);
     window.localStorage.setItem(LAYOUT_KEY, next);
@@ -504,15 +537,20 @@ export function MeetingMidPanel({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
+                className={cn(
+                  TOUCH_ICON_BUTTON,
+                  "shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground",
+                )}
                 aria-label={profile.upcomingAddLabel}
+                title={profile.upcomingAddLabel}
                 onClick={openCreate}
               >
-                <Plus className="h-4 w-4" strokeWidth={1.75} />
+                <Plus strokeWidth={1.75} />
               </Button>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            {/* 모바일은 격자가 1열이라 목록과 동일. 데스크탑에서만 노출 */}
+            <div className="hidden items-center gap-1.5 md:flex">
               <div
                 className="flex overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
                 role="group"
@@ -549,11 +587,23 @@ export function MeetingMidPanel({
               </div>
             </div>
           </div>
+          <MeetingSearch
+            value={searchQuery}
+            onChange={onSearchChange ?? (() => undefined)}
+            placeholder={profile.searchPlaceholder}
+            label={`${profile.upcomingTitle} 검색`}
+            className="mt-3 h-12 max-w-none rounded-2xl md:h-11"
+          />
           <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
         </div>
 
         {visibleItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 px-6 py-10 text-center">
+          <div className="flex flex-col items-center justify-center gap-4 px-6 py-10 text-center">
+            <CalendarPlus
+              className="h-12 w-12 text-muted-2"
+              strokeWidth={1.5}
+              aria-hidden
+            />
             <p className="text-base text-muted">
               {searchQuery.trim()
                 ? "검색 결과가 없습니다."
@@ -562,56 +612,71 @@ export function MeetingMidPanel({
             {!searchQuery.trim() ? (
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="cursor-pointer"
+                className="min-h-14 w-full max-w-xs cursor-pointer rounded-2xl px-6 text-lg font-semibold md:min-h-11 md:w-auto md:text-base [&_svg]:size-5"
                 onClick={openCreate}
               >
-                <Plus className="h-4 w-4" strokeWidth={1.75} />
+                <Plus strokeWidth={2} />
                 {profile.upcomingAddLabel}
               </Button>
             ) : null}
           </div>
         ) : layout === "list" ? (
-          <ul className="divide-y divide-border">
-            {visibleItems.map((item) => (
-              <li key={item.id}>
-                <UpcomingListItem
-                  item={item}
-                  onOpen={openDetail}
-                  showPeopleDensity={profile.showPeopleDensity}
-                />
+          <>
+            <ul className="divide-y divide-border">
+              {pagedUpcoming.map((item) => (
+                <li key={item.id}>
+                  <UpcomingListItem
+                    item={item}
+                    onOpen={openDetail}
+                    showPeopleDensity={profile.showPeopleDensity}
+                  />
+                </li>
+              ))}
+              <li>
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className={cn(
+                    TOUCH_ROW,
+                    "flex w-full cursor-pointer items-center justify-center gap-2 px-6 text-base font-semibold text-muted transition-colors hover:bg-surface/70 hover:text-foreground",
+                  )}
+                  aria-label={profile.upcomingAddLabel}
+                >
+                  <Plus className="h-5 w-5" strokeWidth={2} aria-hidden />
+                  {profile.upcomingAddLabel}
+                </button>
               </li>
-            ))}
-            <li>
-              <button
-                type="button"
-                onClick={openCreate}
-                className="flex w-full cursor-pointer items-center justify-center gap-1.5 px-6 py-3.5 text-base font-medium text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
-                aria-label={profile.upcomingAddLabel}
-              >
-                <Plus className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-                {profile.upcomingAddLabel}
-              </button>
-            </li>
-          </ul>
+            </ul>
+            <RecordsPageNav
+              page={Math.min(upcomingPage, upcomingTotalPages)}
+              totalPages={upcomingTotalPages}
+              onPageChange={setUpcomingPage}
+            />
+          </>
         ) : (
-          <ul
-            className={cn(
-              "grid gap-3 px-6 pb-5 pt-4 sm:grid-cols-2",
-              visibleItems.length >= 5 && "xl:grid-cols-3",
-            )}
-          >
-            {visibleItems.map((item) => (
-              <li key={item.id} className="min-h-0">
-                <UpcomingGridItem
-                  item={item}
-                  onOpen={openDetail}
-                  showPeopleDensity={profile.showPeopleDensity}
-                />
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul
+              className={cn(
+                "grid gap-3 px-6 pb-5 pt-4 sm:grid-cols-2",
+                pagedUpcoming.length >= 3 && "xl:grid-cols-3",
+              )}
+            >
+              {pagedUpcoming.map((item) => (
+                <li key={item.id} className="min-h-0">
+                  <UpcomingGridItem
+                    item={item}
+                    onOpen={openDetail}
+                    showPeopleDensity={profile.showPeopleDensity}
+                  />
+                </li>
+              ))}
+            </ul>
+            <RecordsPageNav
+              page={Math.min(upcomingPage, upcomingTotalPages)}
+              totalPages={upcomingTotalPages}
+              onPageChange={setUpcomingPage}
+            />
+          </>
         )}
       </section>
 

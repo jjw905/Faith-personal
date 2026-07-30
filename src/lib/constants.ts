@@ -1,6 +1,8 @@
 import {
+  Activity,
   Archive,
   CircleHelp,
+  ClipboardList,
   EyeOff,
   Gauge,
   Gem,
@@ -41,11 +43,6 @@ export const NAV_ITEMS: NavItem[] = [
     title: "플랜",
     href: "/plan",
     icon: Gem,
-  },
-  {
-    title: "Changelog",
-    href: "/changelog",
-    icon: History,
   },
   {
     title: "도움말",
@@ -116,6 +113,16 @@ export const OPS_NAV_ITEMS: NavItem[] = [
     href: "/ai-usage",
     icon: Gauge,
   },
+  {
+    title: "파이프라인 통계",
+    href: "/pipeline-stats",
+    icon: Activity,
+  },
+  {
+    title: "수요조사 통계",
+    href: "/survey-stats",
+    icon: ClipboardList,
+  },
 ];
 
 /** 관리자만 사이드바 개발자 메뉴에 노출. 공통 메뉴와 화면/경로를 섞지 않음. */
@@ -174,6 +181,14 @@ export const PAGE_TITLES: Record<
   "/ai-usage": {
     title: "AI 사용량",
     description: "받아쓰기, 정리 비용과 토큰을 확인합니다.",
+  },
+  "/pipeline-stats": {
+    title: "파이프라인 통계",
+    description: "업로드 처리 실패율과 단계별, 모델별 분포를 확인합니다.",
+  },
+  "/survey-stats": {
+    title: "수요조사 통계",
+    description: "결제 의향, 성능 만족도 수요조사 참여 현황을 확인합니다.",
   },
   "/users": {
     title: "사용자 관리",

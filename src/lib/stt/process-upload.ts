@@ -18,6 +18,7 @@ import {
   formatSpeakerBlocks,
 } from "@/lib/stt/speaker-attach";
 import { buildSemanticStructure } from "@/lib/stt/semantic-structure";
+import type { TopicBucket } from "@/lib/stt/semantic-structure";
 import {
   applySpeakerNames,
   identifySpeakerNames,
@@ -26,10 +27,23 @@ import {
   attachCorrections,
   suggestTermCorrections,
 } from "@/lib/stt/term-suggest";
+import {
+  checkTranscriptModeration,
+  logModerationFlag,
+} from "@/lib/stt/content-moderation";
 import { buildMeetingFromStt } from "@/lib/stt/to-meeting";
+import { formatDurationLabel } from "@/lib/diarize-meeting";
 import { alignDialogueToTimedSegments } from "@/lib/stt/timed-segments";
+import { runSelectiveSecondPass } from "@/lib/stt/second-pass-review";
+import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
 import type { SttModel } from "@/lib/stt/models";
 import { assertUploadAudioDuration } from "@/lib/stt/upload-limits";
+import {
+  assertUploadQuota,
+  UploadQuotaExceededError,
+  type QuotaReservation,
+} from "@/lib/stt/usage-quota";
+import { estimateSttUsdFromMinutes } from "@/lib/stt/pricing";
 import { appendAiUsage } from "@/lib/stt/usage-store";
 import { readUserFileBytes } from "@/lib/storage/vault-service";
 import {
@@ -40,6 +54,10 @@ import {
 } from "@/lib/user-meetings-store";
 import { createNotification } from "@/lib/notifications-store";
 import { prisma } from "@/lib/prisma";
+import {
+  appendPipelineAttempt,
+  type PipelineFailedStage,
+} from "@/lib/stt/pipeline-stats-store";
 
 /**
  * 전체 파이프라인 진행률 구간 (실제 작업량 비중).
@@ -136,6 +154,14 @@ export async function processUploadedMeeting(params: {
   vaultFileId: string;
   model: SttModel;
   title: string;
+  /**
+   * 개인정보보호법 제37조의2(자동화된 결정에 대한 정보주체의 권리) 대응.
+   * 이용자가 검열 차단에 이의를 제기하면, 사람이 회의 본문을 읽지 않고도
+   * "자동 차단을 적용하지 않는" 인적 개입 재처리를 할 수 있어야 한다.
+   * 이 값은 반드시 이용자 본인의 이의제기를 받은 운영자 조치로만 true가
+   * 되어야 하며, 회의 처리 자체는 여전히 자동(모델 파이프라인)으로 끝난다.
+   */
+  bypassModeration?: boolean;
 }) {
   const workDir = workDirForMeeting(params.meetingId);
   const progress = (
@@ -145,14 +171,26 @@ export async function processUploadedMeeting(params: {
     setMeetingProgress(params.meetingId, percent, patch);
   };
 
+  // 실패율 통계용. 내용은 담지 않고 어느 단계에서 멈췄는지만 남긴다.
+  let currentStage: PipelineFailedStage = "stt";
+  let moderationBlocked = false;
+  let quotaBlocked = false;
+  let statsDurationSec: number | undefined;
+  let statsSpeakerCount: number | undefined;
+  let statsTopicBucket: TopicBucket | undefined;
+  let quotaReservation: QuotaReservation | null = null;
+
   try {
-    progress(PROGRESS.start, { phase: "transcribing" });
+    progress(PROGRESS.start, {
+      phase: "transcribing",
+      stageLabel: "파일 확인하는 중",
+    });
 
     const file = await readUserFileBytes(params.userId, params.vaultFileId);
     if (!file) {
       throw new Error("보관함 파일을 찾을 수 없습니다.");
     }
-    progress(PROGRESS.fileLoaded);
+    progress(PROGRESS.fileLoaded, { stageLabel: "오디오 불러오는 중" });
 
     const audioPath = writeSourceAudio({
       audioBytes: file.body,
@@ -162,7 +200,25 @@ export async function processUploadedMeeting(params: {
 
     // ffprobe로 길이를 알 수 있을 때만 1시간 한도. 없으면 파일 크기 한도만.
     if (hasAudioTools()) {
-      assertUploadAudioDuration(probeDurationSec(audioPath));
+      const durationSec = probeDurationSec(audioPath);
+      assertUploadAudioDuration(durationSec);
+      // 전사(비용 발생) 전에 이번 주기 쿼터를 확인한다. 결제 수요조사 기간
+      // 한정: 기본 월 20분, 설문 응답 시 월 60분까지.
+      currentStage = "quota";
+      quotaReservation = await assertUploadQuota({
+        userId: params.userId,
+        newDurationSec: durationSec,
+      });
+      currentStage = "stt";
+      // 분석이 끝나기 전에도 실제 길이를 바로 보여준다("-" 표기 없이).
+      const durationLabel = formatDurationLabel(durationSec);
+      const beforeAnalysis = getUserMeeting(params.meetingId);
+      if (beforeAnalysis) {
+        updateUserMeeting(params.meetingId, {
+          meeting: { ...beforeAnalysis.meeting, duration: durationLabel },
+          timeline: { ...beforeAnalysis.timeline, durationLabel },
+        });
+      }
     }
 
     // 고유명사는 소리만으로 못 가린다. 참석자와 지난 회의에서 모아 미리 알려 준다.
@@ -181,8 +237,11 @@ export async function processUploadedMeeting(params: {
         workDir: join(workDir, "chunks"),
         model: params.model,
         glossary,
+        wordTimestamps: true,
         onProgress: (p) => {
-          progress(mapSttFraction(p.fraction));
+          progress(mapSttFraction(p.fraction), {
+            stageLabel: "받아쓰는 중",
+          });
         },
       }),
       diarizeUpload(audioPath),
@@ -220,10 +279,35 @@ export async function processUploadedMeeting(params: {
       estimatedUsd: stt.usage.estimatedUsd,
       billSource: stt.usage.billSource,
     });
+    statsDurationSec = stt.durationSec;
+    statsSpeakerCount = diarization?.speakerCount;
 
+    currentStage = "moderation";
+    // 운영진은 회의 본문에 접근하지 않는다. 사람이 읽고 판단하는 대신 자동
+    // 검열로 명백한 위반(아동 성적 콘텐츠·불법행위 실행 안내 등)만 업로드
+    // 단계에서 차단한다. 본문은 저장하지 않고 카테고리만 남긴다.
+    try {
+      const moderation = await checkTranscriptModeration(stt.text);
+      await logModerationFlag({
+        userId: params.userId,
+        meetingId: params.meetingId,
+        check: moderation,
+      });
+      moderationBlocked = moderation.blocked && !params.bypassModeration;
+    } catch (err) {
+      console.warn("[moderation] 검열 확인 실패, 처리를 계속합니다", err);
+    }
+    if (moderationBlocked) {
+      throw new Error(
+        "이 파일은 서비스 정책에 위반되는 내용이 감지되어 처리할 수 없습니다.",
+      );
+    }
+
+    currentStage = "structure";
     progress(PROGRESS.structureStart, {
       phase: "structuring",
       rawText: stt.text,
+      stageLabel: "분석하는 중",
     });
 
     // 화자를 붙여서 넘긴다. 구조화 모델이 대화기록을 나눌 때 누가 말했는지
@@ -243,14 +327,18 @@ export async function processUploadedMeeting(params: {
       structureInput,
       stt.durationSec,
     );
-    progress(PROGRESS.structureDone);
+    progress(PROGRESS.structureDone, { stageLabel: "타임라인 작성하는 중" });
+    statsTopicBucket = structure.topicBucket;
+    if (statsSpeakerCount === undefined && structure.speakers.length > 0) {
+      statsSpeakerCount = structure.speakers.length;
+    }
 
     structure.dialogue = alignDialogueToTimedSegments(
       structure.dialogue,
       stt.timedSegments,
       stt.durationSec,
     );
-    progress(PROGRESS.aligned);
+    progress(PROGRESS.aligned, { stageLabel: "화자 확인하는 중" });
 
     if (structure.dialogue.length === 0) {
       throw new Error("대화기록 생성에 실패했습니다.");
@@ -308,21 +396,25 @@ export async function processUploadedMeeting(params: {
       rawText: stt.text,
       semantic: structure,
       timedSegments: stt.timedSegments,
+      wordTimings: stt.wordTimings,
       date: meetingDate,
       workspace: existing?.workspace,
       capture: existing?.meeting.capture ?? "upload",
     });
-    progress(PROGRESS.built);
+    progress(PROGRESS.built, { stageLabel: "표현 다듬는 중" });
 
     // 오인식 보정 추천. 표시만 하고 본문은 그대로 둔다. 실패해도 회의는 완료.
     try {
       const suggested = await suggestTermCorrections(
         built.transcript.lines.map((line) => line.text ?? ""),
-        { glossary, keepTerms: confirmedNames },
+        { glossary, keepTerms: confirmedNames, genericDictionary: true },
       );
       built.transcript.lines = attachCorrections(
         built.transcript.lines,
-        suggested.suggestions,
+        suggested.suggestions.map((suggestion) => ({
+          ...suggestion,
+          sttLogprob: stt.meanLogprob,
+        })),
       );
       if (suggested.usage.inputTokens > 0) {
         appendAiUsage({
@@ -342,6 +434,50 @@ export async function processUploadedMeeting(params: {
       }
     } catch (err) {
       console.warn("[stt] 보정 추천 실패", err);
+    }
+
+    // 신뢰도 하위 구간만 골라 mini로 한 번 더 확인. 60분을 다 다시 돌리지
+    // 않고, 겹쳐 말하기·잡음으로 알아듣기 어려웠던 부분만 짧게 재확인한다.
+    if (hasAudioTools()) {
+      try {
+        const secondPass = await runSelectiveSecondPass({
+          audioPath,
+          workDir: join(workDir, "second-pass"),
+          timedSegments: stt.timedSegments,
+          glossary,
+        });
+        if (secondPass.suggestions.length > 0) {
+          const lineStarts = built.transcript.lines.map(lineStartSec);
+          const withLineIndex = secondPass.suggestions.map((suggestion) => ({
+            ...suggestion,
+            lineIndex: activeLineIndexAt(lineStarts, suggestion.startSec),
+          }));
+          built.transcript.lines = attachCorrections(
+            built.transcript.lines,
+            withLineIndex,
+          );
+        }
+        if (secondPass.audioSec > 0) {
+          appendAiUsage({
+            meetingId: params.meetingId,
+            userId: params.userId,
+            title: params.title,
+            stage: "stt",
+            model: "gpt-4o-mini-transcribe",
+            durationSec: secondPass.audioSec,
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            estimatedUsd: estimateSttUsdFromMinutes(
+              "gpt-4o-mini-transcribe",
+              secondPass.audioSec,
+            ),
+            billSource: "audio_minutes",
+          });
+        }
+      } catch (err) {
+        console.warn("[stt] 저신뢰 구간 재확인 실패", err);
+      }
     }
 
     updateUserMeeting(params.meetingId, {
@@ -364,9 +500,41 @@ export async function processUploadedMeeting(params: {
       title: params.title,
       kind: "analysis_done",
     });
+    try {
+      appendPipelineAttempt({
+        meetingId: params.meetingId,
+        userId: params.userId,
+        model: params.model,
+        durationSec: statsDurationSec,
+        speakerCount: statsSpeakerCount,
+        outcome: "done",
+        topicBucket: statsTopicBucket,
+      });
+    } catch (err) {
+      console.warn("[stats] 파이프라인 통계 기록 실패", err);
+    }
   } catch (err) {
+    quotaBlocked = err instanceof UploadQuotaExceededError;
     const message =
       err instanceof Error ? err.message : "회의 정리에 실패했습니다.";
+    try {
+      appendPipelineAttempt({
+        meetingId: params.meetingId,
+        userId: params.userId,
+        model: params.model,
+        durationSec: statsDurationSec,
+        speakerCount: statsSpeakerCount,
+        outcome: quotaBlocked
+          ? "quota_blocked"
+          : moderationBlocked
+            ? "moderation_blocked"
+            : "error",
+        failedStage: currentStage,
+        topicBucket: statsTopicBucket,
+      });
+    } catch (statsErr) {
+      console.warn("[stats] 파이프라인 통계 기록 실패", statsErr);
+    }
     const cur = getUserMeeting(params.meetingId);
     updateUserMeeting(params.meetingId, {
       phase: "error",
@@ -399,6 +567,7 @@ export async function processUploadedMeeting(params: {
       errorMessage: message,
     });
   } finally {
+    quotaReservation?.release();
     try {
       rmSync(workDir, { recursive: true, force: true });
     } catch {

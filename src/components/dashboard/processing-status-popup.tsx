@@ -1,6 +1,13 @@
 "use client";
 
-import { Activity, CheckCircle2, Inbox, Shield, XCircle } from "lucide-react";
+import {
+  Activity,
+  CheckCircle2,
+  CircleSlash,
+  Inbox,
+  Shield,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -25,6 +32,10 @@ function isErrorProcess(item: ProcessItem) {
   return item.status === "error" || item.phase === "error";
 }
 
+function isEmptyProcess(item: ProcessItem) {
+  return item.status === "empty" || item.phase === "empty";
+}
+
 function statusVisual(item: ProcessItem) {
   if (isActiveProcess(item)) {
     const phase =
@@ -42,6 +53,13 @@ function statusVisual(item: ProcessItem) {
       label: MEETING_PROCESS_LABEL.error,
       kind: "error" as const,
       className: "bg-masked-soft text-masked",
+    };
+  }
+  if (isEmptyProcess(item)) {
+    return {
+      label: MEETING_PROCESS_LABEL.empty,
+      kind: "empty" as const,
+      className: "bg-surface-2 text-muted",
     };
   }
   if (item.status === "masking") {
@@ -64,7 +82,8 @@ function processSubtitle(item: ProcessItem, label: string) {
     typeof item.progressPercent === "number" &&
     Number.isFinite(item.progressPercent)
   ) {
-    return `${label}, ${Math.round(item.progressPercent)}%`;
+    const stageText = item.detail && item.detail !== label ? item.detail : label;
+    return `${stageText}, ${Math.round(item.progressPercent)}%`;
   }
   if (item.detail && item.detail !== label) return item.detail;
   return label;
@@ -104,6 +123,8 @@ function ProcessRow({
           </span>
         ) : visual.kind === "error" ? (
           <XCircle className="h-4 w-4" strokeWidth={1.75} />
+        ) : visual.kind === "empty" ? (
+          <CircleSlash className="h-4 w-4" strokeWidth={1.75} />
         ) : visual.kind === "masking" ? (
           <Shield className="h-4 w-4" strokeWidth={1.75} />
         ) : (
@@ -201,9 +222,10 @@ export function ProcessingStatusPopup({
   }, [panelOpen, activeCount, refresh, isDemo]);
 
   const doneItems = items.filter(
-    (p) => !isActiveProcess(p) && !isErrorProcess(p),
+    (p) => !isActiveProcess(p) && !isErrorProcess(p) && !isEmptyProcess(p),
   );
   const errorItems = items.filter(isErrorProcess);
+  const emptyItems = items.filter(isEmptyProcess);
 
   useEffect(() => {
     if (!panelOpen || forceOpen) return;
@@ -225,7 +247,7 @@ export function ProcessingStatusPopup({
     };
   }, [panelOpen, forceOpen]);
 
-  const settledItems = [...errorItems, ...doneItems];
+  const settledItems = [...errorItems, ...emptyItems, ...doneItems];
 
   return (
     <div ref={rootRef} className="relative">

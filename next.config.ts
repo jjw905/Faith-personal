@@ -50,6 +50,24 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const isDev = process.env.NODE_ENV === "development";
+    // Next 인라인/폰트/reCAPTCHA/실시간(OpenAI·LiveKit)·스토리지까지 허용.
+    // nonce 방식은 전면 dynamic 강제라 정적 헤더로 1차 CSP를 둔다.
+    const csp = [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://www.google.com https://www.gstatic.com`,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "img-src 'self' blob: data: https:",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "connect-src 'self' https: wss: blob:",
+      "media-src 'self' blob:",
+      "worker-src 'self' blob:",
+      "frame-src https://www.google.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      ...(isDev ? [] : ["upgrade-insecure-requests"]),
+    ].join("; ");
     return [
       {
         source: "/:path*",
@@ -66,6 +84,7 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
+          { key: "Content-Security-Policy", value: csp },
           ...(isDev
             ? [
                 {
@@ -111,6 +130,8 @@ const nextConfig: NextConfig = {
             key: "Cache-Control",
             value: "private, no-cache, no-store, max-age=0, must-revalidate",
           },
+          // OWASP Forgot Password: referrer leakage 완화
+          { key: "Referrer-Policy", value: "no-referrer" },
         ],
       },
     ];

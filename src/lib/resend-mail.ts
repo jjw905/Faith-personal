@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import {
   appUrl,
   emailChangeOtpEmailHtml,
+  emailChangedNoticeEmailHtml,
   isMailAppUrlSafe,
   resetPasswordEmailHtml,
   signupOtpEmailHtml,
@@ -69,6 +70,18 @@ export async function sendEmailChangeOtp(email: string, code: string) {
     to: email,
     subject: "[Faith] 이메일 변경 인증번호",
     html: emailChangeOtpEmailHtml({ code }),
+  });
+}
+
+/** 이메일 변경 완료 — 기존 주소 알림 (OWASP) */
+export async function sendEmailChangedNotice(
+  oldEmail: string,
+  newEmail: string,
+) {
+  return send({
+    to: oldEmail,
+    subject: "[Faith] 계정 이메일이 변경되었습니다",
+    html: emailChangedNoticeEmailHtml({ newEmail }),
   });
 }
 

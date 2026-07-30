@@ -17,8 +17,12 @@ function alignPreviewEnd(pathname: string) {
     pathname === "/help" ||
     pathname === "/privacy" ||
     pathname === "/terms" ||
+    pathname === "/policy" ||
+    pathname === "/about" ||
     pathname.startsWith("/privacy/") ||
-    pathname.startsWith("/terms/")
+    pathname.startsWith("/terms/") ||
+    pathname.startsWith("/policy/") ||
+    pathname.startsWith("/about/")
   );
 }
 

@@ -222,7 +222,7 @@ function PeopleRow({
         return (
           <li
             key={p.id}
-            className="group/person inline-flex max-w-full items-center gap-0.5"
+            className="group/person inline-flex max-w-full items-center gap-2 md:gap-0.5"
             title={p.recognitionNote || undefined}
           >
             {interactive ? (

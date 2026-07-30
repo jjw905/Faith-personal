@@ -14,7 +14,9 @@ import { cn } from "@/lib/utils";
 
 export type MeetingIntent = "start" | "schedule";
 
-const DURATION_PRESETS = [30, 60, 90] as const;
+const DURATION_PRESETS = [30, 60, 90, 120] as const;
+const DURATION_MIN = 5;
+const DURATION_MAX = 120;
 
 export type TeamMeetingComposerValues = {
   intent: MeetingIntent;
@@ -100,7 +102,7 @@ export function TeamMeetingComposer({
                 aria-pressed={selected}
                 onClick={() => setIntent(value)}
                 className={cn(
-                  "group flex min-h-24 origin-center items-center gap-3 rounded-2xl px-4 text-left shadow-soft transition-[transform,box-shadow,background-color,color] duration-[180ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-colors",
+                  "group flex min-h-24 items-center gap-3 rounded-2xl px-4 text-left shadow-soft transition-colors duration-150",
                   selected
                     ? "bg-primary text-primary-foreground hover:bg-primary-hover"
                     : "bg-surface text-foreground hover:bg-surface-2",
@@ -108,7 +110,7 @@ export function TeamMeetingComposer({
               >
                 <span
                   className={cn(
-                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-transform duration-[180ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none group-hover:scale-105 motion-reduce:group-hover:scale-100",
+                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
                     selected
                       ? "bg-white text-primary"
                       : "bg-primary text-primary-foreground",
@@ -220,12 +222,16 @@ export function TeamMeetingComposer({
         {customDuration || !presetActive ? (
           <Input
             type="number"
-            min={5}
-            max={480}
+            min={DURATION_MIN}
+            max={DURATION_MAX}
             value={durationMinutes}
             onChange={(event) => {
               setCustomDuration(true);
-              setDurationMinutes(Number(event.target.value));
+              const next = Number(event.target.value);
+              if (!Number.isFinite(next)) return;
+              setDurationMinutes(
+                Math.min(DURATION_MAX, Math.max(DURATION_MIN, Math.round(next))),
+              );
             }}
             className="mt-2 min-h-12 max-w-[8rem] text-base"
             aria-label="시간(분)"

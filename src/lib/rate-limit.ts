@@ -24,17 +24,28 @@ function prune(now: number) {
 }
 
 export function clientIpFromHeaders(headers: Headers): string {
+  const trustProxy =
+    process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true";
+
+  // Cloudflare 엣지 헤더는 프로덕션(또는 TRUST_PROXY)에서만 신뢰.
+  // 로컬/직접 오리진 접근에서 X-Forwarded-For 위조로 IP 한도를 우회하지 못하게 한다.
   const cf = headers.get("cf-connecting-ip")?.trim();
-  if (cf) return cf;
-  const trueClient = headers.get("true-client-ip")?.trim();
-  if (trueClient) return trueClient;
-  const real = headers.get("x-real-ip")?.trim();
-  if (real) return real;
-  const xf = headers.get("x-forwarded-for");
-  if (xf) {
-    const first = xf.split(",")[0]?.trim();
-    if (first) return first;
+  if (cf && (trustProxy || process.env.NODE_ENV === "production")) {
+    return cf;
   }
+
+  if (trustProxy) {
+    const trueClient = headers.get("true-client-ip")?.trim();
+    if (trueClient) return trueClient;
+    const real = headers.get("x-real-ip")?.trim();
+    if (real) return real;
+    const xf = headers.get("x-forwarded-for");
+    if (xf) {
+      const first = xf.split(",")[0]?.trim();
+      if (first) return first;
+    }
+  }
+
   return "unknown";
 }
 

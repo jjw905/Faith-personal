@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import { readDataRetentionDaysFromStorage } from "@/lib/data-retention";
+import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { routeWorkspaceId } from "@/lib/workspace-route";
 import { WORKSPACES, type Workspace, type WorkspaceId } from "@/lib/workspaces";
 import type { User } from "@/types/user";
@@ -77,6 +78,7 @@ function readAutoTimelinePref(): boolean {
 
 function readWorkspaceId(): WorkspaceId {
   if (typeof window === "undefined") return "personal";
+  if (!TEAM_FEATURE_ENABLED) return "personal";
   try {
     const raw = window.localStorage.getItem(WORKSPACE_KEY);
     if (raw === "personal" || raw === "team") return raw;

@@ -39,6 +39,7 @@ export async function GET(_request: Request, { params }: Params) {
               ? 100
               : 0,
     errorMessage: row.errorMessage ?? null,
+    stageLabel: row.stageLabel ?? null,
     title: meetingDisplayTitle({ title: row.meeting.title }),
     href: `/meetings/${row.id}`,
   });

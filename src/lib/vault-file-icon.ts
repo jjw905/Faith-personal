@@ -145,3 +145,34 @@ export function vaultFileSymbol(
       return "draft";
   }
 }
+
+/**
+ * 아이콘 안에 넣는 확장자 라벨. 3자로 정규화해 타일을 넘치지 않게 한다.
+ * 확장자를 못 읽으면 빈 문자열 → 호출부는 심볼 글리프로 대체.
+ */
+export function vaultFileExtLabel(name: string): string {
+  const ext = extensionOf(name).replace(/[^a-z0-9]/g, "");
+  if (!ext) return "";
+  switch (ext) {
+    case "jpeg":
+      return "JPG";
+    case "docx":
+      return "DOC";
+    case "xlsx":
+      return "XLS";
+    case "pptx":
+      return "PPT";
+    case "hwpx":
+      return "HWP";
+    case "webm":
+      return "WEB";
+    case "flac":
+      return "FLA";
+    case "heic":
+      return "HEI";
+    case "webp":
+      return "WEP";
+    default:
+      return ext.slice(0, 3).toUpperCase();
+  }
+}

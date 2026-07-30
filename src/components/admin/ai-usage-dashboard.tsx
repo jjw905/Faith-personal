@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  ChevronDown,
   Gauge,
   LoaderCircle,
   RefreshCw,
@@ -374,13 +375,9 @@ export function AiUsageDashboard({
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionCard
-        title="조회 조건"
-        description="기간과 사용자를 고른 뒤 사용량을 확인합니다."
-      >
-        <div className="space-y-5 py-4">
-          <div className="space-y-2">
-            <p className="text-base font-semibold text-foreground">기간</p>
+      <Card className={CARD_SHADOW}>
+        <CardContent className="flex flex-col gap-3 px-5 py-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div
               className="inline-flex max-w-full flex-wrap rounded-xl bg-surface p-1"
               role="group"
@@ -402,31 +399,9 @@ export function AiUsageDashboard({
                 </button>
               ))}
             </div>
-            {range === "custom" ? (
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <input
-                  type="date"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  className="h-14 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
-                  aria-label="시작일"
-                />
-                <span className="text-base text-muted">~</span>
-                <input
-                  type="date"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  className="h-14 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
-                  aria-label="종료일"
-                />
-              </div>
-            ) : null}
-          </div>
 
-          <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="min-w-0 flex-1 space-y-2">
-              <p className="text-base font-semibold text-foreground">사용자</p>
-              <label className="relative block max-w-md">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="relative block w-full min-w-0 max-w-[15rem] flex-1">
                 <Users
                   className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted"
                   strokeWidth={1.75}
@@ -434,7 +409,8 @@ export function AiUsageDashboard({
                 <select
                   value={userId}
                   onChange={(e) => setUserId(e.target.value)}
-                  className="h-14 w-full appearance-none rounded-xl bg-card py-2 pl-11 pr-10 text-base font-medium text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+                  aria-label="사용자"
+                  className="h-12 w-full appearance-none rounded-xl bg-card py-2 pl-11 pr-8 text-base font-medium text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="all">전체 사용자</option>
                   {viewUsers.map((u) => (
@@ -444,29 +420,49 @@ export function AiUsageDashboard({
                   ))}
                 </select>
               </label>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={loading}
+                aria-label="새로고침"
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface text-foreground transition-colors hover:bg-surface-2 disabled:opacity-60"
+              >
+                <RefreshCw
+                  className={cn("h-4 w-4", loading && "animate-spin")}
+                  strokeWidth={1.75}
+                />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={loading}
-              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-border-strong bg-surface px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:opacity-60"
-            >
-              <RefreshCw
-                className={cn("h-4 w-4", loading && "animate-spin")}
-                strokeWidth={1.75}
-              />
-              새로고침
-            </button>
           </div>
 
+          {range === "custom" ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-12 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+                aria-label="시작일"
+              />
+              <span className="text-base text-muted">~</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-12 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+                aria-label="종료일"
+              />
+            </div>
+          ) : null}
+
           {fx ? (
-            <p className="border-t border-border pt-3 text-base text-muted">
+            <p className="text-sm text-muted">
               일별 환율 적용, $1 = ₩{formatRate(fx.latestRate)} (
               {formatShortDate(fx.latestAsOf)})
             </p>
           ) : null}
-        </div>
-      </SectionCard>
+        </CardContent>
+      </Card>
 
       <SectionCard title="요약" description="선택한 조건의 추정 비용과 사용량입니다.">
         <div className="grid grid-cols-2 divide-y divide-border lg:grid-cols-4 lg:divide-x lg:divide-y-0">
@@ -816,10 +812,22 @@ export function AiUsageDashboard({
             </SectionCard>
           </div>
 
-          <SectionCard
-            title="최근 호출"
-            description={`최신 ${viewSummary.recent.length}건`}
-          >
+          <details className={cn(CARD_SHADOW, "group bg-card")}>
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
+              <span className="min-w-0">
+                <span className="text-xl font-bold tracking-tight text-foreground">
+                  최근 호출
+                </span>
+                <span className="ml-2 text-base font-medium text-muted">
+                  최신 {viewSummary.recent.length}건
+                </span>
+              </span>
+              <ChevronDown
+                className="h-5 w-5 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180"
+                strokeWidth={1.75}
+              />
+            </summary>
+            <div className="border-t border-border px-6 pb-5 pt-4">
             {viewSummary.recent.length === 0 ? (
               <EmptyChart />
             ) : (
@@ -896,7 +904,8 @@ export function AiUsageDashboard({
                 />
               </>
             )}
-          </SectionCard>
+            </div>
+          </details>
         </>
       )}
     </div>

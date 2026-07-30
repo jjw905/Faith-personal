@@ -25,7 +25,10 @@ import { createPortal } from "react-dom";
 import { PageContainer } from "@/components/layout/page-container";
 import { Button } from "@/components/ui/button";
 import { VaultFileIcon } from "@/components/vault/vault-file-icon";
-import { VaultDeleteConfirmDialog } from "@/components/vault/vault-delete-confirm-dialog";
+import {
+  VaultActionConfirmDialog,
+  type VaultConfirmAction,
+} from "@/components/vault/vault-action-confirm-dialog";
 import {
   VaultFloatSearch,
   VaultRoundSearch,
@@ -58,10 +61,10 @@ const PAGE_SIZE_MOBILE = 5;
 
 /**
  * List body floor ≈ full page so short lists do not shrink the card.
- * Row: more-btn + py (72 / 76 / 68). + ~1 date-group header (36 / 40).
+ * Mobile 2-line rows (~4.75rem) + date header. Desktop 1-line denser.
  */
 const LIST_BODY_MIN_CLASS =
-  "min-h-[calc(5*4.5rem+2.25rem)] sm:min-h-[calc(5*4.75rem+2.5rem)] md:min-h-[calc(8*4.25rem+2.5rem)]";
+  "min-h-[calc(5*4.75rem+2.5rem)] sm:min-h-[calc(5*4.75rem+2.5rem)] md:min-h-[calc(8*4.25rem+2.5rem)]";
 
 function useIsNarrowMobile() {
   return useSyncExternalStore(
@@ -78,41 +81,46 @@ function useIsNarrowMobile() {
 const CARD_SHADOW =
   "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
 
+function vaultDayKey(iso: string) {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+}
+
+function vaultDayLabel(iso: string, key: string) {
+  const todayKey = vaultDayKey(new Date().toISOString());
+  const yesterdayKey = vaultDayKey(
+    new Date(Date.now() - 86400000).toISOString(),
+  );
+  if (key === todayKey) return "오늘";
+  if (key === yesterdayKey) return "어제";
+  return new Date(iso).toLocaleDateString("ko-KR", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+}
+
 /** 파일 목록을 업로드 날짜별로 묶는다(최신순). */
 function groupVaultByDay(
   items: VaultItemMeta[],
 ): { key: string; label: string; items: VaultItemMeta[] }[] {
-  const dayKey = (iso: string) =>
-    new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-  const todayKey = dayKey(new Date().toISOString());
-  const yesterdayKey = dayKey(
-    new Date(Date.now() - 86400000).toISOString(),
-  );
-
-  const labelOf = (iso: string, key: string) => {
-    if (key === todayKey) return "오늘";
-    if (key === yesterdayKey) return "어제";
-    return new Date(iso).toLocaleDateString("ko-KR", {
-      timeZone: "Asia/Seoul",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      weekday: "short",
-    });
-  };
-
   const sorted = [...items].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
   const groups: { key: string; label: string; items: VaultItemMeta[] }[] = [];
   for (const item of sorted) {
-    const key = dayKey(item.createdAt);
+    const key = vaultDayKey(item.createdAt);
     const last = groups[groups.length - 1];
     if (last && last.key === key) {
       last.items.push(item);
     } else {
-      groups.push({ key, label: labelOf(item.createdAt, key), items: [item] });
+      groups.push({
+        key,
+        label: vaultDayLabel(item.createdAt, key),
+        items: [item],
+      });
     }
   }
   return groups;
@@ -138,7 +146,11 @@ export default function VaultPage() {
     null,
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  /** 다운로드, 공유, 삭제는 실행 전 확인을 거친다. */
+  const [confirmAsk, setConfirmAsk] = useState<{
+    action: VaultConfirmAction;
+    items: VaultItemMeta[];
+  } | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -232,7 +244,7 @@ export default function VaultPage() {
     setPage(1);
     setSelectMode(null);
     setSelected(new Set());
-    setDeleteConfirmOpen(false);
+    setConfirmAsk(null);
   }, [query, scenarioId]);
 
   useEffect(() => {
@@ -292,13 +304,13 @@ export default function VaultPage() {
   function exitSelectMode() {
     setSelectMode(null);
     setSelected(new Set());
-    setDeleteConfirmOpen(false);
+    setConfirmAsk(null);
   }
 
   function enterSelectMode(mode: "download" | "delete") {
     setSelectMode(mode);
     setSelected(new Set());
-    setDeleteConfirmOpen(false);
+    setConfirmAsk(null);
   }
 
   function toggleSelected(id: string) {
@@ -326,75 +338,21 @@ export default function VaultPage() {
     [filtered, selected],
   );
 
-  async function downloadSelectedFiles() {
-    const targets = selectedItems;
+  /** 확인 팝업을 띄운다. 실행은 팝업의 확인 버튼에서만 일어난다. */
+  function askConfirm(action: VaultConfirmAction, targets: VaultItemMeta[]) {
     if (targets.length === 0 || busy) return;
-    setBusy(true);
     setError(null);
-    try {
-      if (!isLive) {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
-        exitSelectMode();
-        return;
-      }
-      for (const meta of targets) {
-        const item = await getVaultItem(meta.id);
-        if (!item) continue;
-        const url = URL.createObjectURL(item.blob);
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = item.name;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
-      }
-      exitSelectMode();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "다운로드에 실패했습니다.",
-      );
-    } finally {
-      setBusy(false);
-    }
+    setConfirmAsk({ action, items: targets });
   }
 
-  async function confirmDeleteSelectedFiles() {
-    const targets = selectedItems;
-    if (targets.length === 0 || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (!isLive) {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
-        setDeleteConfirmOpen(false);
-        exitSelectMode();
-        return;
-      }
-      for (const meta of targets) {
-        await removeVaultItem(meta.id);
-      }
-      await refresh();
-      setDeleteConfirmOpen(false);
-      exitSelectMode();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "삭제에 실패했습니다.");
-    } finally {
-      setBusy(false);
+  async function runDownload(targets: VaultItemMeta[]) {
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      return;
     }
-  }
-
-  async function downloadOneFile(meta: VaultItemMeta) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (!isLive) {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
-        return;
-      }
+    for (const meta of targets) {
       const item = await getVaultItem(meta.id);
-      if (!item) return;
+      if (!item) continue;
       const url = URL.createObjectURL(item.blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -403,57 +361,71 @@ export default function VaultPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "다운로드에 실패했습니다.",
-      );
-    } finally {
-      setBusy(false);
     }
   }
 
-  async function shareOneFile(meta: VaultItemMeta) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (!isLive) {
-        await new Promise((resolve) => window.setTimeout(resolve, 400));
-        return;
-      }
+  async function runDelete(targets: VaultItemMeta[]) {
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      return;
+    }
+    for (const meta of targets) {
+      await removeVaultItem(meta.id);
+    }
+    await refresh();
+  }
+
+  async function runShare(targets: VaultItemMeta[]) {
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      return;
+    }
+    const metas = targets.slice(0, 10);
+    const files: File[] = [];
+    for (const meta of metas) {
       const item = await getVaultItem(meta.id);
-      if (!item) return;
-      const file = new File([item.blob], item.name, { type: item.mime });
-      if (typeof navigator.canShare === "function" && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: item.name });
-        return;
-      }
-      if (typeof navigator.share === "function") {
-        await navigator.share({ title: item.name, text: item.name });
-        return;
-      }
-      await navigator.clipboard.writeText(item.name);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "공유에 실패했습니다.");
-    } finally {
-      setBusy(false);
+      if (!item) continue;
+      files.push(new File([item.blob], item.name, { type: item.mime }));
     }
+    if (files.length === 0) return;
+
+    const title = files.length === 1 ? files[0].name : `파일 ${files.length}개`;
+    if (typeof navigator.canShare === "function" && navigator.canShare({ files })) {
+      await navigator.share({ files, title });
+      return;
+    }
+    if (typeof navigator.share === "function") {
+      await navigator.share({ title, text: title });
+      return;
+    }
+    await navigator.clipboard.writeText(files.map((file) => file.name).join("\n"));
   }
 
-  async function removeFile(id: string) {
-    if (busy) return;
+  async function runConfirmedAction() {
+    if (!confirmAsk || busy) return;
+    const { action, items: targets } = confirmAsk;
     setBusy(true);
     setError(null);
     try {
-      if (!isLive) {
-        await new Promise((resolve) => window.setTimeout(resolve, 500));
+      if (action === "download") await runDownload(targets);
+      else if (action === "delete") await runDelete(targets);
+      else await runShare(targets);
+      setConfirmAsk(null);
+      if (selectMode) exitSelectMode();
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setConfirmAsk(null);
         return;
       }
-      await removeVaultItem(id);
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "삭제에 실패했습니다.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : action === "delete"
+            ? "삭제에 실패했습니다."
+            : action === "download"
+              ? "다운로드에 실패했습니다."
+              : "공유에 실패했습니다.",
+      );
     } finally {
       setBusy(false);
     }
@@ -491,7 +463,7 @@ export default function VaultPage() {
                     type="button"
                     variant="outline"
                     className={cn(
-                      "vault-select-actions-in h-11 cursor-pointer gap-2 rounded-full border-0 bg-card px-5 text-[15px] font-semibold shadow-soft",
+                      "vault-select-actions-in h-11 cursor-pointer gap-2 rounded-full border border-border bg-card px-5 text-[15px] font-semibold",
                       selectMode === "delete"
                         ? "text-masked hover:bg-card hover:brightness-[0.98]"
                         : "text-foreground hover:bg-card hover:brightness-[0.98]",
@@ -503,11 +475,10 @@ export default function VaultPage() {
                         : `다운로드${selected.size > 0 ? ` ${selected.size}` : ""}`
                     }
                     onClick={() => {
-                      if (selectMode === "delete") {
-                        setDeleteConfirmOpen(true);
-                        return;
-                      }
-                      void downloadSelectedFiles();
+                      askConfirm(
+                        selectMode === "delete" ? "delete" : "download",
+                        selectedItems,
+                      );
                     }}
                   >
                     {selectMode === "delete" ? (
@@ -558,7 +529,7 @@ export default function VaultPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-11 cursor-pointer gap-2 rounded-full border-0 bg-card px-5 text-[15px] font-semibold text-foreground shadow-soft hover:bg-card hover:brightness-[0.98]"
+                    className="h-11 cursor-pointer gap-2 rounded-full border border-border bg-card px-5 text-[15px] font-semibold text-foreground hover:bg-card hover:brightness-[0.98]"
                     disabled={busy || filtered.length === 0}
                     aria-label="다운로드"
                     onClick={() => enterSelectMode("download")}
@@ -572,7 +543,7 @@ export default function VaultPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-11 cursor-pointer gap-2 rounded-full border-0 bg-card px-5 text-[15px] font-semibold text-masked shadow-soft hover:bg-card hover:text-masked hover:brightness-[0.98]"
+                    className="h-11 cursor-pointer gap-2 rounded-full border border-border bg-card px-5 text-[15px] font-semibold text-masked hover:bg-card hover:text-masked hover:brightness-[0.98]"
                     disabled={busy || filtered.length === 0}
                     aria-label="삭제"
                     onClick={() => enterSelectMode("delete")}
@@ -605,17 +576,16 @@ export default function VaultPage() {
           onEnterDownload={() => enterSelectMode("download")}
           onEnterDelete={() => enterSelectMode("delete")}
           onConfirmSelection={() => {
-            if (selectMode === "delete") {
-              setDeleteConfirmOpen(true);
-              return;
-            }
-            void downloadSelectedFiles();
+            askConfirm(
+              selectMode === "delete" ? "delete" : "download",
+              selectedItems,
+            );
           }}
           onExitSelect={exitSelectMode}
         />
 
         {quotaFull ? (
-          <p className="text-sm font-medium text-red-600" role="status">
+          <p className="text-base font-medium text-red-600" role="status">
             보관함 용량이 가득 찼습니다. 파일을 비운 뒤 다시 올려 주세요.
           </p>
         ) : null}
@@ -655,21 +625,22 @@ export default function VaultPage() {
           }}
         />
 
-        <VaultDeleteConfirmDialog
-          open={deleteConfirmOpen}
-          items={selectedItems}
+        <VaultActionConfirmDialog
+          open={Boolean(confirmAsk)}
+          action={confirmAsk?.action ?? "download"}
+          items={confirmAsk?.items ?? []}
           busy={busy}
           onCancel={() => {
             if (busy && isLive) return;
-            setDeleteConfirmOpen(false);
+            setConfirmAsk(null);
           }}
           onConfirm={() => {
-            void confirmDeleteSelectedFiles();
+            void runConfirmedAction();
           }}
         />
 
         {error && !uploadOpen ? (
-          <p className="text-sm text-red-600" role="alert">
+          <p className="text-base text-red-600" role="alert">
             {error}
           </p>
         ) : null}
@@ -698,12 +669,7 @@ export default function VaultPage() {
               {selectMode ? (
                 <button
                   type="button"
-                  className={cn(
-                    "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-2",
-                    allFilteredSelected
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border-strong bg-card",
-                  )}
+                  className="-my-2 -ml-2 flex min-h-12 min-w-12 shrink-0 cursor-pointer items-center justify-center rounded-full md:m-0 md:min-h-0 md:min-w-0 md:h-6 md:w-6"
                   aria-label={
                     allFilteredSelected ? "전체 선택 해제" : "전체 선택"
                   }
@@ -711,9 +677,19 @@ export default function VaultPage() {
                   disabled={busy || filtered.length === 0}
                   onClick={toggleSelectAll}
                 >
-                  {allFilteredSelected ? (
-                    <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                  ) : null}
+                  <span
+                    className={cn(
+                      "flex h-6 w-6 items-center justify-center rounded-md border-2",
+                      allFilteredSelected
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border-strong bg-card",
+                    )}
+                    aria-hidden
+                  >
+                    {allFilteredSelected ? (
+                      <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                    ) : null}
+                  </span>
                 </button>
               ) : null}
               <h2
@@ -739,23 +715,24 @@ export default function VaultPage() {
               ) : null}
             </div>
             <div className="mt-2 h-0.5 w-full bg-foreground sm:mt-2.5" aria-hidden />
+            {/* 데스크톱만 컬럼 헤더. 모바일은 M3 2줄 리스트로 표 느낌 제거. */}
             {viewItems.length > 0 && !dragOver ? (
-              <div className="flex h-9 shrink-0 items-center gap-2.5 border-b border-border px-0 sm:h-11 sm:gap-3">
+              <div className="hidden h-11 shrink-0 items-center gap-3 border-b border-border px-0 sm:flex">
                 {selectMode ? (
                   <span className="w-6 shrink-0" aria-hidden />
                 ) : null}
-                <span className="h-9 w-9 shrink-0 sm:h-10 sm:w-10" aria-hidden />
+                <span className="h-10 w-10 shrink-0" aria-hidden />
                 <span className="min-w-0 flex-1 text-base font-medium text-muted">
                   이름
                 </span>
-                <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-                  <span className="hidden w-[4.5rem] text-center text-base font-medium text-muted sm:block">
+                <div className="flex shrink-0 items-center gap-5">
+                  <span className="w-[4.5rem] text-center text-base font-medium text-muted">
                     수정시간
                   </span>
-                  <span className="w-[3.75rem] text-center text-base font-medium text-muted sm:w-[4.5rem]">
+                  <span className="w-[4.5rem] text-center text-base font-medium text-muted">
                     용량
                   </span>
-                  <span className="w-12 shrink-0 md:w-10" aria-hidden />
+                  <span className="w-10 shrink-0" aria-hidden />
                 </div>
               </div>
             ) : null}
@@ -783,11 +760,20 @@ export default function VaultPage() {
                 검색 결과가 없습니다.
               </p>
             ) : (
-              grouped.map((group) => (
+              grouped.map((group) => {
+                const visibleCount = group.items.length;
+                return (
                 <div key={group.key}>
-                  <p className="bg-card px-4 pb-1 pt-2 text-base font-semibold tracking-wide text-muted sm:px-6 sm:pb-1.5 sm:pt-2.5">
-                    {group.label}
-                  </p>
+                  <div className="flex items-baseline justify-between gap-3 bg-card px-4 pb-1 pt-3 sm:px-6 sm:pb-1.5 sm:pt-2.5">
+                    <p className="text-base font-semibold tracking-wide text-muted">
+                      {group.label}
+                    </p>
+                    {visibleCount > 1 ? (
+                      <p className="shrink-0 text-base font-medium tabular-nums text-muted-2">
+                        {visibleCount}개
+                      </p>
+                    ) : null}
+                  </div>
                   <ul className="divide-y divide-border">
                     {group.items.map((item) => (
                       <VaultListItem
@@ -797,23 +783,15 @@ export default function VaultPage() {
                         selecting={Boolean(selectMode)}
                         checked={selected.has(item.id)}
                         onToggle={() => toggleSelected(item.id)}
-                        onDownload={() => {
-                          void downloadOneFile(item);
-                        }}
-                        onShare={() => {
-                          void shareOneFile(item);
-                        }}
-                        onRemove={() => {
-                          if (!window.confirm(`${item.name}을(를) 삭제할까요?`)) {
-                            return;
-                          }
-                          void removeFile(item.id);
-                        }}
+                        onDownload={() => askConfirm("download", [item])}
+                        onShare={() => askConfirm("share", [item])}
+                        onRemove={() => askConfirm("delete", [item])}
                       />
                     ))}
                   </ul>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
 
@@ -890,14 +868,11 @@ function VaultQuotaGauge({ usage }: { usage: VaultUsage | null }) {
 
   return (
     <div
-      className={cn(
-        "flex h-11 w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full bg-card px-3.5 ring-1 ring-border sm:gap-3 sm:px-4",
-        "shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)]",
-      )}
+      className="flex h-11 w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full bg-card px-3.5 ring-1 ring-border sm:gap-3 sm:px-4"
       title={`${pct}% 사용, ${formatVaultSize(used)} / ${formatVaultSize(quota)}`}
     >
       <div
-        className="relative h-2 min-w-[7rem] flex-1 overflow-hidden rounded-full bg-surface-2"
+        className="relative h-2 min-w-[5.5rem] flex-1 overflow-hidden rounded-full bg-surface-2"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -914,7 +889,7 @@ function VaultQuotaGauge({ usage }: { usage: VaultUsage | null }) {
       </div>
       <p
         className={cn(
-          "min-w-0 max-w-[48%] shrink-0 truncate text-right text-base font-semibold tabular-nums leading-none",
+          "min-w-0 shrink-0 whitespace-nowrap text-right text-base font-semibold tabular-nums leading-none",
           tight ? "text-warning" : "text-foreground",
         )}
       >
@@ -933,6 +908,13 @@ function formatVaultModifiedTime(iso: string) {
     hourCycle: "h23",
   });
 }
+
+/** 3항목 + 구분선 높이. 하단 추적 바(약 5rem) 위로 뒤집을 여유까지 확보. */
+const MORE_MENU_HEIGHT = 168;
+const MORE_MENU_SAFE_GAP = 96;
+
+const MORE_MENU_ITEM_CLASS =
+  "flex min-h-12 w-full cursor-pointer items-center gap-3 px-4 text-left text-base font-semibold transition-colors md:min-h-11 md:px-3.5";
 
 function VaultItemMoreMenu({
   fileName,
@@ -957,8 +939,14 @@ function VaultItemMoreMenu({
     const button = rootRef.current?.querySelector("button");
     if (button) {
       const rect = button.getBoundingClientRect();
+      /** 아래 공간이 부족하면 트리거 위로 뒤집어 하단 바에 가리지 않게 한다. */
+      const menuHeight = MORE_MENU_HEIGHT;
+      const bottomRoom = window.innerHeight - rect.bottom - MORE_MENU_SAFE_GAP;
       setPos({
-        top: rect.bottom + 4,
+        top:
+          bottomRoom < menuHeight
+            ? Math.max(8, rect.top - menuHeight - 4)
+            : rect.bottom + 4,
         right: Math.max(8, window.innerWidth - rect.right),
       });
     }
@@ -989,33 +977,19 @@ function VaultItemMoreMenu({
             ref={menuRef}
             role="menu"
             style={{ top: pos.top, right: pos.right }}
-            className="vault-menu-in fixed z-[80] min-w-[9.5rem] overflow-hidden rounded-xl bg-card py-1 shadow-[0_12px_28px_rgba(17,24,46,0.12)]"
+            className="vault-menu-in fixed z-[80] min-w-[11rem] overflow-hidden rounded-2xl bg-card py-1.5 shadow-[0_12px_28px_rgba(17,24,46,0.12)] ring-1 ring-border"
           >
             <li>
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left text-base font-medium text-masked transition-colors hover:bg-masked-soft"
-                onClick={() => {
-                  setOpen(false);
-                  onRemove();
-                }}
-              >
-                <Trash2 className="h-4 w-4 text-masked" strokeWidth={1.75} />
-                삭제
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left text-base font-medium text-foreground transition-colors hover:bg-surface"
+                className={cn(MORE_MENU_ITEM_CLASS, "text-foreground hover:bg-surface")}
                 onClick={() => {
                   setOpen(false);
                   onDownload();
                 }}
               >
-                <Download className="h-4 w-4" strokeWidth={1.75} />
+                <Download className="h-5 w-5 shrink-0" strokeWidth={1.75} />
                 다운로드
               </button>
             </li>
@@ -1023,14 +997,30 @@ function VaultItemMoreMenu({
               <button
                 type="button"
                 role="menuitem"
-                className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left text-base font-medium text-foreground transition-colors hover:bg-surface"
+                className={cn(MORE_MENU_ITEM_CLASS, "text-foreground hover:bg-surface")}
                 onClick={() => {
                   setOpen(false);
                   onShare();
                 }}
               >
-                <Share2 className="h-4 w-4" strokeWidth={1.75} />
+                <Share2 className="h-5 w-5 shrink-0" strokeWidth={1.75} />
                 공유
+              </button>
+            </li>
+            {/* 삭제는 안전한 항목과 붙지 않게 구분선 뒤 마지막에 둔다. */}
+            <li className="my-1.5 h-px bg-border" role="separator" />
+            <li>
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(MORE_MENU_ITEM_CLASS, "text-masked hover:bg-masked-soft")}
+                onClick={() => {
+                  setOpen(false);
+                  onRemove();
+                }}
+              >
+                <Trash2 className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                삭제
               </button>
             </li>
           </ul>,
@@ -1080,6 +1070,9 @@ function VaultListItem({
   onShare: () => void;
   onRemove: () => void;
 }) {
+  const timeLabel = formatVaultModifiedTime(item.createdAt);
+  const sizeLabel = formatVaultSize(item.size);
+
   return (
     <li
       className={cn(
@@ -1132,35 +1125,41 @@ function VaultListItem({
         name={item.name}
         mime={item.mime}
         size={20}
-        className="h-9 w-9 sm:h-10 sm:w-10"
+        className="h-10 w-10"
       />
-      <p
-        className={cn(
-          "min-w-0 flex-1 overflow-hidden truncate text-base font-semibold leading-6 sm:text-lg",
-          selecting && checked ? "text-primary" : "text-foreground",
-        )}
-      >
-        {item.name}
-      </p>
-      <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-        <span className="hidden w-[4.5rem] text-center text-base tabular-nums text-muted sm:block">
-          {formatVaultModifiedTime(item.createdAt)}
-        </span>
-        <span className="w-[3.75rem] text-center text-base tabular-nums text-muted sm:w-[4.5rem]">
-          {formatVaultSize(item.size)}
-        </span>
-        {selecting ? (
-          <span className="w-12 shrink-0 md:w-10" aria-hidden />
-        ) : (
-          <VaultItemMoreMenu
-            fileName={item.name}
-            busy={busy}
-            onDownload={onDownload}
-            onShare={onShare}
-            onRemove={onRemove}
-          />
-        )}
+      {/* 종류는 타일의 확장자로 읽는다. 모바일 보조문구는 용량만. */}
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            "truncate text-lg font-semibold leading-6",
+            selecting && checked ? "text-primary" : "text-foreground",
+          )}
+        >
+          {item.name}
+        </p>
+        <p className="mt-0.5 truncate text-base leading-5 text-muted sm:hidden">
+          {sizeLabel}
+        </p>
       </div>
+      <div className="hidden shrink-0 items-center gap-5 sm:flex">
+        <span className="w-[4.5rem] text-center text-base tabular-nums text-muted">
+          {timeLabel}
+        </span>
+        <span className="w-[4.5rem] text-center text-base tabular-nums text-muted">
+          {sizeLabel}
+        </span>
+      </div>
+      {selecting ? (
+        <span className="w-12 shrink-0 md:w-10" aria-hidden />
+      ) : (
+        <VaultItemMoreMenu
+          fileName={item.name}
+          busy={busy}
+          onDownload={onDownload}
+          onShare={onShare}
+          onRemove={onRemove}
+        />
+      )}
     </li>
   );
 }

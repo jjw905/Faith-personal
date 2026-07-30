@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Upload, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
@@ -47,6 +47,7 @@ export function VaultUploadDialog({
   const [guideError, setGuideError] = useState<string | null>(null);
   const { isLive } = usePageUxPreview();
   const blockDismiss = busy && isLive;
+  const inputId = useId();
 
   useEffect(() => {
     if (!open) {
@@ -127,19 +128,6 @@ export function VaultUploadDialog({
               : "bg-surface/40 hover:bg-surface/70",
           )}
         >
-          {!busy && !quotaFull ? (
-            <input
-              type="file"
-              multiple
-              onChange={(event) => {
-                if (event.target.files) tryUpload(event.target.files);
-                event.target.value = "";
-              }}
-              className="absolute inset-0 z-10 cursor-pointer opacity-0"
-              aria-label="파일 올리기"
-            />
-          ) : null}
-
           {busy ? (
             <div className="flex flex-col items-center gap-4 text-center">
               <Loader2
@@ -152,18 +140,45 @@ export function VaultUploadDialog({
             </div>
           ) : (
             <>
+              {/* 보이는 버튼이 진입점. 데스크톱은 영역 탭으로도 열림. */}
+              <input
+                id={inputId}
+                type="file"
+                multiple
+                disabled={quotaFull}
+                onChange={(event) => {
+                  if (event.target.files) tryUpload(event.target.files);
+                  event.target.value = "";
+                }}
+                className="peer sr-only"
+              />
+              {!quotaFull ? (
+                <label
+                  htmlFor={inputId}
+                  className="absolute inset-0 z-0 hidden cursor-pointer md:block"
+                >
+                  <span className="sr-only">파일 올리기</span>
+                </label>
+              ) : null}
+
               <Upload
-                className="h-9 w-9 text-foreground sm:h-8 sm:w-8"
+                className="relative z-10 h-9 w-9 text-foreground sm:h-8 sm:w-8"
                 strokeWidth={1.75}
                 aria-hidden
               />
-              <p className="text-lg font-semibold text-foreground sm:text-base">
-                드래그하거나 클릭해서 업로드
-              </p>
-              <p className="text-base text-muted sm:text-sm">
+              <label
+                htmlFor={inputId}
+                className={cn(
+                  "relative z-10 inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-6 text-base font-bold text-primary-foreground transition-colors hover:bg-primary-hover peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2",
+                  quotaFull && "pointer-events-none opacity-50",
+                )}
+              >
+                파일 올리기
+              </label>
+              <p className="relative z-10 text-base text-muted">
                 여러 파일을 한 번에 올릴 수 있습니다.
               </p>
-              <ul className="flex max-w-xl flex-wrap justify-center gap-2 px-1 sm:gap-2.5">
+              <ul className="relative z-10 flex max-w-xl flex-wrap justify-center gap-2 px-1 sm:gap-2.5">
                 {FORMAT_GUIDES.map((item) => (
                   <li
                     key={item.ext}
@@ -172,7 +187,8 @@ export function VaultUploadDialog({
                     <span className="font-mono text-base font-bold tracking-tight text-primary sm:text-sm">
                       {item.ext}
                     </span>
-                    <span className="text-sm text-muted sm:text-xs">
+                    {/* 한국어 설명은 좁은 화면에서 생략. 확장자만으로 충분. */}
+                    <span className="hidden text-muted sm:inline sm:text-xs">
                       {item.hint}
                     </span>
                   </li>
@@ -180,7 +196,7 @@ export function VaultUploadDialog({
               </ul>
               {alertText || quotaFull ? (
                 <p
-                  className="relative z-20 max-w-xl px-2 text-center text-sm font-medium text-red-600"
+                  className="relative z-20 max-w-xl px-2 text-center text-base font-medium text-red-600"
                   role="alert"
                 >
                   {alertText ??

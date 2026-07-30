@@ -170,7 +170,15 @@ export function SignupEmailVerifyCodeView({
               onChange={(e) =>
                 onOtpChange?.(e.target.value.replace(/\D/g, "").slice(0, 6))
               }
-              className={cn("tabular-nums tracking-[0.2em]", AUTH_FIELD_INPUT)}
+              placeholder="······"
+              aria-label="인증번호 6자리"
+              className={cn(
+                AUTH_FIELD_INPUT,
+                "text-center tabular-nums tracking-[0.4em]",
+                "placeholder:tracking-[0.4em]",
+                // trailing letter-spacing 상쇄 → 가운데 광학 균형
+                "-mr-[0.4em]",
+              )}
               maxLength={6}
             />
             <p className={AUTH_FIELD_HINT}>인증번호는 10분 동안 유효합니다</p>

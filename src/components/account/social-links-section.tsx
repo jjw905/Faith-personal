@@ -1,8 +1,14 @@
+import { NAVER_LOGIN_ENABLED } from "@/auth";
 import { SocialLinksCard } from "@/components/account/social-links-card";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
 
 const LINKABLE = ["naver", "google", "twitter"] as const;
+
+/** 새로 연결 가능한 제공자. 네이버는 임시 중단 중(src/auth.ts). */
+const AVAILABLE_FOR_NEW_LINK = LINKABLE.filter(
+  (p) => p !== "naver" || NAVER_LOGIN_ENABLED,
+);
 
 function noticeFromSearch(linked?: string, error?: string) {
   if (linked === "1") return "계정을 연결했어요.";
@@ -50,7 +56,7 @@ export async function SocialLinksSection({
       key={`${linkedProviders.slice().sort().join(",")}|${primary ?? ""}`}
       initial={{
         linked: linkedProviders,
-        available: [...LINKABLE],
+        available: [...AVAILABLE_FOR_NEW_LINK],
         primary,
         hasPassword: Boolean(user?.passwordHash),
         notice: noticeFromSearch(linked, error),

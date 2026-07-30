@@ -4,38 +4,13 @@ import { useState } from "react";
 
 import { ParticipantsPopup, SortControl } from "@/components/dashboard/recent-meetings-table";
 import { FIXTURE_PARTICIPANTS } from "@/components/design/fixtures";
+import { PreviewStage } from "@/components/design/preview-stage";
 import { UserProfile } from "@/components/layout/user-profile";
 import {
   AttachMenuPopup,
   ResetConfirmDialog,
 } from "@/components/meetings/new-meeting-session";
 import { Button } from "@/components/ui/button";
-
-function PreviewStage({
-  hint,
-  open,
-  onReopen,
-  children,
-}: {
-  hint: string;
-  open: boolean;
-  onReopen: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative flex h-full min-h-full flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
-        <p className="text-sm text-muted">{hint}</p>
-        {!open ? (
-          <Button type="button" size="sm" onClick={onReopen}>
-            다시 열기
-          </Button>
-        ) : null}
-      </div>
-      <div className="relative min-h-0 flex-1">{children}</div>
-    </div>
-  );
-}
 
 /** 최근 기록: 참석자 팝업 */
 export function SceneParticipantsPopup() {
@@ -56,14 +31,14 @@ export function SceneParticipantsPopup() {
   );
 }
 
-/** 실시간 기록: 첨부 메뉴 (fab-item-up) */
+/** 실시간 기록: 첨부 메뉴 */
 export function SceneAttachMenuPopup() {
   const [open, setOpen] = useState(true);
   const [play, setPlay] = useState(0);
   return (
     <div className="relative flex h-full min-h-full flex-col">
       <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
-        <p className="text-sm text-muted">첨부 버튼 메뉴. 열릴 때 위로 뜹니다.</p>
+        <p className="text-sm text-muted">첨부 버튼 메뉴.</p>
         <Button
           type="button"
           size="sm"
@@ -81,8 +56,7 @@ export function SceneAttachMenuPopup() {
             key={play}
             open={open}
             onAttach={() => setOpen(false)}
-            onVault={() => setOpen(false)}
-            onRandomSend={() => setOpen(false)}
+            onVaultAttach={() => setOpen(false)}
           />
           <div className="h-11 w-11 rounded-full bg-primary shadow-soft" aria-hidden />
         </div>

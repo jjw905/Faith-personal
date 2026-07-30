@@ -3,6 +3,7 @@ import Link from "next/link";
 const LINKS = [
   { label: "개인정보 처리방침", href: "/privacy" },
   { label: "이용약관", href: "/terms" },
+  { label: "운영정책", href: "/policy" },
 ] as const;
 
 /** 앱 페이지 하단 법적 고지. */

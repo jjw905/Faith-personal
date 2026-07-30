@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/require-user";
-import { requireTeamCapability } from "@/lib/team-permissions";
+import {
+  getTeamMember,
+  hasTeamCapability,
+} from "@/lib/team-permissions";
 
 type RouteContext = { params: Promise<{ teamId: string }> };
 
@@ -15,8 +18,14 @@ export async function GET(request: Request, context: RouteContext) {
     );
   }
   const { teamId } = await context.params;
-  const member = await requireTeamCapability(teamId, session.user.id, "invite");
+  const member = await getTeamMember(teamId, session.user.id);
   if (!member) {
+    return NextResponse.json(
+      { ok: false, message: "팀을 찾을 수 없습니다." },
+      { status: 404 },
+    );
+  }
+  if (!hasTeamCapability(member, "invite")) {
     return NextResponse.json(
       { ok: false, message: "초대 권한이 없습니다." },
       { status: 403 },

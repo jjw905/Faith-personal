@@ -322,7 +322,7 @@ function toAdminTeamOpsRow(t: ListedTeam): AdminTeamOpsRow {
 
 /** 플랫폼 관리자용 팀 목록. 이름·대표·인원 등 운영 메타만. */
 export async function listTeamsPage(params: TeamListParams = {}) {
-  const pageSize = Math.max(1, Math.min(100, params.pageSize ?? 9));
+  const pageSize = Math.max(1, Math.min(100, params.pageSize ?? 2));
   const page = Math.max(1, params.page ?? 1);
   const q = params.q?.trim();
   const memberId = params.memberId?.trim();

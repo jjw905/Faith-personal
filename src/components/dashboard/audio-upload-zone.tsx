@@ -11,7 +11,13 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  forwardRef,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useState,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
@@ -25,8 +31,30 @@ import {
   MAX_UPLOAD_AUDIO_MINUTES,
 } from "@/lib/stt/upload-limits";
 import { cn } from "@/lib/utils";
+import { UploadQuotaBanner } from "@/components/dashboard/upload-quota-banner";
 
 type Mode = "idle" | "upload";
+
+/** 디자인·UX 미리보기용 단계. 제품 경로는 쓰지 않는다. */
+export type AudioUploadDemoPhase =
+  | "panel"
+  | "uploading"
+  | "ready"
+  | "starting"
+  | "error";
+
+const DEMO_FILE_NAME = "assembly-7min (1).m4a";
+const DEMO_FILE_BYTES = 2_450_000;
+
+const UPLOAD_FLOW_PHASES: Array<{
+  phase: AudioUploadDemoPhase;
+  atMs: number;
+}> = [
+  { phase: "panel", atMs: 0 },
+  { phase: "uploading", atMs: 1100 },
+  { phase: "ready", atMs: 2800 },
+  { phase: "starting", atMs: 4300 },
+];
 
 const FORMAT_GUIDES = [
   { ext: ".mp3", hint: "음악/음성" },
@@ -37,22 +65,40 @@ const FORMAT_GUIDES = [
   { ext: ".webm", hint: "브라우저 녹음" },
 ] as const;
 
-export function AudioUploadZone({
-  ctaStart = "새 회의 시작",
-  ctaUpload = "파일 업로드",
-  onMeetingStarted,
-}: {
-  ctaStart?: string;
-  ctaUpload?: string;
-  onMeetingStarted?: () => void;
-}) {
+export type AudioUploadZoneHandle = {
+  openUpload: () => void;
+};
+
+export const AudioUploadZone = forwardRef<
+  AudioUploadZoneHandle,
+  {
+    ctaStart?: string;
+    ctaUpload?: string;
+    onMeetingStarted?: () => void;
+    /** 모바일은 하단 추적형 바에 CTA를 두고, 상단 큰 CTA는 숨김 */
+    hideMobileCtas?: boolean;
+    /** 디자인 랩·시나리오 강제 단계 */
+    demoPhase?: AudioUploadDemoPhase | null;
+  }
+>(function AudioUploadZone(
+  {
+    ctaStart = "새 회의 시작",
+    ctaUpload = "파일 업로드",
+    onMeetingStarted,
+    hideMobileCtas = false,
+    demoPhase = null,
+  },
+  ref,
+) {
   const router = useRouter();
-  const { workspaceId } = useAppContext();
+  const { workspaceId, activeTeamId } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
   const [mode, setMode] = useState<Mode>("idle");
+  const fileInputId = useId();
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [flowPhase, setFlowPhase] = useState<AudioUploadDemoPhase>("panel");
 
   const {
     isDragging,
@@ -87,7 +133,10 @@ export function AudioUploadZone({
     if (
       scenarioId === "popup-duplicate" ||
       scenarioId === "popup-uploading" ||
-      scenarioId === "popup-starting"
+      scenarioId === "popup-starting" ||
+      scenarioId === "popup-start-ready" ||
+      scenarioId === "popup-start-error" ||
+      scenarioId === "anim-upload-flow"
     ) {
       setMode("upload");
       setVaultPickerOpen(false);
@@ -112,9 +161,41 @@ export function AudioUploadZone({
     }
   }, [scenarioId]);
 
+  useEffect(() => {
+    if (scenarioId !== "anim-upload-flow" || demoPhase) return;
+    let cancelled = false;
+    const timers = new Set<number>();
+
+    const run = () => {
+      if (cancelled) return;
+      setFlowPhase("panel");
+      for (const { phase, atMs } of UPLOAD_FLOW_PHASES.slice(1)) {
+        timers.add(
+          window.setTimeout(() => {
+            if (!cancelled) setFlowPhase(phase);
+          }, atMs),
+        );
+      }
+      timers.add(
+        window.setTimeout(() => {
+          if (!cancelled) run();
+        }, 6500),
+      );
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+      for (const id of timers) window.clearTimeout(id);
+      timers.clear();
+    };
+  }, [scenarioId, demoPhase]);
+
   function openUpload() {
     setMode("upload");
   }
+
+  useImperativeHandle(ref, () => ({ openUpload }), []);
 
   function closeUpload() {
     if (
@@ -123,7 +204,11 @@ export function AudioUploadZone({
       scenarioId === "popup-vault-picker-empty" ||
       scenarioId === "popup-duplicate" ||
       scenarioId === "popup-uploading" ||
-      scenarioId === "popup-starting"
+      scenarioId === "popup-starting" ||
+      scenarioId === "popup-start-ready" ||
+      scenarioId === "popup-start-error" ||
+      scenarioId === "anim-upload-flow" ||
+      demoPhase
     ) {
       return;
     }
@@ -132,18 +217,41 @@ export function AudioUploadZone({
     setMode("idle");
   }
 
-  const previewUploading = scenarioId === "popup-uploading";
-  const previewStarting = scenarioId === "popup-starting";
+  const resolvedDemo: AudioUploadDemoPhase | null =
+    demoPhase ??
+    (scenarioId === "anim-upload-flow"
+      ? flowPhase
+      : scenarioId === "popup-uploading"
+        ? "uploading"
+        : scenarioId === "popup-starting"
+          ? "starting"
+          : scenarioId === "popup-start-ready"
+            ? "ready"
+            : scenarioId === "popup-start-error"
+              ? "error"
+              : null);
+
+  const previewUploading = resolvedDemo === "uploading";
+  const previewStarting = resolvedDemo === "starting";
+  const previewReady = resolvedDemo === "ready" || resolvedDemo === "error";
+  const previewPanel = resolvedDemo === "panel";
   const showUploading = previewUploading || uploadStatus === "uploading";
   const showStarting = previewStarting || starting;
+  const demoActive = resolvedDemo != null;
 
   async function startMeeting() {
-    if (!storedId || starting) return;
+    if (starting) return;
+    if (!storedId) {
+      setStartError("파일을 아직 준비 중입니다. 잠시 후 다시 눌러 주세요.");
+      return;
+    }
     setStarting(true);
     setStartError(null);
     try {
       if (!isLive) {
-        await new Promise((resolve) => window.setTimeout(resolve, 600));
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+        setStartError(null);
+        // 미리보기: 시작 중 상태를 유지해 반응이 보이게 둔다.
         return;
       }
       const res = await fetch("/api/meetings/from-audio", {
@@ -155,6 +263,9 @@ export function AudioUploadZone({
             ? stripFileExtension(selectedFile.name)
             : undefined,
           workspace: workspaceId,
+          ...(workspaceId === "team" && activeTeamId
+            ? { teamId: activeTeamId }
+            : {}),
         }),
       });
       const data = (await res.json()) as {
@@ -168,30 +279,72 @@ export function AudioUploadZone({
       }
       onMeetingStarted?.();
       router.push(data.href);
+      // 이동 전까지 시작 중 유지. 성공 시 버튼을 다시 켜지 않는다.
     } catch (err) {
       setStartError(
         err instanceof Error ? err.message : "회의 정리를 시작하지 못했습니다.",
       );
-    } finally {
       setStarting(false);
     }
   }
 
+  // 업로드 완료 + 보관함 id가 있어야 시작 가능. id 없이 done만 보이면 무반응처럼 느껴진다.
+  const liveReady =
+    uploadStatus === "done" && Boolean(selectedFile) && Boolean(storedId);
   const ready =
-    previewStarting || (uploadStatus === "done" && Boolean(selectedFile));
+    previewStarting ||
+    previewReady ||
+    liveReady ||
+    (uploadStatus === "done" && Boolean(selectedFile) && !storedId);
+
+  const awaitingStoreId =
+    !demoActive &&
+    uploadStatus === "done" &&
+    Boolean(selectedFile) &&
+    !storedId;
+
+  const demoFileLabel = stripFileExtension(DEMO_FILE_NAME);
+  const fileLabel = selectedFile
+    ? stripFileExtension(selectedFile.name)
+    : demoActive
+      ? demoFileLabel
+      : null;
+  const fileSizeLabel = selectedFile
+    ? formatBytes(selectedFile.size)
+    : demoActive
+      ? formatBytes(DEMO_FILE_BYTES)
+      : null;
+
+  const startDisabled =
+    showStarting ||
+    awaitingStoreId ||
+    (!storedId && !previewStarting && !previewReady);
+
+  useEffect(() => {
+    if (demoPhase === "panel" || previewPanel) {
+      setMode("upload");
+    } else if (demoPhase) {
+      setMode("upload");
+    }
+  }, [demoPhase, previewPanel]);
 
   return (
     <div className="w-full space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div
+        className={cn(
+          "grid grid-cols-2 gap-2 sm:gap-3",
+          hideMobileCtas && "max-md:hidden",
+        )}
+      >
         <div className="min-w-0 p-0.5">
           <Link
             href={`/meetings/new?workspace=${workspaceId}`}
-            className="group flex h-24 w-full origin-center cursor-pointer items-center gap-4 rounded-2xl bg-primary px-6 text-left text-primary-foreground shadow-soft transition-[transform,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:scale-[1.008] hover:bg-primary-hover hover:shadow-[0_10px_28px_rgba(17,24,46,0.14)] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100"
+            className="group flex h-20 w-full cursor-pointer items-center gap-2.5 rounded-2xl bg-primary px-3.5 text-left text-primary-foreground shadow-soft transition-colors duration-150 hover:bg-primary-hover sm:h-24 sm:gap-4 sm:px-6"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:group-hover:scale-100">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-primary sm:h-11 sm:w-11">
               <Mic className="h-5 w-5" strokeWidth={1.75} />
             </span>
-            <span className="text-lg font-semibold tracking-tight">
+            <span className="min-w-0 text-base font-semibold tracking-tight sm:text-lg">
               {ctaStart}
             </span>
           </Link>
@@ -202,14 +355,14 @@ export function AudioUploadZone({
             type="button"
             onClick={openUpload}
             className={cn(
-              "group flex h-24 w-full origin-center cursor-pointer items-center gap-4 rounded-2xl bg-card px-6 text-left shadow-soft ring-1 ring-border transition-[transform,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:scale-[1.008] hover:bg-surface hover:shadow-[0_10px_28px_rgba(17,24,46,0.1)] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100",
+              "group flex h-20 w-full cursor-pointer items-center gap-2.5 rounded-2xl bg-card px-3.5 text-left shadow-soft ring-1 ring-border transition-colors duration-150 hover:bg-surface sm:h-24 sm:gap-4 sm:px-6",
               mode === "upload" && "bg-primary-soft",
             )}
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:group-hover:scale-100">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground sm:h-11 sm:w-11">
               <Upload className="h-5 w-5" strokeWidth={1.75} />
             </span>
-            <span className="text-lg font-semibold tracking-tight text-foreground">
+            <span className="min-w-0 text-base font-semibold tracking-tight text-foreground sm:text-lg">
               {ctaUpload}
             </span>
           </button>
@@ -221,7 +374,7 @@ export function AudioUploadZone({
           <div className="space-y-0 px-6 pb-0 pt-6">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xl font-bold tracking-tight text-foreground">
-                {ready ? "회의 정리" : "오디오 업로드"}
+                {ready && !previewPanel ? "회의 정리" : "오디오 업로드"}
               </p>
               <Button
                 type="button"
@@ -237,20 +390,20 @@ export function AudioUploadZone({
             <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
           </div>
 
-          {ready ? (
-            <div className="space-y-4 px-6 py-5">
+          {ready && !previewPanel ? (
+            <div className="space-y-4 px-6 py-5 animate-[bubble-in_280ms_ease-out] motion-reduce:animate-none">
               <div className="flex items-center gap-3 rounded-2xl bg-surface px-3.5 py-3 sm:px-4">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
                   <FileAudio className="h-5 w-5" strokeWidth={1.75} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-semibold text-foreground">
-                    {selectedFile
-                      ? stripFileExtension(selectedFile.name)
-                      : "주간회의"}
+                    {fileLabel ?? "주간회의"}
                   </p>
                   <p className="mt-0.5 text-base tabular-nums text-muted">
-                    {selectedFile ? formatBytes(selectedFile.size) : "2.4 MB"}
+                    {awaitingStoreId
+                      ? "준비 중…"
+                      : (fileSizeLabel ?? "2.4 MB")}
                   </p>
                 </div>
                 <Button
@@ -258,9 +411,9 @@ export function AudioUploadZone({
                   variant="ghost"
                   size="sm"
                   className="h-9 shrink-0 text-muted hover:text-foreground"
-                  disabled={showStarting}
+                  disabled={showStarting || demoActive}
                   onClick={() => {
-                    if (previewStarting) return;
+                    if (demoActive) return;
                     clearFile();
                     setStartError(null);
                   }}
@@ -269,30 +422,38 @@ export function AudioUploadZone({
                 </Button>
               </div>
 
-              {startError ? (
-                <p className="text-sm font-medium text-red-600" role="alert">
-                  {startError}
+              {resolvedDemo === "error" || startError ? (
+                <p className="text-base font-medium text-red-600" role="alert">
+                  {startError ?? "회의 정리를 시작하지 못했습니다."}
+                </p>
+              ) : awaitingStoreId ? (
+                <p className="text-base font-medium text-muted" role="status">
+                  파일 연결을 마치는 중…
                 </p>
               ) : null}
 
               <button
                 type="button"
-                disabled={showStarting || (!storedId && !previewStarting)}
+                disabled={startDisabled && !previewReady}
+                aria-busy={showStarting}
                 onClick={() => {
-                  if (previewStarting) return;
+                  if (demoActive) return;
                   void startMeeting();
                 }}
                 className={cn(
-                  "flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-primary px-5 text-base font-semibold tracking-tight text-primary-foreground shadow-soft transition-colors",
-                  showStarting || (!storedId && !previewStarting)
+                  "flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-primary px-5 text-base font-semibold tracking-tight text-primary-foreground shadow-soft transition-[opacity,transform,background-color] duration-150",
+                  showStarting && "scale-[0.99]",
+                  startDisabled && !previewReady && !showStarting
                     ? "cursor-not-allowed opacity-70"
-                    : "hover:bg-primary-hover",
+                    : showStarting
+                      ? "cursor-wait opacity-90"
+                      : "hover:bg-primary-hover",
                 )}
               >
-                {showStarting ? (
+                {showStarting || awaitingStoreId ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" strokeWidth={1.75} />
-                    시작 중…
+                    {awaitingStoreId ? "준비 중…" : "시작 중…"}
                   </>
                 ) : (
                   <>
@@ -316,17 +477,27 @@ export function AudioUploadZone({
                 )}
               >
                 {uploadStatus !== "uploading" && !previewUploading && (
-                  <input
-                    type="file"
-                    accept={acceptedFormats.join(",")}
-                    onChange={handleFileSelect}
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                    aria-label="오디오 파일 업로드"
-                  />
+                  <>
+                    {/* 보이는 버튼이 진입점. 데스크톱은 영역 탭으로도 열림. */}
+                    <input
+                      id={fileInputId}
+                      type="file"
+                      accept={acceptedFormats.join(",")}
+                      onChange={handleFileSelect}
+                      className="peer sr-only"
+                      aria-label="오디오 파일 업로드"
+                    />
+                    <label
+                      htmlFor={fileInputId}
+                      className="absolute inset-0 z-0 hidden cursor-pointer md:block"
+                    >
+                      <span className="sr-only">파일 업로드</span>
+                    </label>
+                  </>
                 )}
 
                 {showUploading ? (
-                  <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="flex flex-col items-center gap-3 text-center animate-[bubble-in_280ms_ease-out] motion-reduce:animate-none">
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
                       <Loader2
                         className="h-6 w-6 animate-spin"
@@ -338,35 +509,40 @@ export function AudioUploadZone({
                         업로드 중
                       </p>
                       <p className="mt-1 max-w-[280px] truncate text-base text-muted">
-                        {selectedFile
-                          ? stripFileExtension(selectedFile.name)
-                          : previewUploading
-                            ? "주간회의"
-                            : null}
+                        {fileLabel}
                       </p>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                      <Upload className="h-5 w-5" strokeWidth={1.75} />
-                    </span>
-                    <p className="text-base font-semibold text-foreground">
-                      드래그하거나 클릭해서 업로드
+                    <label
+                      htmlFor={fileInputId}
+                      className="relative z-10 inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-6 text-base font-bold text-primary-foreground transition-colors hover:bg-primary-hover peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2"
+                    >
+                      <Upload className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                      파일 업로드
+                    </label>
+                    <p className="relative z-10 text-base text-muted">
+                      최대 {MAX_UPLOAD_AUDIO_MINUTES}분(1시간)
                     </p>
-                    <p className="text-base text-muted">
-                      최대 {MAX_UPLOAD_AUDIO_MINUTES}분(1시간), 초과 시 거절
-                    </p>
-                    <ul className="flex flex-wrap justify-center gap-2">
+                    {isLive && !demoActive ? (
+                      <div className="relative z-10 w-full">
+                        <UploadQuotaBanner />
+                      </div>
+                    ) : null}
+                    <ul className="relative z-10 flex flex-wrap justify-center gap-2">
                       {FORMAT_GUIDES.map((item) => (
                         <li
                           key={item.ext}
                           className="inline-flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5"
                         >
-                          <span className="font-mono text-sm font-bold tracking-tight text-primary">
+                          <span className="font-mono text-base font-bold tracking-tight text-primary sm:text-sm">
                             {item.ext}
                           </span>
-                          <span className="text-base text-muted">{item.hint}</span>
+                          {/* 한국어 설명은 좁은 화면에서 생략. 확장자만으로 충분. */}
+                          <span className="hidden text-muted sm:inline sm:text-xs">
+                            {item.hint}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -396,7 +572,7 @@ export function AudioUploadZone({
               </div>
 
               {uploadStatus === "idle" || uploadStatus === "error" ? (
-                !previewUploading ? (
+                !previewUploading && !previewPanel ? (
                 <div className="px-6 py-4">
                   <div
                     className="mb-3 flex items-center gap-3"
@@ -421,10 +597,36 @@ export function AudioUploadZone({
                         보관함에서 고르기
                       </span>
                       <span className="mt-0.5 block text-base text-muted">
-                        올려 둔 파일 바로 사용
+                        올려 둔 음성 바로 사용
                       </span>
                     </span>
                   </button>
+                </div>
+                ) : previewPanel ? (
+                <div className="px-6 py-4">
+                  <div
+                    className="mb-3 flex items-center gap-3"
+                    aria-hidden
+                  >
+                    <span className="h-px flex-1 bg-surface-2" />
+                    <span className="text-base font-semibold tracking-wide text-muted-2">
+                      또는
+                    </span>
+                    <span className="h-px flex-1 bg-surface-2" />
+                  </div>
+                  <div className="flex h-14 w-full items-center gap-3 rounded-2xl bg-primary-soft px-4 text-left">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                      <Archive className="h-5 w-5" strokeWidth={1.75} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-base font-semibold text-foreground">
+                        보관함에서 고르기
+                      </span>
+                      <span className="mt-0.5 block text-base text-muted">
+                        올려 둔 음성 바로 사용
+                      </span>
+                    </span>
+                  </div>
                 </div>
                 ) : null
               ) : null}
@@ -451,6 +653,7 @@ export function AudioUploadZone({
           setVaultPickerOpen(false);
         }}
         onPick={(file, meta) => attachExistingFile(file, meta.id)}
+        audioOnly
       />
 
       <DuplicateVaultNameDialog
@@ -475,4 +678,4 @@ export function AudioUploadZone({
       />
     </div>
   );
-}
+});

@@ -16,6 +16,7 @@ import {
 } from "@/lib/storage/quota";
 import {
   assertVaultBackendReady,
+  assertOwnedVaultObjectKey,
   buildObjectKey,
   deleteObject,
   getDownloadUrl,
@@ -26,6 +27,7 @@ import {
   putObject,
   spacesConfigured,
 } from "@/lib/storage/spaces";
+import { assertVaultAllowedUpload, safeVaultMime } from "@/lib/vault";
 
 export async function getUserStorageUsage(userId: string) {
   const agg = await prisma.vaultFile.aggregate({
@@ -86,11 +88,12 @@ export async function prepareUserUpload(params: {
   purpose?: VaultPurpose;
 }) {
   assertVaultBackendReady();
+  assertVaultAllowedUpload(params.fileName);
   const usage = await getUserStorageUsage(params.userId);
   assertUploadSize(params.size, usage.used);
 
   const id = randomUUID();
-  const mime = params.mime || "application/octet-stream";
+  const mime = safeVaultMime(params.fileName, params.mime);
   const key = buildObjectKey(params.userId, id, params.fileName);
   const purpose = params.purpose ?? ("VAULT" as VaultPurpose);
 
@@ -134,14 +137,14 @@ export async function completeLocalUpload(params: {
   if (spacesConfigured() || !localVaultAllowed()) {
     throw new Error("로컬 업로드를 사용할 수 없습니다.");
   }
-  if (!params.key.startsWith(`users/${params.userId}/${params.id}/`)) {
-    throw new Error("잘못된 저장 경로입니다.");
-  }
+  assertVaultAllowedUpload(params.fileName);
+  assertOwnedVaultObjectKey(params.userId, params.id, params.key);
   const usage = await getUserStorageUsage(params.userId);
   assertUploadSize(params.size, usage.used);
   if (params.body.length !== params.size) {
     throw new Error("업로드 파일 크기가 일치하지 않습니다.");
   }
+  const mime = safeVaultMime(params.fileName, params.mime);
 
   await localPutObject(params.key, params.body);
   try {
@@ -151,7 +154,7 @@ export async function completeLocalUpload(params: {
         userId: params.userId,
         name: params.fileName,
         size: params.size,
-        mime: params.mime || "application/octet-stream",
+        mime,
         key: params.key,
         purpose: params.purpose ?? "VAULT",
       },
@@ -175,12 +178,12 @@ export async function completeUserUpload(params: {
   if (!spacesConfigured()) {
     throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
   }
-  if (!params.key.startsWith(`users/${params.userId}/${params.id}/`)) {
-    throw new Error("잘못된 저장 경로입니다.");
-  }
+  assertVaultAllowedUpload(params.fileName);
+  assertOwnedVaultObjectKey(params.userId, params.id, params.key);
 
   const usage = await getUserStorageUsage(params.userId);
   assertUploadSize(params.size, usage.used);
+  const mime = safeVaultMime(params.fileName, params.mime);
 
   let head: { size: number; contentType: string };
   try {
@@ -200,7 +203,7 @@ export async function completeUserUpload(params: {
         userId: params.userId,
         name: params.fileName,
         size: params.size,
-        mime: params.mime || head.contentType || "application/octet-stream",
+        mime,
         key: params.key,
         purpose: params.purpose ?? "VAULT",
       },
@@ -225,16 +228,15 @@ export async function completeSpacesProxyUpload(params: {
   if (!spacesConfigured()) {
     throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
   }
-  if (!params.key.startsWith(`users/${params.userId}/${params.id}/`)) {
-    throw new Error("잘못된 저장 경로입니다.");
-  }
+  assertVaultAllowedUpload(params.fileName);
+  assertOwnedVaultObjectKey(params.userId, params.id, params.key);
   const usage = await getUserStorageUsage(params.userId);
   assertUploadSize(params.size, usage.used);
   if (params.body.length !== params.size) {
     throw new Error("업로드 파일 크기가 일치하지 않습니다.");
   }
 
-  const mime = params.mime || "application/octet-stream";
+  const mime = safeVaultMime(params.fileName, params.mime);
   await putObject({
     key: params.key,
     body: params.body,

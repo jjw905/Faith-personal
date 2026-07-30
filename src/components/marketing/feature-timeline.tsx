@@ -1,7 +1,14 @@
 import { FileText, Lock, Mic, Shield, type LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
 
 import { Container } from "@/components/marketing/container";
 import { FeaturesHeadline } from "@/components/marketing/features-headline";
+import {
+  MockAutoMask,
+  MockAutoSummary,
+  MockLiveTranscribe,
+  MockSecureVault,
+} from "@/components/marketing/feature-showcase-mocks";
 import { cn } from "@/lib/utils";
 
 type Step = {
@@ -9,6 +16,7 @@ type Step = {
   title: string;
   desc: string;
   icon: LucideIcon;
+  mock: ComponentType;
 };
 
 const STEPS: Step[] = [
@@ -17,24 +25,28 @@ const STEPS: Step[] = [
     title: "실시간 음성 텍스트 추출",
     desc: "회의 음성을 실시간으로 받아써 텍스트로 변환합니다. 화자별로 구분해 기록합니다.",
     icon: Mic,
+    mock: MockLiveTranscribe,
   },
   {
     step: "02",
     title: "개인정보 자동 마스킹",
     desc: "유출될 수 있는 개인정보를 감지해 자동으로 마스킹 합니다.",
     icon: Shield,
+    mock: MockAutoMask,
   },
   {
     step: "03",
     title: "회의 내용 자동 요약",
     desc: "핵심 안건, 결정사항, 후속 조치를 자동으로 정리해 한눈에 확인합니다.",
     icon: FileText,
+    mock: MockAutoSummary,
   },
   {
     step: "04",
     title: "안전한 회의록 관리",
     desc: "암호화 저장, 역할 기반 접근 권한, 활동 로그로 회의록을 안전하게 보관합니다.",
     icon: Lock,
+    mock: MockSecureVault,
   },
 ];
 
@@ -112,6 +124,7 @@ export function FeatureTimeline() {
 
           {STEPS.map((s, i) => {
             const Icon = s.icon;
+            const Mock = s.mock;
             const isDark = i % 2 === 0;
             const isLeft = i % 2 === 0;
 
@@ -155,11 +168,19 @@ export function FeatureTimeline() {
                     <div className="relative z-10 hidden justify-center sm:flex">
                       <StepNode Icon={Icon} isDark={isDark} />
                     </div>
-                    <div className="hidden sm:block" aria-hidden />
+                    <div className="hidden xl:block">
+                      <div className="ml-1 max-w-md">
+                        <Mock />
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <>
-                    <div className="hidden sm:block" aria-hidden />
+                    <div className="hidden xl:block">
+                      <div className="ml-auto mr-1 max-w-md">
+                        <Mock />
+                      </div>
+                    </div>
                     <div className="relative z-10 hidden justify-center sm:flex">
                       <StepNode Icon={Icon} isDark={isDark} />
                     </div>

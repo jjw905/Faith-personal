@@ -7,8 +7,8 @@
 import {
   findDictionaryPronunciationCandidates,
   getKoreanDictionaryStats,
-  sourceInKoreanDictionary,
 } from "@/lib/stt/korean-dictionary";
+import { sourceInDictionary } from "@/lib/stt/dict-exists";
 import { pronunciationSimilarity, toJamo } from "@/lib/stt/pronunciation";
 import type { TranscriptCorrection, TranscriptLine } from "@/types/transcript";
 
@@ -96,11 +96,15 @@ const INFLECTED_OR_FUNCTIONAL_ENDING =
 
 export type TermSuggestion = {
   lineIndex: number;
+  startOffset: number;
+  endOffset: number;
   wrong: string;
   suggestion: string;
   reason: string;
   similarity: number;
-  source: "glossary" | "ourmalsam";
+  dictionaryVerified: boolean;
+  source: "glossary" | "ourmalsam" | "second-pass";
+  sttLogprob?: number;
 };
 
 export type TermSuggestResult = {
@@ -119,14 +123,17 @@ export type TermSuggestResult = {
 type WordOccurrence = {
   lineIndex: number;
   text: string;
+  startOffset: number;
+  endOffset: number;
 };
 
 function clean(value: string): string {
   return value.replace(/[^0-9A-Za-z가-힣]/g, "");
 }
 
+/** 대소문자만 다른 영문 낱말(KTV vs ktv)을 같은 말로 본다. */
 function bare(value: string): string {
-  return clean(value).replace(/\s/g, "");
+  return clean(value).replace(/\s/g, "").toLowerCase();
 }
 
 function isProtected(value: string, keepTerms: string[]): boolean {
@@ -140,12 +147,22 @@ function isProtected(value: string, keepTerms: string[]): boolean {
   });
 }
 
+/**
+ * source가 "후보어+조사"일 때만 조사를 후보에 붙인다.
+ *
+ * 조사 목록 글자(는/은/이/가 등)는 관형사형 어미("하는", "먹는")의 끝
+ * 글자와 겹친다. 끝 글자만 보고 떼면 "생중계하는"에서 "하"가 통째로
+ * 사라져 "생중계는"이 된다 — 다른 낱말이 된다. 조사를 뗀 나머지가 후보와
+ * 정확히 같을 때만(=진짜 후보+조사 결합일 때만) 허용한다.
+ */
 function addSourceParticle(source: string, candidate: string): string {
   for (const particle of PARTICLES) {
     if (
       source.length > particle.length + 1 &&
       source.endsWith(particle) &&
-      !candidate.endsWith(particle)
+      !candidate.endsWith(particle) &&
+      source.slice(0, source.length - particle.length).toLowerCase() ===
+        candidate.toLowerCase()
     ) {
       return `${candidate}${particle}`;
     }
@@ -191,17 +208,20 @@ async function glossarySuggestion(
   const candidate = bestGlossaryCandidate(occurrence.text, glossary);
   if (!candidate) return null;
 
-  const sourceExists = await sourceInKoreanDictionary(occurrence.text, {
+  const sourceExists = await sourceInDictionary(occurrence.text, {
     cacheOnly,
   });
   if (sourceExists !== false) return null;
 
   return {
     lineIndex: occurrence.lineIndex,
+    startOffset: occurrence.startOffset,
+    endOffset: occurrence.endOffset,
     wrong: occurrence.text,
     suggestion: candidate.word,
     reason: "회의 용어와 발음이 비슷함",
     similarity: candidate.similarity,
+    dictionaryVerified: true,
     source: "glossary",
   };
 }
@@ -216,7 +236,7 @@ async function dictionarySuggestion(
   if (!isGenericCandidate(word, keepTerms)) return null;
 
   if (!sourceMissing) {
-    const sourceExists = await sourceInKoreanDictionary(word, { cacheOnly });
+    const sourceExists = await sourceInDictionary(word, { cacheOnly });
     if (sourceExists !== false) return null;
   }
 
@@ -237,12 +257,47 @@ async function dictionarySuggestion(
 
   return {
     lineIndex: occurrence.lineIndex,
+    startOffset: occurrence.startOffset,
+    endOffset: occurrence.endOffset,
     wrong: occurrence.text,
     suggestion: best.word,
     reason: "발음이 가까운 우리말샘 등록어",
     similarity: best.similarity,
+    dictionaryVerified: true,
     source: "ourmalsam",
   };
+}
+
+export type { WordOccurrence };
+
+/**
+ * 사전에도 회의 용어집에도 없는 낱말 후보. 대부분 고유명사(사람, 장소, 상호명)라
+ * 사전 기반 교정 대상이 아니다 — 오디오 재확인 후보를 고를 때만 쓴다.
+ */
+export async function findMissingDictionaryWords(
+  lines: string[],
+  options: { keepTerms?: string[]; cacheOnly?: boolean; limit?: number } = {},
+): Promise<WordOccurrence[]> {
+  const usable = lines.map((line) => line ?? "");
+  const keepTerms = [
+    ...new Set((options.keepTerms ?? []).map(clean).filter(Boolean)),
+  ];
+  const occurrences = wordOccurrences(usable);
+  const sourcePool = uniqueGenericWords(occurrences)
+    .filter((occurrence) =>
+      isGenericCandidate(clean(occurrence.text), keepTerms),
+    )
+    .slice(0, GENERIC_SOURCE_CHECK_BUDGET);
+  const sourceChecks = await mapLimited(sourcePool, async (occurrence) => ({
+    occurrence,
+    exists: await sourceInDictionary(clean(occurrence.text), {
+      cacheOnly: options.cacheOnly === true,
+    }),
+  }));
+  return sourceChecks
+    .filter((row) => row.exists === false)
+    .map((row) => row.occurrence)
+    .slice(0, options.limit ?? MAX_GENERIC_WORDS);
 }
 
 function isGenericCandidate(word: string, keepTerms: string[]): boolean {
@@ -263,7 +318,15 @@ function wordOccurrences(lines: string[]): WordOccurrence[] {
     const line = lines[lineIndex] ?? "";
     for (const match of line.matchAll(/[0-9A-Za-z가-힣]+/g)) {
       const text = match[0];
-      if (text) out.push({ lineIndex, text });
+      const startOffset = match.index ?? 0;
+      if (text) {
+        out.push({
+          lineIndex,
+          text,
+          startOffset,
+          endOffset: startOffset + text.length,
+        });
+      }
     }
   }
   return out;
@@ -306,7 +369,11 @@ async function mapLimited<T, R>(
   return out;
 }
 
-/** 추천을 대화기록 줄에 붙인다. 본문은 그대로 둔다. */
+/**
+ * 추천을 대화기록 줄에 붙인다. 본문은 그대로 둔다.
+ * 여러 번 불러도 안전하도록, 그 줄에 이미 붙은 추천은 지우지 않고 더한다
+ * (사전/용어 추천 + 저신뢰 구간 재확인 추천을 각각 따로 불러도 합쳐진다).
+ */
 export function attachCorrections(
   lines: TranscriptLine[],
   suggestions: TermSuggestion[],
@@ -320,14 +387,65 @@ export function attachCorrections(
       suggestion: suggestion.suggestion,
       reason: suggestion.reason,
       similarity: suggestion.similarity,
+      dictionaryVerified: suggestion.dictionaryVerified,
+      startOffset: suggestion.startOffset,
+      endOffset: suggestion.endOffset,
+      sttLogprob: suggestion.sttLogprob,
       source: suggestion.source,
     });
     byLine.set(suggestion.lineIndex, list);
   }
   return lines.map((line, index) => {
-    const corrections = byLine.get(index);
-    return corrections ? { ...line, corrections } : line;
+    const additions = byLine.get(index);
+    if (!additions) return line;
+    const seen = new Set<string>();
+    const merged = [...(line.corrections ?? []), ...additions].filter((c) => {
+      const key = `${c.wrong}:${c.suggestion}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return { ...line, corrections: merged };
   });
+}
+
+/**
+ * 조건부 재전사는 후보를 만들지 않는다. 두 번째 mini가 실제로 쓴 표기가
+ * 제목, 참석자, 확인 용어에 있고 첫 결과와 발음이 가까울 때만 추천한다.
+ */
+export function suggestSecondPassCorrections(params: {
+  original: string;
+  secondPass: string;
+  glossary: string[];
+  lineIndex?: number;
+  sttLogprob?: number;
+}): TermSuggestion[] {
+  const trusted = [...new Set(params.glossary.map(clean).filter(Boolean))];
+  if (trusted.length === 0) return [];
+  const secondWords = new Set(
+    wordOccurrences([params.secondPass]).map((occurrence) =>
+      bare(occurrence.text),
+    ),
+  );
+  const suggestions: TermSuggestion[] = [];
+  for (const occurrence of wordOccurrences([params.original])) {
+    const candidate = bestGlossaryCandidate(occurrence.text, trusted);
+    if (!candidate || !secondWords.has(bare(candidate.word))) continue;
+    suggestions.push({
+      ...occurrence,
+      lineIndex: params.lineIndex ?? 0,
+      suggestion: candidate.word,
+      wrong: occurrence.text,
+      reason: "재전사와 확인된 회의 용어가 일치함",
+      similarity: candidate.similarity,
+      dictionaryVerified: true,
+      source: "second-pass",
+      sttLogprob: params.sttLogprob,
+    });
+  }
+  return suggestions
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 3);
 }
 
 /**
@@ -368,7 +486,9 @@ export async function suggestTermCorrections(
     );
   }
 
-  if (options.genericDictionary !== false) {
+  // 자연 발화 정밀도 관문을 통과하기 전에는 사전 전체에서 후보를 만들지 않는다.
+  // 회의 제목, 참석자, 확인 용어 후보의 실재어 검증에는 우리말샘을 계속 쓴다.
+  if (options.genericDictionary === true) {
     const sourcePool = uniqueGenericWords(occurrences)
       .filter((occurrence) =>
         isGenericCandidate(clean(occurrence.text), keepTerms),
@@ -376,7 +496,7 @@ export async function suggestTermCorrections(
       .slice(0, GENERIC_SOURCE_CHECK_BUDGET);
     const sourceChecks = await mapLimited(sourcePool, async (occurrence) => ({
       occurrence,
-      exists: await sourceInKoreanDictionary(clean(occurrence.text), {
+      exists: await sourceInDictionary(clean(occurrence.text), {
         cacheOnly: options.cacheOnly === true,
       }),
     }));

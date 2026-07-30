@@ -360,7 +360,7 @@ function MessageBubble({
   return (
     <div
       className={cn(
-        "flex w-full animate-[bubble-in_240ms_ease-out]",
+        "flex w-full animate-[bubble-in_240ms_ease-out] motion-reduce:animate-none",
         mine ? "justify-end" : "justify-start",
       )}
     >

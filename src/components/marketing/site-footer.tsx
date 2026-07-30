@@ -10,13 +10,12 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: "기능", href: "/#features" },
       { label: "요금제", href: "/pricing" },
-      { label: "데모", href: "/#features" },
     ],
   },
   {
     title: "회사",
     links: [
-      { label: "소개", href: "/" },
+      { label: "소개", href: "/about" },
       { label: "도움말", href: "/help" },
     ],
   },
@@ -25,6 +24,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: "개인정보 처리방침", href: "/privacy" },
       { label: "이용약관", href: "/terms" },
+      { label: "운영정책", href: "/policy" },
     ],
   },
 ];

@@ -14,8 +14,12 @@ import {
   composeDisplaySummary,
   keywordsFromSemantic,
 } from "@/lib/stt/semantic-structure";
-import { mapTimelineByDialogue, mapTimelineByTimedSegments } from "@/lib/stt/timed-segments";
-import type { TimedSegment } from "@/lib/stt/timed-segments";
+import {
+  assignWordTimingsToLines,
+  mapTimelineByDialogue,
+  mapTimelineByTimedSegments,
+} from "@/lib/stt/timed-segments";
+import type { TimedSegment, WordTiming } from "@/lib/stt/timed-segments";
 import type { WorkspaceId } from "@/lib/workspaces";
 
 const SPEAKER_COLORS = [
@@ -274,6 +278,8 @@ export type BuildMeetingFromSttInput = {
   rawText: string;
   semantic: SemanticStructure;
   timedSegments?: TimedSegment[];
+  /** 있으면 각 대화 줄에 단어 단위 실측 시각을 배정한다(재생 하이라이트용). */
+  wordTimings?: WordTiming[];
   workspace?: WorkspaceId;
   tags?: string[];
   summaryTags?: string[];
@@ -293,11 +299,14 @@ export function buildMeetingFromStt(input: BuildMeetingFromSttInput): {
     input.durationSec,
     input.timedSegments,
   );
-  const lines = buildTranscriptFromSemantic(
+  let lines = buildTranscriptFromSemantic(
     input.semantic,
     input.durationSec,
     timelineSegments,
   );
+  if (input.wordTimings?.length) {
+    lines = assignWordTimingsToLines(lines, input.wordTimings, input.durationSec);
+  }
   const participants = buildParticipantsFromSemantic(input.semantic);
 
   const topicKeywords = keywordsFromSemantic(input.semantic, 5);
@@ -345,11 +354,17 @@ export function placeholderMeeting(params: {
   /** 미지정 시 업로드(호출) 시각 */
   date?: string;
   capture?: Meeting["capture"];
+  /** 업로드 직후 ffprobe 등으로 미리 알아낸 길이(초). 없으면 분석 중엔 길이를 표시하지 않는다. */
+  durationSec?: number;
 }): {
   meeting: Meeting;
   transcript: MeetingTranscript;
   timeline: MeetingTimeline;
 } {
+  const durationLabel =
+    typeof params.durationSec === "number" && params.durationSec > 0
+      ? formatDurationLabel(params.durationSec)
+      : "";
   return {
     meeting: {
       id: params.meetingId,
@@ -357,7 +372,7 @@ export function placeholderMeeting(params: {
       tags: ["STT", "처리중"],
       summaryTags: [],
       date: params.date?.trim() || new Date().toISOString(),
-      duration: "—",
+      duration: durationLabel,
       participants: [SPEAKER],
       status: "in_progress",
       security: "protected",
@@ -367,7 +382,7 @@ export function placeholderMeeting(params: {
     transcript: { meetingId: params.meetingId, lines: [] },
     timeline: {
       meetingId: params.meetingId,
-      durationLabel: "—",
+      durationLabel,
       overallSummary: "받아쓰기와 요약을 준비하는 중입니다.",
       segments: [],
     },

@@ -4,11 +4,17 @@ import { NextResponse } from "next/server";
 
 import type { TeamRole } from "@prisma/client";
 
+import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { createNotification } from "@/lib/notifications-store";
 import { prisma } from "@/lib/prisma";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/require-user";
-import { requireTeamCapability, writeTeamAudit } from "@/lib/team-permissions";
+import {
+  getTeamMember,
+  hasTeamCapability,
+  requireTeamCapability,
+  writeTeamAudit,
+} from "@/lib/team-permissions";
 import { TEAM_INVITE_TTL_MS } from "@/lib/team-permission-matrix";
 
 type RouteContext = { params: Promise<{ teamId: string }> };
@@ -22,8 +28,14 @@ export async function GET(_: Request, context: RouteContext) {
     );
   }
   const { teamId } = await context.params;
-  const member = await requireTeamCapability(teamId, session.user.id, "invite");
+  const member = await getTeamMember(teamId, session.user.id);
   if (!member) {
+    return NextResponse.json(
+      { ok: false, message: "팀을 찾을 수 없습니다." },
+      { status: 404 },
+    );
+  }
+  if (!hasTeamCapability(member, "invite")) {
     return NextResponse.json(
       { ok: false, message: "초대 권한이 없습니다." },
       { status: 403 },
@@ -46,6 +58,12 @@ export async function GET(_: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
+  if (!TEAM_FEATURE_ENABLED) {
+    return NextResponse.json(
+      { ok: false, message: "현재 수요조사 기간에는 팀 기능을 제공하지 않습니다." },
+      { status: 403 },
+    );
+  }
   const session = await requireUser();
   if (!session) {
     return NextResponse.json(
@@ -54,6 +72,13 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
   const { teamId } = await context.params;
+  const membership = await getTeamMember(teamId, session.user.id);
+  if (!membership) {
+    return NextResponse.json(
+      { ok: false, message: "팀을 찾을 수 없습니다." },
+      { status: 404 },
+    );
+  }
   const actor = await requireTeamCapability(teamId, session.user.id, "invite");
   if (!actor) {
     return NextResponse.json(

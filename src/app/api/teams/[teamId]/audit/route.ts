@@ -14,8 +14,17 @@ export async function GET(request: Request, context: RouteContext) {
   }
   const { teamId } = await context.params;
   const member = await getTeamMember(teamId, session.user.id);
-  if (!member || member.role !== "OWNER") {
-    return NextResponse.json({ ok: false, message: "감사 로그는 팀 대표만 볼 수 있습니다." }, { status: 403 });
+  if (!member) {
+    return NextResponse.json(
+      { ok: false, message: "팀을 찾을 수 없습니다." },
+      { status: 404 },
+    );
+  }
+  if (member.role !== "OWNER") {
+    return NextResponse.json(
+      { ok: false, message: "감사 로그는 팀 대표만 볼 수 있습니다." },
+      { status: 403 },
+    );
   }
   const purged = await purgeExpiredTeamAuditLogs({ teamId });
   const url = new URL(request.url);

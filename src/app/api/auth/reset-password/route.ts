@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { AUTH_PASSWORD_INVALID } from "@/lib/auth-messages";
-import { isValidEmail, isValidPassword } from "@/lib/auth-validation";
+import {
+  isValidEmail,
+  isValidPassword,
+  normalizeAuthEmail,
+} from "@/lib/auth-validation";
 import { consumeResetToken } from "@/lib/otp";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
@@ -22,7 +26,8 @@ export async function POST(request: Request) {
     typeof body === "object" && body !== null
       ? (body as Record<string, unknown>)
       : {};
-  const email = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
+  const email =
+    typeof data.email === "string" ? normalizeAuthEmail(data.email) : "";
   const token = typeof data.token === "string" ? data.token : "";
   const password = typeof data.password === "string" ? data.password : "";
   const passwordConfirm =

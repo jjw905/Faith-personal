@@ -11,6 +11,7 @@ import {
   localVaultAllowed,
   spacesConfigured,
 } from "@/lib/storage/spaces";
+import { safeVaultMime, vaultContentDisposition } from "@/lib/vault";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -74,12 +75,22 @@ export async function GET(request: Request, { params }: Params) {
     const nodeStream = createReadStream(absolutePath, { start, end });
     const webStream = Readable.toWeb(nodeStream) as ReadableStream;
 
+    // DB에 남은 잘못된 mime(레거시)도 확장자로 덮어 동일 출처 XSS를 막는다.
+    let mime = "application/octet-stream";
+    try {
+      mime = safeVaultMime(row.name, row.mime);
+    } catch {
+      mime = "application/octet-stream";
+    }
+    const disposition = vaultContentDisposition(row.name, mime);
+
     const headers: Record<string, string> = {
-      "Content-Type": row.mime || "application/octet-stream",
+      "Content-Type": mime,
       "Content-Length": String(chunkSize),
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(row.name)}`,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(row.name)}`,
     };
     if (range) {
       headers["Content-Range"] = `bytes ${start}-${end}/${size}`;

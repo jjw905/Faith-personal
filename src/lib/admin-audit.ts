@@ -8,7 +8,8 @@ export type AdminAuditAction =
   | "user.plan"
   | "user.role"
   | "user.disabled"
-  | "user.team_entitlement";
+  | "user.team_entitlement"
+  | "moderation.reprocess";
 
 /** 조회 기간. day=오늘, week=최근7일, month=최근30일, year=올해, all=전체 */
 export type AdminAuditPeriod = "day" | "week" | "month" | "year" | "all";
@@ -21,6 +22,7 @@ export const ADMIN_AUDIT_ACTIONS: {
   { id: "user.role", label: "역할" },
   { id: "user.disabled", label: "상태" },
   { id: "user.team_entitlement", label: "팀권한" },
+  { id: "moderation.reprocess", label: "검열 이의제기 재처리" },
 ];
 
 /** Append-only. 앱에서 delete/purge 하지 않음. */

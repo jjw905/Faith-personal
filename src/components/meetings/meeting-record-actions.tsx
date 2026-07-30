@@ -2,12 +2,15 @@
 
 import { Download, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
+import { MonthDayCalendar } from "@/components/meetings/month-day-calendar";
 import {
   formatSeoulDateParts,
+  seoulDateKey,
   toSeoulDateTimeLocal,
 } from "@/lib/meeting-date";
 import type { Meeting } from "@/types/meeting";
@@ -236,33 +239,64 @@ export function MeetingTitleHeading({
   );
 }
 
-/** 날짜·시간 인라인 수정. 미지정 업로드는 업로드 시각이 기본값. */
+/** 날짜·시간 인라인 수정. 미지정 업로드는 업로드 시각이 기본값.
+ * 모바일: 48px 셀 월 달력 시트 (MD3 comfortable / Faith 터치).
+ * 데스크탑: datetime-local.
+ * header: 상단 가운데 제목 자리 (말줄임 → 탭 시 2줄).
+ */
 export function MeetingDateTimeMeta({
   meetingId,
   date,
   duration,
   canEdit,
+  variant = "meta",
   className,
 }: {
   meetingId: string;
   date: string;
   duration: string;
   canEdit: boolean;
+  variant?: "meta" | "header";
   className?: string;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const { day, time } = formatSeoulDateParts(date);
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [value, setValue] = useState(() => toSeoulDateTimeLocal(date));
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const titleId = useId();
+  const isHeader = variant === "header";
+
+  const datePart = value.slice(0, 10) || seoulDateKey();
+  const timePart = value.slice(11, 16) || "12:00";
+  const hasDuration = Boolean(duration && duration !== "—");
+  const headerLabel = hasDuration
+    ? `${day} · ${time} · ${duration}`
+    : `${day} · ${time}`;
+
+  useEffect(() => {
+    setMounted(true);
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     setValue(toSeoulDateTimeLocal(date));
   }, [date]);
 
   useEffect(() => {
-    if (!editing) return;
+    setExpanded(false);
+  }, [date, duration]);
+
+  useEffect(() => {
+    if (!editing || isMobile) return;
     const el = inputRef.current;
     if (!el) return;
     el.focus();
@@ -271,10 +305,19 @@ export function MeetingDateTimeMeta({
     } catch {
       // ignore
     }
-  }, [editing]);
+  }, [editing, isMobile]);
 
-  async function saveDate() {
-    const next = value.trim();
+  useEffect(() => {
+    if (!editing || !isMobile) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [editing, isMobile]);
+
+  async function saveDate(nextValue = value) {
+    const next = nextValue.trim();
     const currentLocal = toSeoulDateTimeLocal(date);
     if (!next || next === currentLocal || busy) {
       setEditing(false);
@@ -307,14 +350,168 @@ export function MeetingDateTimeMeta({
     setEditing(false);
   }
 
-  const durationNode = (
+  function setDateIso(iso: string) {
+    setValue(`${iso}T${timePart}`);
+  }
+
+  function setTimeValue(t: string) {
+    setValue(`${datePart}T${t || "12:00"}`);
+  }
+
+  const metaSep = (
+    <span className="select-none text-muted-2" aria-hidden>
+      ·
+    </span>
+  );
+
+  const durationNode = hasDuration ? (
     <>
-      <span className="text-muted-2" aria-hidden>
-        ,
-      </span>
+      {metaSep}
       <span className="font-medium tabular-nums text-muted">{duration}</span>
     </>
-  );
+  ) : null;
+
+  const mobileSheet =
+    mounted && editing && isMobile
+      ? createPortal(
+          <div className="fixed inset-0 z-[80] md:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              aria-label="닫기"
+              onClick={cancel}
+            />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              className="absolute inset-x-0 bottom-0 max-h-[min(92dvh,40rem)] overflow-y-auto rounded-t-3xl bg-card px-4 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-3 shadow-float"
+            >
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" aria-hidden />
+              <h2
+                id={titleId}
+                className="text-xl font-bold tracking-tight text-foreground"
+              >
+                날짜·시간
+              </h2>
+              <div className="mt-4 space-y-4">
+                <MonthDayCalendar
+                  selectedIso={datePart}
+                  onSelect={setDateIso}
+                />
+                <label className="block">
+                  <span className="mb-1.5 block text-base font-medium text-muted">
+                    시간
+                  </span>
+                  <input
+                    type="time"
+                    value={timePart}
+                    onChange={(e) => setTimeValue(e.target.value)}
+                    disabled={busy}
+                    aria-label="회의 시간"
+                    className="h-14 w-full max-w-[12rem] cursor-pointer rounded-2xl bg-surface-2 px-4 text-base font-semibold tabular-nums text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
+                  />
+                </label>
+              </div>
+              <div className="mt-5 flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-14 flex-1 rounded-2xl text-base font-semibold"
+                  disabled={busy}
+                  onClick={cancel}
+                >
+                  취소
+                </Button>
+                <Button
+                  type="button"
+                  className="h-14 flex-1 rounded-2xl text-base font-semibold"
+                  disabled={busy}
+                  onClick={() => void saveDate(`${datePart}T${timePart}`)}
+                >
+                  저장
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  if (isHeader) {
+    if (editing && !isMobile) {
+      return (
+        <div
+          className={cn(
+            "flex w-full min-w-0 items-center justify-center gap-x-2",
+            className,
+          )}
+        >
+          <input
+            ref={inputRef}
+            type="datetime-local"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={() => void saveDate()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void saveDate();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+            disabled={busy}
+            aria-label="회의 날짜와 시간"
+            className="h-11 max-w-full rounded-xl bg-surface-2 px-3 text-base font-semibold tabular-nums tracking-tight text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div
+          className={cn(
+            "flex w-full min-w-0 items-center gap-2 md:gap-0.5",
+            className,
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            title={headerLabel}
+            className="min-w-0 flex-1 cursor-pointer text-center outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
+            <time
+              dateTime={date}
+              className={cn(
+                "block text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl md:text-xl",
+                expanded ? "line-clamp-2 break-words" : "truncate",
+              )}
+            >
+              {headerLabel}
+            </time>
+          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9"
+              title="날짜 수정"
+              aria-label={`날짜 수정: ${day} ${time}`}
+            >
+              <Pencil className="h-4 w-4 md:h-3.5 md:w-3.5" strokeWidth={2} />
+            </button>
+          ) : null}
+        </div>
+        {mobileSheet}
+      </>
+    );
+  }
 
   if (!canEdit) {
     return (
@@ -330,9 +527,7 @@ export function MeetingDateTimeMeta({
         >
           {day}
         </time>
-        <span className="text-muted-2" aria-hidden>
-          ,
-        </span>
+        {metaSep}
         <span className="font-semibold tabular-nums tracking-tight text-foreground">
           {time}
         </span>
@@ -341,7 +536,7 @@ export function MeetingDateTimeMeta({
     );
   }
 
-  if (editing) {
+  if (editing && !isMobile) {
     return (
       <div
         className={cn(
@@ -367,7 +562,7 @@ export function MeetingDateTimeMeta({
           }}
           disabled={busy}
           aria-label="회의 날짜와 시간"
-          className="h-14 rounded-xl bg-surface-2 px-3 py-2 text-base font-semibold tabular-nums tracking-tight text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-primary disabled:opacity-60 md:h-auto md:rounded-lg md:px-2 md:py-1 md:text-sm"
+          className="h-auto rounded-lg bg-surface-2 px-2 py-1 text-sm font-semibold tabular-nums tracking-tight text-foreground outline-none ring-1 ring-border focus:ring-2 focus:ring-primary disabled:opacity-60"
         />
         {durationNode}
       </div>
@@ -375,39 +570,40 @@ export function MeetingDateTimeMeta({
   }
 
   return (
-    <div
-      className={cn(
-        "mt-3 flex min-h-12 flex-wrap items-center gap-x-2 gap-y-1 text-base md:min-h-0 md:text-sm",
-        className,
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="group inline-flex max-w-full cursor-pointer items-center gap-x-2 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-        title="날짜 수정"
-        aria-label={`날짜 수정: ${day} ${time}`}
+    <>
+      <div
+        className={cn(
+          "mt-3 flex min-h-12 flex-wrap items-center gap-x-2 gap-y-1 text-base md:min-h-0 md:text-sm",
+          className,
+        )}
       >
-        <time
-          dateTime={date}
-          className="font-semibold tabular-nums tracking-tight text-foreground decoration-muted/50 underline-offset-4 group-hover:underline"
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="group inline-flex min-h-12 max-w-full cursor-pointer items-center gap-x-2 rounded-lg px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:min-h-0 md:rounded-sm md:px-0"
+          title="날짜 수정"
+          aria-label={`날짜 수정: ${day} ${time}`}
         >
-          {day}
-        </time>
-        <span className="text-muted-2" aria-hidden>
-          ,
-        </span>
-        <span className="font-semibold tabular-nums tracking-tight text-foreground decoration-muted/50 underline-offset-4 group-hover:underline">
-          {time}
-        </span>
-        <Pencil
-          className="h-3 w-3 shrink-0 text-muted transition-colors group-hover:text-foreground"
-          strokeWidth={2}
-          aria-hidden
-        />
-      </button>
-      {durationNode}
-    </div>
+          <time
+            dateTime={date}
+            className="font-semibold tabular-nums tracking-tight text-foreground decoration-muted/50 underline-offset-4 group-hover:underline"
+          >
+            {day}
+          </time>
+          {metaSep}
+          <span className="font-semibold tabular-nums tracking-tight text-foreground decoration-muted/50 underline-offset-4 group-hover:underline">
+            {time}
+          </span>
+          <Pencil
+            className="h-4 w-4 shrink-0 text-muted transition-colors group-hover:text-foreground md:h-3 md:w-3"
+            strokeWidth={2}
+            aria-hidden
+          />
+        </button>
+        {durationNode}
+      </div>
+      {mobileSheet}
+    </>
   );
 }
 
@@ -419,6 +615,7 @@ export function MeetingRecordActions({
   timeline,
   transcript,
   summary,
+  processing = false,
 }: {
   meetingId: string;
   tags?: string[];
@@ -426,12 +623,15 @@ export function MeetingRecordActions({
   timeline?: MeetingTimeline;
   transcript?: MeetingTranscript;
   summary?: string;
+  /** 분석 중에는 아직 완성되지 않은 기록이므로 다운로드·삭제를 막는다. */
+  processing?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [actionMode, setActionMode] = useState<"delete" | "download" | null>(
     null,
   );
+  const disabled = busy || processing;
 
   async function confirmAction() {
     if (busy || !actionMode) return;
@@ -470,28 +670,30 @@ export function MeetingRecordActions({
 
   return (
     <>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex h-12 shrink-0 items-center gap-2 md:h-9 md:gap-1">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9"
+          className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
           aria-label="다운로드"
-          disabled={busy}
+          title={processing ? "분석이 끝나면 다운로드할 수 있어요" : "다운로드"}
+          disabled={disabled}
           onClick={() => setActionMode("download")}
         >
-          <Download className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
+          <Download strokeWidth={1.75} />
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-12 w-12 text-masked hover:bg-masked-soft hover:text-masked md:h-9 md:w-9"
+          className="h-12 w-12 text-masked hover:bg-masked-soft hover:text-masked md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
           aria-label="기록 삭제"
-          disabled={busy}
+          title={processing ? "분석이 끝나면 삭제할 수 있어요" : "기록 삭제"}
+          disabled={disabled}
           onClick={() => setActionMode("delete")}
         >
-          <Trash2 className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
+          <Trash2 strokeWidth={1.75} />
         </Button>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { BrowserPcmCapture } from "@/lib/stt/realtime/browser-pcm-capture";
 import type { TranscriptCorrection } from "@/types/transcript";
 
 type LiveStatus =
@@ -19,6 +20,7 @@ export type BrowserRealtimeUtterance = {
   startSec: number;
   endSec?: number;
   confidence?: number;
+  meanLogprob?: number;
   corrections?: TranscriptCorrection[];
 };
 
@@ -26,6 +28,11 @@ type StartOptions = {
   title: string;
   teamMeetingId?: string;
   mediaStreamTrack?: MediaStreamTrack;
+  /**
+   * 외부(LiveKit 등) 트랙은 true(기본)로 clone해 통화 트랙을 건드리지 않는다.
+   * 우리가 만든 합성 마이크(보관함 파일)는 false.
+   */
+  cloneMediaTrack?: boolean;
 };
 
 type CompleteResult = {
@@ -36,9 +43,12 @@ type CompleteResult = {
 
 const OPENAI_CALLS_ENDPOINT = "https://api.openai.com/v1/realtime/calls";
 
-function eventConfidence(event: Record<string, unknown>): number | undefined {
+function eventConfidence(event: Record<string, unknown>): {
+  confidence?: number;
+  meanLogprob?: number;
+} {
   const logprobs = event.logprobs;
-  if (!Array.isArray(logprobs) || logprobs.length === 0) return undefined;
+  if (!Array.isArray(logprobs) || logprobs.length === 0) return {};
   const values = logprobs
     .map((row) =>
       row && typeof row === "object"
@@ -46,9 +56,13 @@ function eventConfidence(event: Record<string, unknown>): number | undefined {
         : Number.NaN,
     )
     .filter(Number.isFinite);
-  if (values.length === 0) return undefined;
-  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-  return Math.max(0, Math.min(1, Math.exp(mean)));
+  if (values.length === 0) return {};
+  const meanLogprob =
+    values.reduce((sum, value) => sum + value, 0) / values.length;
+  return {
+    meanLogprob,
+    confidence: Math.max(0, Math.min(1, Math.exp(meanLogprob))),
+  };
 }
 
 export function useRealtimeTranscription() {
@@ -71,6 +85,14 @@ export function useRealtimeTranscription() {
   );
   const completedRef = useRef(new Set<string>());
   const pendingWritesRef = useRef(new Set<Promise<unknown>>());
+  const pcmCaptureRef = useRef(new BrowserPcmCapture());
+  const activeTrackRef = useRef<MediaStreamTrack | null>(null);
+  const clientSecretRef = useRef<string | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectPeerRef = useRef<
+    ((clientSecret: string, track: MediaStreamTrack) => Promise<void>) | null
+  >(null);
 
   const setLiveStatus = useCallback((next: LiveStatus) => {
     statusRef.current = next;
@@ -78,20 +100,42 @@ export function useRealtimeTranscription() {
   }, []);
 
   const closeMedia = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
     channelRef.current?.close();
     channelRef.current = null;
     peerRef.current?.close();
     peerRef.current = null;
+    pcmCaptureRef.current.stop();
+    activeTrackRef.current = null;
+    clientSecretRef.current = null;
+    reconnectAttemptsRef.current = 0;
     for (const track of tracksRef.current) track.stop();
     tracksRef.current = [];
   }, []);
 
   const persistUtterance = useCallback(
-    (sessionId: string, utterance: BrowserRealtimeUtterance) => {
+    (
+      sessionId: string,
+      utterance: BrowserRealtimeUtterance,
+      audio?: Blob | null,
+    ) => {
+      const request = audio
+        ? (() => {
+            const form = new FormData();
+            form.set("utterance", JSON.stringify(utterance));
+            form.set("audio", audio, `${utterance.itemId}.wav`);
+            return { body: form };
+          })()
+        : {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(utterance),
+          };
       const task = fetch(`/api/stt/realtime/${sessionId}/utterance`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(utterance),
+        ...request,
       })
         .then(async (response) => {
           const body = (await response.json()) as {
@@ -201,7 +245,7 @@ export function useRealtimeTranscription() {
         text,
         startSec: window.startSec,
         endSec: window.endSec,
-        confidence: eventConfidence(event),
+        ...eventConfidence(event),
       };
       lastEndSecRef.current = Math.max(
         lastEndSecRef.current,
@@ -211,10 +255,110 @@ export function useRealtimeTranscription() {
       setPartialText("");
 
       const sessionId = sessionIdRef.current;
-      if (sessionId) persistUtterance(sessionId, utterance);
+      if (sessionId) {
+        const audio = pcmCaptureRef.current.wavForWindow(
+          utterance.startSec,
+          utterance.endSec ?? elapsedSec,
+        );
+        persistUtterance(sessionId, utterance, audio);
+      }
     },
     [persistUtterance],
   );
+
+  const connectPeer = useCallback(
+    async (clientSecret: string, track: MediaStreamTrack) => {
+      channelRef.current?.close();
+      peerRef.current?.close();
+      const peer = new RTCPeerConnection();
+      peerRef.current = peer;
+      peer.addTrack(track, new MediaStream([track]));
+      const channel = peer.createDataChannel("oai-events");
+      channelRef.current = channel;
+      channel.addEventListener("message", (message) =>
+        handleServerEvent(String(message.data ?? "")),
+      );
+      channel.addEventListener("error", () => {
+        setError("실시간 전사 채널을 다시 연결하고 있습니다.");
+      });
+      peer.addEventListener("connectionstatechange", () => {
+        if (
+          peer.connectionState !== "failed" &&
+          peer.connectionState !== "disconnected"
+        ) {
+          if (peer.connectionState === "connected") setError(null);
+          return;
+        }
+        if (
+          statusRef.current !== "recording" ||
+          reconnectAttemptsRef.current >= 2 ||
+          reconnectTimerRef.current
+        ) {
+          if (reconnectAttemptsRef.current >= 2) {
+            setError("실시간 전사 연결이 끊겼습니다. 기록을 다시 시작해 주세요.");
+          }
+          return;
+        }
+        reconnectAttemptsRef.current += 1;
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          const activeTrack = activeTrackRef.current;
+          const sessionId = sessionIdRef.current;
+          if (
+            sessionId &&
+            activeTrack?.readyState === "live" &&
+            statusRef.current === "recording"
+          ) {
+            void fetch("/api/stt/realtime/session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reconnectSessionId: sessionId }),
+            })
+              .then(async (response) => {
+                const body = (await response.json()) as {
+                  ok?: boolean;
+                  clientSecret?: string;
+                  message?: string;
+                };
+                if (!response.ok || !body.ok || !body.clientSecret) {
+                  throw new Error(body.message ?? "재연결 키를 받지 못했습니다.");
+                }
+                clientSecretRef.current = body.clientSecret;
+                await connectPeerRef.current?.(body.clientSecret, activeTrack);
+              })
+              .catch(() => {
+                setError("실시간 전사 재연결에 실패했습니다.");
+              });
+          }
+        }, 1_200);
+      });
+
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      const sdpResponse = await fetch(OPENAI_CALLS_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${clientSecret}`,
+          "Content-Type": "application/sdp",
+        },
+        body: offer.sdp,
+      });
+      if (!sdpResponse.ok) {
+        throw new Error("실시간 음성 연결을 열지 못했습니다.");
+      }
+      await peer.setRemoteDescription({
+        type: "answer",
+        sdp: await sdpResponse.text(),
+      });
+    },
+    [handleServerEvent],
+  );
+  useEffect(() => {
+    connectPeerRef.current = connectPeer;
+    return () => {
+      connectPeerRef.current = null;
+    };
+  }, [connectPeer]);
 
   const start = useCallback(
     async (options: StartOptions): Promise<boolean> => {
@@ -279,41 +423,20 @@ export function useRealtimeTranscription() {
         }
         if (!sourceTrack) throw new Error("마이크를 찾을 수 없습니다.");
 
-        const track =
-          options.mediaStreamTrack && sourceTrack.clone
-            ? sourceTrack.clone()
-            : sourceTrack;
+        const shouldClone =
+          Boolean(options.mediaStreamTrack) &&
+          options.cloneMediaTrack !== false &&
+          typeof sourceTrack.clone === "function";
+        const track = shouldClone ? sourceTrack.clone() : sourceTrack;
         if (track !== sourceTrack) tracksRef.current.push(track);
-
-        const peer = new RTCPeerConnection();
-        peerRef.current = peer;
-        peer.addTrack(track, new MediaStream([track]));
-        const channel = peer.createDataChannel("oai-events");
-        channelRef.current = channel;
-        channel.addEventListener("message", (message) =>
-          handleServerEvent(String(message.data ?? "")),
-        );
-        channel.addEventListener("error", () => {
-          setError("실시간 전사 채널 연결이 끊겼습니다.");
-        });
-
-        const offer = await peer.createOffer();
-        await peer.setLocalDescription(offer);
-        const sdpResponse = await fetch(OPENAI_CALLS_ENDPOINT, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${tokenBody.clientSecret}`,
-            "Content-Type": "application/sdp",
-          },
-          body: offer.sdp,
-        });
-        if (!sdpResponse.ok) {
-          throw new Error("실시간 음성 연결을 열지 못했습니다.");
+        else if (options.mediaStreamTrack) {
+          tracksRef.current.push(track);
         }
-        await peer.setRemoteDescription({
-          type: "answer",
-          sdp: await sdpResponse.text(),
-        });
+        await pcmCaptureRef.current.start(track);
+        activeTrackRef.current = track;
+        clientSecretRef.current = tokenBody.clientSecret;
+        reconnectAttemptsRef.current = 0;
+        await connectPeer(tokenBody.clientSecret, track);
 
         startedAtRef.current = Date.now();
         setLiveStatus("recording");
@@ -329,7 +452,7 @@ export function useRealtimeTranscription() {
         return false;
       }
     },
-    [closeMedia, handleServerEvent, setLiveStatus],
+    [closeMedia, connectPeer, setLiveStatus],
   );
 
   const stop = useCallback(

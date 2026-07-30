@@ -9,16 +9,23 @@ function matchKey(m: PiiMatch) {
   return `${m.start}:${m.end}:${m.type}`;
 }
 
+function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
 /** 마스킹 칩 — 클릭 시 해당 항목만 원문 토글. */
 export function MaskedText({
   original,
   matches,
   onPrimary = false,
+  activeWordRange,
 }: {
   original: string;
   matches: PiiMatch[];
   /** 내 말풍선(진한 primary) 위일 때 */
   onPrimary?: boolean;
+  /** 재생 중인 단어의 원문 offset. 노래방 자막처럼 그 구간만 옅게 강조한다. */
+  activeWordRange?: { startOffset: number; endOffset: number } | null;
 }) {
   /**
    * 가린 항목이 바뀔 때만 열어 둔 것을 닫는다.
@@ -42,11 +49,13 @@ export function MaskedText({
   const segments = useMemo(() => {
     if (!original) return [];
     if (!matches.length) {
-      return [{ kind: "text" as const, text: original, key: "all" }];
+      return [
+        { kind: "text" as const, text: original, start: 0, end: original.length, key: "all" },
+      ];
     }
     const sorted = [...matches].sort((a, b) => a.start - b.start);
     const out: Array<
-      | { kind: "text"; text: string; key: string }
+      | { kind: "text"; text: string; start: number; end: number; key: string }
       | { kind: "mask"; match: PiiMatch; key: string }
     > = [];
     let cursor = 0;
@@ -57,6 +66,8 @@ export function MaskedText({
         out.push({
           kind: "text",
           text: original.slice(cursor, start),
+          start: cursor,
+          end: start,
           key: `t-${cursor}`,
         });
       }
@@ -67,6 +78,8 @@ export function MaskedText({
       out.push({
         kind: "text",
         text: original.slice(cursor),
+        start: cursor,
+        end: original.length,
         key: `t-${cursor}`,
       });
     }
@@ -84,13 +97,49 @@ export function MaskedText({
 
   if (!original) return null;
 
+  const highlightClass = onPrimary
+    ? "bg-white/25 rounded-[0.2em]"
+    : "bg-primary-soft rounded-[0.2em]";
+
   return (
     <>
       {segments.map((seg) => {
         if (seg.kind === "text") {
-          return <span key={seg.key}>{seg.text}</span>;
+          if (
+            !activeWordRange ||
+            !overlaps(
+              seg.start,
+              seg.end,
+              activeWordRange.startOffset,
+              activeWordRange.endOffset,
+            )
+          ) {
+            return <span key={seg.key}>{seg.text}</span>;
+          }
+          const hiStart = Math.max(seg.start, activeWordRange.startOffset);
+          const hiEnd = Math.min(seg.end, activeWordRange.endOffset);
+          const before = original.slice(seg.start, hiStart);
+          const active = original.slice(hiStart, hiEnd);
+          const after = original.slice(hiEnd, seg.end);
+          return (
+            <span key={seg.key}>
+              {before}
+              <span className={cn("transition-colors", highlightClass)}>
+                {active}
+              </span>
+              {after}
+            </span>
+          );
         }
         const open = revealed.has(seg.key);
+        const isActive =
+          activeWordRange &&
+          overlaps(
+            seg.match.start,
+            seg.match.end,
+            activeWordRange.startOffset,
+            activeWordRange.endOffset,
+          );
         return (
           <button
             key={seg.key}
@@ -109,7 +158,8 @@ export function MaskedText({
                   : "bg-success-soft text-success underline decoration-dotted underline-offset-2"
                 : onPrimary
                   ? "cursor-pointer bg-white/20 text-primary-foreground hover:bg-white/30"
-                  : "animate-[mask-chip-in_220ms_ease-out] cursor-pointer bg-masked-soft text-masked hover:brightness-95",
+                  : "animate-[mask-chip-in_220ms_ease-out] motion-reduce:animate-none cursor-pointer bg-masked-soft text-masked hover:brightness-95",
+              isActive && (onPrimary ? "ring-2 ring-white/50" : "ring-2 ring-primary/40"),
             )}
           >
             {open ? seg.match.value : seg.match.replacement}

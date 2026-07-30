@@ -1,3 +1,7 @@
+import { mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
 import { buildSemanticStructure } from "@/lib/stt/semantic-structure";
 import { buildGlossary } from "@/lib/stt/glossary";
 import { buildMeetingFromStt } from "@/lib/stt/to-meeting";
@@ -22,9 +26,21 @@ import {
   attachCorrections,
   suggestTermCorrections,
 } from "@/lib/stt/term-suggest";
-import { alignDialogueToTimedSegments } from "@/lib/stt/timed-segments";
-import { estimateStructureUsd, STRUCTURE_MODEL } from "@/lib/stt/pricing";
+import {
+  alignDialogueToTimedSegments,
+  type TimedSegment,
+  type WordTiming,
+} from "@/lib/stt/timed-segments";
+import { whisperWordTimingsForFile } from "@/lib/stt/chunked-transcribe";
+import { runSelectiveSecondPass } from "@/lib/stt/second-pass-review";
+import { hasAudioTools } from "@/lib/stt/local-tools";
+import {
+  estimateSttUsdFromMinutes,
+  estimateStructureUsd,
+  STRUCTURE_MODEL,
+} from "@/lib/stt/pricing";
 import { appendAiUsage } from "@/lib/stt/usage-store";
+import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline } from "@/types/timeline";
 import type { MeetingTranscript } from "@/types/transcript";
@@ -51,7 +67,7 @@ export type RealtimePipelineResult = {
 
 /**
  * 실시간 상품 파이프라인.
- * 오디오 스트림 STT(모델) → 구조화(고정 gpt-4o-mini) → 회의 산출.
+ * 업로드와 같이 화자분리, 단어 타임스탬프, 저신뢰 2차보정을 붙인다.
  * 에이전트/휴리스틱으로 대화·요약을 다시 쓰지 않는다.
  */
 export async function processRealtimeMeeting(params: {
@@ -64,18 +80,23 @@ export async function processRealtimeMeeting(params: {
   onProgress?: (p: RealtimeTranscribeProgress) => void;
   logUsage?: boolean;
   model?: RealtimeSttModel;
+  /** 기본은 업로드와 같이 화자분리를 켠다. "none"만 명시적으로 끈다. */
   diarization?: "none" | "pyannote";
   minSpeakers?: number;
   maxSpeakers?: number;
 }): Promise<RealtimePipelineResult> {
-  // 화자분리는 있으면 쓰고 없으면 넘어간다. 실시간 경로도 업로드와 같다.
-  const wantDiarization = params.diarization === "pyannote";
+  const wantDiarization = params.diarization !== "none";
   const diarizationReady = wantDiarization
     ? diarizationAvailability()
     : ({ ok: false as const, reason: "요청하지 않음" });
   if (wantDiarization && !diarizationReady.ok) {
     console.warn(`[realtime] 화자분리 없이 진행: ${diarizationReady.reason}`);
   }
+
+  const glossary = buildGlossary({
+    userId: params.userId,
+    title: params.title,
+  });
 
   const [stt, diarization] = await Promise.all([
     realtimeTranscribeFile(params.audioPath, {
@@ -123,6 +144,36 @@ export async function processRealtimeMeeting(params: {
     });
   }
 
+  let wordTimings: WordTiming[] = [];
+  let timingUsd = 0;
+  if (hasAudioTools()) {
+    try {
+      const timed = await whisperWordTimingsForFile(params.audioPath, glossary);
+      wordTimings = timed.words;
+      timingUsd = estimateSttUsdFromMinutes(
+        "whisper-1",
+        timed.durationBillSec || stt.durationSec,
+      );
+      if (params.logUsage !== false && timingUsd > 0) {
+        appendAiUsage({
+          meetingId: params.meetingId,
+          userId: params.userId ?? "realtime",
+          title: params.title,
+          stage: "stt",
+          model: "whisper-1",
+          durationSec: timed.durationBillSec || stt.durationSec,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedUsd: timingUsd,
+          billSource: "audio_minutes",
+        });
+      }
+    } catch (err) {
+      console.warn("[realtime] 단어 타임스탬프 건너뜀", err);
+    }
+  }
+
   const speakerUtterances = diarization
     ? alignRealtimeUtterancesToSpeakers({
         utterances: stt.utterances,
@@ -142,14 +193,17 @@ export async function processRealtimeMeeting(params: {
     stt.durationSec,
   );
 
-  const timedSegments = speakerUtterances.map((utterance, index) => ({
-    startSec: utterance.startSec,
-    endSec:
-      utterance.endSec ??
-      speakerUtterances[index + 1]?.startSec ??
-      stt.durationSec,
-    text: utterance.text,
-  }));
+  const timedSegments: TimedSegment[] = speakerUtterances.map(
+    (utterance, index) => ({
+      startSec: utterance.startSec,
+      endSec:
+        utterance.endSec ??
+        speakerUtterances[index + 1]?.startSec ??
+        stt.durationSec,
+      text: utterance.text,
+      confidence: utterance.confidence,
+    }),
+  );
 
   structure.dialogue = alignDialogueToTimedSegments(
     structure.dialogue,
@@ -161,7 +215,6 @@ export async function processRealtimeMeeting(params: {
     throw new Error("구조화 대화기록이 비어 있습니다.");
   }
 
-  // 화자 실명 추정. 화자 분리가 없으면 라벨이 하나뿐이라 건너뛴다.
   let speakerNameUsd = 0;
   const confirmedNames: string[] = [];
   try {
@@ -211,20 +264,24 @@ export async function processRealtimeMeeting(params: {
     rawText: stt.text,
     semantic: structure,
     timedSegments,
+    wordTimings,
     capture: "live",
   });
 
-  // 오인식 보정 추천. 표시만 하고 본문은 그대로 둔다.
   let suggestUsd = 0;
   try {
-    const glossary = buildGlossary({
+    const fullGlossary = buildGlossary({
       userId: params.userId,
       title: params.title,
       participantNames: confirmedNames,
     });
     const suggested = await suggestTermCorrections(
       built.transcript.lines.map((line) => line.text ?? ""),
-      { glossary, keepTerms: confirmedNames },
+      {
+        glossary: fullGlossary,
+        keepTerms: confirmedNames,
+        genericDictionary: true,
+      },
     );
     built.transcript.lines = attachCorrections(
       built.transcript.lines,
@@ -245,6 +302,55 @@ export async function processRealtimeMeeting(params: {
         estimatedUsd: suggested.usage.estimatedUsd,
         billSource: "tokens",
       });
+    }
+
+    if (hasAudioTools()) {
+      const workDir = join(
+        tmpdir(),
+        `faith-rt-second-${params.meetingId}-${Date.now().toString(36)}`,
+      );
+      try {
+        mkdirSync(workDir, { recursive: true });
+        const secondPass = await runSelectiveSecondPass({
+          audioPath: params.audioPath,
+          workDir,
+          timedSegments,
+          glossary: fullGlossary,
+        });
+        if (secondPass.suggestions.length > 0) {
+          const lineStarts = built.transcript.lines.map(lineStartSec);
+          const withLineIndex = secondPass.suggestions.map((suggestion) => ({
+            ...suggestion,
+            lineIndex: activeLineIndexAt(lineStarts, suggestion.startSec),
+          }));
+          built.transcript.lines = attachCorrections(
+            built.transcript.lines,
+            withLineIndex,
+          );
+        }
+        if (params.logUsage !== false && secondPass.audioSec > 0) {
+          appendAiUsage({
+            meetingId: params.meetingId,
+            userId: params.userId ?? "realtime",
+            title: params.title,
+            stage: "stt",
+            model: "gpt-4o-mini-transcribe",
+            durationSec: secondPass.audioSec,
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+            estimatedUsd: estimateSttUsdFromMinutes(
+              "gpt-4o-mini-transcribe",
+              secondPass.audioSec,
+            ),
+            billSource: "audio_minutes",
+          });
+        }
+      } catch (err) {
+        console.warn("[realtime] 저신뢰 구간 재확인 실패", err);
+      } finally {
+        rmSync(workDir, { recursive: true, force: true });
+      }
     }
   } catch (err) {
     console.warn("[realtime] 보정 추천 실패", err);
@@ -269,6 +375,10 @@ export async function processRealtimeMeeting(params: {
     transcript: built.transcript,
     timeline: built.timeline,
     totalEstimatedUsd:
-      stt.estimatedUsd + usage.estimatedUsd + suggestUsd + speakerNameUsd,
+      stt.estimatedUsd +
+      timingUsd +
+      usage.estimatedUsd +
+      suggestUsd +
+      speakerNameUsd,
   };
 }

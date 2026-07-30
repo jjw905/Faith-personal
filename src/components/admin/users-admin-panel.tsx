@@ -999,7 +999,8 @@ export function UsersAdminPanel({
   const hasActiveFilter = Boolean(debouncedQuery) || filter !== "all";
   const auditPageSize = isNarrow ? 8 : 20;
   const auditTotalPages = Math.max(1, Math.ceil(auditTotal / auditPageSize));
-  const teamPageSize = isNarrow ? 3 : 9;
+  /** 가로 2열 × 1행 = 한 페이지 */
+  const teamPageSize = 2;
   const pageSizePrevRef = useRef(pageSize);
 
   useEffect(() => {
@@ -1813,7 +1814,7 @@ export function UsersAdminPanel({
           ) : (
             <ul
               className={cn(
-                "grid grid-cols-1 items-start gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-3",
+                "grid grid-cols-2 items-start gap-3 md:gap-4",
                 "transition-opacity duration-150",
                 teamLoading && "opacity-55",
               )}

@@ -30,7 +30,10 @@ const POPUP = {
     label: "보관함 비어 있음",
   },
   uploading: { id: "popup-uploading", label: "업로드 중" },
+  startReady: { id: "popup-start-ready", label: "시작 대기" },
   starting: { id: "popup-starting", label: "회의 시작 중" },
+  startError: { id: "popup-start-error", label: "시작 실패" },
+  uploadFlow: { id: "anim-upload-flow", label: "올리기→시작 흐름" },
   processing: { id: "anim-processing", label: "제작 중" },
   sort: { id: "popup-sort", label: "정렬 메뉴" },
   recordsDelete: { id: "popup-records-delete", label: "기록 삭제" },
@@ -67,7 +70,10 @@ const DASHBOARD_SCENARIOS: PageUxScenario[] = [
   POPUP.vaultPickerLoading,
   POPUP.vaultPickerEmpty,
   POPUP.uploading,
+  POPUP.startReady,
   POPUP.starting,
+  POPUP.startError,
+  POPUP.uploadFlow,
   POPUP.duplicate,
   POPUP.processing,
   POPUP.sort,
@@ -371,6 +377,9 @@ export function isPageUxAnimScenario(scenarioId: string): boolean {
     scenarioId === "upload-busy" ||
     scenarioId === "popup-uploading" ||
     scenarioId === "popup-starting" ||
+    scenarioId === "popup-start-ready" ||
+    scenarioId === "popup-start-error" ||
+    scenarioId === "anim-upload-flow" ||
     scenarioId === "popup-vault-picker-loading" ||
     scenarioId === "popup-invite-search" ||
     scenarioId === "anim-processing"

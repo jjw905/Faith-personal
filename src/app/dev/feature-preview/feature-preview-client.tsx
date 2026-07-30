@@ -107,7 +107,7 @@ export function FeaturePreviewClient() {
           기록 시작 아래. 파일명 + 진행 표시. 끝나면 사라짐.
         </p>
         <div className="rounded-2xl border border-dashed border-border bg-surface/40 p-4">
-          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:gap-3">
             <div className="flex h-16 items-center rounded-2xl bg-primary px-4 text-sm font-semibold text-primary-foreground">
               기록 시작
             </div>

@@ -25,8 +25,25 @@ export type TranscriptCorrection = {
   reason?: string;
   /** 발음 유사도 0~1 */
   similarity?: number;
+  /** 원문 줄에서 추천 대상이 시작하고 끝나는 UTF-16 offset */
+  startOffset?: number;
+  endOffset?: number;
+  /** 원문 후보가 사전 또는 사용자가 확인한 용어 관문을 통과했는지 */
+  dictionaryVerified?: boolean;
+  /** STT 토큰 logprob 평균. 파일 전사처럼 값이 없으면 생략 */
+  sttLogprob?: number;
   /** 추천 후보 출처 */
   source?: "glossary" | "ourmalsam" | "second-pass";
+};
+
+/** 단어 하나의 실측 시각과, 본문(text) 안에서 그 단어가 있는 자리. */
+export type TranscriptWordTiming = {
+  text: string;
+  startSec: number;
+  endSec: number;
+  /** 원문 줄에서 이 단어가 시작하고 끝나는 UTF-16 offset */
+  startOffset: number;
+  endOffset: number;
 };
 
 /** 회의 다시보기용 대화 한 줄. */
@@ -47,6 +64,10 @@ export type TranscriptLine = {
   segmentId?: string;
   /** 오인식 보정 추천 (표시만) */
   corrections?: TranscriptCorrection[];
+  /** 이 대사에 남긴 메모 */
+  memo?: string;
+  /** 단어 단위 실측 시각 (있으면 재생 중 단어 하이라이트에 쓴다) */
+  words?: TranscriptWordTiming[];
 };
 
 export type MeetingTranscript = {

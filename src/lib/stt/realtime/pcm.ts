@@ -16,6 +16,7 @@ export function audioToPcm24k(audioPath: string, workDir: string): {
   }
   mkdirSync(workDir, { recursive: true });
   const pcmPath = join(workDir, `${randomUUID()}.pcm`);
+  // 손상된 오디오가 ffmpeg를 무한 루프에 빠뜨려도 서버 전체가 멈추지 않게 상한을 둔다.
   execFileSync(
     requireAudioToolPath("ffmpeg"),
     [
@@ -32,7 +33,7 @@ export function audioToPcm24k(audioPath: string, workDir: string): {
       "pcm_s16le",
       pcmPath,
     ],
-    { stdio: "pipe" },
+    { stdio: "pipe", timeout: 60_000, killSignal: "SIGKILL" },
   );
   const pcm = readFileSync(pcmPath);
   const durationSec = pcm.length / (24000 * 2);

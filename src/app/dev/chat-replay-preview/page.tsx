@@ -12,9 +12,9 @@ import { resolveMeetingReplayAudio } from "@/lib/meeting-replay-audio";
 export default function ChatReplayPreviewPage() {
   if (process.env.NODE_ENV === "production") notFound();
 
-  const meeting = getMeetingById("mtg-001");
+  const meeting = getMeetingById("mtg-stt-assembly") ?? getMeetingById("mtg-001");
   if (!meeting) notFound();
-  const transcript = getMeetingTranscript("mtg-001");
+  const transcript = getMeetingTranscript(meeting.id);
   const audio = resolveMeetingReplayAudio({ meeting, transcript });
 
   return (

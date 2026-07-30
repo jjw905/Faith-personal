@@ -42,13 +42,14 @@ export type SocialLinksInitial = {
   notice?: string;
 };
 
-/** 소셜 연동 목록. 지원 제공자는 항상 전부 표시. */
+/** 소셜 연동 목록. 이미 연결된 것은 항상 표시, 새로 연결 가능한 것만 추가로 표시. */
 export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
   const router = useRouter();
   const [linked, setLinked] = useState(initial.linked);
   const [msg, setMsg] = useState(initial.notice ?? "");
   const [pending, setPending] = useState<string | null>(null);
   const primary = initial.primary;
+  const available = initial.available;
 
   async function link(provider: string) {
     setMsg("");
@@ -89,7 +90,11 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
     }
   }
 
-  const orderedProviders = [...PROVIDERS].sort((a, b) => {
+  const visibleProviders = PROVIDERS.filter(
+    (p) => linked.includes(p) || !available || available.includes(p),
+  );
+
+  const orderedProviders = [...visibleProviders].sort((a, b) => {
     const rank = (p: (typeof PROVIDERS)[number]) => {
       const isLinked = linked.includes(p);
       const isSignupMethod = primary === p && isLinked;

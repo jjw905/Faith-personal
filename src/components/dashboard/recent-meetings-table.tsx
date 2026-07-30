@@ -25,6 +25,10 @@ import {
 } from "@/components/meetings/meeting-record-actions";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
+import {
+  RecordsPageNav,
+  RECORDS_PAGE_SIZE,
+} from "@/components/dashboard/records-page-nav";
 import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { meetingCaptureLabel } from "@/lib/meeting-capture";
@@ -41,11 +45,19 @@ import { meetingDisplayKeywords } from "@/lib/meeting-keywords";
 import { matchesSearchText } from "@/lib/search-text";
 import { getWorkspaceProfile } from "@/lib/workspaces";
 import type { Meeting, Participant } from "@/types/meeting";
+import { TOUCH_ICON_BUTTON } from "@/lib/touch-target";
 import { cn } from "@/lib/utils";
 
 interface RecentMeetingsTableProps {
   meetings: Meeting[];
   onMeetingRemoved?: (meetingId: string) => void;
+  /** 페이지 통합 검색. 없으면 섹션 로컬 검색. */
+  searchQuery?: string;
+  onSearchChange?: (value: string) => void;
+  /** 일정 탭으로 나갈 때 선택 모드 해제 */
+  onMobileBarChange?: (state: {
+    onExitSelect: () => void;
+  } | null) => void;
 }
 
 type SelectMode = "delete" | "download" | null;
@@ -167,7 +179,7 @@ function PeriodUnitControl({
           aria-pressed={unit === option.value}
           onClick={() => onUnitChange(option.value)}
           className={cn(
-            "h-9 min-w-9 cursor-pointer rounded-md px-2.5 text-base font-semibold transition-colors",
+            "min-h-12 min-w-12 cursor-pointer rounded-md px-2.5 text-base font-semibold transition-colors md:min-h-9 md:min-w-9",
             unit === option.value
               ? "bg-card text-foreground shadow-soft"
               : "text-muted hover:text-foreground",
@@ -198,11 +210,14 @@ function PeriodDateNav({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8 shrink-0 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground"
+        className={cn(
+          TOUCH_ICON_BUTTON,
+          "shrink-0 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground",
+        )}
         aria-label="이전 기간"
         onClick={() => onAnchorChange(shiftPeriodAnchor(anchor, unit, -1))}
       >
-        <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
+        <ChevronLeft strokeWidth={1.75} />
       </Button>
       <p className="min-w-0 truncate px-1 text-center text-base font-medium tabular-nums text-foreground sm:px-1.5">
         {range.label}
@@ -211,18 +226,20 @@ function PeriodDateNav({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-8 w-8 shrink-0 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground"
+        className={cn(
+          TOUCH_ICON_BUTTON,
+          "shrink-0 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground",
+        )}
         aria-label="다음 기간"
         onClick={() => onAnchorChange(shiftPeriodAnchor(anchor, unit, 1))}
       >
-        <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+        <ChevronRight strokeWidth={1.75} />
       </Button>
       {!current ? (
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="ml-1 h-8 cursor-pointer px-2.5 text-xs"
+          className="ml-1 min-h-12 cursor-pointer px-3 text-base md:min-h-8 md:px-2.5 md:text-xs"
           onClick={() => onAnchorChange(new Date())}
         >
           오늘
@@ -275,7 +292,7 @@ export function SortControl({
           setOpen((v) => !v);
         }}
         className={cn(
-          "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-surface px-3 text-base font-semibold text-foreground transition-colors",
+          "inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-lg bg-surface px-3 text-base font-semibold text-foreground transition-colors md:min-h-9",
           "hover:bg-surface-2",
           listOpen && "bg-card text-foreground shadow-soft ring-1 ring-border",
         )}
@@ -307,7 +324,7 @@ export function SortControl({
                   if (!forceOpen) setOpen(false);
                 }}
                 className={cn(
-                  "flex w-full cursor-pointer px-3 py-2 text-left text-base font-medium transition-colors",
+                  "flex min-h-12 w-full cursor-pointer items-center px-3 text-left text-base font-medium transition-colors md:min-h-9",
                   option.value === value
                     ? "bg-primary-soft text-primary"
                     : "text-foreground hover:bg-surface",
@@ -382,11 +399,14 @@ export function ParticipantsPopup({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0 cursor-pointer text-muted hover:bg-surface-2"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "shrink-0 cursor-pointer text-muted hover:bg-surface-2",
+            )}
             onClick={onClose}
             aria-label="참석자 닫기"
           >
-            <X className="h-4 w-4" />
+            <X />
           </Button>
         </div>
 
@@ -477,11 +497,16 @@ function ParticipantsCell({
 export function RecentMeetingsTable({
   meetings,
   onMeetingRemoved,
+  searchQuery: searchQueryProp,
+  onSearchChange,
+  onMobileBarChange,
 }: RecentMeetingsTableProps) {
   const { workspaceId } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
   const profile = getWorkspaceProfile(workspaceId);
-  const [recordSearch, setRecordSearch] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
+  const recordSearch = searchQueryProp ?? localSearch;
+  const setRecordSearch = onSearchChange ?? setLocalSearch;
   const [sortKey, setSortKey] = useState<SortKey>("date_desc");
   const [periodUnit, setPeriodUnit] = useState<PeriodUnit>("week");
   const [periodAnchor, setPeriodAnchor] = useState(() => new Date());
@@ -489,6 +514,7 @@ export function RecentMeetingsTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [actionConfirmOpen, setActionConfirmOpen] = useState(false);
+  const [recordsPage, setRecordsPage] = useState(1);
 
   const activeQuery = recordSearch.trim();
 
@@ -514,6 +540,24 @@ export function RecentMeetingsTable({
     [filtered, sortKey],
   );
 
+  const recordsTotalPages = Math.max(
+    1,
+    Math.ceil(sorted.length / RECORDS_PAGE_SIZE),
+  );
+  const pagedRecords = useMemo(() => {
+    const page = Math.min(recordsPage, recordsTotalPages);
+    const start = (page - 1) * RECORDS_PAGE_SIZE;
+    return sorted.slice(start, start + RECORDS_PAGE_SIZE);
+  }, [sorted, recordsPage, recordsTotalPages]);
+
+  useEffect(() => {
+    setRecordsPage(1);
+  }, [workspaceId, periodUnit, periodAnchor, activeQuery, sortKey]);
+
+  useEffect(() => {
+    setRecordsPage((p) => Math.min(p, recordsTotalPages));
+  }, [recordsTotalPages]);
+
   useEffect(() => {
     if (
       scenarioId === "popup-records-delete" ||
@@ -527,8 +571,8 @@ export function RecentMeetingsTable({
   }, [workspaceId, periodUnit, periodAnchor, activeQuery, scenarioId]);
 
   useEffect(() => {
-    setRecordSearch("");
-  }, [workspaceId]);
+    if (searchQueryProp === undefined) setLocalSearch("");
+  }, [workspaceId, searchQueryProp]);
 
   useEffect(() => {
     if (scenarioId === "popup-records-delete") {
@@ -632,6 +676,14 @@ export function RecentMeetingsTable({
     }
   }
 
+  useEffect(() => {
+    if (!onMobileBarChange) return;
+    onMobileBarChange({
+      onExitSelect: exitMode,
+    });
+    return () => onMobileBarChange(null);
+  }, [onMobileBarChange, selectMode]);
+
   const periodUnitControl =
     !selectMode && !activeQuery ? (
     <PeriodUnitControl
@@ -652,14 +704,16 @@ export function RecentMeetingsTable({
   ) : null;
 
   const batchActions = (
-    <div className="flex shrink-0 items-center gap-0.5">
+    <div className="flex shrink-0 items-center gap-2">
       {selectMode ? (
         <>
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-9 px-2.5 text-xs font-semibold"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "min-w-0 cursor-pointer px-3 text-base font-semibold md:h-9 md:min-h-9 md:min-w-0 md:px-2.5 md:text-xs",
+            )}
             onClick={toggleAll}
             disabled={sorted.length === 0 || busy}
           >
@@ -669,9 +723,8 @@ export function RecentMeetingsTable({
           </Button>
           <Button
             type="button"
-            size="sm"
             className={cn(
-              "h-9 gap-1.5 px-3",
+              "h-12 min-w-12 cursor-pointer gap-1.5 px-3 text-base md:h-9 md:min-w-0 md:px-3 md:text-sm",
               selectMode === "delete" &&
                 "bg-masked text-white hover:bg-masked/90",
             )}
@@ -679,22 +732,22 @@ export function RecentMeetingsTable({
             onClick={() => void runSelectionAction()}
           >
             {selectMode === "delete" ? (
-              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+              <Trash2 className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
             ) : (
-              <Download className="h-4 w-4" strokeWidth={1.75} />
+              <Download className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
             )}
-            {selected.size}
+            <span className="tabular-nums">{selected.size}</span>
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9"
+            className={cn(TOUCH_ICON_BUTTON, "cursor-pointer")}
             aria-label="선택 취소"
             disabled={busy}
             onClick={exitMode}
           >
-            <X className="h-5 w-5" strokeWidth={1.75} />
+            <X strokeWidth={1.75} />
           </Button>
         </>
       ) : (
@@ -703,23 +756,29 @@ export function RecentMeetingsTable({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted hover:bg-surface-2 hover:text-foreground"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground",
+            )}
             aria-label="다운로드"
             disabled={sorted.length === 0}
             onClick={() => enterMode("download")}
           >
-            <Download className="h-4 w-4" strokeWidth={1.75} />
+            <Download strokeWidth={1.75} />
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-masked hover:bg-masked-soft hover:text-masked"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "cursor-pointer text-masked hover:bg-masked-soft hover:text-masked",
+            )}
             aria-label="삭제"
             disabled={sorted.length === 0}
             onClick={() => enterMode("delete")}
           >
-            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+            <Trash2 strokeWidth={1.75} />
           </Button>
         </>
       )}
@@ -767,7 +826,7 @@ export function RecentMeetingsTable({
           {filterControls}
         </div>
 
-        {/* 검색: 기록 전용, 모바일 전체폭 */}
+        {/* 검색: 페이지에 둠. 하단 추적 바는 탐색만 */}
         {!selectMode ? (
           <MeetingSearch
             value={recordSearch}
@@ -778,15 +837,10 @@ export function RecentMeetingsTable({
           />
         ) : null}
 
-        {/* 기간 / 선택 안내, 다운로드·삭제 (좌우 동일 폭으로 날짜 광학 중앙) */}
-        <div className="grid min-h-9 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-          <div
-            className="pointer-events-none invisible justify-self-start"
-            aria-hidden
-          >
-            {batchActions}
-          </div>
-          <div className="min-w-0 justify-self-center">{periodHint}</div>
+        {/* 기간 / 선택 안내, 다운로드·삭제 (좌우 1fr로 날짜 광학 중앙) */}
+        <div className="grid min-h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 md:min-h-9">
+          <div className="min-w-0" aria-hidden />
+          <div className="min-w-0 justify-self-center px-1">{periodHint}</div>
           <div className="justify-self-end">{batchActions}</div>
         </div>
 
@@ -799,19 +853,26 @@ export function RecentMeetingsTable({
             {activeQuery ? "검색 결과가 없습니다." : profile.recordsEmpty}
           </p>
         ) : (
-          <ul className="divide-y divide-border">
-            {sorted.map((meeting) => (
-              <li key={meeting.id}>
-                <MeetingRecordListItem
-                  meeting={meeting}
-                  showPeopleDensity={profile.showPeopleDensity}
-                  selecting={Boolean(selectMode)}
-                  checked={selected.has(meeting.id)}
-                  onToggle={() => toggleId(meeting.id)}
-                />
-              </li>
-            ))}
-          </ul>
+          <>
+            <ul className="divide-y divide-border">
+              {pagedRecords.map((meeting) => (
+                <li key={meeting.id}>
+                  <MeetingRecordListItem
+                    meeting={meeting}
+                    showPeopleDensity={profile.showPeopleDensity}
+                    selecting={Boolean(selectMode)}
+                    checked={selected.has(meeting.id)}
+                    onToggle={() => toggleId(meeting.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+            <RecordsPageNav
+              page={Math.min(recordsPage, recordsTotalPages)}
+              totalPages={recordsTotalPages}
+              onPageChange={setRecordsPage}
+            />
+          </>
         )}
       </CardContent>
 

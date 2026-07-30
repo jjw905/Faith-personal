@@ -4,7 +4,7 @@ export const MAX_UPLOAD_AUDIO_SEC = 3600;
 export const MAX_UPLOAD_AUDIO_MINUTES = MAX_UPLOAD_AUDIO_SEC / 60;
 
 export const UPLOAD_AUDIO_TOO_LONG_MESSAGE =
-  `업로드 음성은 최대 ${MAX_UPLOAD_AUDIO_MINUTES}분(1시간)까지 지원합니다. 더 짧은 파일로 올려 주세요.`;
+  `업로드 음성은 최대 ${MAX_UPLOAD_AUDIO_MINUTES}분(1시간)까지 지원합니다.`;
 
 /**
  * ffmpeg 없는 배포 서버는 원본을 한 번에 OpenAI로 보낸다.

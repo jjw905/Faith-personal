@@ -1,31 +1,25 @@
 "use client";
 
 import {
-  ChevronLeft,
-  ChevronRight,
   Link2,
   MapPin,
-  Pencil,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MonthDayCalendar } from "@/components/meetings/month-day-calendar";
 import {
   dateLabelToIso,
   formatUpcomingScheduleSummary,
   isoToUpcomingDateLabel,
-  listMonthDayCells,
-  parseIsoDateParts,
   relativeUpcomingHint,
   seoulDateKey,
-  shiftMonth,
 } from "@/lib/meeting-date";
 import {
   inferMeetingPlatform,
@@ -41,6 +35,7 @@ import {
   WORKSPACE_PEOPLE,
   type UpcomingItem,
 } from "@/lib/workspace-data";
+import { TOUCH_BUTTON, TOUCH_ICON_BUTTON } from "@/lib/touch-target";
 import { cn } from "@/lib/utils";
 
 interface UpcomingDetailPanelProps {
@@ -112,7 +107,7 @@ function DetailRow({
     >
       <p
         className={cn(
-          "w-14 shrink-0 text-xs font-medium leading-5 text-muted",
+          "w-16 shrink-0 text-base font-medium leading-5 text-muted md:w-14 md:text-xs",
           align === "start" && "pt-0.5",
         )}
       >
@@ -164,7 +159,7 @@ function AddAction({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-3 text-xs font-medium text-muted transition-colors hover:border-foreground/25 hover:bg-surface hover:text-foreground"
+      className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-3.5 text-base font-medium text-muted transition-colors hover:border-foreground/25 hover:bg-surface hover:text-foreground md:h-9 md:px-3 md:text-xs"
     >
       {children}
       <span>{label}</span>
@@ -209,7 +204,7 @@ const DURATION_PRESETS = [
 ] as const;
 
 const DURATION_MIN = 5;
-const DURATION_MAX = 480;
+const DURATION_MAX = 120;
 
 function clampDurationMinutes(mins: number) {
   if (!Number.isFinite(mins)) return 30;
@@ -300,7 +295,7 @@ function MinuteInput({
         )}
         aria-label={ariaLabel}
       />
-      <span className="shrink-0 text-sm text-muted">분</span>
+      <span className="shrink-0 text-base text-muted md:text-sm">분</span>
     </div>
   );
 }
@@ -343,101 +338,111 @@ function DurationFields({
   }
 
   return (
-    <div className="min-w-0 space-y-3">
-      <p className="text-xs font-medium text-muted">소요</p>
-
-      <div
-        className="inline-flex rounded-lg border border-border p-0.5"
-        role="radiogroup"
-        aria-label="소요 입력 방식"
-      >
-        {(
-          [
-            ["exact", "지정"],
-            ["range", "구간"],
-          ] as const
-        ).map(([id, text]) => {
-          const active = mode === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => {
-                if (id === "exact") {
-                  applyExact(minMins);
-                  return;
-                }
-                applyRange(minMins, Math.max(maxMins, minMins + 15));
-              }}
-              className={cn(
-                "h-8 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors",
-                active
-                  ? "bg-primary-soft text-primary"
-                  : "text-muted hover:text-foreground",
-              )}
-            >
-              {text}
-            </button>
-          );
-        })}
+    <div className="min-w-0 space-y-2">
+      {/* 라벨 옆에 현재 값을 바로 보여줘 아래 문구와 중복 표기하지 않는다 */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-base font-medium text-muted md:text-xs">소요</p>
+        <p className="text-base font-semibold tabular-nums text-foreground md:text-sm">
+          {label}
+        </p>
       </div>
 
-      <div
-        className="flex flex-wrap gap-2"
-        role="group"
-        aria-label="빠른 소요"
-      >
-        {DURATION_PRESETS.map((preset) => {
-          const mins = durationPartToMinutes(preset) ?? 30;
-          const active = mode === "exact" && minMins === mins && !isRange;
-          return (
-            <Chip
-              key={preset}
-              active={active}
-              onClick={() => applyExact(mins)}
-            >
-              {preset}
-            </Chip>
-          );
-        })}
-      </div>
-
-      {mode === "exact" ? (
-        <MinuteInput
-          value={minMins}
-          onChange={applyExact}
-          ariaLabel="소요 분"
-        />
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <MinuteInput
-            value={minMins}
-            onChange={(mins) => applyRange(mins, maxMins)}
-            ariaLabel="최소 소요 분"
-          />
-          <span className="text-sm text-muted" aria-hidden>
-            ~
-          </span>
-          <MinuteInput
-            value={maxMins}
-            onChange={(mins) => applyRange(minMins, mins)}
-            ariaLabel="최대 소요 분"
-          />
+      {/* 방식·프리셋·직접 입력을 한 카드로 묶어 따로 노는 느낌을 없앤다 */}
+      <div className="min-w-0 space-y-3 rounded-xl border border-border p-3">
+        <div
+          className="inline-flex rounded-lg border border-border p-0.5"
+          role="radiogroup"
+          aria-label="소요 입력 방식"
+        >
+          {(
+            [
+              ["exact", "지정"],
+              ["range", "구간"],
+            ] as const
+          ).map(([id, text]) => {
+            const active = mode === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => {
+                  if (id === "exact") {
+                    applyExact(minMins);
+                    return;
+                  }
+                  applyRange(minMins, Math.max(maxMins, minMins + 15));
+                }}
+                className={cn(
+                  "h-11 cursor-pointer rounded-md px-4 text-base font-medium transition-colors md:h-8 md:px-3 md:text-xs",
+                  active
+                    ? "bg-primary-soft text-primary"
+                    : "text-muted hover:text-foreground",
+                )}
+              >
+                {text}
+              </button>
+            );
+          })}
         </div>
-      )}
 
-      <p className="text-xs font-medium tabular-nums text-foreground">
-        {label}
-      </p>
+        <div
+          className="flex flex-wrap gap-2"
+          role="group"
+          aria-label="빠른 소요"
+        >
+          {DURATION_PRESETS.map((preset) => {
+            const mins = durationPartToMinutes(preset) ?? 30;
+            const active = mode === "exact" && minMins === mins && !isRange;
+            return (
+              <Chip
+                key={preset}
+                active={active}
+                onClick={() => applyExact(mins)}
+              >
+                {preset}
+              </Chip>
+            );
+          })}
+        </div>
+
+        <div className="space-y-1.5 border-t border-border pt-3">
+          <p className="text-sm font-medium text-muted md:text-xs">
+            직접 입력
+          </p>
+          {mode === "exact" ? (
+            <MinuteInput
+              value={minMins}
+              onChange={applyExact}
+              ariaLabel="소요 분"
+            />
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <MinuteInput
+                value={minMins}
+                onChange={(mins) => applyRange(mins, maxMins)}
+                ariaLabel="최소 소요 분"
+              />
+              <span className="text-base text-muted md:text-sm" aria-hidden>
+                ~
+              </span>
+              <MinuteInput
+                value={maxMins}
+                onChange={(mins) => applyRange(minMins, mins)}
+                ariaLabel="최대 소요 분"
+              />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 /** M3 outlined text field */
 const outlinedFieldClass =
-  "flex h-12 w-full rounded-md border border-border bg-transparent px-3.5 text-sm text-foreground placeholder:text-muted-2 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
+  "flex h-12 w-full rounded-md border border-border bg-transparent px-3.5 text-base text-foreground placeholder:text-muted-2 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary md:text-sm";
 
 function Chip({
   active,
@@ -455,7 +460,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 cursor-pointer items-center rounded-lg px-2.5 text-xs font-medium transition-colors",
+        "inline-flex h-11 cursor-pointer items-center rounded-lg px-3.5 text-base font-medium transition-colors md:h-8 md:px-2.5 md:text-xs",
         active
           ? "bg-primary-soft text-primary"
           : "border border-border bg-transparent text-foreground hover:bg-surface",
@@ -487,118 +492,12 @@ function ScheduleSummary({
 
   return (
     <div className={cn("min-w-0", className)}>
-      <p className="text-sm font-medium tabular-nums tracking-tight text-foreground">
+      <p className="text-base font-medium tabular-nums tracking-tight text-foreground md:text-sm">
         {summary}
       </p>
       {hint ? (
-        <p className="mt-0.5 text-xs text-muted">{hint}</p>
+        <p className="mt-1 text-sm text-muted md:mt-0.5 md:text-xs">{hint}</p>
       ) : null}
-    </div>
-  );
-}
-
-const WEEKDAY_HEADERS = ["일", "월", "화", "수", "목", "금", "토"] as const;
-
-/** M3 docked month calendar — 큰 날짜 셀, 월 이동 */
-function MonthCalendar({
-  selectedIso,
-  minIso,
-  onSelect,
-}: {
-  selectedIso: string;
-  minIso: string;
-  onSelect: (iso: string) => void;
-}) {
-  const selectedParts = parseIsoDateParts(selectedIso);
-  const minParts = parseIsoDateParts(minIso);
-  const [view, setView] = useState(() => ({
-    year: selectedParts?.year ?? minParts?.year ?? 2026,
-    month: selectedParts?.month ?? minParts?.month ?? 1,
-  }));
-
-  useEffect(() => {
-    const parts = parseIsoDateParts(selectedIso);
-    if (!parts) return;
-    setView({ year: parts.year, month: parts.month });
-  }, [selectedIso]);
-
-  const cells = listMonthDayCells(view.year, view.month);
-  const canGoPrev =
-    !minParts ||
-    view.year > minParts.year ||
-    (view.year === minParts.year && view.month > minParts.month);
-
-  return (
-    <div
-      className="min-w-0 rounded-xl border border-border bg-card px-2 pb-2 pt-3"
-      role="group"
-      aria-label="날짜 달력"
-    >
-      <div className="mb-2 flex items-center justify-between px-1">
-        <button
-          type="button"
-          onClick={() => setView((v) => shiftMonth(v.year, v.month, -1))}
-          disabled={!canGoPrev}
-          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface disabled:pointer-events-none disabled:opacity-30"
-          aria-label="이전 달"
-        >
-          <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
-        </button>
-        <p className="text-sm font-semibold tabular-nums text-foreground">
-          {view.year}년 {view.month}월
-        </p>
-        <button
-          type="button"
-          onClick={() => setView((v) => shiftMonth(v.year, v.month, 1))}
-          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface"
-          aria-label="다음 달"
-        >
-          <ChevronRight className="h-5 w-5" strokeWidth={1.75} />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-7">
-        {WEEKDAY_HEADERS.map((label) => (
-          <div
-            key={label}
-            className="flex h-9 items-center justify-center text-xs font-medium text-muted"
-          >
-            {label}
-          </div>
-        ))}
-        {cells.map((cell) => {
-          const disabled = cell.iso < minIso;
-          const selected = cell.iso === selectedIso;
-          const isToday = cell.iso === minIso;
-          return (
-            <div
-              key={cell.iso}
-              className="flex items-center justify-center py-0.5"
-            >
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={cell.iso}
-                aria-pressed={selected}
-                onClick={() => onSelect(cell.iso)}
-                className={cn(
-                  "inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full text-sm font-medium tabular-nums transition-colors",
-                  !cell.inMonth && !selected && "text-muted-2",
-                  cell.inMonth &&
-                    !selected &&
-                    "text-foreground hover:bg-surface",
-                  isToday && !selected && "font-semibold text-primary",
-                  selected &&
-                    "bg-primary font-semibold text-primary-foreground",
-                  disabled && "pointer-events-none opacity-30",
-                )}
-              >
-                {cell.day}
-              </button>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -632,8 +531,8 @@ function ScheduleFields({
       />
 
       <div className="min-w-0">
-        <p className="mb-1.5 text-xs font-medium text-muted">날짜</p>
-        <MonthCalendar
+        <p className="mb-1.5 text-base font-medium text-muted">날짜</p>
+        <MonthDayCalendar
           selectedIso={selectedIso}
           minIso={todayIso}
           onSelect={(iso) => onDateChange(isoToUpcomingDateLabel(iso))}
@@ -641,14 +540,14 @@ function ScheduleFields({
       </div>
 
       <label className="block min-w-0">
-        <span className="mb-1 block text-xs font-medium text-muted">시작</span>
+        <span className="mb-1 block text-base font-medium text-muted">시작</span>
         <input
           type="time"
           value={toTimeInputValue(timeLabel)}
           onChange={(e) => onTimeChange(fromTimeInputValue(e.target.value))}
           className={cn(
             outlinedFieldClass,
-            "max-w-[10.5rem] cursor-pointer text-base font-semibold tabular-nums",
+            "h-14 max-w-[10.5rem] cursor-pointer text-base font-semibold tabular-nums md:h-11",
           )}
           aria-label={`시작 시간 ${timeLabel}`}
         />
@@ -679,8 +578,10 @@ export function UpcomingDetailPanel({
   mode = "view",
 }: UpcomingDetailPanelProps) {
   const isCreate = mode === "create";
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<FormState | null>(null);
+  const [editing, setEditing] = useState(isCreate);
+  const [form, setForm] = useState<FormState | null>(() =>
+    item ? toForm(item) : null,
+  );
   const [participantDraft, setParticipantDraft] = useState("");
   const [linkDraft, setLinkDraft] = useState("");
   const [showLinkEditor, setShowLinkEditor] = useState(false);
@@ -688,11 +589,6 @@ export function UpcomingDetailPanel({
   const [showParticipantAdd, setShowParticipantAdd] = useState(false);
   const [showOrganizerPick, setShowOrganizerPick] = useState(false);
   const [showCustomParticipant, setShowCustomParticipant] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   function resetEditors() {
     setParticipantDraft("");
@@ -789,88 +685,78 @@ export function UpcomingDetailPanel({
   }
 
   const view = item;
-  const data = editing ? form : view ? toForm(view) : null;
+  const data = editing
+    ? form
+    : view
+      ? form ?? toForm(view)
+      : null;
   const sheetTitle = isCreate
     ? "예정 회의 추가"
     : editing
       ? "예정 회의 수정"
       : "예정 회의";
 
-  if (!mounted) return null;
+  if (!open || !view || !data) return null;
 
-  return createPortal(
+  return (
     <>
+      {/* M3: 모바일은 full-screen dialog라 스크림 없음. md+ side sheet만 스크림. */}
       <div
         className={cn(
-          "fixed inset-0 z-50 bg-black/40 transition-opacity duration-200",
-          open ? "opacity-100" : "pointer-events-none opacity-0",
+          "fixed inset-0 z-[70] hidden bg-black/40 transition-opacity duration-200 md:block",
+          "opacity-100",
         )}
         onClick={onClose}
-        aria-hidden={!open}
+        aria-hidden
       />
 
       <aside
         role="dialog"
-        aria-modal={open}
-        aria-hidden={!open}
+        aria-modal="true"
         aria-label={sheetTitle}
-        inert={!open}
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex h-dvh w-full max-w-[min(100vw,28rem)] flex-col overflow-hidden bg-card shadow-[0_0_40px_rgba(17,24,46,0.12)] transition-transform duration-200 ease-out sm:max-w-md",
-          open ? "translate-x-0" : "translate-x-full",
+          // 모바일: edge-to-edge full-screen dialog. md+: 우측 side sheet.
+          "fixed inset-0 z-[70] flex h-dvh w-full flex-col overflow-hidden bg-card transition-transform duration-200 ease-out",
+          "md:inset-y-0 md:right-0 md:left-auto md:max-w-md md:shadow-[0_0_40px_rgba(17,24,46,0.12)]",
+          "translate-x-0",
         )}
       >
-        {/* M3 side sheet header */}
+        {/* M3 top app bar: X(취소/닫기) 좌측, 편집 중엔 저장 액션 우측(모바일 full-screen dialog 규칙) */}
         <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2 sm:px-3">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-10 w-10 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
-            onClick={onClose}
-            aria-label="상세 닫기"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground",
+            )}
+            onClick={editing ? cancelEdit : onClose}
+            aria-label={editing ? "편집 취소" : "상세 닫기"}
           >
-            <X className="h-5 w-5" />
+            <X />
           </Button>
           <div className="min-w-0 flex-1 px-1">
             <p className="truncate text-base font-medium text-foreground">
               {sheetTitle}
             </p>
           </div>
-          {!editing && view && !isCreate ? (
-            <div className="flex shrink-0 items-center">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
-                onClick={startEdit}
-                aria-label="수정"
-              >
-                <Pencil className="h-5 w-5" strokeWidth={1.75} />
-              </Button>
-              {onDelete ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 cursor-pointer text-masked hover:bg-masked-soft hover:text-masked"
-                  onClick={() => {
-                    if (!view) return;
-                    if (!window.confirm("이 일정을 삭제할까요?")) return;
-                    onDelete(view);
-                    onClose();
-                  }}
-                  aria-label="삭제"
-                >
-                  <Trash2 className="h-5 w-5" strokeWidth={1.75} />
-                </Button>
-              ) : null}
-            </div>
+          {editing ? (
+            <Button
+              type="button"
+              className={cn(
+                TOUCH_BUTTON,
+                "shrink-0 cursor-pointer px-4 text-base md:hidden",
+              )}
+              onClick={handleSave}
+            >
+              {isCreate ? "추가" : "저장"}
+            </Button>
           ) : null}
+          {/* 보기 모드 수정, 삭제는 하단 액션 바에만 둔다. 헤더 중복 시 같은 기능이 위아래로 겹침 */}
         </div>
 
-        {view && data && form ? (
+        {view && data ? (
           <>
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
               <div className="min-w-0 space-y-0 px-4 py-2 sm:px-5">
@@ -878,7 +764,7 @@ export function UpcomingDetailPanel({
                 <div className="border-b border-border py-4">
                   {editing ? (
                     <input
-                      value={form.title}
+                      value={data.title}
                       onChange={(e) => update("title", e.target.value)}
                       className="w-full bg-transparent text-xl font-medium leading-snug text-foreground outline-none placeholder:text-muted-2"
                       placeholder="회의 제목"
@@ -895,9 +781,9 @@ export function UpcomingDetailPanel({
                   <div className="py-4">
                     {editing ? (
                       <ScheduleFields
-                        dateLabel={form.dateLabel}
-                        timeLabel={form.timeLabel}
-                        duration={form.duration}
+                        dateLabel={data.dateLabel}
+                        timeLabel={data.timeLabel}
+                        duration={data.duration}
                         onDateChange={(next) => update("dateLabel", next)}
                         onTimeChange={(next) => update("timeLabel", next)}
                         onDurationChange={(next) => update("duration", next)}
@@ -926,7 +812,7 @@ export function UpcomingDetailPanel({
                             aria-label="장소 플랫폼"
                           >
                             {MEETING_PLATFORMS.map((option) => {
-                              const selected = form.platform === option.id;
+                              const selected = data.platform === option.id;
                               return (
                                 <button
                                   key={option.id}
@@ -948,7 +834,7 @@ export function UpcomingDetailPanel({
                                     }
                                   }}
                                   className={cn(
-                                    "inline-flex cursor-pointer flex-col items-center gap-1 rounded-lg px-1.5 py-1 transition-colors",
+                                    "inline-flex min-h-11 min-w-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 transition-colors",
                                     selected
                                       ? "bg-primary-soft"
                                       : "hover:bg-surface",
@@ -963,7 +849,7 @@ export function UpcomingDetailPanel({
                                   />
                                   <span
                                     className={cn(
-                                      "text-xs font-medium",
+                                      "text-sm font-medium md:text-xs",
                                       selected ? "text-primary" : "text-muted",
                                     )}
                                   >
@@ -976,16 +862,16 @@ export function UpcomingDetailPanel({
                             })}
                           </div>
 
-                          {form.platform === "custom" ? (
-                            hasExtraLocation(form.platform, form.location) ? (
-                              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border py-1 pl-2.5 pr-1.5">
+                          {data.platform === "custom" ? (
+                            hasExtraLocation(data.platform, data.location) ? (
+                              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border py-1 pl-2.5 pr-1">
                                 <MapPin className="h-3.5 w-3.5 shrink-0 text-muted" />
-                                <span className="truncate text-sm text-foreground">
-                                  {form.location}
+                                <span className="truncate text-base text-foreground md:text-sm">
+                                  {data.location}
                                 </span>
                                 <button
                                   type="button"
-                                  className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
+                                  className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground md:h-7 md:w-7"
                                   aria-label="장소 지우기"
                                   onClick={() => {
                                     update("location", "");
@@ -1004,7 +890,7 @@ export function UpcomingDetailPanel({
                                   ).map((place) => (
                                     <Chip
                                       key={place}
-                                      active={form.location === place}
+                                      active={data.location === place}
                                       onClick={() => {
                                         update("location", place);
                                         setShowPlaceEditor(false);
@@ -1015,7 +901,7 @@ export function UpcomingDetailPanel({
                                   ))}
                                 </div>
                                 <input
-                                  value={form.location}
+                                  value={data.location}
                                   onChange={(e) =>
                                     update("location", e.target.value)
                                   }
@@ -1041,20 +927,20 @@ export function UpcomingDetailPanel({
                                 <MapPin className="h-3.5 w-3.5" />
                               </AddAction>
                             )
-                          ) : hasExtraLocation(form.platform, form.location) ? (
-                            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border py-1 pl-2.5 pr-1.5">
+                          ) : hasExtraLocation(data.platform, data.location) ? (
+                            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-border py-1 pl-2.5 pr-1">
                               <Link2 className="h-3.5 w-3.5 shrink-0 text-muted" />
-                              <span className="truncate text-sm text-foreground">
-                                {form.location}
+                              <span className="truncate text-base text-foreground md:text-sm">
+                                {data.location}
                               </span>
                               <button
                                 type="button"
-                                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
+                                className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground md:h-7 md:w-7"
                                 aria-label="링크 지우기"
                                 onClick={() => {
                                   update(
                                     "location",
-                                    platformDefaultLocation(form.platform),
+                                    platformDefaultLocation(data.platform),
                                   );
                                   setShowLinkEditor(false);
                                 }}
@@ -1101,12 +987,12 @@ export function UpcomingDetailPanel({
                           )}
                         </div>
                       ) : (
-                        <div className="flex min-w-0 items-center gap-2.5">
+                        <div className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-2.5">
                           <MeetingPlatformIcon
                             platform={resolvePlatform(view)}
                             size="sm"
                           />
-                          <p className="min-w-0 text-sm text-foreground">
+                          <p className="min-w-0 truncate text-base font-medium leading-5 text-foreground md:text-sm">
                             {view.location}
                           </p>
                         </div>
@@ -1124,15 +1010,15 @@ export function UpcomingDetailPanel({
                           <button
                             type="button"
                             onClick={() => setShowOrganizerPick((v) => !v)}
-                            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:bg-surface"
+                            className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:bg-surface md:min-h-0"
                             aria-expanded={showOrganizerPick}
                             aria-label="주최자 변경"
                           >
-                            <PersonAvatar name={form.organizer} size="sm" />
-                            <span className="text-sm text-foreground">
-                              {form.organizer}
+                            <PersonAvatar name={data.organizer} size="sm" />
+                            <span className="text-base text-foreground md:text-sm">
+                              {data.organizer}
                             </span>
-                            <span className="text-xs font-medium text-muted">
+                            <span className="text-sm font-medium text-muted md:text-xs">
                               변경
                             </span>
                           </button>
@@ -1143,7 +1029,7 @@ export function UpcomingDetailPanel({
                               aria-label="주최자 선택"
                             >
                               {WORKSPACE_PEOPLE.map((person) => {
-                                const active = form.organizer === person.name;
+                                const active = data.organizer === person.name;
                                 return (
                                   <button
                                     key={person.name}
@@ -1154,16 +1040,16 @@ export function UpcomingDetailPanel({
                                       update("organizer", person.name);
                                       setShowOrganizerPick(false);
                                       if (
-                                        !form.participants.includes(person.name)
+                                        !data.participants.includes(person.name)
                                       ) {
                                         update("participants", [
                                           person.name,
-                                          ...form.participants,
+                                          ...data.participants,
                                         ]);
                                       }
                                     }}
                                     className={cn(
-                                      "inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors",
+                                      "inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors md:min-h-0",
                                       active
                                         ? "border-primary bg-primary-soft text-primary"
                                         : "border-border hover:bg-surface",
@@ -1174,7 +1060,7 @@ export function UpcomingDetailPanel({
                                       size="sm"
                                       className="border-transparent"
                                     />
-                                    <span className="text-sm font-medium leading-5">
+                                    <span className="text-base font-medium leading-5 md:text-sm">
                                       {person.name}
                                     </span>
                                   </button>
@@ -1184,9 +1070,9 @@ export function UpcomingDetailPanel({
                           ) : null}
                         </div>
                       ) : (
-                        <div className="inline-flex items-center gap-2">
+                        <div className="inline-flex items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-2.5">
                           <PersonAvatar name={view.organizer} size="sm" />
-                          <p className="text-sm text-foreground">
+                          <p className="text-base font-medium leading-5 text-foreground md:text-sm">
                             {view.organizer}
                           </p>
                         </div>
@@ -1202,29 +1088,29 @@ export function UpcomingDetailPanel({
                       {editing ? (
                         <div className="min-w-0 space-y-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            {form.participants.map((name) => (
+                            {data.participants.map((name) => (
                               <span
                                 key={name}
-                                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-1.5"
+                                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-1 md:min-h-0"
                               >
                                 <PersonAvatar name={name} size="sm" />
-                                <span className="max-w-[8rem] truncate text-sm font-medium leading-5 text-foreground">
+                                <span className="max-w-[8rem] truncate text-base font-medium leading-5 text-foreground md:text-sm">
                                   {name}
                                 </span>
                                 <button
                                   type="button"
-                                  className="inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
+                                  className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground md:h-6 md:w-6"
                                   aria-label={`${name} 제거`}
                                   onClick={() =>
                                     update(
                                       "participants",
-                                      form.participants.filter(
+                                      data.participants.filter(
                                         (p) => p !== name,
                                       ),
                                     )
                                   }
                                 >
-                                  <X className="h-3 w-3" />
+                                  <X className="h-3.5 w-3.5 md:h-3 md:w-3" />
                                 </button>
                               </span>
                             ))}
@@ -1239,8 +1125,8 @@ export function UpcomingDetailPanel({
                           </div>
 
                           {showParticipantAdd ? (
-                            <div className="space-y-2.5">
-                              <p className="text-xs font-medium text-muted">
+                            <div className="space-y-2.5 rounded-xl border border-border p-3">
+                              <p className="text-sm font-medium text-muted md:text-xs">
                                 팀원 선택
                               </p>
                               <div
@@ -1249,7 +1135,7 @@ export function UpcomingDetailPanel({
                                 aria-label="참석자 후보"
                               >
                                 {WORKSPACE_PEOPLE.map((person) => {
-                                  const selected = form.participants.includes(
+                                  const selected = data.participants.includes(
                                     person.name,
                                   );
                                   return (
@@ -1261,7 +1147,7 @@ export function UpcomingDetailPanel({
                                         toggleParticipant(person.name)
                                       }
                                       className={cn(
-                                        "inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors",
+                                        "inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors md:min-h-0",
                                         selected
                                           ? "border-primary bg-primary-soft text-primary"
                                           : "border-border hover:bg-surface",
@@ -1272,7 +1158,7 @@ export function UpcomingDetailPanel({
                                         size="sm"
                                         className="border-transparent"
                                       />
-                                      <span className="text-sm font-medium leading-5">
+                                      <span className="text-base font-medium leading-5 md:text-sm">
                                         {person.name}
                                       </span>
                                     </button>
@@ -1312,7 +1198,7 @@ export function UpcomingDetailPanel({
                               ) : (
                                 <button
                                   type="button"
-                                  className="cursor-pointer text-xs font-medium text-muted hover:text-foreground"
+                                  className="min-h-11 cursor-pointer text-base font-medium text-muted hover:text-foreground md:min-h-0 md:text-xs"
                                   onClick={() =>
                                     setShowCustomParticipant(true)
                                   }
@@ -1328,10 +1214,10 @@ export function UpcomingDetailPanel({
                           {view.participants.map((name) => (
                             <span
                               key={name}
-                              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-2.5"
+                              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-2.5 md:min-h-0"
                             >
                               <PersonAvatar name={name} size="sm" />
-                              <span className="max-w-[8rem] truncate text-sm font-medium leading-5 text-foreground">
+                              <span className="max-w-[8rem] truncate text-base font-medium leading-5 text-foreground md:text-sm">
                                 {name}
                               </span>
                             </span>
@@ -1344,12 +1230,12 @@ export function UpcomingDetailPanel({
 
                 <section className="border-t border-border py-4">
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <h3 className="text-xs font-medium text-muted">안건</h3>
+                    <h3 className="text-base font-medium text-muted md:text-xs">안건</h3>
                     {editing ? (
                       <button
                         type="button"
                         onClick={addAgendaRow}
-                        className="cursor-pointer text-xs font-medium text-primary hover:underline"
+                        className="min-h-11 cursor-pointer text-base font-medium text-primary hover:underline md:min-h-0 md:text-xs"
                       >
                         추가
                       </button>
@@ -1357,24 +1243,24 @@ export function UpcomingDetailPanel({
                   </div>
 
                   {editing ? (
-                    form.agenda.length === 0 ? (
-                      <p className="text-xs text-muted">
+                    data.agenda.length === 0 ? (
+                      <p className="text-base text-muted md:text-xs">
                         미리 적어 두면 회의 때 흐름을 잡기 좋아요.
                       </p>
                     ) : (
                       <ol className="space-y-2">
-                        {form.agenda.map((line, index) => (
+                        {data.agenda.map((line, index) => (
                           <li
                             key={`agenda-edit-${index}`}
                             className="flex items-center gap-2"
                           >
-                            <span className="w-4 shrink-0 text-sm tabular-nums text-muted-2">
+                            <span className="w-4 shrink-0 text-base tabular-nums text-muted-2 md:text-sm">
                               {index + 1}.
                             </span>
                             <input
                               value={line}
                               onChange={(e) => {
-                                const next = [...form.agenda];
+                                const next = [...data.agenda];
                                 next[index] = e.target.value;
                                 update("agenda", next);
                               }}
@@ -1387,12 +1273,12 @@ export function UpcomingDetailPanel({
                             />
                             <button
                               type="button"
-                              className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-masked hover:bg-masked-soft"
+                              className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-masked hover:bg-masked-soft md:h-10 md:w-10"
                               aria-label={`안건 ${index + 1} 삭제`}
                               onClick={() =>
                                 update(
                                   "agenda",
-                                  form.agenda.filter((_, i) => i !== index),
+                                  data.agenda.filter((_, i) => i !== index),
                                 )
                               }
                             >
@@ -1407,7 +1293,7 @@ export function UpcomingDetailPanel({
                       {view.agenda.map((line, index) => (
                         <li
                           key={`${view.id}-agenda-${index}`}
-                          className="flex gap-2 text-sm text-foreground"
+                          className="flex gap-2 text-base text-foreground md:text-sm"
                         >
                           <span className="shrink-0 tabular-nums text-muted-2">
                             {index + 1}.
@@ -1417,15 +1303,15 @@ export function UpcomingDetailPanel({
                       ))}
                     </ol>
                   ) : (
-                    <p className="text-sm text-muted">안건 없음</p>
+                    <p className="text-base text-muted md:text-sm">안건 없음</p>
                   )}
                 </section>
 
                 <section className="border-t border-border py-4">
-                  <h3 className="mb-3 text-xs font-medium text-muted">메모</h3>
+                  <h3 className="mb-3 text-base font-medium text-muted md:text-xs">메모</h3>
                   {editing ? (
                     <textarea
-                      value={form.notes}
+                      value={data.notes}
                       onChange={(e) => update("notes", e.target.value)}
                       rows={4}
                       className={cn(
@@ -1435,7 +1321,7 @@ export function UpcomingDetailPanel({
                       placeholder="참고할 내용, 링크 등"
                     />
                   ) : (
-                    <p className="text-sm leading-relaxed text-foreground">
+                    <p className="text-base leading-relaxed text-foreground md:text-sm">
                       {view.notes || (
                         <span className="text-muted">메모 없음</span>
                       )}
@@ -1445,33 +1331,49 @@ export function UpcomingDetailPanel({
               </div>
             </div>
 
-            {/* M3 action bar: text/outline left, filled primary right */}
-            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-3 sm:px-4">
+            {/* M3 action bar: 편집 중엔 저장이 상단으로 옮겨가서 모바일에서 숨김(키보드 겹침 방지). 데스크탑 side sheet는 유지. */}
+            <div
+              className={cn(
+                "shrink-0 border-t border-border bg-card px-4 pt-3",
+                "pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]",
+                "sm:px-5 sm:pb-4",
+                editing && "hidden md:block",
+              )}
+            >
               {editing ? (
-                <>
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <Button
                     type="button"
                     variant="ghost"
-                    className="min-w-[4.5rem] cursor-pointer"
+                    className={cn(
+                      TOUCH_BUTTON,
+                      "w-full cursor-pointer text-base sm:w-auto sm:min-w-[4.5rem] sm:text-sm",
+                    )}
                     onClick={cancelEdit}
                   >
                     취소
                   </Button>
                   <Button
                     type="button"
-                    className="min-w-[5rem] cursor-pointer"
+                    className={cn(
+                      TOUCH_BUTTON,
+                      "w-full cursor-pointer text-base sm:w-auto sm:min-w-[5rem] sm:text-sm",
+                    )}
                     onClick={handleSave}
                   >
                     {isCreate ? "추가" : "저장"}
                   </Button>
-                </>
+                </div>
               ) : (
-                <>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
                   {onDelete ? (
                     <Button
                       type="button"
                       variant="ghost"
-                      className="mr-auto cursor-pointer text-masked hover:bg-masked-soft hover:text-masked"
+                      className={cn(
+                        TOUCH_BUTTON,
+                        "cursor-pointer justify-self-stretch text-base text-masked hover:bg-masked-soft hover:text-masked sm:mr-auto sm:w-auto sm:text-sm",
+                      )}
                       onClick={() => {
                         if (!window.confirm("이 일정을 삭제할까요?")) return;
                         onDelete(view);
@@ -1484,23 +1386,32 @@ export function UpcomingDetailPanel({
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-w-[4.5rem] cursor-pointer"
+                    className={cn(
+                      TOUCH_BUTTON,
+                      "cursor-pointer justify-self-stretch text-base sm:w-auto sm:min-w-[4.5rem] sm:text-sm",
+                      !onDelete && "col-span-2 sm:col-span-1",
+                    )}
                     onClick={startEdit}
                   >
                     수정
                   </Button>
-                  <Button asChild className="min-w-[5.5rem] cursor-pointer">
+                  <Button
+                    asChild
+                    className={cn(
+                      TOUCH_BUTTON,
+                      "col-span-2 w-full cursor-pointer text-base sm:col-span-1 sm:w-auto sm:min-w-[5.5rem] sm:text-sm",
+                    )}
+                  >
                     <Link href={view.href} onClick={onClose}>
                       회의 시작
                     </Link>
                   </Button>
-                </>
+                </div>
               )}
             </div>
           </>
         ) : null}
       </aside>
-    </>,
-    document.body,
+    </>
   );
 }

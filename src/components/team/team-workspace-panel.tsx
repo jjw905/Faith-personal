@@ -27,6 +27,15 @@ import {
 
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import {
+  MeetingsMobileActionBar,
+  type MeetingsMobilePane,
+} from "@/components/dashboard/meetings-mobile-action-bar";
+import {
+  RecordsPageNav,
+  RECORDS_PAGE_SIZE,
+  UPCOMING_PAGE_SIZE,
+} from "@/components/dashboard/records-page-nav";
+import {
   TeamMeetingComposer,
   type TeamMeetingComposerValues,
 } from "@/components/team/team-meeting-composer";
@@ -214,7 +223,7 @@ type UpcomingCard = {
 const PREVIEW_LABEL = TEAM_PREVIEW_ROLE_LABEL;
 
 const CTA_CLASS =
-  "group flex h-24 w-full origin-center cursor-pointer items-center gap-4 rounded-2xl px-6 text-left shadow-soft transition-[transform,box-shadow,background-color] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:scale-[1.008] motion-reduce:transition-colors motion-reduce:hover:translate-y-0 motion-reduce:hover:scale-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:scale-100";
+  "group flex h-24 w-full cursor-pointer items-center gap-4 rounded-2xl px-6 text-left shadow-soft transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
 
 function todayDateLabel() {
   const now = new Date();
@@ -396,7 +405,7 @@ function TeamWorkspaceEmpty() {
             >
               팀 플랜 보기
               <ArrowUpRight
-                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 motion-reduce:transition-none"
+              className="h-4 w-4"
                 aria-hidden
               />
             </Link>
@@ -459,6 +468,8 @@ export function TeamWorkspacePanel() {
     [],
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobilePane, setMobilePane] =
+    useState<MeetingsMobilePane>("upcoming");
   const [upcomingLayout, setUpcomingLayout] = useState<SectionLayout>("list");
   const [announcementsLayout, setAnnouncementsLayout] =
     useState<SectionLayout>("list");
@@ -727,6 +738,17 @@ export function TeamWorkspacePanel() {
           ),
     [displayData?.upcoming, normalizedSearch],
   );
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const upcomingTotalPages = Math.max(
+    1,
+    Math.ceil(filteredUpcoming.length / UPCOMING_PAGE_SIZE),
+  );
+  const pagedUpcoming = useMemo(() => {
+    const page = Math.min(upcomingPage, upcomingTotalPages);
+    const start = (page - 1) * UPCOMING_PAGE_SIZE;
+    return filteredUpcoming.slice(start, start + UPCOMING_PAGE_SIZE);
+  }, [filteredUpcoming, upcomingPage, upcomingTotalPages]);
+
   const filteredRecords = useMemo(
     () =>
       !normalizedSearch
@@ -736,6 +758,35 @@ export function TeamWorkspacePanel() {
           ),
     [displayData?.recentRecords, normalizedSearch],
   );
+  const [recordsPage, setRecordsPage] = useState(1);
+  const recordsTotalPages = Math.max(
+    1,
+    Math.ceil(filteredRecords.length / RECORDS_PAGE_SIZE),
+  );
+  const pagedRecords = useMemo(() => {
+    const page = Math.min(recordsPage, recordsTotalPages);
+    const start = (page - 1) * RECORDS_PAGE_SIZE;
+    return filteredRecords.slice(start, start + RECORDS_PAGE_SIZE);
+  }, [filteredRecords, recordsPage, recordsTotalPages]);
+
+  useEffect(() => {
+    setRecordsPage(1);
+    setUpcomingPage(1);
+  }, [normalizedSearch, activeTeamId]);
+
+  useEffect(() => {
+    setRecordsPage((p) => Math.min(p, recordsTotalPages));
+  }, [recordsTotalPages]);
+
+  useEffect(() => {
+    setUpcomingPage((p) => Math.min(p, upcomingTotalPages));
+  }, [upcomingTotalPages]);
+
+  useEffect(() => {
+    setSearchQuery("");
+    setMobilePane("upcoming");
+  }, [activeTeamId]);
+
   const nearestId = displayData?.nearest?.id ?? null;
   const dateHeading = todayDateLabel();
 
@@ -1122,7 +1173,7 @@ export function TeamWorkspacePanel() {
   }
 
   return (
-    <div className="relative flex flex-col gap-4">
+    <div className="relative flex flex-col gap-4 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:pb-0">
       {message ? (
         <div className="rounded-2xl bg-primary-soft px-4 py-3 text-base">
           {message}
@@ -1216,13 +1267,13 @@ export function TeamWorkspacePanel() {
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="회의, 참석자 검색"
-            className="bg-card ring-1 ring-border"
+            className="h-12 bg-card ring-1 ring-border md:h-11"
           />
         </div>
       </div>
 
       {caps.showLeader ? (
-        <section className="space-y-3">
+        <section className="max-md:hidden space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="min-w-0 p-0.5">
               <button
@@ -1236,10 +1287,10 @@ export function TeamWorkspacePanel() {
                 }}
                 className={cn(
                   CTA_CLASS,
-                  "bg-primary text-primary-foreground hover:bg-primary-hover hover:shadow-[0_10px_28px_rgba(17,24,46,0.14)]",
+                  "bg-primary text-primary-foreground hover:bg-primary-hover",
                 )}
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:group-hover:scale-100">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary">
                   <Mic className="h-5 w-5" strokeWidth={1.75} />
                 </span>
                 <span className="text-lg font-semibold tracking-tight">
@@ -1259,10 +1310,10 @@ export function TeamWorkspacePanel() {
                 }}
                 className={cn(
                   CTA_CLASS,
-                  "bg-card text-foreground ring-1 ring-border hover:bg-surface hover:shadow-[0_10px_28px_rgba(17,24,46,0.1)]",
+                  "bg-card text-foreground ring-1 ring-border hover:bg-surface",
                 )}
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:group-hover:scale-100">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                   <CalendarDays className="h-5 w-5" strokeWidth={1.75} />
                 </span>
                 <span className="text-lg font-semibold tracking-tight">
@@ -1277,10 +1328,10 @@ export function TeamWorkspacePanel() {
                 onClick={openAnnouncementSheet}
                 className={cn(
                   CTA_CLASS,
-                  "bg-card text-foreground ring-1 ring-border hover:bg-surface hover:shadow-[0_10px_28px_rgba(17,24,46,0.1)]",
+                  "bg-card text-foreground ring-1 ring-border hover:bg-surface",
                 )}
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 motion-reduce:group-hover:scale-100">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                   <Megaphone className="h-5 w-5" strokeWidth={1.75} />
                 </span>
                 <span className="text-lg font-semibold tracking-tight">
@@ -1319,7 +1370,12 @@ export function TeamWorkspacePanel() {
         </section>
       ) : null}
 
-      <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
+      <div
+        className={cn(
+          "grid grid-cols-1 items-stretch gap-4 md:grid-cols-2",
+          mobilePane !== "upcoming" && "max-md:hidden",
+        )}
+      >
         <SectionCard
           title="예정 회의"
           count={filteredUpcoming.length}
@@ -1379,61 +1435,68 @@ export function TeamWorkspacePanel() {
           }
         >
           {filteredUpcoming.length > 0 ? (
-            upcomingLayout === "list" ? (
-              <ul className="divide-y divide-border">
-                {filteredUpcoming.map((meeting) => (
-                  <li key={meeting.id}>
-                    <UpcomingMeetingRow
-                      meeting={meeting}
-                      emphasized={meeting.id === nearestId}
-                      showAck={caps.showLeader}
-                      trailing={
-                        caps.showLeader && caps.canActLeader ? (
-                          <Button
-                            variant="ghost"
-                            className="min-h-11 rounded-xl text-muted hover:text-foreground"
-                            onClick={() =>
-                              void cancelUpcomingMeeting(meeting.id)
-                            }
-                          >
-                            취소
-                          </Button>
-                        ) : null
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <ul
-                className={sectionGridClass(filteredUpcoming.length, {
-                  split: true,
-                })}
-              >
-                {filteredUpcoming.map((meeting) => (
-                  <li key={meeting.id} className="min-h-0">
-                    <UpcomingMeetingGridCard
-                      meeting={meeting}
-                      emphasized={meeting.id === nearestId}
-                      showAck={caps.showLeader}
-                      trailing={
-                        caps.showLeader && caps.canActLeader ? (
-                          <Button
-                            variant="ghost"
-                            className="min-h-11 rounded-xl text-muted hover:text-foreground"
-                            onClick={() =>
-                              void cancelUpcomingMeeting(meeting.id)
-                            }
-                          >
-                            취소
-                          </Button>
-                        ) : null
-                      }
-                    />
-                  </li>
-                ))}
-              </ul>
-            )
+            <>
+              {upcomingLayout === "list" ? (
+                <ul className="divide-y divide-border">
+                  {pagedUpcoming.map((meeting) => (
+                    <li key={meeting.id}>
+                      <UpcomingMeetingRow
+                        meeting={meeting}
+                        emphasized={meeting.id === nearestId}
+                        showAck={caps.showLeader}
+                        trailing={
+                          caps.showLeader && caps.canActLeader ? (
+                            <Button
+                              variant="ghost"
+                              className="min-h-11 rounded-xl text-muted hover:text-foreground"
+                              onClick={() =>
+                                void cancelUpcomingMeeting(meeting.id)
+                              }
+                            >
+                              취소
+                            </Button>
+                          ) : null
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <ul
+                  className={sectionGridClass(pagedUpcoming.length, {
+                    split: true,
+                  })}
+                >
+                  {pagedUpcoming.map((meeting) => (
+                    <li key={meeting.id} className="min-h-0">
+                      <UpcomingMeetingGridCard
+                        meeting={meeting}
+                        emphasized={meeting.id === nearestId}
+                        showAck={caps.showLeader}
+                        trailing={
+                          caps.showLeader && caps.canActLeader ? (
+                            <Button
+                              variant="ghost"
+                              className="min-h-11 rounded-xl text-muted hover:text-foreground"
+                              onClick={() =>
+                                void cancelUpcomingMeeting(meeting.id)
+                              }
+                            >
+                              취소
+                            </Button>
+                          ) : null
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <RecordsPageNav
+                page={Math.min(upcomingPage, upcomingTotalPages)}
+                totalPages={upcomingTotalPages}
+                onPageChange={setUpcomingPage}
+              />
+            </>
           ) : null}
         </SectionCard>
 
@@ -1561,6 +1624,7 @@ export function TeamWorkspacePanel() {
         </SectionCard>
       </div>
 
+      <div className={cn(mobilePane !== "records" && "max-md:hidden")}>
       <SectionCard
         title="최근 기록"
         count={filteredRecords.length}
@@ -1586,51 +1650,88 @@ export function TeamWorkspacePanel() {
         }
       >
         {filteredRecords.length > 0 ? (
-          recordsLayout === "list" ? (
-            <ul className="divide-y divide-border">
-              {filteredRecords.map((record) => (
-                <li key={record.id}>
-                  <Link
-                    href={`/meetings/team/${record.id}`}
-                    className="grid min-h-14 items-start gap-2 px-6 py-4 transition-colors hover:bg-surface/70 sm:grid-cols-[minmax(7rem,auto)_1fr_auto] sm:items-center sm:gap-3 sm:py-5"
-                  >
-                    <span className="text-base font-semibold tabular-nums tracking-tight text-muted sm:text-lg sm:text-foreground">
-                      {formatRecordWhen(record.endedAt)}
-                    </span>
-                    <span className="truncate text-lg font-semibold text-foreground">
-                      {record.title}
-                    </span>
-                    <span className="text-base text-muted">
-                      {recordStateLabel(record.state)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <ul className={sectionGridClass(filteredRecords.length)}>
-              {filteredRecords.map((record) => (
-                <li key={record.id} className="min-h-0">
-                  <Link
-                    href={`/meetings/team/${record.id}`}
-                    className="flex h-full min-h-[8.5rem] flex-col rounded-2xl bg-surface p-4 ring-1 ring-border transition-colors hover:bg-surface-2 sm:min-h-[9.5rem]"
-                  >
-                    <span className="text-base font-semibold tabular-nums text-muted">
-                      {formatRecordWhen(record.endedAt)}
-                    </span>
-                    <span className="mt-2 line-clamp-2 flex-1 text-lg font-semibold leading-snug text-foreground">
-                      {record.title}
-                    </span>
-                    <span className="mt-3 text-base text-muted">
-                      {recordStateLabel(record.state)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )
+          <>
+            {recordsLayout === "list" ? (
+              <ul className="divide-y divide-border">
+                {pagedRecords.map((record) => (
+                  <li key={record.id}>
+                    <Link
+                      href={`/meetings/team/${record.id}`}
+                      className="grid min-h-14 items-start gap-2 px-6 py-4 transition-colors hover:bg-surface/70 sm:grid-cols-[minmax(7rem,auto)_1fr_auto] sm:items-center sm:gap-3 sm:py-5"
+                    >
+                      <span className="text-base font-semibold tabular-nums tracking-tight text-muted sm:text-lg sm:text-foreground">
+                        {formatRecordWhen(record.endedAt)}
+                      </span>
+                      <span className="truncate text-lg font-semibold text-foreground">
+                        {record.title}
+                      </span>
+                      <span className="text-base text-muted">
+                        {recordStateLabel(record.state)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <ul className={sectionGridClass(pagedRecords.length)}>
+                {pagedRecords.map((record) => (
+                  <li key={record.id} className="min-h-0">
+                    <Link
+                      href={`/meetings/team/${record.id}`}
+                      className="flex h-full min-h-[8.5rem] flex-col rounded-2xl bg-surface p-4 ring-1 ring-border transition-colors hover:bg-surface-2 sm:min-h-[9.5rem]"
+                    >
+                      <span className="text-base font-semibold tabular-nums text-muted">
+                        {formatRecordWhen(record.endedAt)}
+                      </span>
+                      <span className="mt-2 line-clamp-2 flex-1 text-lg font-semibold leading-snug text-foreground">
+                        {record.title}
+                      </span>
+                      <span className="mt-3 text-base text-muted">
+                        {recordStateLabel(record.state)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <RecordsPageNav
+              page={Math.min(recordsPage, recordsTotalPages)}
+              totalPages={recordsTotalPages}
+              onPageChange={setRecordsPage}
+            />
+          </>
         ) : null}
       </SectionCard>
+      </div>
+
+      <MeetingsMobileActionBar
+        pane={mobilePane}
+        onPaneChange={setMobilePane}
+        startLabel="회의 시작"
+        onStart={
+          caps.showLeader && caps.canActLeader
+            ? () => {
+                setComposerIntent("start");
+                setComposerMessage("");
+                setComposerMembers([]);
+                setComposerOpen(true);
+              }
+            : undefined
+        }
+        uploadLabel="일정 잡기"
+        uploadIcon="calendar"
+        createLabel="회의 추가"
+        onUpload={
+          caps.showLeader && caps.canActLeader
+            ? () => {
+                setComposerIntent("schedule");
+                setComposerMessage("");
+                setComposerMembers([]);
+                setComposerOpen(true);
+              }
+            : undefined
+        }
+      />
 
       <TeamSheet
         open={

@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Download, Share2, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { VaultFileIcon } from "@/components/vault/vault-file-icon";
@@ -8,15 +8,22 @@ import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { formatVaultSize, type VaultItemMeta } from "@/lib/vault";
 import { cn } from "@/lib/utils";
 
-/** 보관함 선택 삭제 확인. */
-export function VaultDeleteConfirmDialog({
+export type VaultConfirmAction = "delete" | "download" | "share";
+
+/**
+ * 보관함 다운로드, 공유, 삭제 확인.
+ * 모바일은 바텀시트(확인 위, 취소 아래 = HIG 액션시트 순서), 데스크톱은 중앙 모달.
+ */
+export function VaultActionConfirmDialog({
   open,
+  action,
   items,
   busy,
   onCancel,
   onConfirm,
 }: {
   open: boolean;
+  action: VaultConfirmAction;
   items: VaultItemMeta[];
   busy: boolean;
   onCancel: () => void;
@@ -75,6 +82,34 @@ export function VaultDeleteConfirmDialog({
 
   const count = items.length;
   const single = count === 1;
+  const destructive = action === "delete";
+  const totalSize = items.reduce((sum, item) => sum + item.size, 0);
+
+  const title = destructive
+    ? single
+      ? "이 파일을 삭제할까요?"
+      : `파일 ${count}개를 삭제할까요?`
+    : action === "download"
+      ? single
+        ? "이 파일을 받을까요?"
+        : `파일 ${count}개를 받을까요?`
+      : single
+        ? "이 파일을 공유할까요?"
+        : `파일 ${count}개를 공유할까요?`;
+
+  const description = destructive
+    ? "삭제 후 복구할 수 없습니다."
+    : action === "download"
+      ? `기기 저장 공간에 ${formatVaultSize(totalSize)}를 내려받습니다.`
+      : "기기 공유 시트로 파일 원본이 전달됩니다.";
+
+  const confirmLabel = destructive
+    ? "삭제"
+    : action === "download"
+      ? "다운로드"
+      : "공유";
+
+  const ConfirmIcon = destructive ? Trash2 : action === "download" ? Download : Share2;
 
   return (
     <div
@@ -85,37 +120,41 @@ export function VaultDeleteConfirmDialog({
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="vault-delete-confirm-title"
-        aria-describedby="vault-delete-confirm-desc"
-        className="w-full max-w-md rounded-t-3xl bg-card p-6 shadow-float sm:rounded-3xl sm:p-7"
+        aria-labelledby="vault-action-confirm-title"
+        aria-describedby="vault-action-confirm-desc"
+        className="w-full max-w-md rounded-t-3xl bg-card px-5 pt-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] shadow-float sm:rounded-3xl sm:p-7"
         onClick={(event) => event.stopPropagation()}
       >
         <h2
-          id="vault-delete-confirm-title"
-          className="text-lg font-bold tracking-tight text-foreground"
+          id="vault-action-confirm-title"
+          className="text-xl font-bold tracking-tight text-foreground sm:text-lg"
         >
-          {single ? "이 파일을 삭제할까요?" : "선택한 파일을 삭제할까요?"}
+          {title}
         </h2>
         <p
-          id="vault-delete-confirm-desc"
+          id="vault-action-confirm-desc"
           className="mt-2 text-base leading-relaxed text-muted"
         >
-          삭제 후 복구할 수 없습니다.
+          {description}
         </p>
 
         <div className="mt-5">
-          <div className="mb-2.5 flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-muted">선택 목록</p>
-            <span className="text-sm font-semibold tabular-nums text-muted">
-              {count}개
-            </span>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-base font-semibold text-muted">
+              {single ? "대상 파일" : "선택 목록"}
+            </p>
+            {single ? null : (
+              <span className="text-base font-semibold tabular-nums text-muted">
+                {count}개
+              </span>
+            )}
           </div>
-          <ul ref={listRef} className="max-h-52 space-y-1 overflow-y-auto">
+          <ul
+            ref={listRef}
+            className="max-h-52 space-y-1 overflow-y-auto rounded-2xl bg-surface/60 px-3 py-1"
+          >
             {items.map((item) => (
-              <li
-                key={item.id}
-                className="flex min-w-0 items-center gap-3 py-2"
-              >
+              <li key={item.id} className="flex min-w-0 items-center gap-3 py-2">
                 <VaultFileIcon
                   name={item.name}
                   mime={item.mime}
@@ -128,7 +167,7 @@ export function VaultDeleteConfirmDialog({
                 >
                   {item.name}
                 </p>
-                <span className="shrink-0 text-sm tabular-nums text-muted">
+                <span className="shrink-0 text-base tabular-nums text-muted">
                   {formatVaultSize(item.size)}
                 </span>
               </li>
@@ -136,12 +175,12 @@ export function VaultDeleteConfirmDialog({
           </ul>
         </div>
 
-        <div className="mt-7 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:mt-7 sm:flex-row sm:justify-end sm:gap-2.5">
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-2xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-auto sm:rounded-xl"
           >
             취소
           </button>
@@ -150,11 +189,14 @@ export function VaultDeleteConfirmDialog({
             onClick={onConfirm}
             disabled={busy}
             className={cn(
-              "inline-flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-masked px-5 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto",
+              "inline-flex h-12 w-full cursor-pointer items-center justify-center gap-1.5 rounded-2xl px-5 text-base font-bold transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-auto sm:rounded-xl",
+              destructive
+                ? "bg-masked text-white"
+                : "bg-primary text-primary-foreground",
             )}
           >
-            <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-            삭제
+            <ConfirmIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+            {confirmLabel}
           </button>
         </div>
       </div>

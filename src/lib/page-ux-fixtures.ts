@@ -47,11 +47,19 @@ function daysAgoIso(days: number) {
   return new Date(Date.now() - days * 86400000).toISOString();
 }
 
+/** 같은 날 여러 파일을 시각·용량으로 구분할 수 있게 시각을 어긋낸다. */
+function hoursAgoIso(hours: number) {
+  return new Date(Date.now() - hours * 3600000).toISOString();
+}
+
 let cachedVaultItemsFull: VaultItemMeta[] | null = null;
 let cachedAiUsageFull: AiUsageSummary | null = null;
 const cachedMeetingsFull = new Map<string, Meeting[]>();
 
-/** UX 미리보기: 보관함 가득 찬 목록. */
+/**
+ * UX 미리보기: 보관함 가득 찬 목록.
+ * 앞쪽은 오늘/어제에 여러 개를 모아 같은 날짜 그룹을 재현한다.
+ */
 export function fixtureVaultItemsFull(): VaultItemMeta[] {
   if (cachedVaultItemsFull) return cachedVaultItemsFull;
   const names = [
@@ -80,12 +88,17 @@ export function fixtureVaultItemsFull(): VaultItemMeta[] {
     "녹취2.m4a",
     "포스터.png",
   ];
+  /** 오늘 4, 어제 3, 이후 하루씩 분산. */
+  const hourOffsets = [
+    1, 3, 5, 8, 26, 30, 34, 50, 74, 98, 122, 146, 170, 194, 218, 242, 266,
+    290, 314, 338, 362, 386, 410, 434,
+  ];
   cachedVaultItemsFull = names.map((name, index) => ({
     id: `ux-vault-${index + 1}`,
     name,
     size: 120_000 + index * 85_000,
     mime: guessVaultMime(name),
-    createdAt: daysAgoIso(index % 6),
+    createdAt: hoursAgoIso(hourOffsets[index] ?? index * 24 + 1),
     purpose: "VAULT" as const,
   }));
   return cachedVaultItemsFull;
@@ -467,8 +480,8 @@ export function fixtureNotificationsExpand(): AppNotification[] {
     {
       id: "ux-n-exp-access",
       type: "access",
-      title: "비정상 접근 시도",
-      body: "알 수 없는 기기에서 로그인이 차단되었습니다. 본인 활동이 아니면 비밀번호를 변경하세요.",
+      title: "로그인 보호 안내",
+      body: "다른 기기에서 로그인 시도를 막아 두었습니다. 본인이 아니면 비밀번호를 바꿔 주세요.",
       time: "1시간 전",
       unread: true,
       createdAt: new Date(Date.now() - 60 * 60_000).toISOString(),
@@ -631,7 +644,7 @@ export function fixtureAdminTeamsEmpty(): FixtureAdminTeam[] {
 }
 
 /** UX: 관리자 팀 목록 채워짐 (운영 메타만, count개) */
-export function fixtureAdminTeamsFull(count = 9): FixtureAdminTeam[] {
+export function fixtureAdminTeamsFull(count = 2): FixtureAdminTeam[] {
   const n = Math.max(1, count);
   return Array.from({ length: n }, (_, i) => {
     const seed = ADMIN_TEAM_FIXTURE_SEED[i % ADMIN_TEAM_FIXTURE_SEED.length]!;

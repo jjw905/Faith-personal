@@ -246,6 +246,7 @@ body {
 @keyframes vault-search-pop-in {
   from {
     opacity: 0;
+    transform: translate(-50%, 0);
   }
   to {
     opacity: 1;
@@ -257,6 +258,20 @@ body {
   transform: translate(-50%, 0);
   transform-origin: bottom center;
   animation: vault-search-pop-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes meetings-sheet-pop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.meetings-sheet-pop-in {
+  transform-origin: bottom right;
+  animation: meetings-sheet-pop-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes replay-panel-up {
@@ -313,19 +328,6 @@ body {
   animation: replay-speaker-out 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes chat-tool-slide {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.chat-tool-slide {
-  animation: chat-tool-slide 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .vault-menu-in,
   .chat-more-drop,
@@ -335,11 +337,11 @@ body {
   }
 
   .vault-search-pop-in,
+  .meetings-sheet-pop-in,
   .replay-panel-up,
   .replay-volume-up,
   .replay-speaker-in,
-  .replay-speaker-out,
-  .chat-tool-slide {
+  .replay-speaker-out {
     animation: none;
   }
 }
@@ -356,9 +358,11 @@ body {
 @keyframes fab-item-up {
   from {
     opacity: 0;
+    transform: translateY(10px) scale(0.92);
   }
   to {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -405,6 +409,24 @@ body {
 }
 .record-beat-bars > span:nth-child(5) {
   animation-delay: 105ms;
+}
+
+@keyframes faith-mark-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.faith-mark-bar {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: faith-mark-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes dot-bounce {
@@ -470,6 +492,11 @@ body {
     animation: none;
     opacity: 0.7;
     transform: scaleY(0.65);
+  }
+
+  .faith-mark-bar {
+    animation: none;
+    opacity: 0.85;
   }
 
   .running-dots > span {
@@ -609,6 +636,30 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .auth-enter {
+    animation: none;
+  }
+}
+
+/* 설문 제출 완료: 보상 아이콘 팝인 */
+@keyframes survey-gift-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .survey-gift-pop {
+    animation: survey-gift-pop 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .survey-gift-pop {
     animation: none;
   }
 }

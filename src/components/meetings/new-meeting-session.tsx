@@ -5,14 +5,15 @@ import {
   Archive,
   ArrowLeft,
   Clock3,
+  Eye,
+  EyeOff,
   FileAudio,
   History,
+  MoreHorizontal,
   NotebookPen,
   Paperclip,
   Plus,
-  RefreshCw,
   SendHorizontal,
-  Shuffle,
   Trash2,
   Upload,
   X,
@@ -23,10 +24,13 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ChangeEvent,
+  type DragEvent,
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 
 import { MaskedText } from "@/components/meetings/masked-text";
@@ -36,10 +40,15 @@ import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { useAppContext } from "@/context/app-context";
 import { useMeetingChrome } from "@/context/meeting-chrome-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
-import { useRealtimeTranscription } from "@/hooks/use-realtime-transcription";
+import { REALTIME_FEATURE_ENABLED } from "@/lib/feature-flags";
+import {
+  useRealtimeTranscription,
+  type BrowserRealtimeUtterance,
+} from "@/hooks/use-realtime-transcription";
 import { maskPii, type MaskStyle } from "@/lib/masking";
 import { cn } from "@/lib/utils";
 import type { TranscriptCorrection } from "@/types/transcript";
+import type { VaultItemMeta } from "@/lib/vault";
 
 type Side = "left" | "right";
 
@@ -56,13 +65,6 @@ type ChatMessage = {
     isTest?: boolean;
   };
   corrections?: TranscriptCorrection[];
-};
-
-type ScenarioBeat = {
-  time: string;
-  kind: string;
-  title: string;
-  line: string;
 };
 
 const SPEAKERS = [
@@ -93,123 +95,82 @@ const SPEAKERS = [
   },
 ];
 
-const CONTENT_POOL = [
-  "오늘 안건부터 정리할까요?",
-  "지난주 마스킹 오탐 리뷰 공유드릴게요.",
-  "연락처는 010-3942-3916 로 남겨 주세요.",
-  "샘플은 seoyeon.lee@partner.co.kr 로 보내 두었습니다.",
-  "권한 매트릭스는 아직 초안 단계입니다.",
-  "데모 계정은 어제 준비 끝났어요.",
-  "민감정보는 자동 마스킹되는지 같이 보죠.",
-  "회의록 타임라인 요약이 잘 붙는지 확인합시다.",
-  "참석자 발화 구분도 테스트에 넣어 주세요.",
-  "다음 액션은 월요일까지로 잡겠습니다.",
-  "외부 공유 전 검수 체크리스트 한번 볼게요.",
-  "결정 사항은 팀 관리 메뉴에 반영합시다.",
-  "소요 시간은 대략 40분 정도로 보면 됩니다.",
-  "시나리오 칸에 요약 대사가 뜨는지 봐 주세요.",
-  "파일 업로드 클립도 이어서 검증하겠습니다.",
-  "레이아웃 비율이 깨지지 않는지 확인 중이에요.",
-  "인식 시작 후에는 좌측 메뉴가 사라져야 합니다.",
-  "우측 시나리오에 타임라인 구간을 채워 둘게요.",
-  "버블이 너무 빽빽하면 간격만 조금 조정하죠.",
-  "개발용 랜덤 메시지 스트림은 약 1분 분량입니다.",
-  "질문 있으시면 채팅으로 바로 남겨 주세요.",
-  "다음 안건은 접근 로그 이상 징후입니다.",
-  "감사 대응 체크리스트도 같이 점검합시다.",
-  "좋습니다. 이어서 진행하겠습니다.",
-  "요약문 톤은 지금이 무난해 보입니다.",
-  "마지막에 후속 조치만 정리하면 충분합니다.",
-];
-
-const SCENARIO_SEED: ScenarioBeat[] = [
-  {
-    time: "00:00",
-    kind: "안건",
-    title: "킥오프",
-    line: "회의 목적과 마스킹·타임라인 검증 범위를 공유합니다.",
-  },
-  {
-    time: "00:12",
-    kind: "논의",
-    title: "레이아웃",
-    line: "채팅 버블과 홈 ChatMock 정렬이 같은지 확인합니다.",
-  },
-  {
-    time: "00:28",
-    kind: "논의",
-    title: "인식 흐름",
-    line: "녹음 시작 시 좌측 메뉴 숨김, 우측 시나리오 노출을 점검합니다.",
-  },
-  {
-    time: "00:44",
-    kind: "결정",
-    title: "업로드",
-    line: "클립 아이콘으로 오디오 파일을 정식 첨부할 수 있게 합니다.",
-  },
-  {
-    time: "00:58",
-    kind: "조치",
-    title: "후속",
-    line: "1분 랜덤 메시지 스트림과 타임라인 요약을 함께 검증합니다.",
-  },
-];
-
-const SAMPLE_AUDIO_FILES = [
-  {
-    name: "meeting-intro-noise30.wav",
-    path: "/samples/audio/meeting-intro-noise30.wav",
-    sizeLabel: "약 480 KB",
-  },
-  {
-    name: "meeting-action-noise30.wav",
-    path: "/samples/audio/meeting-action-noise30.wav",
-    sizeLabel: "약 510 KB",
-  },
-  {
-    name: "meeting-cafe-noise30.wav",
-    path: "/samples/audio/meeting-cafe-noise30.wav",
-    sizeLabel: "약 520 KB",
-  },
-  {
-    name: "meeting-pii-noise30.wav",
-    path: "/samples/audio/meeting-pii-noise30.wav",
-    sizeLabel: "약 495 KB",
-  },
-  {
-    name: "meeting-summary-noise30.wav",
-    path: "/samples/audio/meeting-summary-noise30.wav",
-    sizeLabel: "약 505 KB",
-  },
-  {
-    name: "meeting-new-session.wav",
-    path: "/samples/audio/meeting-new-session.wav",
-    sizeLabel: "약 620 KB",
-  },
-] as const;
-
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function pickRandom<T>(list: T[]): T {
-  return list[Math.floor(Math.random() * list.length)]!;
-}
-
-function createRandomMessage(): Omit<ChatMessage, "id"> {
-  const speaker = pickRandom(SPEAKERS);
-  return {
-    ...speaker,
-    content: pickRandom(CONTENT_POOL),
-  };
-}
-
 function formatElapsed(totalSeconds: number) {
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/** sm 미만: 모바일 하단 컴포저·스피드 다이얼용. */
+function useIsMobileComposer() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia("(max-width: 639px)");
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia("(max-width: 639px)").matches,
+    () => false,
+  );
+}
+
+/** md 미만: 타임라인 우측 드로어 대신 바텀시트. */
+function useIsTimelineSheet() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia("(max-width: 767px)");
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia("(max-width: 767px)").matches,
+    () => false,
+  );
+}
+
+/**
+ * 키보드가 가리는 하단 높이.
+ * iOS: visualViewport height+offsetTop. Android: interactive-widget + 동일 API.
+ * safe-area는 키보드가 떠 있을 때 쓰면 이중 여백이 생기므로 호출측에서 끈다.
+ */
+function useKeyboardBottomInset(enabled: boolean) {
+  const [inset, setInset] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) {
+      setInset(0);
+      return;
+    }
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    let raf = 0;
+    const update = () => {
+      window.cancelAnimationFrame(raf);
+      raf = window.requestAnimationFrame(() => {
+        const visibleBottom = vv.height + vv.offsetTop;
+        setInset(Math.max(0, Math.round(window.innerHeight - visibleBottom)));
+      });
+    };
+
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [enabled]);
+
+  return inset;
 }
 
 function ChatDateDivider({ label }: { label: string }) {
@@ -311,7 +272,7 @@ export function ChatBubble({
   return (
     <div
       className={cn(
-        "flex w-full min-w-0 animate-[bubble-in_320ms_ease-out]",
+        "flex w-full min-w-0 animate-[bubble-in_320ms_ease-out] motion-reduce:animate-none",
         isMe ? "justify-end" : "justify-start",
       )}
     >
@@ -425,11 +386,10 @@ function createDefaultMeetingMemo(): MeetingMemo {
     notes: [
       "민감정보가 나오면 마스킹 칩으로 가려진 뒤 클릭 시에만 원문 확인",
       "시나리오 타임라인은 경과 시간에 맞춰 구간이 순차 개방됨",
-      "개발 전용 랜덤 메시지 스트림은 약 1분 분량으로 레이아웃 부하를 점검",
     ].map(createMemoLine),
     decisions: [
       "채팅 입력과 녹음 버튼은 같은 행에 배치",
-      "개발 도구·파일·메모는 아래 행에 좌우로 분리",
+      "파일 첨부·메모는 아래 도구줄에 배치",
     ].map(createMemoLine),
     followUps: [
       "실제 STT 연동 전, 시나리오 요약 문장 톤을 한 번 더 다듬기",
@@ -474,41 +434,41 @@ function MemoListSection({
 
   return (
     <section>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold tracking-wide text-muted">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-muted sm:text-sm">
           {label}
         </h3>
         <button
           type="button"
           onClick={addItem}
           aria-label={`${label} 추가`}
-          className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-lg px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary-soft"
+          className="inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-xl px-3 text-base font-semibold text-primary transition-colors hover:bg-primary-soft sm:min-h-8 sm:px-2 sm:text-sm"
         >
-          <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+          <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" strokeWidth={2} />
           {addLabel}
         </button>
       </div>
-      <ul className="space-y-1.5">
+      <ul className="space-y-2">
         {items.length === 0 ? (
-          <li className="rounded-xl bg-surface px-3 py-2 text-xs text-muted">
+          <li className="rounded-xl bg-surface px-3 py-3 text-base text-muted sm:py-2 sm:text-sm">
             항목이 없습니다. 추가로 입력하세요.
           </li>
         ) : (
           items.map((item) => (
-            <li key={item.id} className="flex items-start gap-1.5">
+            <li key={item.id} className="flex items-center gap-2">
               <input
                 type="text"
                 data-memo-line-id={item.id}
                 value={item.text}
                 onChange={(event) => updateItem(item.id, event.target.value)}
                 placeholder={placeholder}
-                className="min-w-0 flex-1 rounded-xl bg-surface px-3 py-2 text-xs leading-relaxed text-foreground outline-none ring-1 ring-transparent transition-[box-shadow,background-color] placeholder:text-muted focus:bg-card focus:ring-primary/25"
+                className="min-h-12 min-w-0 flex-1 rounded-xl bg-surface px-3 py-2 text-base leading-relaxed text-foreground outline-none ring-1 ring-transparent transition-[box-shadow,background-color] placeholder:text-muted focus:bg-card focus:ring-primary/25 sm:min-h-9 sm:text-sm"
               />
               <button
                 type="button"
                 onClick={() => removeItem(item.id)}
                 aria-label={`${label} 항목 삭제`}
-                className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-masked transition-colors hover:bg-masked-soft"
+                className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-xl text-masked transition-colors hover:bg-masked-soft sm:h-9 sm:w-9"
               >
                 <Trash2 className="h-5 w-5" strokeWidth={1.75} />
               </button>
@@ -520,48 +480,37 @@ function MemoListSection({
   );
 }
 
-function DevBadge() {
-  return (
-    <span
-      aria-hidden
-      className="pointer-events-none absolute -left-0.5 -top-0.5 z-10 rounded-[4px] bg-primary px-1 py-px text-[8px] font-bold leading-none tracking-tight text-primary-foreground"
-    >
-      개발
-    </span>
-  );
-}
-
 function ToolAction({
   label,
   onClick,
   pressed,
   ariaLabel,
-  badge,
   children,
+  buttonRef,
 }: {
   label: string;
   onClick: () => void;
   pressed?: boolean;
   ariaLabel: string;
-  badge?: boolean;
   children: ReactNode;
+  buttonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   return (
-    <div className="relative flex w-10 flex-col items-center">
+    <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
       <button
+        ref={buttonRef}
         type="button"
         onClick={onClick}
         aria-pressed={pressed}
         aria-label={ariaLabel}
         title={label}
         className={cn(
-          "relative inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all md:h-10 md:w-10",
+          "relative inline-flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all",
           pressed
             ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
             : "bg-surface-2 text-foreground/70 ring-1 ring-border-strong hover:bg-[#e4e6eb] hover:text-foreground",
         )}
       >
-        {badge ? <DevBadge /> : null}
         {children}
       </button>
       <span
@@ -572,6 +521,54 @@ function ToolAction({
       >
         {label}
       </span>
+    </div>
+  );
+}
+
+/** 모바일 스피드 다이얼 아이콘. 라벨은 왼쪽에 붙여 오른손 엄지 존을 가리지 않는다. */
+function MobileFabButton({
+  label,
+  onClick,
+  pressed,
+  ariaLabel,
+  delayMs = 0,
+  children,
+  buttonRef,
+}: {
+  label: string;
+  onClick: () => void;
+  pressed?: boolean;
+  ariaLabel: string;
+  delayMs?: number;
+  children: ReactNode;
+  buttonRef?: RefObject<HTMLButtonElement | null>;
+}) {
+  return (
+    <div
+      className="flex items-center justify-end gap-2"
+      style={{
+        animation: `fab-item-up 220ms cubic-bezier(0.2, 0, 0, 1) ${delayMs}ms both`,
+      }}
+    >
+      <span className="whitespace-nowrap px-1 text-xs font-semibold text-foreground">
+        {label}
+      </span>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={onClick}
+        aria-pressed={pressed}
+        aria-label={ariaLabel}
+        title={label}
+        className={cn(
+          "inline-flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all",
+          pressed
+            ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
+            : "bg-card text-foreground shadow-soft ring-1 ring-border hover:bg-surface-2",
+        )}
+      >
+        {children}
+      </button>
     </div>
   );
 }
@@ -591,64 +588,56 @@ export function RecordBeatBars() {
 export function AttachMenuPopup({
   open,
   onAttach,
-  onVault,
-  onRandomSend,
+  onVaultAttach,
+  align = "center",
 }: {
   open: boolean;
   onAttach: () => void;
-  onVault: () => void;
-  onRandomSend: () => void;
+  onVaultAttach?: () => void;
+  align?: "center" | "end";
 }) {
   if (!open) return null;
 
   return (
     <div
-      role="menu"
-      aria-label="파일 첨부 메뉴"
-      className="absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 rounded-2xl bg-card p-1.5 shadow-soft ring-1 ring-border"
-      style={{
-        animation: "fab-item-up 220ms cubic-bezier(0.2, 0, 0, 1) both",
-      }}
+      className={cn(
+        "absolute bottom-full z-50 mb-2",
+        align === "end" ? "right-0" : "left-1/2 -translate-x-1/2",
+      )}
     >
+      <div
+        role="menu"
+        aria-label="파일 첨부 메뉴"
+        className="w-56 rounded-2xl bg-card p-1.5 shadow-soft ring-1 ring-border"
+        style={{
+          animation: "fab-item-up 220ms cubic-bezier(0.2, 0, 0, 1) both",
+        }}
+      >
       <button
         type="button"
         role="menuitem"
         onClick={onAttach}
-        className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] font-semibold text-foreground transition-colors hover:bg-surface-2"
+        className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-base font-semibold text-foreground transition-colors hover:bg-surface-2"
       >
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground">
           <Upload className="h-4 w-4" strokeWidth={1.75} />
         </span>
-        <span className="min-w-0 flex-1 truncate">파일 첨부</span>
+        <span className="min-w-0 flex-1 truncate">이 기기에서</span>
       </button>
-      <button
-        type="button"
-        role="menuitem"
-        onClick={onVault}
-        className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] font-semibold text-foreground transition-colors hover:bg-surface-2"
-      >
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground">
-          <Archive className="h-4 w-4" strokeWidth={1.75} />
-        </span>
-        <span className="min-w-0 flex-1 truncate">보관함에서</span>
-        <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-xs font-bold leading-none text-primary-foreground">
-          개발
-        </span>
-      </button>
-      <button
-        type="button"
-        role="menuitem"
-        onClick={onRandomSend}
-        className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-[13px] font-semibold text-foreground transition-colors hover:bg-surface-2"
-      >
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground">
-          <Shuffle className="h-4 w-4" strokeWidth={1.75} />
-        </span>
-        <span className="min-w-0 flex-1 truncate">파일 임의전송</span>
-        <span className="shrink-0 rounded bg-primary px-1.5 py-0.5 text-xs font-bold leading-none text-primary-foreground">
-          개발
-        </span>
-      </button>
+      {onVaultAttach ? (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onVaultAttach}
+          className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-base font-semibold text-foreground transition-colors hover:bg-surface-2"
+        >
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground">
+            <Archive className="h-4 w-4" strokeWidth={1.75} />
+          </span>
+          <span className="min-w-0 flex-1 truncate">보관함에서</span>
+        </button>
+      ) : null}
+      </div>
     </div>
   );
 }
@@ -730,41 +719,132 @@ export function ResetConfirmDialog({
   );
 }
 
+function formatUtteranceTime(startSec: number) {
+  return formatElapsed(Math.max(0, Math.floor(startSec)));
+}
+
 function ScenarioPanel({
-  beats,
-  elapsedSec,
   elapsedLabel,
   running,
+  utterances,
+  partialText,
+  maskStyle,
   onClose,
+  layout = "rail",
 }: {
-  beats: ScenarioBeat[];
-  elapsedSec: number;
   elapsedLabel: string;
   running: boolean;
+  utterances: BrowserRealtimeUtterance[];
+  partialText: string;
+  maskStyle: MaskStyle;
   onClose: () => void;
+  /** sheet: 모바일 바텀시트. rail: md+ 우측 패널. */
+  layout?: "sheet" | "rail";
 }) {
-  const unlockStep = 8;
-  const unlockedCount =
-    elapsedSec === 0 && !running
-      ? 0
-      : Math.min(beats.length, Math.floor(elapsedSec / unlockStep) + 1);
-  const visibleBeats = beats.slice(0, unlockedCount);
-  const activeIndex = Math.max(0, visibleBeats.length - 1);
+  const hasContent = utterances.length > 0 || Boolean(partialText);
+  const isSheet = layout === "sheet";
+
+  const body = (
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+      {!hasContent ? (
+        <p className="rounded-xl bg-surface px-3 py-3 text-base leading-relaxed text-muted">
+          {running
+            ? "발화를 기다리는 중입니다."
+            : "인식을 시작하면 발화 시간순으로 타임라인이 생성됩니다."}
+        </p>
+      ) : (
+        <ol className="space-y-3">
+          {utterances.map((utterance) => {
+            const matches = utterance.text
+              ? maskPii(utterance.text, { style: maskStyle }).matches
+              : [];
+            return (
+              <li key={utterance.itemId} className="flex gap-2.5">
+                <span className="mt-0.5 shrink-0 font-mono text-base tabular-nums text-muted">
+                  {formatUtteranceTime(utterance.startSec)}
+                </span>
+                <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
+                  <MaskedText original={utterance.text} matches={matches} />
+                </p>
+              </li>
+            );
+          })}
+          {partialText ? (
+            <li className="flex gap-2.5 opacity-60">
+              <span className="mt-0.5 shrink-0 font-mono text-base tabular-nums text-muted">
+                {elapsedLabel}
+              </span>
+              <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
+                {partialText}
+              </p>
+            </li>
+          ) : null}
+        </ol>
+      )}
+    </div>
+  );
+
+  if (isSheet) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-end bg-black/40 md:hidden"
+        role="presentation"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="타임라인"
+          className="flex h-[66.666dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-float"
+          style={{
+            paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex shrink-0 justify-center pb-1 pt-3" aria-hidden>
+            <span className="h-1 w-10 rounded-full bg-border" />
+          </div>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-1">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-foreground">타임라인</h2>
+              <p className="mt-0.5 flex items-center gap-1.5 text-base text-muted">
+                <Clock3
+                  className={cn("h-4 w-4 shrink-0", running && "animate-spin")}
+                  strokeWidth={1.75}
+                />
+                <span className="font-mono tabular-nums">{elapsedLabel}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="타임라인 닫기"
+              className="inline-flex h-12 min-w-12 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-xl bg-surface-2 px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface"
+            >
+              <X className="h-5 w-5" strokeWidth={1.75} />
+              닫기
+            </button>
+          </div>
+          {body}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <aside
-      aria-label="시나리오 타임라인"
+      aria-label="타임라인"
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card"
     >
       <div className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-foreground">타임라인</h2>
-          <p className="mt-0.5 text-xs leading-relaxed text-muted">
-            위에서 아래로 순차 생성
+          <h2 className="text-base font-semibold text-foreground">타임라인</h2>
+          <p className="mt-0.5 text-sm leading-relaxed text-muted">
+            발화 시간순 자동 생성
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <span className="inline-flex items-center gap-1 font-mono text-xs tabular-nums text-muted">
+          <span className="inline-flex items-center gap-1 font-mono text-sm tabular-nums text-muted">
             <Clock3
               className={cn("h-3.5 w-3.5", running && "animate-spin")}
               strokeWidth={1.75}
@@ -781,66 +861,7 @@ function ScenarioPanel({
           </button>
         </div>
       </div>
-
-      <ol className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-        {visibleBeats.length === 0 ? (
-          <li className="rounded-xl bg-surface px-3 py-3 text-xs leading-relaxed text-muted">
-            인식을 시작하면 시간순으로 타임라인이 생성됩니다.
-          </li>
-        ) : (
-          visibleBeats.map((beat, index) => {
-            const active = index === activeIndex;
-            const isLast = index === visibleBeats.length - 1;
-            return (
-              <li
-                key={`${beat.time}-${beat.title}`}
-                className="relative flex gap-2.5 animate-[bubble-in_280ms_ease-out]"
-              >
-                <div className="relative flex w-7 shrink-0 flex-col items-center">
-                  {!isLast ? (
-                    <span
-                      aria-hidden
-                      className="absolute bottom-0 left-1/2 top-7 w-0.5 -translate-x-1/2 bg-primary/35"
-                    />
-                  ) : null}
-                  <span
-                    className={cn(
-                      "relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-surface-2 text-foreground",
-                      active && "bg-primary-soft text-primary",
-                    )}
-                  >
-                    <Clock3
-                      className={cn("h-3.5 w-3.5", active && "animate-spin")}
-                      strokeWidth={1.75}
-                    />
-                  </span>
-                </div>
-                <div
-                  className={cn(
-                    "min-w-0 flex-1 rounded-xl bg-surface px-2.5 py-2",
-                    !isLast && "mb-3",
-                  )}
-                >
-                  <div className="mb-0.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                    <span className="font-mono text-xs tabular-nums text-muted">
-                      {beat.time}
-                    </span>
-                    <span className="text-xs font-semibold text-foreground">
-                      {beat.title}
-                    </span>
-                    <span className="text-xs font-medium text-muted">
-                      {beat.kind}
-                    </span>
-                  </div>
-                  <p className="text-xs leading-relaxed text-foreground/80">
-                    {beat.line}
-                  </p>
-                </div>
-              </li>
-            );
-          })
-        )}
-      </ol>
+      {body}
     </aside>
   );
 }
@@ -856,19 +877,133 @@ function MeetingMemoPanel({
   memo: MeetingMemo;
   onChange: (next: MeetingMemo) => void;
 }) {
+  const isMobile = useIsMobileComposer();
+
   useEffect(() => {
     if (!open) return;
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
+    if (isMobile) document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      if (isMobile) document.body.style.overflow = "";
+    };
+  }, [open, onClose, isMobile]);
 
   if (!open) return null;
 
   function patch(partial: Partial<MeetingMemo>) {
     onChange({ ...memo, ...partial });
+  }
+
+  const fields = (
+    <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
+      <MemoListSection
+        label="참석"
+        items={memo.attendees}
+        onChange={(attendees) => patch({ attendees })}
+        placeholder="참석자 이름"
+        addLabel="추가"
+      />
+      <MemoListSection
+        label="목적"
+        items={memo.purpose}
+        onChange={(purpose) => patch({ purpose })}
+        placeholder="목적 항목"
+        addLabel="추가"
+      />
+      <MemoListSection
+        label="핵심 메모"
+        items={memo.notes}
+        onChange={(notes) => patch({ notes })}
+        placeholder="메모 항목"
+        addLabel="추가"
+      />
+      <MemoListSection
+        label="결정"
+        items={memo.decisions}
+        onChange={(decisions) => patch({ decisions })}
+        placeholder="결정 사항"
+        addLabel="추가"
+      />
+      <MemoListSection
+        label="후속"
+        items={memo.followUps}
+        onChange={(followUps) => patch({ followUps })}
+        placeholder="후속 조치"
+        addLabel="추가"
+      />
+      <section className="rounded-2xl bg-warning-soft px-3 py-3">
+        <h3 className="text-base font-semibold text-warning sm:text-sm">주의</h3>
+        <textarea
+          value={memo.caution}
+          onChange={(event) => patch({ caution: event.target.value })}
+          rows={3}
+          className="mt-1.5 w-full resize-y rounded-xl bg-transparent px-0 py-1 text-base leading-relaxed text-foreground/90 outline-none sm:text-sm"
+          placeholder="주의 사항"
+        />
+      </section>
+    </div>
+  );
+
+  const headerFields = (
+    <div className="min-w-0 flex-1">
+      <input
+        type="text"
+        value={memo.title}
+        onChange={(event) => patch({ title: event.target.value })}
+        aria-label="메모 제목"
+        className="w-full bg-transparent text-lg font-semibold text-foreground outline-none placeholder:text-muted sm:text-base"
+        placeholder="회의 메모"
+      />
+      <input
+        type="text"
+        value={memo.subject}
+        onChange={(event) => patch({ subject: event.target.value })}
+        aria-label="메모 주제"
+        className="mt-1 w-full bg-transparent text-base text-muted outline-none placeholder:text-muted/70 sm:text-sm"
+        placeholder="주제"
+      />
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-end bg-black/40"
+        role="presentation"
+        onClick={onClose}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="회의 메모"
+          className="flex h-[66.666dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-float"
+          style={{
+            paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex shrink-0 justify-center pb-1 pt-3" aria-hidden>
+            <span className="h-1 w-10 rounded-full bg-border" />
+          </div>
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 pb-3 pt-1">
+            {headerFields}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="메모 닫기"
+              className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface hover:text-foreground"
+            >
+              <X className="h-5 w-5" strokeWidth={1.75} />
+            </button>
+          </div>
+          {fields}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -879,24 +1014,7 @@ function MeetingMemoPanel({
       className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[22rem] flex-col overflow-hidden rounded-2xl bg-card shadow-soft sm:w-[22rem]"
     >
       <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <input
-            type="text"
-            value={memo.title}
-            onChange={(event) => patch({ title: event.target.value })}
-            aria-label="메모 제목"
-            className="w-full bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted"
-            placeholder="회의 메모"
-          />
-          <input
-            type="text"
-            value={memo.subject}
-            onChange={(event) => patch({ subject: event.target.value })}
-            aria-label="메모 주제"
-            className="mt-1 w-full bg-transparent text-xs text-muted outline-none placeholder:text-muted/70"
-            placeholder="주제"
-          />
-        </div>
+        {headerFields}
         <button
           type="button"
           onClick={onClose}
@@ -906,56 +1024,7 @@ function MeetingMemoPanel({
           <X className="h-4 w-4" strokeWidth={1.75} />
         </button>
       </div>
-
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <MemoListSection
-          label="참석"
-          items={memo.attendees}
-          onChange={(attendees) => patch({ attendees })}
-          placeholder="참석자 이름"
-          addLabel="추가"
-        />
-        <MemoListSection
-          label="목적"
-          items={memo.purpose}
-          onChange={(purpose) => patch({ purpose })}
-          placeholder="목적 항목"
-          addLabel="추가"
-        />
-        <MemoListSection
-          label="핵심 메모"
-          items={memo.notes}
-          onChange={(notes) => patch({ notes })}
-          placeholder="메모 항목"
-          addLabel="추가"
-        />
-        <MemoListSection
-          label="결정"
-          items={memo.decisions}
-          onChange={(decisions) => patch({ decisions })}
-          placeholder="결정 사항"
-          addLabel="추가"
-        />
-        <MemoListSection
-          label="후속"
-          items={memo.followUps}
-          onChange={(followUps) => patch({ followUps })}
-          placeholder="후속 조치"
-          addLabel="추가"
-        />
-        <section className="rounded-2xl bg-warning-soft px-3 py-2.5">
-          <h3 className="text-xs font-semibold tracking-wide text-warning">
-            주의
-          </h3>
-          <textarea
-            value={memo.caution}
-            onChange={(event) => patch({ caution: event.target.value })}
-            rows={3}
-            className="mt-1 w-full resize-y rounded-xl bg-transparent px-0 py-1 text-xs leading-relaxed text-foreground/90 outline-none"
-            placeholder="주의 사항"
-          />
-        </section>
-      </div>
+      {fields}
     </div>
   );
 }
@@ -977,33 +1046,40 @@ export function NewMeetingSession() {
   const {
     acceptedFormats,
     handleFileSelect,
-    attachExistingFile,
-    clearFile,
+    isDragging,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
   } = useFileUpload();
 
   const [inMeeting, setInMeeting] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [streaming, setStreaming] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [memoOpen, setMemoOpen] = useState(false);
   const [timelineOpen, setTimelineOpen] = useState(false);
-  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
-  const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [meetingTitle, setMeetingTitle] = useState(DEFAULT_MEETING_TITLE);
   const [editingTitle, setEditingTitle] = useState(false);
   const [memo, setMemo] = useState<MeetingMemo>(() => createDefaultMeetingMemo());
   const [maskStyle, setMaskStyle] = useState<MaskStyle>("partial");
+  const [mobileMaskOpen, setMobileMaskOpen] = useState(false);
+  const [desktopMaskOpen, setDesktopMaskOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [vaultAttachOpen, setVaultAttachOpen] = useState(false);
+  const mobileMaskBtnRef = useRef<HTMLButtonElement>(null);
+  const desktopMaskBtnRef = useRef<HTMLButtonElement>(null);
+  const toolsRootRef = useRef<HTMLDivElement>(null);
+  const attachMenuRootRef = useRef<HTMLDivElement>(null);
+  const isMobileComposer = useIsMobileComposer();
+  const isTimelineSheet = useIsTimelineSheet();
+  const keyboardInset = useKeyboardBottomInset(isMobileComposer);
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const attachMenuRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
-  const streamTimerRef = useRef<number | null>(null);
-  const streamEndRef = useRef(0);
   const inputId = useId();
 
   const dateLabel = useMemo(
@@ -1043,6 +1119,50 @@ export function NewMeetingSession() {
   }, [setFocusMode]);
 
   useEffect(() => {
+    if (!toolsOpen) return;
+    function onPointer(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node | null;
+      if (target && toolsRootRef.current?.contains(target)) return;
+      setToolsOpen(false);
+      setAttachMenuOpen(false);
+    }
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") {
+        setToolsOpen(false);
+        setAttachMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("touchstart", onPointer, { passive: true });
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("touchstart", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [toolsOpen]);
+
+  useEffect(() => {
+    if (!attachMenuOpen || toolsOpen) return;
+    function onPointer(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node | null;
+      if (target && attachMenuRootRef.current?.contains(target)) return;
+      setAttachMenuOpen(false);
+    }
+    function onKey(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setAttachMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("touchstart", onPointer, { passive: true });
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("touchstart", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [attachMenuOpen, toolsOpen]);
+
+  useEffect(() => {
     if (!editingTitle) return;
     const el = titleInputRef.current;
     if (!el) return;
@@ -1070,31 +1190,6 @@ export function NewMeetingSession() {
   }, [inMeeting]);
 
   useEffect(() => {
-    return () => {
-      if (streamTimerRef.current) window.clearTimeout(streamTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!attachMenuOpen) return;
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (attachMenuRef.current && !attachMenuRef.current.contains(target)) {
-        setAttachMenuOpen(false);
-      }
-    }
-    function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setAttachMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [attachMenuOpen]);
-
-  useEffect(() => {
     if (!timelineOpen) return;
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key === "Escape") setTimelineOpen(false);
@@ -1120,16 +1215,10 @@ export function NewMeetingSession() {
     el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
   }
 
-  function pushRandomMessage() {
-    const line = createRandomMessage();
-    setMessages((prev) => [...prev, { ...line, id: nextId("rnd") }]);
-  }
-
   function pushFileMessage(
     speaker: (typeof SPEAKERS)[number],
     fileName: string,
     sizeLabel: string,
-    options?: { isTest?: boolean },
   ) {
     setMessages((prev) => [
       ...prev,
@@ -1143,7 +1232,6 @@ export function NewMeetingSession() {
         attachment: {
           name: fileName,
           sizeLabel,
-          isTest: options?.isTest,
         },
       },
     ]);
@@ -1155,70 +1243,21 @@ export function NewMeetingSession() {
     if (!file) return;
     const me = SPEAKERS[0]!;
     pushFileMessage(me, file.name, formatFileSize(file.size));
-    setAttachMenuOpen(false);
     event.target.value = "";
   }
 
-  function onVaultFilePicked(file: File, id: string) {
-    attachExistingFile(file, id);
+  function onVaultAttachPick(file: File, meta: VaultItemMeta) {
+    const me = SPEAKERS[0]!;
+    pushFileMessage(me, meta.name, formatFileSize(file.size));
+    setVaultAttachOpen(false);
+  }
+
+  function onCardDrop(event: DragEvent) {
+    const file = event.dataTransfer.files?.[0];
+    handleDrop(event);
+    if (!file) return;
     const me = SPEAKERS[0]!;
     pushFileMessage(me, file.name, formatFileSize(file.size));
-    setAttachMenuOpen(false);
-  }
-
-  function sendRandomTestFiles() {
-    setAttachMenuOpen(false);
-    const me = SPEAKERS[0]!;
-    const partner = pickRandom(SPEAKERS.filter((s) => s.side === "right"));
-    const mine = pickRandom([...SAMPLE_AUDIO_FILES]);
-    const theirs = pickRandom([...SAMPLE_AUDIO_FILES]);
-
-    pushFileMessage(me, mine.name, mine.sizeLabel, { isTest: true });
-    window.setTimeout(() => {
-      pushFileMessage(partner, theirs.name, theirs.sizeLabel, { isTest: true });
-    }, 320);
-  }
-
-  function clearStreamTimer() {
-    if (streamTimerRef.current) {
-      window.clearTimeout(streamTimerRef.current);
-      streamTimerRef.current = null;
-    }
-  }
-
-  function scheduleNextRandomMessage() {
-    const remaining = streamEndRef.current - Date.now();
-    if (remaining <= 0) {
-      setStreaming(false);
-      streamTimerRef.current = null;
-      return;
-    }
-
-    const delay = 1800 + Math.floor(Math.random() * 2200);
-    streamTimerRef.current = window.setTimeout(() => {
-      pushRandomMessage();
-      scheduleNextRandomMessage();
-    }, Math.min(delay, remaining));
-  }
-
-  function toggleRandomStream() {
-    if (streaming) {
-      clearStreamTimer();
-      setStreaming(false);
-      if (!isRecording) {
-        setInMeeting(false);
-      }
-      return;
-    }
-
-    setInMeeting(true);
-    if (autoOpenTimelineOnStart) {
-      setTimelineOpen(true);
-    }
-    setStreaming(true);
-    streamEndRef.current = Date.now() + 60_000;
-    pushRandomMessage();
-    scheduleNextRandomMessage();
   }
 
   function sendChat(event?: FormEvent) {
@@ -1252,11 +1291,16 @@ export function NewMeetingSession() {
     }
   }
 
+  async function stopMeeting() {
+    setInMeeting(false);
+    await stopRealtime();
+  }
+
   async function handleRecordToggle() {
     if (isRecording) {
-      setInMeeting(false);
-      await stopRealtime();
+      await stopMeeting();
     } else {
+      if (!REALTIME_FEATURE_ENABLED) return;
       setInMeeting(true);
       if (autoOpenTimelineOnStart) {
         setTimelineOpen(true);
@@ -1266,56 +1310,38 @@ export function NewMeetingSession() {
     }
   }
 
-  function requestReset() {
-    setAttachMenuOpen(false);
-    setResetConfirmOpen(true);
-  }
-
-  async function handleReset() {
-    if (isRecording) await stopRealtime();
-    clearStreamTimer();
-    setStreaming(false);
-    setInMeeting(false);
-    setMemoOpen(false);
-    setAttachMenuOpen(false);
-    setResetConfirmOpen(false);
-    resetRealtime();
-    setMessages([]);
-    setDraft("");
-    setElapsedSec(0);
-    setMeetingTitle(DEFAULT_MEETING_TITLE);
-    setEditingTitle(false);
-    setMemo(createDefaultMeetingMemo());
-    clearFile();
-    requestAnimationFrame(() => {
-      if (inputRef.current) {
-        inputRef.current.style.height = "auto";
-        inputRef.current.focus();
-      }
-    });
-  }
-
   return (
     <div className="flex h-full min-h-0 bg-white">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white p-3 sm:p-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white p-3 pb-0 sm:p-4">
         <div
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible rounded-3xl border border-transparent bg-card px-5 pb-5 pt-4 xl:px-6 xl:pb-6 xl:pt-5"
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-transparent bg-card px-5 pb-0 pt-4 max-sm:rounded-b-none sm:overflow-visible sm:pb-5 xl:px-6 xl:pb-6 xl:pt-5"
           style={{
             boxShadow:
               "0 4px 12px rgba(17, 24, 39, 0.06), 0 24px 56px rgba(17, 24, 39, 0.14)",
           }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={onCardDrop}
         >
+          {isDragging ? (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-2 z-40 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary bg-primary-soft/90"
+            >
+              <Upload className="h-8 w-8 text-primary" strokeWidth={1.75} />
+              <p className="text-base font-semibold text-primary">
+                여기에 놓아 파일 첨부
+              </p>
+            </div>
+          ) : null}
           {/* 회의 섹션 상단: 돌아가기(좌) + 제목(가운데) + 타임라인(우) */}
           <div className="mb-3 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2">
             <div className="justify-self-start">
               <Link
                 href="/dashboard"
                 onClick={(event) => {
-                  clearStreamTimer();
-                  setStreaming(false);
                   setInMeeting(false);
                   setMemoOpen(false);
-                  setAttachMenuOpen(false);
                   setTimelineOpen(false);
                   if (isRecording) {
                     event.preventDefault();
@@ -1373,23 +1399,8 @@ export function NewMeetingSession() {
                 </h1>
               </button>
             )}
-            <div className="flex items-center justify-self-end gap-1.5">
-              <MaskStylePopup value={maskStyle} onChange={setMaskStyle} />
-              <button
-                type="button"
-                onClick={() => setTimelineOpen((v) => !v)}
-                aria-pressed={timelineOpen}
-                aria-label={timelineOpen ? "타임라인 숨기기" : "타임라인 보기"}
-                className={cn(
-                  "inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full transition-all md:h-10 md:w-10",
-                  timelineOpen
-                    ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
-                    : "bg-surface-2 text-foreground/70 ring-1 ring-border-strong hover:bg-[#e4e6eb] hover:text-foreground",
-                )}
-              >
-                <History className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={1.75} />
-              </button>
-            </div>
+            {/* 헤더는 돌아가기·제목만. 마스킹·타임라인은 sm+ 하단 도구 모음, max-sm은 스피드 다이얼(엄지 존)로 이동해 개수를 통일. */}
+            <div className="justify-self-end" aria-hidden />
           </div>
 
           <div className="mb-3 flex shrink-0 justify-center">
@@ -1450,12 +1461,29 @@ export function NewMeetingSession() {
             </Link>
           ) : null}
 
-          {/* 메시지 입력 섹션: 모바일은 2행(입력+녹음 / 도구), sm+는 입력·도구·녹음 1행 */}
-          <div className="relative z-20 mt-3 flex shrink-0 flex-col gap-2 overflow-visible border-t border-border pb-4 pt-3 sm:flex-row sm:items-center sm:gap-2">
-            <div className="flex min-w-0 items-center gap-2 sm:contents">
+          {/* 하단: 입력+녹음은 맨 아래. 모바일 도구는 녹음 위 스피드 다이얼. */}
+          <div
+            className={cn(
+              "relative z-20 mt-2 shrink-0 pt-1",
+              "max-sm:-mx-5 max-sm:px-4",
+              "sm:flex sm:flex-row sm:items-center sm:gap-2 sm:pb-0",
+            )}
+            style={
+              isMobileComposer
+                ? {
+                    marginBottom: keyboardInset > 0 ? keyboardInset : 0,
+                    paddingBottom:
+                      keyboardInset > 0
+                        ? 8
+                        : "max(0.5rem, env(safe-area-inset-bottom, 0px))",
+                  }
+                : undefined
+            }
+          >
+            <div className="flex min-w-0 items-end gap-2 sm:contents">
               <form
                 onSubmit={sendChat}
-                className="order-1 flex h-14 min-w-0 flex-1 items-center gap-2 rounded-2xl bg-surface-2 px-3"
+                className="order-1 flex h-14 min-w-0 flex-1 items-center gap-1.5 rounded-full bg-surface-2 py-1 pl-4 pr-1"
               >
                 <label className="sr-only" htmlFor={inputId}>
                   채팅 입력
@@ -1470,128 +1498,260 @@ export function NewMeetingSession() {
                     resizeInput();
                   }}
                   onKeyDown={onInputKeyDown}
+                  onFocus={() => {
+                    setToolsOpen(false);
+                    setAttachMenuOpen(false);
+                    setDesktopMaskOpen(false);
+                  }}
                   placeholder="메시지 입력"
-                  className="max-h-12 min-h-12 w-full resize-none overflow-y-auto bg-transparent py-3 text-base font-medium leading-6 text-foreground outline-none placeholder:text-foreground/55 md:max-h-10 md:min-h-10 md:py-2 md:text-[15px] md:leading-5"
+                  className="max-h-12 min-h-12 w-full resize-none overflow-y-auto bg-transparent py-3 text-base font-medium leading-6 text-foreground outline-none placeholder:text-foreground/55"
                 />
                 <button
                   type="submit"
                   disabled={!canSend}
                   aria-label="전송"
                   className={cn(
-                    "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors md:h-10 md:w-10",
+                    "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors",
                     canSend
                       ? "bg-primary text-primary-foreground hover:bg-primary-hover"
                       : "cursor-not-allowed bg-foreground/10 text-foreground/40",
                   )}
                 >
-                  <SendHorizontal className="h-4 w-4" strokeWidth={1.75} />
+                  <SendHorizontal className="h-5 w-5" strokeWidth={1.75} />
                 </button>
               </form>
 
-              <button
-                type="button"
-                onClick={handleRecordToggle}
-                aria-pressed={isRecording}
-                aria-label={isRecording ? "녹음 중지" : "녹음 시작"}
-                title={isRecording ? "인식 중지" : "인식 시작"}
-                className={cn(
-                  "group relative order-2 flex h-14 shrink-0 cursor-pointer items-center justify-center transition-all active:scale-95 sm:order-3",
-                  isRecording
-                    ? "min-w-[8.5rem] gap-1.5 rounded-full bg-masked px-3 text-white shadow-soft ring-2 ring-masked/40"
-                    : "w-14 rounded-full bg-surface-2 ring-1 ring-border-strong hover:bg-[#e4e6eb]",
-                )}
+              {/* 데스크톱: 도구를 입력과 녹음 사이에 가로 배치 */}
+              <div
+                role="toolbar"
+                aria-label="회의 도구"
+                className="order-2 hidden h-14 shrink-0 items-center gap-3 sm:flex"
               >
-                {isRecording ? (
-                  <>
-                    <RecordBeatBars />
-                    <span className="text-[12px] font-bold tracking-tight">
-                      회의 녹음중
-                    </span>
-                    <span className="font-mono text-[12px] font-bold tabular-nums tracking-tight">
-                      {elapsedLabel}
-                    </span>
-                  </>
-                ) : (
-                  <span
-                    className="h-10 w-10 rounded-full bg-masked shadow-soft transition-transform group-hover:scale-[1.03]"
-                    aria-hidden
+                <div className="relative flex h-14 items-center">
+                  <ToolAction
+                    label="마스킹"
+                    onClick={() => setDesktopMaskOpen((v) => !v)}
+                    pressed={desktopMaskOpen || maskStyle !== "off"}
+                    ariaLabel="개인정보 가림 방식"
+                    buttonRef={desktopMaskBtnRef}
+                  >
+                    {maskStyle === "off" ? (
+                      <Eye className="h-5 w-5" strokeWidth={1.75} />
+                    ) : (
+                      <EyeOff className="h-5 w-5" strokeWidth={1.75} />
+                    )}
+                  </ToolAction>
+                  <MaskStylePopup
+                    value={maskStyle}
+                    onChange={(next) => {
+                      setMaskStyle(next);
+                      setDesktopMaskOpen(false);
+                    }}
+                    hideTrigger
+                    open={desktopMaskOpen}
+                    onOpenChange={setDesktopMaskOpen}
+                    anchorRef={desktopMaskBtnRef}
                   />
-                )}
-              </button>
-            </div>
+                </div>
+                <ToolAction
+                  label="타임라인"
+                  onClick={() => setTimelineOpen((v) => !v)}
+                  pressed={timelineOpen}
+                  ariaLabel={timelineOpen ? "타임라인 숨기기" : "타임라인 보기"}
+                >
+                  <History className="h-5 w-5" strokeWidth={1.75} />
+                </ToolAction>
+                <div ref={attachMenuRootRef} className="relative flex h-14 items-center">
+                  <AttachMenuPopup
+                    open={attachMenuOpen}
+                    onAttach={() => {
+                      setAttachMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                    onVaultAttach={() => {
+                      setAttachMenuOpen(false);
+                      setVaultAttachOpen(true);
+                    }}
+                  />
+                  <ToolAction
+                    label="파일 첨부"
+                    onClick={() => setAttachMenuOpen((v) => !v)}
+                    pressed={attachMenuOpen || vaultAttachOpen}
+                    ariaLabel="파일 첨부"
+                  >
+                    <Paperclip className="h-5 w-5" strokeWidth={1.75} />
+                  </ToolAction>
+                </div>
+                <ToolAction
+                  label="메모"
+                  onClick={() => setMemoOpen((v) => !v)}
+                  pressed={memoOpen}
+                  ariaLabel="메모"
+                >
+                  <NotebookPen className="h-5 w-5" strokeWidth={1.75} />
+                </ToolAction>
+              </div>
 
-            <div
-              role="toolbar"
-              aria-label="회의 도구"
-              className="order-3 flex h-14 w-full shrink-0 items-center justify-between gap-2 px-1 sm:order-2 sm:w-auto sm:justify-start sm:gap-[0.9375rem]"
-            >
-              <ToolAction
-                label={streaming ? "스트림 중지" : "랜덤 메시지"}
-                onClick={toggleRandomStream}
-                pressed={streaming}
-                ariaLabel={streaming ? "랜덤 메시지 중지" : "랜덤 메시지 시작"}
-                badge
+              {/* 모바일: 도구 스피드 다이얼(위) + 녹음(아래). 데스크톱: 녹음만 */}
+              <div
+                ref={toolsRootRef}
+                className="relative order-2 flex min-w-14 shrink-0 flex-col items-center gap-2 sm:order-3 sm:h-14 sm:min-w-0 sm:justify-center"
               >
-                <Clock3
-                  className={cn("h-4 w-4", streaming && "animate-spin")}
-                  strokeWidth={1.75}
-                />
-              </ToolAction>
-              <ToolAction
-                label="초기화"
-                onClick={requestReset}
-                ariaLabel="세션 초기화"
-                badge
-              >
-                <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
-              </ToolAction>
-              <div ref={attachMenuRef} className="relative flex w-12 flex-col items-center md:w-10">
-                <AttachMenuPopup
-                  open={attachMenuOpen}
-                  onAttach={() => {
-                    setAttachMenuOpen(false);
-                    fileInputRef.current?.click();
-                  }}
-                  onVault={() => {
-                    setAttachMenuOpen(false);
-                    setVaultPickerOpen(true);
-                  }}
-                  onRandomSend={sendRandomTestFiles}
-                />
+                <div className="flex w-full flex-col items-center sm:hidden">
+                  {toolsOpen ? (
+                    <div
+                      className="absolute bottom-[calc(100%+0.5rem)] right-0 z-30 flex flex-col-reverse items-end gap-2"
+                      role="menu"
+                      aria-label="회의 도구"
+                    >
+                      <MobileFabButton
+                        label="타임라인"
+                        delayMs={0}
+                        pressed={timelineOpen}
+                        ariaLabel={
+                          timelineOpen ? "타임라인 숨기기" : "타임라인 보기"
+                        }
+                        onClick={() => {
+                          setToolsOpen(false);
+                          setTimelineOpen((v) => !v);
+                        }}
+                      >
+                        <History className="h-5 w-5" strokeWidth={1.75} />
+                      </MobileFabButton>
+                      <MobileFabButton
+                        label="메모"
+                        delayMs={40}
+                        pressed={memoOpen}
+                        ariaLabel="메모"
+                        onClick={() => {
+                          setToolsOpen(false);
+                          setAttachMenuOpen(false);
+                          setMemoOpen(true);
+                        }}
+                      >
+                        <NotebookPen className="h-5 w-5" strokeWidth={1.75} />
+                      </MobileFabButton>
+                      <div className="relative">
+                        <MaskStylePopup
+                          value={maskStyle}
+                          onChange={(next) => {
+                            setMaskStyle(next);
+                            setMobileMaskOpen(false);
+                            setToolsOpen(false);
+                          }}
+                          hideTrigger
+                          open={mobileMaskOpen}
+                          onOpenChange={setMobileMaskOpen}
+                          anchorRef={mobileMaskBtnRef}
+                        />
+                        <MobileFabButton
+                          label="마스킹"
+                          delayMs={80}
+                          pressed={mobileMaskOpen || maskStyle !== "off"}
+                          ariaLabel="개인정보 가림 방식"
+                          buttonRef={mobileMaskBtnRef}
+                          onClick={() => setMobileMaskOpen((v) => !v)}
+                        >
+                          {maskStyle === "off" ? (
+                            <Eye className="h-5 w-5" strokeWidth={1.75} />
+                          ) : (
+                            <EyeOff className="h-5 w-5" strokeWidth={1.75} />
+                          )}
+                        </MobileFabButton>
+                      </div>
+                      <div className="relative">
+                        <AttachMenuPopup
+                          open={attachMenuOpen}
+                          align="end"
+                          onAttach={() => {
+                            setAttachMenuOpen(false);
+                            setToolsOpen(false);
+                            fileInputRef.current?.click();
+                          }}
+                          onVaultAttach={() => {
+                            setAttachMenuOpen(false);
+                            setToolsOpen(false);
+                            setVaultAttachOpen(true);
+                          }}
+                        />
+                        <MobileFabButton
+                          label="파일 첨부"
+                          delayMs={120}
+                          pressed={attachMenuOpen || vaultAttachOpen}
+                          ariaLabel="파일 첨부"
+                          onClick={() => setAttachMenuOpen((v) => !v)}
+                        >
+                          <Paperclip className="h-5 w-5" strokeWidth={1.75} />
+                        </MobileFabButton>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className={cn(
+                      "inline-flex h-14 w-14 cursor-pointer items-center justify-center rounded-full transition-all",
+                      toolsOpen
+                        ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
+                        : "bg-surface-2 text-foreground ring-1 ring-border-strong hover:bg-[#e4e6eb]",
+                    )}
+                    aria-label={toolsOpen ? "도구 닫기" : "도구 열기"}
+                    aria-expanded={toolsOpen}
+                    aria-haspopup="menu"
+                    onClick={() => {
+                      setMobileMaskOpen(false);
+                      setAttachMenuOpen(false);
+                      setToolsOpen((open) => !open);
+                    }}
+                  >
+                    {toolsOpen ? (
+                      <X className="h-5 w-5" strokeWidth={2} />
+                    ) : (
+                      <MoreHorizontal className="h-5 w-5" strokeWidth={1.75} />
+                    )}
+                  </button>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setAttachMenuOpen((v) => !v)}
-                  aria-expanded={attachMenuOpen}
-                  aria-haspopup="menu"
-                  aria-pressed={attachMenuOpen}
-                  aria-label="파일 첨부"
-                  title="파일 첨부"
+                  onClick={handleRecordToggle}
+                  disabled={!isRecording && !REALTIME_FEATURE_ENABLED}
+                  aria-pressed={isRecording}
+                  aria-label={isRecording ? "녹음 중지" : "녹음 시작"}
+                  title={
+                    !isRecording && !REALTIME_FEATURE_ENABLED
+                      ? "수요조사 기간에는 실시간 기록을 제공하지 않습니다. 업로드 분석을 이용해 주세요."
+                      : isRecording
+                        ? "인식 중지"
+                        : "인식 시작"
+                  }
                   className={cn(
-                    "relative inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all md:h-10 md:w-10",
-                    attachMenuOpen
-                      ? "bg-primary text-primary-foreground shadow-soft ring-2 ring-primary/40"
-                      : "bg-surface-2 text-foreground/70 ring-1 ring-border-strong hover:bg-[#e4e6eb] hover:text-foreground",
+                    "group relative flex h-14 shrink-0 items-center justify-center transition-all active:scale-95",
+                    isRecording
+                      ? "min-w-[8.5rem] cursor-pointer gap-1.5 rounded-full bg-masked px-3 text-white shadow-soft ring-2 ring-masked/40"
+                      : REALTIME_FEATURE_ENABLED
+                        ? "w-14 cursor-pointer rounded-full bg-surface-2 ring-1 ring-border-strong hover:bg-[#e4e6eb]"
+                        : "w-14 cursor-not-allowed rounded-full bg-surface-2 opacity-40 ring-1 ring-border-strong",
                   )}
                 >
-                  <Paperclip className="h-4 w-4" strokeWidth={1.75} />
+                  {isRecording ? (
+                    <>
+                      <RecordBeatBars />
+                      <span className="text-[12px] font-bold tracking-tight">
+                        회의 녹음중
+                      </span>
+                      <span className="font-mono text-[12px] font-bold tabular-nums tracking-tight">
+                        {elapsedLabel}
+                      </span>
+                    </>
+                  ) : (
+                    <span
+                      className="h-10 w-10 rounded-full bg-masked shadow-soft"
+                      aria-hidden
+                    />
+                  )}
                 </button>
-                <span
-                  className={cn(
-                    "pointer-events-none absolute left-1/2 top-[calc(100%+4px)] w-max max-w-[4.5rem] -translate-x-1/2 text-center text-xs font-semibold leading-tight",
-                    attachMenuOpen ? "text-primary" : "text-foreground/65",
-                  )}
-                >
-                  파일 첨부
-                </span>
               </div>
-              <ToolAction
-                label="메모 보기"
-                onClick={() => setMemoOpen((v) => !v)}
-                pressed={memoOpen}
-                ariaLabel="메모 보기"
-              >
-                <NotebookPen className="h-4 w-4" strokeWidth={1.75} />
-              </ToolAction>
             </div>
 
             <input
@@ -1607,47 +1767,45 @@ export function NewMeetingSession() {
       </div>
 
       <VaultPickerDialog
-        open={vaultPickerOpen}
-        onClose={() => setVaultPickerOpen(false)}
-        onPick={(file, meta) => onVaultFilePicked(file, meta.id)}
+        open={vaultAttachOpen}
+        onClose={() => setVaultAttachOpen(false)}
+        onPick={onVaultAttachPick}
       />
 
-      <ResetConfirmDialog
-        open={resetConfirmOpen}
-        onCancel={() => setResetConfirmOpen(false)}
-        onConfirm={handleReset}
-      />
-
-      {/* 모바일: 오버레이, md+: 우측 사이드바 슬라이드 인 */}
-      <div
-        className={cn(
-          "fixed inset-0 z-40 bg-black/40 transition-opacity md:hidden",
-          timelineOpen ? "opacity-100" : "pointer-events-none opacity-0",
-        )}
-        onClick={() => setTimelineOpen(false)}
-        aria-hidden
-      />
-      <aside
-        className={cn(
-          "flex shrink-0 flex-col overflow-hidden border-l border-border bg-card",
-          "fixed inset-y-0 right-0 z-50 w-[min(24rem,100%)] transition-transform duration-300 ease-[cubic-bezier(0.2,0,0,1)]",
-          "md:static md:z-auto md:h-full md:transition-[width]",
-          timelineOpen
-            ? "translate-x-0 md:w-96"
-            : "translate-x-full md:w-0 md:translate-x-0 md:border-l-0",
-        )}
-        aria-hidden={!timelineOpen}
-      >
-        <div className="flex h-full w-full min-w-0 flex-col md:w-96 md:min-w-[24rem]">
+      {isTimelineSheet ? (
+        timelineOpen ? (
           <ScenarioPanel
-            beats={SCENARIO_SEED}
-            elapsedSec={elapsedSec}
+            layout="sheet"
             elapsedLabel={elapsedLabel}
             running={inMeeting}
+            utterances={realtimeUtterances}
+            partialText={partialText}
+            maskStyle={maskStyle}
             onClose={() => setTimelineOpen(false)}
           />
-        </div>
-      </aside>
+        ) : null
+      ) : (
+        <aside
+          className={cn(
+            "flex shrink-0 flex-col overflow-hidden border-l border-border bg-card",
+            "h-full transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)]",
+            timelineOpen ? "w-96" : "w-0 border-l-0",
+          )}
+          aria-hidden={!timelineOpen}
+        >
+          <div className="flex h-full w-96 min-w-[24rem] flex-col">
+            <ScenarioPanel
+              layout="rail"
+              elapsedLabel={elapsedLabel}
+              running={inMeeting}
+              utterances={realtimeUtterances}
+              partialText={partialText}
+              maskStyle={maskStyle}
+              onClose={() => setTimelineOpen(false)}
+            />
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

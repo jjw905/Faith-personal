@@ -22,9 +22,28 @@ export async function POST(request: Request, context: RouteContext) {
     startSec?: number;
     endSec?: number;
     confidence?: number;
+    meanLogprob?: number;
   };
+  let audioBytes: Buffer | undefined;
+  let audioFilename: string | undefined;
   try {
-    body = await request.json();
+    if (request.headers.get("content-type")?.includes("multipart/form-data")) {
+      const form = await request.formData();
+      body = JSON.parse(String(form.get("utterance") ?? "{}")) as typeof body;
+      const audio = form.get("audio");
+      if (audio instanceof File) {
+        if (audio.size > 4 * 1024 * 1024) {
+          return NextResponse.json(
+            { ok: false, message: "재전사 음성 구간이 너무 큽니다." },
+            { status: 413 },
+          );
+        }
+        audioBytes = Buffer.from(await audio.arrayBuffer());
+        audioFilename = audio.name || "utterance.wav";
+      }
+    } else {
+      body = await request.json();
+    }
   } catch {
     return NextResponse.json(
       { ok: false, message: "잘못된 요청입니다." },
@@ -63,6 +82,13 @@ export async function POST(request: Request, context: RouteContext) {
         typeof body.confidence === "number" && Number.isFinite(body.confidence)
           ? body.confidence
           : undefined,
+      meanLogprob:
+        typeof body.meanLogprob === "number" &&
+        Number.isFinite(body.meanLogprob)
+          ? body.meanLogprob
+          : undefined,
+      audioBytes,
+      audioFilename,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
