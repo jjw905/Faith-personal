@@ -3,7 +3,6 @@
 import Image from "next/image";
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   useSyncExternalStore,
@@ -12,8 +11,6 @@ import {
 
 import { cn } from "@/lib/utils";
 
-/** 이 폭에서 1:1. 좁아지면 블록 전체가 비율 그대로 축소된다. */
-const DESIGN_W = 896;
 const STORAGE_KEY = "faith.features.headline.pos";
 
 type XY = { x: number; y: number };
@@ -71,18 +68,26 @@ function useEditMode() {
   );
 }
 
+function useWideLayout() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia("(min-width: 640px)");
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia("(min-width: 640px)").matches,
+    () => true,
+  );
+}
+
 /**
  * 기능 섹션 타이틀 + 말풍선.
- * - DESIGN_W(896) 기준 레이아웃을 통째로 scale — 창 크기와 무관하게 비율 고정.
- * - ?edit=1 이면 드래그로 위치 조절(값은 이 브라우저에 저장, 코드에 옮겨 고정).
+ * 글자 크기는 뷰포트 scale로 줄이지 않는다. 좁은 폭은 반응형 타입·배치만 사용.
+ * ?edit=1 이면 드래그로 위치 조절(값은 이 브라우저에 저장, 코드에 옮겨 고정).
  */
 export function FeaturesHeadline() {
   const edit = useEditMode();
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [boxH, setBoxH] = useState<number | undefined>(undefined);
-  // 서버는 DEFAULT, 클라이언트는 localStorage. 드래그 중에는 draft가 이긴다.
+  const wide = useWideLayout();
   const storedPos = useSyncExternalStore(
     subscribePos,
     getPosSnapshot,
@@ -90,9 +95,7 @@ export function FeaturesHeadline() {
   );
   const [draft, setDraft] = useState<Pos | null>(null);
   const pos = draft ?? storedPos;
-  const setPos = (
-    next: Pos | ((prev: Pos) => Pos),
-  ) => {
+  const setPos = (next: Pos | ((prev: Pos) => Pos)) => {
     setDraft((prev) => {
       const base = prev ?? storedPos;
       return typeof next === "function" ? next(base) : next;
@@ -115,31 +118,13 @@ export function FeaturesHeadline() {
     posCache = pos;
   }, [pos, edit]);
 
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current;
-    const inner = innerRef.current;
-    if (!wrap || !inner) return;
-    const measure = () => {
-      const s = Math.min(1, wrap.clientWidth / DESIGN_W);
-      const h = inner.offsetHeight * s;
-      setScale((prev) => (Math.abs(prev - s) < 0.001 ? prev : s));
-      setBoxH((prev) =>
-        prev !== undefined && Math.abs(prev - h) < 0.5 ? prev : h,
-      );
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(wrap);
-    return () => ro.disconnect();
-  }, []);
-
   useEffect(() => {
     if (!edit) return;
     function onMove(e: globalThis.PointerEvent) {
       const d = drag.current;
       if (!d) return;
-      const dx = (e.clientX - d.startX) / (scale || 1);
-      const dy = (e.clientY - d.startY) / (scale || 1);
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
       setPos((p) => ({
         ...p,
         [d.key]: { x: Math.round(d.origX + dx), y: Math.round(d.origY + dy) },
@@ -154,7 +139,7 @@ export function FeaturesHeadline() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [edit, scale]);
+  }, [edit]);
 
   function startDrag(e: PointerEvent<HTMLDivElement>, key: "title" | "bubble") {
     if (!edit) return;
@@ -169,7 +154,6 @@ export function FeaturesHeadline() {
     };
   }
 
-  // 화살표키 미세조정(선택 요소 1px, Shift+10px)
   useEffect(() => {
     if (!edit) return;
     function onKey(e: KeyboardEvent) {
@@ -199,68 +183,63 @@ export function FeaturesHeadline() {
     setPos((p) => ({ ...p, [key]: { ...p[key], [axis]: v } }));
   }
 
-  // 일반 화면은 고정값(DEFAULT), 편집 모드에서만 드래그 중인 pos 사용
   const view = edit ? pos : DEFAULT;
+  const applyOffset = edit || wide;
   const snippet = `title: translate(${pos.title.x}px, ${pos.title.y}px)\nbubble: translate(${pos.bubble.x}px, ${pos.bubble.y}px)`;
 
   return (
-    <div
-      ref={wrapRef}
-      className="relative w-full overflow-x-clip"
-      style={{ height: boxH }}
-    >
-      <div
-        ref={innerRef}
-        className="absolute left-1/2 top-0 flex flex-col items-center"
-        style={{
-          width: DESIGN_W,
-          transform: `translateX(-50%) scale(${scale})`,
-          transformOrigin: "top center",
-        }}
-      >
-        {/* 세로선은 히어로에서 이어짐. 간격만 유지 */}
-        <div aria-hidden className="mb-12 h-12 w-px" />
+    <div className="relative w-full overflow-x-clip">
+      <div className="mx-auto flex w-full max-w-4xl flex-col items-center">
+        <div aria-hidden className="mb-8 h-12 w-px sm:mb-12" />
 
-        <div className="grid w-full grid-cols-2 items-start gap-x-10">
+        <div className="grid w-full grid-cols-1 items-start gap-8 sm:grid-cols-2 sm:gap-x-8 xl:gap-x-10">
           <div
             className={cn(
-              "min-w-0 justify-self-end text-left",
+              "min-w-0 text-left sm:justify-self-end",
               edit &&
                 "cursor-grab outline outline-1 outline-dashed active:cursor-grabbing",
               edit && sel === "title"
                 ? "outline-2 outline-primary"
                 : edit && "outline-primary/40",
             )}
-            style={{ transform: `translate(${view.title.x}px, ${view.title.y}px)` }}
+            style={
+              applyOffset
+                ? { transform: `translate(${view.title.x}px, ${view.title.y}px)` }
+                : undefined
+            }
             onPointerDown={(e) => startDrag(e, "title")}
           >
-            <h2 className="break-keep text-5xl font-bold tracking-tight text-foreground">
+            <h2 className="break-keep text-3xl font-bold tracking-tight text-foreground sm:text-4xl xl:text-5xl">
               회의 전 과정을
               <br />
               하나의 흐름으로.
             </h2>
-            <p className="mt-6 break-keep text-lg leading-relaxed text-muted">
-              기록까지 안전하게, Faith가 자동으로 이어줍니다.
+            <p className="mt-4 break-keep text-lg leading-relaxed text-muted sm:mt-5 sm:text-xl xl:mt-6 xl:text-2xl">
+              받아쓰기부터 요약까지, Faith가 자동으로 이어줍니다.
             </p>
           </div>
 
           <div
             className={cn(
-              "justify-self-start pt-1",
+              "justify-self-center pt-1 sm:justify-self-start",
               edit &&
                 "cursor-grab outline outline-1 outline-dashed active:cursor-grabbing",
               edit && sel === "bubble"
                 ? "outline-2 outline-primary"
                 : edit && "outline-primary/40",
             )}
-            style={{
-              transform: `translate(${view.bubble.x}px, ${view.bubble.y}px)`,
-            }}
+            style={
+              applyOffset
+                ? {
+                    transform: `translate(${view.bubble.x}px, ${view.bubble.y}px)`,
+                  }
+                : undefined
+            }
             onPointerDown={(e) => startDrag(e, "bubble")}
           >
             <div
               aria-hidden
-              className="pointer-events-none relative z-10 w-[15rem] select-none"
+              className="pointer-events-none relative z-10 w-44 select-none sm:w-52 xl:w-[15rem]"
             >
               <Image
                 src="/hero-chat-glass-charcoal.png"
@@ -313,7 +292,9 @@ export function FeaturesHeadline() {
                     type="number"
                     value={pos[k][axis]}
                     onFocus={() => setSel(k)}
-                    onChange={(e) => setAxis(k, axis, Math.round(Number(e.target.value) || 0))}
+                    onChange={(e) =>
+                      setAxis(k, axis, Math.round(Number(e.target.value) || 0))
+                    }
                     className="w-14 rounded-md border border-border bg-surface px-1.5 py-1 text-xs text-foreground"
                   />
                 </label>

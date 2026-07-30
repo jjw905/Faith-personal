@@ -112,6 +112,10 @@ export function NewMeetingSetup({
       setMessage("팀과 제목을 확인해 주세요.");
       return;
     }
+    if (values.participantIds.length === 0) {
+      setMessage("함께할 팀원을 선택해 주세요.");
+      return;
+    }
     if (values.intent === "schedule" && !values.start) {
       setMessage("시작 시각을 확인해 주세요.");
       return;

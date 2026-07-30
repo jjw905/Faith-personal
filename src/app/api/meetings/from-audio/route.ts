@@ -2,11 +2,16 @@ import { randomUUID } from "crypto";
 import { after, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/require-user";
+import { parseAccountDisplayPrefs } from "@/lib/account-settings";
 import { DEFAULT_STT_MODEL } from "@/lib/stt/models";
 import { processUploadedMeeting } from "@/lib/stt/process-upload";
 import { placeholderMeeting } from "@/lib/stt/to-meeting";
 import { stripFileExtension } from "@/lib/meeting-process";
 import { prisma } from "@/lib/prisma";
+import {
+  getUploadQuotaStatus,
+  UploadQuotaExceededError,
+} from "@/lib/stt/usage-quota";
 import {
   saveUserMeeting,
   type UserMeetingRecord,
@@ -57,6 +62,29 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { ok: false, message: "파일을 찾을 수 없습니다." },
       { status: 404 },
+    );
+  }
+
+  // 길이는 ffprobe 이후에 최종 검사한다. 남은 시간이 이미 0이면
+  // placeholder 회의를 만들지 않고 여기서 막는다(비동기 실패 잔존 방지).
+  const quota = await getUploadQuotaStatus(session.user.id);
+  if (quota.enforced && quota.remainingSec <= 0) {
+    const err = new UploadQuotaExceededError(quota);
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "UPLOAD_QUOTA_EXCEEDED",
+        message: err.message,
+        quota: {
+          usedSec: quota.usedSec,
+          limitSec: quota.limitSec,
+          remainingSec: quota.remainingSec,
+          surveyCompleted: quota.surveyCompleted,
+          resetsAtLabel: quota.resetsAtLabel,
+          enforced: quota.enforced,
+        },
+      },
+      { status: 429 },
     );
   }
 
@@ -140,6 +168,14 @@ export async function POST(request: Request) {
     });
   }
 
+  const personalSettings = await prisma.userPersonalSettings.findUnique({
+    where: { userId: session.user.id },
+    select: { displayPrefs: true },
+  });
+  const { speakerSplit } = parseAccountDisplayPrefs(
+    personalSettings?.displayPrefs,
+  );
+
   after(() =>
     processUploadedMeeting({
       meetingId,
@@ -147,6 +183,7 @@ export async function POST(request: Request) {
       vaultFileId,
       model,
       title,
+      speakerSplit,
     }),
   );
 

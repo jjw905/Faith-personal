@@ -53,7 +53,6 @@ export const PLAN_CATALOG: Record<CatalogPlanId, PlanCatalogEntry> = {
       "보관함 500MB",
       "음성 텍스트 추출",
       "개인정보 자동 마스킹",
-      "단어 교정 추천",
     ],
   },
   PRO: {

@@ -186,7 +186,7 @@ export function useRealtimeTranscription() {
             ? String((event.error as Record<string, unknown>).message ?? "")
             : "";
         if (!/buffer.*empty|buffer_too_small|commit_empty/i.test(detail)) {
-          setError(detail || "실시간 전사 연결에서 오류가 발생했습니다.");
+          setError(detail || "실시간 받아쓰기 연결에서 오류가 발생했습니다.");
         }
         return;
       }
@@ -279,7 +279,7 @@ export function useRealtimeTranscription() {
         handleServerEvent(String(message.data ?? "")),
       );
       channel.addEventListener("error", () => {
-        setError("실시간 전사 채널을 다시 연결하고 있습니다.");
+        setError("실시간 받아쓰기 채널을 다시 연결하고 있습니다.");
       });
       peer.addEventListener("connectionstatechange", () => {
         if (
@@ -295,7 +295,7 @@ export function useRealtimeTranscription() {
           reconnectTimerRef.current
         ) {
           if (reconnectAttemptsRef.current >= 2) {
-            setError("실시간 전사 연결이 끊겼습니다. 기록을 다시 시작해 주세요.");
+            setError("실시간 받아쓰기 연결이 끊겼습니다. 기록을 다시 시작해 주세요.");
           }
           return;
         }
@@ -327,7 +327,7 @@ export function useRealtimeTranscription() {
                 await connectPeerRef.current?.(body.clientSecret, activeTrack);
               })
               .catch(() => {
-                setError("실시간 전사 재연결에 실패했습니다.");
+                setError("실시간 받아쓰기 재연결에 실패했습니다.");
               });
           }
         }, 1_200);

@@ -10,9 +10,9 @@ import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteNav } from "@/components/marketing/site-nav";
 
 export const metadata: Metadata = {
-  title: "Faith · 안전한 회의록과 개인정보 마스킹",
+  title: "Faith · AI 회의록",
   description:
-    "채팅과 회의록의 개인정보를 규칙과 NER 하이브리드로 자동 감지, 마스킹하는 보안 플랫폼.",
+    "화자 구분 받아쓰기, 요약, 타임라인으로 회의를 자동 정리하는 AI 회의록. 개인정보 마스킹은 부가로 따라옵니다.",
 };
 
 /** 사이트 루트 — 로그인 중이면 앱으로, 아니면 마케팅 메인(브랜딩 우선). */

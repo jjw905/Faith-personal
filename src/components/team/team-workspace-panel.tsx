@@ -1056,6 +1056,10 @@ export function TeamWorkspacePanel() {
       setComposerMessage("제목을 확인해 주세요.");
       return;
     }
+    if (values.participantIds.length === 0) {
+      setComposerMessage("함께할 팀원을 선택해 주세요.");
+      return;
+    }
     if (values.intent === "schedule" && !values.start) {
       setComposerMessage("시작 시각을 확인해 주세요.");
       return;
@@ -1155,7 +1159,7 @@ export function TeamWorkspacePanel() {
             <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
             돌아가기
           </Link>
-          <h1 className="mt-2 text-2xl font-bold leading-none tracking-tight text-foreground">
+          <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight text-foreground">
             {manageTitle}
           </h1>
         </header>
@@ -1182,7 +1186,7 @@ export function TeamWorkspacePanel() {
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-base font-medium leading-none text-muted">
+          <p className="text-base font-medium leading-tight text-muted">
             {dateHeading}
           </p>
           {renaming && caps.canActOwner ? (
@@ -1214,7 +1218,7 @@ export function TeamWorkspacePanel() {
             </div>
           ) : (
             <div className="mt-2 flex min-w-0 items-center gap-1">
-              <h1 className="truncate text-2xl font-bold leading-none tracking-tight text-foreground">
+              <h1 className="truncate text-2xl font-bold leading-tight tracking-tight text-foreground">
                 {data.team.name}
               </h1>
               {caps.showOwner && caps.canActOwner ? (

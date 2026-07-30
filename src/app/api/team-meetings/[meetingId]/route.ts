@@ -7,6 +7,7 @@ import { deriveMeetingState } from "@/lib/team/meeting-lifecycle";
 import {
   notifyMeetingCanceled,
   notifyMeetingChanged,
+  notifyMeetingScheduled,
   notifyPrivateConflict,
 } from "@/lib/team/meeting-notifications";
 import { reconcileTeamMeeting } from "@/lib/team/reconcile-meeting";
@@ -213,6 +214,49 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
+  let nextParticipantIds = schedule.value.participantIds;
+  if (body.participantIds) {
+    const validMembers = await prisma.teamMember.findMany({
+      where: {
+        teamId: meeting.teamId,
+        userId: { in: schedule.value.participantIds },
+        user: { disabled: false },
+      },
+      select: { userId: true },
+    });
+    nextParticipantIds = Array.from(
+      new Set([
+        meeting.organizerId,
+        ...validMembers
+          .map((row) => row.userId)
+          .filter((id) => id !== meeting.organizerId),
+      ]),
+    );
+    if (
+      nextParticipantIds.filter((id) => id !== meeting.organizerId).length < 1
+    ) {
+      return NextResponse.json(
+        { ok: false, message: "함께할 팀원을 초대해 주세요." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const nextBackupHostId =
+    schedule.value.backupHostId &&
+    nextParticipantIds.includes(schedule.value.backupHostId)
+      ? schedule.value.backupHostId
+      : null;
+
+  const previousInvitees = new Set(
+    meeting.access
+      .filter((row) => row.isParticipant)
+      .map((row) => row.userId),
+  );
+  const newlyAdded = nextParticipantIds.filter(
+    (id) => id !== meeting.organizerId && !previousInvitees.has(id),
+  );
+
   const accessible = await accessibleMeetingIdsForUser(session.user.id);
   type ConflictVisible = Awaited<
     ReturnType<typeof findParticipantConflicts>
@@ -223,7 +267,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const updated = await prisma
     .$transaction(async (tx) => {
       const conflicts = await guardScheduleConflicts(tx, {
-        participantIds: schedule.value.participantIds,
+        participantIds: nextParticipantIds,
         startMs: schedule.value.scheduledStartAt.getTime(),
         durationMinutes: schedule.value.durationMinutes,
         excludeMeetingId: meetingId,
@@ -235,7 +279,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
       privateNotices = conflicts.privateNotices;
       if (body.participantIds) {
-        const keep = new Set(schedule.value.participantIds);
+        const keep = new Set(nextParticipantIds);
         await tx.teamMeetingAccess.updateMany({
           where: { meetingId, userId: { notIn: Array.from(keep) } },
           data: { isParticipant: false },
@@ -260,7 +304,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           title: schedule.value.title,
           scheduledStartAt: schedule.value.scheduledStartAt,
           durationMinutes: schedule.value.durationMinutes,
-          backupHostId: schedule.value.backupHostId,
+          backupHostId: nextBackupHostId,
         },
       });
     })
@@ -282,15 +326,35 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  await notifyMeetingChanged({
-    teamId: meeting.teamId,
-    teamName: meeting.team.name,
-    meetingId,
-    title: updated.title,
-    scheduledStartAt: schedule.value.scheduledStartAt,
-    inviteeIds: schedule.value.participantIds,
-    actorId: session.user.id,
-  });
+  if (newlyAdded.length > 0) {
+    await notifyMeetingScheduled({
+      teamId: meeting.teamId,
+      teamName: meeting.team.name,
+      meetingId,
+      title: updated.title,
+      scheduledStartAt: schedule.value.scheduledStartAt,
+      inviteeIds: newlyAdded,
+      organizerId: meeting.organizerId,
+      startNow: derived.canJoin,
+    });
+  }
+
+  const scheduleMetaChanged =
+    body.title != null ||
+    body.scheduledStartAt != null ||
+    body.durationMinutes != null ||
+    body.backupHostId !== undefined;
+  if (scheduleMetaChanged) {
+    await notifyMeetingChanged({
+      teamId: meeting.teamId,
+      teamName: meeting.team.name,
+      meetingId,
+      title: updated.title,
+      scheduledStartAt: schedule.value.scheduledStartAt,
+      inviteeIds: nextParticipantIds.filter((id) => !newlyAdded.includes(id)),
+      actorId: session.user.id,
+    });
+  }
   await Promise.all(
     privateNotices.map((notice) =>
       notifyPrivateConflict({

@@ -44,7 +44,7 @@ function flipPhase(phase?: string): "transcribing" | "structuring" {
 }
 
 /**
- * 기록 시작 / 파일 올리기 바로 아래.
+ * 실시간 기록 / 파일 올리기 바로 아래.
  * 제작 중이면 회의 제목(리스트와 동일) + 파이프라인 실제 진행률.
  */
 export function ProcessingNowSection({

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { UsageLimitDialog } from "@/components/dashboard/usage-limit-dialog";
 import {
   MEETING_PROCESS_LABEL,
   type MeetingProcessPhase,
@@ -11,6 +12,15 @@ import { cn } from "@/lib/utils";
 
 export type { MeetingProcessPhase };
 export { MEETING_PROCESS_LABEL };
+
+function isQuotaBlockedMessage(message: string | null | undefined) {
+  if (!message) return false;
+  return (
+    message.includes("분석 가능 시간") ||
+    message.includes("무료 분석 시간") ||
+    message.includes("설문에 참여하면")
+  );
+}
 
 /** ETA 계산용 최소 신호. 너무 이르면 튀는 추정치라 숨긴다. (MS Progress Bars) */
 const ETA_MIN_ELAPSED_SEC = 3;
@@ -227,6 +237,9 @@ export function MeetingProcessBanner({
       ? (initialErrorMessage?.trim() || MEETING_PROCESS_LABEL[initialPhase])
       : null,
   );
+  const [usageDialogOpen, setUsageDialogOpen] = useState(() =>
+    isQuotaBlockedMessage(initialErrorMessage),
+  );
 
   const active = phase === "transcribing" || phase === "structuring";
 
@@ -301,9 +314,10 @@ export function MeetingProcessBanner({
         targetPercentRef.current = nextPercent;
 
         if (data.phase === "error" || data.phase === "empty") {
-          setError(
-            data.errorMessage ?? MEETING_PROCESS_LABEL[data.phase],
-          );
+          const nextError =
+            data.errorMessage ?? MEETING_PROCESS_LABEL[data.phase];
+          setError(nextError);
+          if (isQuotaBlockedMessage(nextError)) setUsageDialogOpen(true);
           etaRef.current = {
             lastSample: null,
             rate: null,
@@ -391,6 +405,11 @@ export function MeetingProcessBanner({
         progressPercent={displayPercent}
         stageLabel={stageLabel}
         etaLabel={etaLabel}
+      />
+      <UsageLimitDialog
+        open={usageDialogOpen}
+        variant="time"
+        onClose={() => setUsageDialogOpen(false)}
       />
     </section>
   );

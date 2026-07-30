@@ -1,20 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
+import { Geist_Mono, Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 
 import { AuthSessionProvider } from "@/components/auth/session-provider";
 import { AppProvider } from "@/context/app-context";
 
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+/** 영문(라틴) — 한글 글리프가 없어 아래 Pretendard로 넘어간다. */
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-latin",
   subsets: ["latin"],
   display: "swap",
 });
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const pretendard = localFont({
+  src: "../../node_modules/pretendard/dist/web/variable/woff2/PretendardVariable.woff2",
+  display: "swap",
+  weight: "45 920",
+  variable: "--font-pretendard",
+  fallback: [
+    "-apple-system",
+    "BlinkMacSystemFont",
+    "Apple SD Gothic Neo",
+    "Segoe UI",
+    "sans-serif",
+  ],
 });
 
 const geistMono = Geist_Mono({
@@ -23,9 +34,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "보안회의록 | AI 회의록 자동화 플랫폼",
+  title: "Faith | AI 회의록",
   description:
-    "보안 및 접근 제어 기능이 내재된 AI 기반 회의록 자동화 웹 플랫폼",
+    "화자 구분 받아쓰기, 요약, 타임라인까지 자동으로 만드는 AI 회의록. 개인정보 마스킹은 부가로 따라옵니다.",
 };
 
 /** Android Chrome: 키보드가 레이아웃을 줄여 하단 입력이 가려지지 않게 한다. iOS는 visualViewport로 보정. */
@@ -45,7 +56,7 @@ export default function RootLayout({
     <html
       lang="ko"
       data-scroll-behavior="smooth"
-      className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${plusJakarta.variable} ${pretendard.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />

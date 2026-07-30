@@ -7,7 +7,7 @@ import {
 } from "@/lib/stt/survey";
 
 /**
- * 결제 수요조사 기간 한정 월간 업로드 분석 쿼터.
+ * 오픈 준비 기간 한정 월간 업로드 분석 쿼터.
  * 실시간 회화, 팀 회의는 대상이 아니다(업로드 분석만). 팀 기능은 이 기간에
  * 제공하지 않으므로 애초에 대상 밖이다.
  * 분(分) 상수 자체는 survey.ts에 있다. 이 파일은 prisma를 의존해 서버 전용이라,
@@ -36,6 +36,8 @@ export type UploadQuotaStatus = {
   resetsAt: string;
   /** 표시용. 예: 8월 15일 */
   resetsAtLabel: string;
+  /** DEMAND_SURVEY_ACTIVE가 꺼지면 서버도 클라이언트도 한도를 적용하지 않는다. */
+  enforced: boolean;
 };
 
 function seoulYmd(date: Date) {
@@ -127,9 +129,10 @@ export async function hasCompletedSurvey(userId: string): Promise<boolean> {
  * 요청을 동시에 여러 번 보내면(병렬 탭, 스크립트) 각 요청이 서로의 진행
  * 중인 사용량을 못 보고 전부 쿼터를 통과해 버린다 — 통과된 개수만큼 한도를
  * 넘겨 유료 STT 호출이 나간다. 여기 이 프로세스 메모리에 임시로 더해서 막는다.
- * 서버가 여러 대면 인스턴스마다 따로 세므로 완벽하진 않지만, 가장 흔한 경로
- * (같은 브라우저 세션의 동시 업로드)는 막는다. 완료되면 즉시 release, 못
- * 불려도 15분 뒤 스스로 사라진다.
+ * 전제: DigitalOcean 단일 앱 인스턴스. 멀티 인스턴스면 인스턴스마다 예약이
+ * 갈라져 레이스가 난다. 공유 durable 예약은 과대 스코프라 두지 않는다.
+ * 같은 브라우저 세션의 동시 업로드는 이 메모리 예약으로 막는다. 완료되면
+ * 즉시 release, 못 불려도 15분 뒤 스스로 사라진다.
  */
 const RESERVATION_TTL_MS = 15 * 60 * 1000;
 type Reservation = {
@@ -199,15 +202,17 @@ export async function getUploadQuotaStatus(
   const limitSec = surveyCompleted
     ? SURVEY_UNLOCKED_MONTHLY_SEC
     : FREE_MONTHLY_SEC;
+  const enforced = DEMAND_SURVEY_ACTIVE;
   return {
     periodKey,
     monthKey: periodKey,
     usedSec,
     limitSec,
-    remainingSec: Math.max(0, limitSec - usedSec),
+    remainingSec: enforced ? Math.max(0, limitSec - usedSec) : limitSec,
     surveyCompleted,
     resetsAt: resetsAt.toISOString(),
     resetsAtLabel,
+    enforced,
   };
 }
 

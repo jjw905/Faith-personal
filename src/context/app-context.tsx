@@ -11,7 +11,6 @@ import {
   useState,
 } from "react";
 
-import { readDataRetentionDaysFromStorage } from "@/lib/data-retention";
 import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { routeWorkspaceId } from "@/lib/workspace-route";
 import { WORKSPACES, type Workspace, type WorkspaceId } from "@/lib/workspaces";
@@ -119,12 +118,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     async function refreshCount() {
       try {
-        const retentionDays = readDataRetentionDaysFromStorage();
-        const q = new URLSearchParams({
-          countOnly: "1",
-          retentionDays: String(retentionDays),
-        });
-        const res = await fetch(`/api/notifications?${q}`, {
+        const res = await fetch("/api/notifications?countOnly=1", {
           cache: "no-store",
         });
         const data = (await res.json()) as {

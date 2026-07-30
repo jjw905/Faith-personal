@@ -24,7 +24,7 @@ export function MaskedText({
   matches: PiiMatch[];
   /** 내 말풍선(진한 primary) 위일 때 */
   onPrimary?: boolean;
-  /** 재생 중인 단어의 원문 offset. 노래방 자막처럼 그 구간만 옅게 강조한다. */
+  /** 재생 중인 단어의 원문 offset. 형광펜처럼 그 구간만 강조한다. */
   activeWordRange?: { startOffset: number; endOffset: number } | null;
 }) {
   /**
@@ -97,9 +97,9 @@ export function MaskedText({
 
   if (!original) return null;
 
-  const highlightClass = onPrimary
-    ? "bg-white/25 rounded-[0.2em]"
-    : "bg-primary-soft rounded-[0.2em]";
+  const markClass = onPrimary
+    ? "word-play-mark word-play-mark-on-primary"
+    : "word-play-mark";
 
   return (
     <>
@@ -124,9 +124,9 @@ export function MaskedText({
           return (
             <span key={seg.key}>
               {before}
-              <span className={cn("transition-colors", highlightClass)}>
+              <mark data-word-play-mark className={markClass}>
                 {active}
-              </span>
+              </mark>
               {after}
             </span>
           );
@@ -159,7 +159,7 @@ export function MaskedText({
                 : onPrimary
                   ? "cursor-pointer bg-white/20 text-primary-foreground hover:bg-white/30"
                   : "animate-[mask-chip-in_220ms_ease-out] motion-reduce:animate-none cursor-pointer bg-masked-soft text-masked hover:brightness-95",
-              isActive && (onPrimary ? "ring-2 ring-white/50" : "ring-2 ring-primary/40"),
+              isActive && markClass,
             )}
           >
             {open ? seg.match.value : seg.match.replacement}

@@ -72,7 +72,7 @@ export async function GET() {
 export async function POST(request: Request) {
   if (!TEAM_FEATURE_ENABLED) {
     return NextResponse.json(
-      { ok: false, message: "현재 수요조사 기간에는 팀 기능을 제공하지 않습니다." },
+      { ok: false, message: "팀 기능은 오픈 준비중이에요." },
       { status: 403 },
     );
   }

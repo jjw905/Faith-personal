@@ -17,7 +17,7 @@ export const DIRECT_UPLOAD_MAX_MB = Math.floor(
 );
 
 export const UPLOAD_AUDIO_TOO_LARGE_MESSAGE =
-  `이 서버에서는 ${DIRECT_UPLOAD_MAX_MB}MB 이하 파일만 전사할 수 있습니다. 더 작은 파일로 올려 주세요.`;
+  `이 서버에서는 ${DIRECT_UPLOAD_MAX_MB}MB 이하 파일만 받아쓸 수 있습니다. 더 작은 파일로 올려 주세요.`;
 
 export function isUploadAudioTooLong(durationSec: number): boolean {
   return Number.isFinite(durationSec) && durationSec > MAX_UPLOAD_AUDIO_SEC;

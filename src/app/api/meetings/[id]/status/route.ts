@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/require-user";
 import { meetingDisplayTitle } from "@/lib/meeting-process";
-import { getUserMeeting } from "@/lib/user-meetings-store";
+import {
+  getUserMeeting,
+  healStaleProcessingMeeting,
+} from "@/lib/user-meetings-store";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,7 +19,8 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const row = getUserMeeting(id);
+  const healed = healStaleProcessingMeeting(id);
+  const row = healed ?? getUserMeeting(id);
   if (!row || row.userId !== session.user.id) {
     return NextResponse.json(
       { ok: false, message: "회의 없음" },

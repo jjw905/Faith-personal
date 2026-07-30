@@ -5,10 +5,12 @@ import {
   meetingDisplayTitle,
   meetingProcessDetail,
 } from "@/lib/meeting-process";
+import { parseDataRetentionDays } from "@/lib/data-retention";
 import { getMeetingsForUser } from "@/lib/meetings-data";
 import { prisma } from "@/lib/prisma";
 import {
   listUserMeetings,
+  purgeExpiredUserMeetings,
   type UserMeetingRecord,
 } from "@/lib/user-meetings-store";
 import type { WorkspaceId } from "@/lib/workspaces";
@@ -90,6 +92,21 @@ export async function GET(request: Request) {
     url.searchParams.get("workspace") === "team" ? "team" : "personal"
   ) as WorkspaceId;
 
+  // 알림 목록과 같은 패턴: 조회 전 보존 기간이 지난 개인 회의 기록을 지연 삭제한다.
+  // 이미 사용자가 고지·선택한 기간을 적용하는 것이라, 기간을 "줄일 때"의 확인 다이얼로그와는 별개다.
+  let purgedCount = 0;
+  const account = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { meetingRetentionDays: true },
+  });
+  if (account) {
+    const result = purgeExpiredUserMeetings(
+      session.user.id,
+      parseDataRetentionDays(account.meetingRetentionDays),
+    );
+    purgedCount = result.deleted;
+  }
+
   const meetings = getMeetingsForUser(session.user.id, workspace);
   const inWorkspace = listUserMeetings(session.user.id).filter(
     (r) => r.workspace === workspace,
@@ -118,5 +135,5 @@ export async function GET(request: Request) {
 
   const activity = rows.map((row) => toActivityItem(row, vaultNames));
 
-  return NextResponse.json({ ok: true, meetings, activity });
+  return NextResponse.json({ ok: true, meetings, activity, purgedCount });
 }

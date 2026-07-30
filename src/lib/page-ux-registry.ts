@@ -53,6 +53,14 @@ const POPUP = {
   inviteSearch: { id: "popup-invite-search", label: "초대 검색 중" },
   member: { id: "popup-member", label: "멤버 권한" },
   access: { id: "popup-access", label: "기록 접근" },
+  createTeamFirst: {
+    id: "popup-create-team-first",
+    label: "팀 먼저 만들기",
+  },
+  teamSettingsOff: {
+    id: "popup-team-settings-off",
+    label: "팀 설정 준비중",
+  },
 } as const satisfies Record<string, PageUxScenario>;
 
 const LIST_SCENARIOS: PageUxScenario[] = [LIVE, EMPTY, FULL];
@@ -294,6 +302,17 @@ const SURFACE_RULES: SurfaceRule[] = [
     label: "도움말",
     scenarios: WITH_CHROME,
     match: (pathname) => pathname === "/help",
+  },
+  {
+    id: "settings",
+    label: "시스템 설정",
+    scenarios: [
+      LIVE,
+      POPUP.createTeamFirst,
+      POPUP.teamSettingsOff,
+      ...CHROME_POPUPS,
+    ],
+    match: (pathname) => pathname === "/settings",
   },
   {
     id: "audit",

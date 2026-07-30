@@ -29,7 +29,7 @@ export type SurveyStatsSummary = {
 };
 
 /**
- * 수요조사 응답 집계. 개별 자유서술(improvementNote)이나 userId는 절대
+ * 설문 응답 집계. 개별 자유서술(improvementNote)이나 userId는 절대
  * 포함하지 않는다. 선택형·척도 값의 분포와 참여 건수만 반환한다.
  */
 export async function summarizeSurveyStats(): Promise<SurveyStatsSummary> {

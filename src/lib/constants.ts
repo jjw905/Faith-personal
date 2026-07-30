@@ -119,7 +119,7 @@ export const OPS_NAV_ITEMS: NavItem[] = [
     icon: Activity,
   },
   {
-    title: "수요조사 통계",
+    title: "설문 통계",
     href: "/survey-stats",
     icon: ClipboardList,
   },
@@ -187,8 +187,8 @@ export const PAGE_TITLES: Record<
     description: "업로드 처리 실패율과 단계별, 모델별 분포를 확인합니다.",
   },
   "/survey-stats": {
-    title: "수요조사 통계",
-    description: "결제 의향, 성능 만족도 수요조사 참여 현황을 확인합니다.",
+    title: "설문 통계",
+    description: "결제 의향, 성능 만족도 설문 참여 현황을 확인합니다.",
   },
   "/users": {
     title: "사용자 관리",

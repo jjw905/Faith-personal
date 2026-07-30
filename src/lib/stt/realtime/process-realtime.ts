@@ -119,11 +119,11 @@ export async function processRealtimeMeeting(params: {
   ]);
 
   if (!stt.text.trim()) {
-    throw new Error("실시간 전사가 비어 있습니다.");
+    throw new Error("실시간 받아쓰기가 비어 있습니다.");
   }
   if (!stt.utterances.length) {
     throw new Error(
-      "실시간 STT 발화 시각이 비어 있습니다. 싱크를 맞출 수 없어 중단합니다.",
+      "실시간 받아쓰기 발화 시각이 비어 있습니다. 싱크를 맞출 수 없어 중단합니다.",
     );
   }
 

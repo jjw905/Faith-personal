@@ -64,6 +64,7 @@ type QuotaStatus = {
   remainingSec: number;
   surveyCompleted: boolean;
   resetsAtLabel?: string;
+  enforced?: boolean;
 };
 
 function useUploadQuota() {
@@ -95,6 +96,7 @@ function useUploadQuota() {
 function UsageHeroCard({ tier }: { tier: AccountTier }) {
   const { status, loading } = useUploadQuota();
   const resetLabel = status?.resetsAtLabel;
+  const enforced = status?.enforced !== false;
 
   return (
     <Card className={CARD_SHADOW}>
@@ -117,6 +119,15 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
           <div className="mt-4 space-y-3">
             <div className="h-10 w-40 animate-pulse rounded-lg bg-surface-2" />
             <div className="h-2.5 w-full animate-pulse rounded-full bg-surface-2" />
+          </div>
+        ) : !enforced ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-2xl font-bold tracking-tight text-foreground">
+              한도 없음
+            </p>
+            <p className="text-base font-medium text-muted">
+              지금은 분석 시간 한도를 적용하지 않습니다.
+            </p>
           </div>
         ) : (
           <>
@@ -253,7 +264,7 @@ export default function PlanPage() {
     <PageContainer soft>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
         <header className="min-w-0">
-          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
             플랜
           </h1>
           <p className="mt-2 text-base font-medium text-muted">

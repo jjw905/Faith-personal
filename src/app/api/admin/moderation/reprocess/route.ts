@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { writeAdminAudit } from "@/lib/admin-audit";
+import { parseAccountDisplayPrefs } from "@/lib/account-settings";
 import { prisma } from "@/lib/prisma";
 import { processUploadedMeeting } from "@/lib/stt/process-upload";
 import { getUserMeeting, updateUserMeeting } from "@/lib/user-meetings-store";
@@ -70,6 +71,14 @@ export async function POST(request: Request) {
     errorMessage: undefined,
   });
 
+  const personalSettings = await prisma.userPersonalSettings.findUnique({
+    where: { userId: record.userId },
+    select: { displayPrefs: true },
+  });
+  const { speakerSplit } = parseAccountDisplayPrefs(
+    personalSettings?.displayPrefs,
+  );
+
   after(() =>
     processUploadedMeeting({
       meetingId,
@@ -78,6 +87,7 @@ export async function POST(request: Request) {
       model: record.model,
       title: record.meeting.title,
       bypassModeration: true,
+      speakerSplit,
     }),
   );
 

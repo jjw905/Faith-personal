@@ -32,7 +32,7 @@ const ICON_SLOT =
   "relative inline-flex h-5 w-5 shrink-0 items-center justify-center";
 
 const LABEL_CLASS =
-  "w-full truncate text-center text-[11px] font-semibold leading-none";
+  "w-full truncate text-center text-sm font-semibold leading-tight";
 
 const SHEET_ITEM_CLASS =
   "flex min-h-16 w-full cursor-pointer items-center gap-3 rounded-2xl px-3 text-left transition-colors hover:bg-surface disabled:pointer-events-none disabled:opacity-50";
@@ -56,7 +56,7 @@ export function MeetingsMobileActionBar({
   onPaneChange,
   startHref,
   onStart,
-  startLabel = "기록 시작",
+  startLabel = "실시간 기록",
   onUpload,
   uploadLabel = "파일 올리기",
   uploadIcon = "upload",

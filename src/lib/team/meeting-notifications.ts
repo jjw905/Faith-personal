@@ -17,8 +17,13 @@ export async function notifyMeetingScheduled(params: {
   scheduledStartAt: Date;
   inviteeIds: string[];
   organizerId: string;
+  /** 바로 시작: 입장 링크로 안내 */
+  startNow?: boolean;
 }) {
   const startLabel = params.scheduledStartAt.toLocaleString("ko-KR");
+  const href = params.startNow
+    ? `/meetings/team/${params.meetingId}`
+    : `/team?meeting=${params.meetingId}`;
   await Promise.all(
     params.inviteeIds
       .filter((userId) => userId !== params.organizerId)
@@ -27,8 +32,12 @@ export async function notifyMeetingScheduled(params: {
           userId,
           type: "meeting",
           kind: NOTIFICATION_KINDS.MEETING_ACK,
-          title: `${params.teamName}, 미확인`,
-          body: `${params.title} (${startLabel})`,
+          title: params.startNow
+            ? `${params.teamName}, 지금 참가`
+            : `${params.teamName}, 미확인`,
+          body: params.startNow
+            ? `${params.title}`
+            : `${params.title} (${startLabel})`,
           teamId: params.teamId,
           meetingId: params.meetingId,
           groupKey: meetingAckGroupKey(params.meetingId),
@@ -37,9 +46,10 @@ export async function notifyMeetingScheduled(params: {
             teamId: params.teamId,
             teamName: params.teamName,
             meetingId: params.meetingId,
-            href: `/team?meeting=${params.meetingId}`,
+            href,
             ack: true,
-            label: "미확인",
+            label: params.startNow ? "참가" : "미확인",
+            startNow: Boolean(params.startNow),
           },
         }),
       ),

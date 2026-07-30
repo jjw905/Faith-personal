@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useId,
   useImperativeHandle,
@@ -32,6 +33,10 @@ import {
 } from "@/lib/stt/upload-limits";
 import { cn } from "@/lib/utils";
 import { UploadQuotaBanner } from "@/components/dashboard/upload-quota-banner";
+import {
+  UsageLimitDialog,
+  type UsageLimitTimeStatus,
+} from "@/components/dashboard/usage-limit-dialog";
 
 type Mode = "idle" | "upload";
 
@@ -99,6 +104,31 @@ export const AudioUploadZone = forwardRef<
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [flowPhase, setFlowPhase] = useState<AudioUploadDemoPhase>("panel");
+  const [quotaStatus, setQuotaStatus] = useState<UsageLimitTimeStatus | null>(
+    null,
+  );
+  const [usageDialogOpen, setUsageDialogOpen] = useState(false);
+
+  function applyQuotaPayload(
+    data: { ok?: boolean } & Partial<UsageLimitTimeStatus>,
+  ): UsageLimitTimeStatus | null {
+    if (
+      !data.ok ||
+      typeof data.limitSec !== "number" ||
+      typeof data.usedSec !== "number" ||
+      typeof data.remainingSec !== "number"
+    ) {
+      return null;
+    }
+    return {
+      limitSec: data.limitSec,
+      usedSec: data.usedSec,
+      remainingSec: data.remainingSec,
+      surveyCompleted: Boolean(data.surveyCompleted),
+      resetsAtLabel: data.resetsAtLabel ?? "다음 주기",
+      enforced: data.enforced !== false,
+    };
+  }
 
   const {
     isDragging,
@@ -191,11 +221,40 @@ export const AudioUploadZone = forwardRef<
     };
   }, [scenarioId, demoPhase]);
 
-  function openUpload() {
-    setMode("upload");
-  }
+  useEffect(() => {
+    if (!isLive) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/usage/quota", { cache: "no-store" });
+        const data = (await res.json()) as {
+          ok?: boolean;
+        } & Partial<UsageLimitTimeStatus>;
+        const next = applyQuotaPayload(data);
+        if (!cancelled && next) setQuotaStatus(next);
+      } catch {
+        // 조회 실패 시 서버가 실제 시작 시점에 다시 검사한다.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLive]);
 
-  useImperativeHandle(ref, () => ({ openUpload }), []);
+  const openUpload = useCallback(() => {
+    if (
+      isLive &&
+      quotaStatus?.enforced !== false &&
+      quotaStatus &&
+      quotaStatus.remainingSec <= 0
+    ) {
+      setUsageDialogOpen(true);
+      return;
+    }
+    setMode("upload");
+  }, [isLive, quotaStatus]);
+
+  useImperativeHandle(ref, () => ({ openUpload }), [openUpload]);
 
   function closeUpload() {
     if (
@@ -245,6 +304,50 @@ export const AudioUploadZone = forwardRef<
       setStartError("파일을 아직 준비 중입니다. 잠시 후 다시 눌러 주세요.");
       return;
     }
+    if (isLive) {
+      try {
+        const res = await fetch("/api/usage/quota", { cache: "no-store" });
+        const data = (await res.json()) as {
+          ok?: boolean;
+        } & Partial<UsageLimitTimeStatus>;
+        const fresh = applyQuotaPayload(data);
+        if (fresh) {
+          setQuotaStatus(fresh);
+          if (fresh.enforced !== false && fresh.remainingSec <= 0) {
+            setUsageDialogOpen(true);
+            return;
+          }
+          // 남은 시간보다 긴 파일이면 서버가 나중에 거절한다. 미리 막는다.
+          if (
+            fresh.enforced !== false &&
+            selectedFile &&
+            fresh.remainingSec > 0
+          ) {
+            const durationSec = await new Promise<number | null>((resolve) => {
+              const url = URL.createObjectURL(selectedFile);
+              const audio = document.createElement("audio");
+              const finish = (sec: number | null) => {
+                URL.revokeObjectURL(url);
+                resolve(sec);
+              };
+              audio.preload = "metadata";
+              audio.onloadedmetadata = () => {
+                const d = audio.duration;
+                finish(Number.isFinite(d) && d > 0 ? d : null);
+              };
+              audio.onerror = () => finish(null);
+              audio.src = url;
+            });
+            if (durationSec != null && durationSec > fresh.remainingSec) {
+              setUsageDialogOpen(true);
+              return;
+            }
+          }
+        }
+      } catch {
+        // 조회 실패해도 서버가 실제 처리 시점에 다시 검사한다.
+      }
+    }
     setStarting(true);
     setStartError(null);
     try {
@@ -273,7 +376,23 @@ export const AudioUploadZone = forwardRef<
         message?: string;
         href?: string;
         meetingId?: string;
+        code?: string;
+        quota?: UsageLimitTimeStatus;
       };
+      if (
+        res.status === 429 ||
+        data.code === "UPLOAD_QUOTA_EXCEEDED"
+      ) {
+        if (data.quota) {
+          setQuotaStatus({
+            ...data.quota,
+            enforced: data.quota.enforced !== false,
+          });
+        }
+        setUsageDialogOpen(true);
+        setStarting(false);
+        return;
+      }
       if (!res.ok || !data.ok || !data.href) {
         throw new Error(data.message ?? "회의 정리를 시작하지 못했습니다.");
       }
@@ -675,6 +794,13 @@ export const AudioUploadZone = forwardRef<
           if (scenarioId === "popup-duplicate") return;
           confirmDuplicateUpload();
         }}
+      />
+
+      <UsageLimitDialog
+        open={usageDialogOpen}
+        variant="time"
+        timeStatus={quotaStatus}
+        onClose={() => setUsageDialogOpen(false)}
       />
     </div>
   );

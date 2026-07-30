@@ -275,7 +275,7 @@ export function SurveyForm({
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">
-          {qSat}. 받아쓰기(STT) 정확도에 얼마나 만족하시나요?
+          {qSat}. AI 회의록 성능에 얼마나 만족하시나요?
         </h2>
         <div className="grid grid-cols-5 gap-2">
           {SATISFACTION_SCALE.map((n) => (

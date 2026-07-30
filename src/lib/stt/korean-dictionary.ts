@@ -278,19 +278,11 @@ function seoulDay(): string {
 
 async function reserveApiCall(): Promise<boolean> {
   const day = seoulDay();
-  try {
-    await prisma.koreanDictionaryUsage.upsert({
-      where: { day },
-      create: { day, callCount: 0 },
-      update: {},
-    });
-  } catch (error) {
-    const code =
-      error && typeof error === "object" && "code" in error
-        ? String(error.code)
-        : "";
-    if (code !== "P2002") throw error;
-  }
+  // upsert 동시 생성은 day unique로 P2002가 난다. 먼저 행만 확보한다.
+  await prisma.koreanDictionaryUsage.createMany({
+    data: [{ day, callCount: 0 }],
+    skipDuplicates: true,
+  });
   const reserved = await prisma.koreanDictionaryUsage.updateMany({
     where: {
       day,

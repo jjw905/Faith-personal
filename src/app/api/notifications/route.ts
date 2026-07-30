@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 
-import {
-  parseDataRetentionDays,
-  type DataRetentionDays,
-} from "@/lib/data-retention";
+import { parseDataRetentionDays } from "@/lib/data-retention";
 import {
   listVisibleNotifications,
   markNotificationsRead,
@@ -12,13 +9,6 @@ import {
 import { requireUser } from "@/lib/require-user";
 
 export const dynamic = "force-dynamic";
-
-function retentionFromRequest(request: Request): DataRetentionDays | undefined {
-  const url = new URL(request.url);
-  const q = url.searchParams.get("retentionDays");
-  if (q) return parseDataRetentionDays(q);
-  return undefined;
-}
 
 export async function GET(request: Request) {
   const session = await requireUser();
@@ -31,8 +21,12 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const countOnly = url.searchParams.get("countOnly") === "1";
-  const retentionDays = retentionFromRequest(request);
-  const result = await listVisibleNotifications(session.user.id, retentionDays);
+  // 보존 기간은 DB(계정 설정)만 사용. 쿼리로 덮어쓰면 localStorage 스테이로
+  // 서버보다 짧은 기간이 적용돼 알림이 과다 삭제될 수 있다.
+  // countOnly(배지)는 purge 생략 — 폴링마다 삭제하면 부하만 커진다.
+  const result = await listVisibleNotifications(session.user.id, undefined, {
+    purge: !countOnly,
+  });
 
   if (countOnly) {
     return NextResponse.json({
@@ -74,44 +68,30 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const retentionDays =
-    body.retentionDays !== undefined
-      ? parseDataRetentionDays(body.retentionDays)
-      : undefined;
-
-  if (retentionDays !== undefined) {
+  const hasIds = Array.isArray(body.ids) && body.ids.length > 0;
+  // 보존 기간 변경은 읽음 처리와 섞지 않는다. 클라이언트가 localStorage 값을
+  // 같이 보내면 서버 설정을 덮어쓰며 알림을 과다 삭제할 수 있다.
+  // 보존 기간 전용 PATCH만 허용(레거시). 신규 UI는 /api/account/data-retention.
+  if (body.retentionDays !== undefined && !body.all && !hasIds) {
+    const retentionDays = parseDataRetentionDays(body.retentionDays);
     await setUserNotificationRetention(session.user.id, retentionDays);
-  }
-
-  if (body.all) {
-    const r = await markNotificationsRead(
-      session.user.id,
-      "all",
-      retentionDays,
-    );
-    return NextResponse.json({ ok: true, unreadCount: r.unreadCount });
-  }
-
-  if (Array.isArray(body.ids) && body.ids.length > 0) {
-    const ids = body.ids.map((id) => String(id)).filter(Boolean);
-    const r = await markNotificationsRead(
-      session.user.id,
-      ids,
-      retentionDays,
-    );
-    return NextResponse.json({ ok: true, unreadCount: r.unreadCount });
-  }
-
-  if (retentionDays !== undefined) {
-    const result = await listVisibleNotifications(
-      session.user.id,
-      retentionDays,
-    );
+    const result = await listVisibleNotifications(session.user.id);
     return NextResponse.json({
       ok: true,
       unreadCount: result.unreadCount,
       retentionDays: result.retentionDays,
     });
+  }
+
+  if (body.all) {
+    const r = await markNotificationsRead(session.user.id, "all");
+    return NextResponse.json({ ok: true, unreadCount: r.unreadCount });
+  }
+
+  if (hasIds) {
+    const ids = body.ids!.map((id) => String(id)).filter(Boolean);
+    const r = await markNotificationsRead(session.user.id, ids);
+    return NextResponse.json({ ok: true, unreadCount: r.unreadCount });
   }
 
   return NextResponse.json(

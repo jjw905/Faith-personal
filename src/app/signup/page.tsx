@@ -8,7 +8,7 @@ import { SignupFlow } from "@/components/auth/signup-flow";
 
 export const metadata: Metadata = {
   title: "회원가입, Faith",
-  description: "Faith 계정을 만들어 안전한 회의록 관리를 시작하세요.",
+  description: "Faith 계정을 만들어 AI 회의록을 시작하세요.",
 };
 
 export default async function SignupPage() {

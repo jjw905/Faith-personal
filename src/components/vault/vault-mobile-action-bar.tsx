@@ -26,7 +26,7 @@ const ICON_SLOT =
   "relative inline-flex h-5 w-5 shrink-0 items-center justify-center";
 
 const LABEL_CLASS =
-  "w-full truncate text-center text-[11px] font-semibold leading-none";
+  "w-full truncate text-center text-sm font-semibold leading-tight";
 
 function ActionLabel({ children }: { children: ReactNode }) {
   return <span className={LABEL_CLASS}>{children}</span>;
@@ -275,9 +275,11 @@ export function VaultMobileActionBar({
                 type="button"
                 className={cn(
                   ACTION_CLASS,
-                  "bg-primary text-primary-foreground hover:bg-primary-hover",
+                  quotaFull
+                    ? "bg-surface-2 text-muted hover:bg-surface-2"
+                    : "bg-primary text-primary-foreground hover:bg-primary-hover",
                 )}
-                disabled={busy || quotaFull}
+                disabled={busy}
                 aria-label="올리기"
                 onClick={onUpload}
               >

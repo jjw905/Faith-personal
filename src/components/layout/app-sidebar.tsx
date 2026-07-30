@@ -286,19 +286,13 @@ function MeetingsNav({
             {!TEAM_FEATURE_ENABLED ? (
               <span
                 aria-disabled="true"
-                title="수요조사 기간에는 제공하지 않습니다"
+                title="팀 설정은 오픈 준비중이에요"
                 className="flex min-h-12 cursor-not-allowed items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-2 opacity-50"
               >
                 <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-muted-2">
                   <UsersRound className="h-4 w-4" strokeWidth={1.75} />
                 </span>
                 <span className="flex-1">팀</span>
-                <Badge
-                  variant="sidebar"
-                  className="min-w-fit justify-center px-1.5 py-0 text-xs"
-                >
-                  준비중
-                </Badge>
               </span>
             ) : teams.length === 0 ? (
               <Link

@@ -18,6 +18,30 @@ export type ChangelogEntry = {
  */
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "0.9.1",
+    date: "2026-07-31",
+    title: "사용량 안내, 개인 설정, 보존 기간",
+    summary:
+      "분석 시간을 다 쓰면 닫을 수 있는 안내가 뜹니다. 개인 설정이 서버에 저장되고, 회의 기록과 알림 보존 기간을 바꿀 수 있습니다. 감사 로그는 별도 보관입니다.",
+    sections: [
+      {
+        title: "사용량",
+        items: [
+          "한도 도달 시 닫을 수 있는 안내 팝업",
+          "설문으로 분석 시간 늘리기 안내",
+        ],
+      },
+      {
+        title: "설정",
+        items: [
+          "자동 마스킹, 화자 분리, 요약 언어 저장",
+          "회의 기록과 알림 보존 기간 선택",
+          "감사 로그는 법령상 최소 1년, 보존 설정과 무관",
+        ],
+      },
+    ],
+  },
+  {
     version: "0.9",
     date: "2026-07-26",
     title: "회의 다시듣기, 말한 사람 구분",
@@ -216,7 +240,7 @@ export const DEV_CHANGELOG: ChangelogEntry[] = [
       "pyannote 화자분리를 업로드와 실시간 경로에 연결하고, 대화기록 시각을 whisper 실측 구간으로 정렬했다. 추정 시각 폴백은 기본 차단한다. 재생은 Range 스트리밍 API로 바꿔 seek을 지원한다.",
     sections: [
       {
-        title: "STT 파이프라인",
+        title: "받아쓰기 파이프라인",
         items: [
           "diarize-meeting, chunked-transcribe, process-upload 연결",
           "realtime process-realtime 화자 라벨 반영",
@@ -275,7 +299,7 @@ export const DEV_CHANGELOG: ChangelogEntry[] = [
         items: [
           "LiveKit token API, team-voice-room, 주최자 기록 on/off",
           "infra/livekit setup-on-droplet, env LiveKit 키",
-          "주최자 부재, 기록 전/중 상태, STT 할당 연계 훅",
+          "주최자 부재, 기록 전/중 상태, 받아쓰기 할당 연계 훅",
         ],
       },
       {
@@ -329,9 +353,9 @@ export const DEV_CHANGELOG: ChangelogEntry[] = [
   {
     version: "0.6",
     date: "2026-07-20",
-    title: "Vault API, Help chrome, STT 백엔드",
+    title: "Vault API, Help chrome, 받아쓰기 백엔드",
     summary:
-      "유저당 500MB vault를 Spaces/로컬 디스크로 붙이고 회의 업로드와 공유한다. Help는 /help에서 셸 숨김. FastAPI STT/correct와 ffmpeg Whisper 전처리를 추가했다.",
+      "유저당 500MB vault를 Spaces/로컬 디스크로 붙이고 회의 업로드와 공유한다. Help는 /help에서 셸 숨김. FastAPI 받아쓰기/correct와 ffmpeg Whisper 전처리를 추가했다.",
     sections: [
       {
         title: "Vault",
@@ -348,9 +372,9 @@ export const DEV_CHANGELOG: ChangelogEntry[] = [
         ],
       },
       {
-        title: "STT",
+        title: "받아쓰기",
         items: [
-          "FastAPI STT/correct, ffmpeg re-encode for Whisper",
+          "FastAPI 받아쓰기/correct, ffmpeg re-encode for Whisper",
           "Auth.js Google, 네이버, X provider 초안",
         ],
       },
@@ -431,7 +455,7 @@ export const DEV_AGENDA: {
     { label: "실측 타임스탬프로 대화기록 정렬", done: true },
     { label: "재생 Range 스트리밍 API", done: true },
     { label: "워크스페이스 전환 경로 기준 정리", done: true },
-    { label: "STT 모델 벤치 비교 정리" },
+    { label: "받아쓰기 모델 벤치 비교 정리" },
   ],
 };
 

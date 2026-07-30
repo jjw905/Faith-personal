@@ -38,6 +38,7 @@ import { CorrectionHint } from "@/components/meetings/correction-hint";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { useAppContext } from "@/context/app-context";
+import { useAccountDisplayPrefs } from "@/hooks/use-account-display-prefs";
 import { useMeetingChrome } from "@/context/meeting-chrome-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { REALTIME_FEATURE_ENABLED } from "@/lib/feature-flags";
@@ -392,7 +393,7 @@ function createDefaultMeetingMemo(): MeetingMemo {
       "파일 첨부·메모는 아래 도구줄에 배치",
     ].map(createMemoLine),
     followUps: [
-      "실제 STT 연동 전, 시나리오 요약 문장 톤을 한 번 더 다듬기",
+      "실제 받아쓰기 연동 전, 시나리오 요약 문장 톤을 한 번 더 다듬기",
       "외부 공유 전 메모·타임라인에 개인정보가 남는지 재검수",
     ].map(createMemoLine),
     caution:
@@ -1062,6 +1063,17 @@ export function NewMeetingSession() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [memo, setMemo] = useState<MeetingMemo>(() => createDefaultMeetingMemo());
   const [maskStyle, setMaskStyle] = useState<MaskStyle>("partial");
+  const { autoMask, loaded: prefsLoaded } = useAccountDisplayPrefs();
+  const maskSeededRef = useRef(false);
+  useEffect(() => {
+    if (!prefsLoaded || maskSeededRef.current) return;
+    maskSeededRef.current = true;
+    setMaskStyle((prev) => {
+      // 사용자가 이미 다른 방식으로 바꾼 뒤에는 덮지 않는다.
+      if (prev !== "partial") return prev;
+      return autoMask ? "partial" : "off";
+    });
+  }, [prefsLoaded, autoMask]);
   const [mobileMaskOpen, setMobileMaskOpen] = useState(false);
   const [desktopMaskOpen, setDesktopMaskOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -1720,7 +1732,7 @@ export function NewMeetingSession() {
                   aria-label={isRecording ? "녹음 중지" : "녹음 시작"}
                   title={
                     !isRecording && !REALTIME_FEATURE_ENABLED
-                      ? "수요조사 기간에는 실시간 기록을 제공하지 않습니다. 업로드 분석을 이용해 주세요."
+                      ? "실시간 기록은 오픈 준비중이에요. 업로드 분석을 이용해 주세요."
                       : isRecording
                         ? "인식 중지"
                         : "인식 시작"

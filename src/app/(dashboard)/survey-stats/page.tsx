@@ -13,8 +13,8 @@ export default async function SurveyStatsPage() {
     <PageContainer soft>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <header className="min-w-0">
-          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
-            수요조사 통계
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
+            설문 통계
           </h1>
         </header>
 

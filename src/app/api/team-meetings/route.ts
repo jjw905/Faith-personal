@@ -11,6 +11,7 @@ import {
 import {
   accessibleMeetingIdsForUser,
   assertOnlineOnly,
+  clampParticipantsToSeatLimit,
   findParticipantConflicts,
   guardScheduleConflicts,
   validateScheduleInput,
@@ -122,16 +123,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: schedule.message }, { status: 400 });
   }
 
-  const requested = Array.from(
-    new Set(schedule.value.participantIds),
-  ).slice(0, actor.team.seatLimit);
+  const requested = clampParticipantsToSeatLimit(
+    schedule.value.participantIds,
+    schedule.value.organizerId,
+    actor.team.seatLimit,
+  );
   const validMembers = await prisma.teamMember.findMany({
     where: { teamId, userId: { in: requested }, user: { disabled: false } },
     select: { userId: true },
   });
-  const validIds = validMembers.map((row) => row.userId);
+  const validIds = clampParticipantsToSeatLimit(
+    validMembers.map((row) => row.userId),
+    schedule.value.organizerId,
+    actor.team.seatLimit,
+  );
   if (!validIds.includes(schedule.value.organizerId)) {
     return NextResponse.json({ ok: false, message: "주최자는 팀 멤버여야 합니다." }, { status: 400 });
+  }
+  const otherInvitees = validIds.filter((id) => id !== schedule.value.organizerId);
+  if (otherInvitees.length < 1) {
+    return NextResponse.json(
+      { ok: false, message: "함께할 팀원을 초대해 주세요." },
+      { status: 400 },
+    );
   }
   if (
     schedule.value.backupHostId &&
@@ -167,13 +181,15 @@ export async function POST(request: Request) {
         throw new Error("SCHEDULE_CONFLICT");
       }
       privateNotices = conflicts.privateNotices;
+      // 바로 시작도 입장 전(로비)에서는 SCHEDULED로 둬서 팀원 초대를
+      // 바꿀 수 있게 한다. 주최자가 LiveKit에 입장하면 ACTIVE로 전환된다.
       return tx.teamMeeting.create({
         data: {
           id: meetingId,
           teamId,
           title: schedule.value.title,
           mode: "ONLINE",
-          state: startNow ? "ACTIVE" : "SCHEDULED",
+          state: "SCHEDULED",
           livekitRoomName: roomName,
           createdById: session.user.id,
           organizerId: schedule.value.organizerId,
@@ -181,8 +197,8 @@ export async function POST(request: Request) {
           currentHostId: schedule.value.organizerId,
           scheduledStartAt: schedule.value.scheduledStartAt,
           durationMinutes: schedule.value.durationMinutes,
-          startedAt: startNow ? now : null,
-          hostPresentAt: startNow ? now : null,
+          startedAt: null,
+          hostPresentAt: null,
           access: {
             create: validIds.map((userId) => ({
               userId,
@@ -225,6 +241,7 @@ export async function POST(request: Request) {
     action: startNow ? "meeting.started" : "meeting.scheduled",
     metadata: {
       mode: "ONLINE",
+      startNow,
       participantCount: validIds.length,
       scheduledStartAt: schedule.value.scheduledStartAt.toISOString(),
       durationMinutes: schedule.value.durationMinutes,
@@ -232,17 +249,16 @@ export async function POST(request: Request) {
     request,
   });
 
-  if (!startNow) {
-    await notifyMeetingScheduled({
-      teamId,
-      teamName: actor.team.name,
-      meetingId: meeting.id,
-      title: meeting.title,
-      scheduledStartAt: schedule.value.scheduledStartAt,
-      inviteeIds: validIds,
-      organizerId: schedule.value.organizerId,
-    });
-  }
+  await notifyMeetingScheduled({
+    teamId,
+    teamName: actor.team.name,
+    meetingId: meeting.id,
+    title: meeting.title,
+    scheduledStartAt: schedule.value.scheduledStartAt,
+    inviteeIds: validIds,
+    organizerId: schedule.value.organizerId,
+    startNow,
+  });
 
   await Promise.all(
     privateNotices.map((notice) =>

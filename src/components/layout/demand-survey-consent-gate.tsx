@@ -9,7 +9,7 @@ import { DEMAND_SURVEY_ACTIVE } from "@/lib/feature-flags";
 import { cn } from "@/lib/utils";
 
 /**
- * 결제 수요조사 기간 임시 보관·통계 목적 이용 고지. 가입 후 최초 진입 시
+ * 오픈 준비 기간 임시 보관·통계 목적 이용 고지. 가입 후 최초 진입 시
  * 1회만 노출하고 동의를 받는다. 개인정보 보호법상 수집 시점에 보유기간과
  * 파기 절차를 미리 알리면, 실제 파기 시점에 별도로 다시 통지할 의무는 없다
  * (제21조는 파기 의무만 규정하고 개별 통지를 요구하지 않음) — 그래서 이
@@ -80,17 +80,17 @@ export function DemandSurveyConsentGate({
     >
       <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-[0_8px_40px_rgba(17,22,46,0.25)] ring-1 ring-border">
         <p className="text-xl font-bold tracking-tight text-foreground">
-          결제 수요조사 기간 안내
+          오픈 준비 기간 안내
         </p>
         <div className="mt-3 space-y-2.5 text-base leading-relaxed text-muted">
           <p>
-            지금은 서비스 결제 수요를 확인하는 기간입니다. 업로드 분석 이용량과
-            설문 응답은 통계 분석 목적으로만 임시 보관합니다.
+            지금은 오픈을 준비하는 기간입니다. 업로드 분석 이용량과 설문
+            응답은 통계 분석 목적으로만 임시 보관합니다.
           </p>
           <p>
-            수요조사 기간이 끝나면 계정과 연결된 값은 파기하고, 개인을 식별할
-            수 없는 통계 결과만 남깁니다. 이 안내로 보유기간과 파기 절차를
-            미리 알렸으므로 실제 파기 시점에 다시 통지하지 않습니다.
+            이 기간이 끝나면 계정과 연결된 값은 파기하고, 개인을 식별할 수
+            없는 통계 결과만 남깁니다. 이 안내로 보유기간과 파기 절차를 미리
+            알렸으므로 실제 파기 시점에 다시 통지하지 않습니다.
           </p>
           <p>
             자세한 내용은{" "}

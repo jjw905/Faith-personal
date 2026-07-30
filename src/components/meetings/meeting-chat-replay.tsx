@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
@@ -14,9 +14,11 @@ import {
 import { ChatReplayTools } from "@/components/meetings/chat-replay-tools";
 import { CorrectionHint } from "@/components/meetings/correction-hint";
 import { MaskedText } from "@/components/meetings/masked-text";
+import { MeetingTitleHeading } from "@/components/meetings/meeting-record-actions";
 import { Button } from "@/components/ui/button";
 import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { useAppContext } from "@/context/app-context";
+import { useAccountDisplayPrefs } from "@/hooks/use-account-display-prefs";
 import { maskPii, type MaskStyle } from "@/lib/masking";
 import { activeLineIndexAt, activeWordAt, lineStartSec, estimateTranscriptDurationSec, parseDurationLabelToSec, readMediaDurationSec } from "@/lib/transcript-time";
 import type { Meeting, Participant } from "@/types/meeting";
@@ -110,9 +112,12 @@ function ReplayBubble({
   active: boolean;
   /** 이 말풍선이 active일 때만 의미 있는 재생 시각(초). 단어 하이라이트용. */
   currentSec: number;
-  onSeek?: () => void;
-  onMemoChange: (next: string) => void;
-  onApplyCorrection: (correction: TranscriptCorrection) => void;
+  onSeek?: (line: TranscriptLine) => void;
+  onMemoChange: (lineId: string, next: string) => void;
+  onApplyCorrection: (
+    lineId: string,
+    correction: TranscriptCorrection,
+  ) => void;
 }) {
   const meta = personMeta(line.speaker, participants, meName);
   const text = line.text ?? "";
@@ -127,6 +132,9 @@ function ReplayBubble({
   const [draft, setDraft] = useState(memo ?? "");
   const hasMemo = Boolean(memo?.trim());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const markKey = activeWordRange
+    ? `${activeWordRange.startOffset}:${activeWordRange.endOffset}`
+    : "";
 
   useEffect(() => {
     if (!editing) setDraft(memo ?? "");
@@ -141,8 +149,17 @@ function ReplayBubble({
     el.setSelectionRange(len, len);
   }, [editing]);
 
+  useEffect(() => {
+    if (!active || !markKey) return;
+    const mark = document.querySelector(
+      `#tx-line-${CSS.escape(line.id)} [data-word-play-mark]`,
+    );
+    if (!(mark instanceof HTMLElement)) return;
+    mark.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active, markKey, line.id]);
+
   function commitMemo() {
-    onMemoChange(draft.trim());
+    onMemoChange(line.id, draft.trim());
     setEditing(false);
   }
 
@@ -216,11 +233,11 @@ function ReplayBubble({
                 <div
                   role="button"
                   tabIndex={0}
-                  onClick={onSeek}
+                  onClick={() => onSeek(line)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      onSeek();
+                      onSeek(line);
                     }
                   }}
                   className={cn(
@@ -309,7 +326,7 @@ function ReplayBubble({
                     className="min-h-10 rounded-lg px-3 text-sm font-semibold text-masked hover:bg-masked-soft"
                     onClick={() => {
                       setDraft("");
-                      onMemoChange("");
+                      onMemoChange(line.id, "");
                       setEditing(false);
                     }}
                   >
@@ -367,19 +384,21 @@ function ReplayBubble({
             corrections={corrections}
             align={meta.mine ? "end" : "start"}
             className="lg:hidden"
-            onApply={onApplyCorrection}
+            onApply={(correction) => onApplyCorrection(line.id, correction)}
           />
         </div>
         <CorrectionHint
           corrections={corrections}
           align={meta.mine ? "end" : "start"}
           className="hidden w-[12rem] shrink-0 pb-1 lg:flex"
-          onApply={onApplyCorrection}
+          onApply={(correction) => onApplyCorrection(line.id, correction)}
         />
       </div>
     </div>
   );
 }
+
+const ReplayBubbleMemo = memo(ReplayBubble);
 
 /** 실시간 회의와 같은 채팅 UI로 대화기록 다시보기 + 음성 동기 재생. */
 export function MeetingChatReplay({
@@ -387,19 +406,32 @@ export function MeetingChatReplay({
   transcript: initialTranscript,
   audioSrc,
   audioLabel = "다시듣기",
+  canEditTitle = false,
 }: {
   meeting: Meeting;
   transcript: MeetingTranscript;
   audioSrc?: string | null;
   audioLabel?: string;
+  /** 업로드 회의 등 사용자 저장소에 있을 때만 제목 수정 */
+  canEditTitle?: boolean;
 }) {
   const { currentUser } = useAppContext();
   const searchParams = useSearchParams();
   const focusLine = searchParams.get("line");
   const focusSegment = searchParams.get("segment");
   const [maskStyle, setMaskStyle] = useState<MaskStyle>("partial");
+  const { autoMask, loaded: prefsLoaded } = useAccountDisplayPrefs();
+  const maskSeededRef = useRef(false);
+  useEffect(() => {
+    if (!prefsLoaded || maskSeededRef.current) return;
+    maskSeededRef.current = true;
+    setMaskStyle((prev) => {
+      // 사용자가 이미 다른 방식으로 바꾼 뒤에는 덮지 않는다.
+      if (prev !== "partial") return prev;
+      return autoMask ? "partial" : "off";
+    });
+  }, [prefsLoaded, autoMask]);
   const [transcript, setTranscript] = useState(initialTranscript);
-  const [titleExpanded, setTitleExpanded] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(focusLine);
   const [playing, setPlaying] = useState(false);
   const [currentSec, setCurrentSec] = useState(0);
@@ -434,7 +466,7 @@ export function MeetingChatReplay({
     setTranscript(initialTranscript);
   }, [meeting.id, initialTranscript]);
 
-  function setLineMemo(lineId: string, next: string) {
+  const handleMemoChange = useCallback((lineId: string, next: string) => {
     setTranscript((prev) => ({
       ...prev,
       lines: prev.lines.map((line) =>
@@ -442,47 +474,53 @@ export function MeetingChatReplay({
       ),
     }));
     void patchMeeting(meeting.id, { setMemo: { lineId, memo: next } });
-  }
+  }, [meeting.id]);
 
-  function applyCorrection(lineId: string, correction: TranscriptCorrection) {
-    setTranscript((prev) => ({
-      ...prev,
-      lines: prev.lines.map((line) => {
-        if (line.id !== lineId) return line;
-        const text = line.text ?? "";
-        const { wrong, suggestion, startOffset, endOffset } = correction;
-        let nextText = text;
-        if (
-          typeof startOffset === "number" &&
-          typeof endOffset === "number" &&
-          text.slice(startOffset, endOffset) === wrong
-        ) {
-          nextText = text.slice(0, startOffset) + suggestion + text.slice(endOffset);
-        } else {
-          const at = text.indexOf(wrong);
-          if (at >= 0) {
-            nextText = text.slice(0, at) + suggestion + text.slice(at + wrong.length);
+  const handleApplyCorrection = useCallback(
+    (lineId: string, correction: TranscriptCorrection) => {
+      setTranscript((prev) => ({
+        ...prev,
+        lines: prev.lines.map((line) => {
+          if (line.id !== lineId) return line;
+          const text = line.text ?? "";
+          const { wrong, suggestion, startOffset, endOffset } = correction;
+          let nextText = text;
+          if (
+            typeof startOffset === "number" &&
+            typeof endOffset === "number" &&
+            text.slice(startOffset, endOffset) === wrong
+          ) {
+            nextText =
+              text.slice(0, startOffset) + suggestion + text.slice(endOffset);
+          } else {
+            const at = text.indexOf(wrong);
+            if (at >= 0) {
+              nextText =
+                text.slice(0, at) + suggestion + text.slice(at + wrong.length);
+            }
           }
-        }
-        return {
-          ...line,
-          text: nextText,
-          corrections: line.corrections?.filter(
-            (c) => !(c.wrong === wrong && c.suggestion === suggestion),
-          ),
-        };
-      }),
-    }));
-    void patchMeeting(meeting.id, {
-      applyCorrection: {
-        lineId,
-        wrong: correction.wrong,
-        suggestion: correction.suggestion,
-        startOffset: correction.startOffset,
-        endOffset: correction.endOffset,
-      },
-    });
-  }
+          return {
+            ...line,
+            text: nextText,
+            words: undefined,
+            corrections: line.corrections?.filter(
+              (c) => !(c.wrong === wrong && c.suggestion === suggestion),
+            ),
+          };
+        }),
+      }));
+      void patchMeeting(meeting.id, {
+        applyCorrection: {
+          lineId,
+          wrong: correction.wrong,
+          suggestion: correction.suggestion,
+          startOffset: correction.startOffset,
+          endOffset: correction.endOffset,
+        },
+      });
+    },
+    [meeting.id],
+  );
 
   useEffect(() => {
     const lineId =
@@ -511,29 +549,61 @@ export function MeetingChatReplay({
     a.muted = settings.muted;
     a.volume = settings.muted ? 0 : Math.min(1, Math.max(0, settings.volume));
 
-    const onTime = () => {
+    let raf = 0;
+    const syncFromMedia = () => {
       const media = a.currentTime;
-      setCurrentSec(media);
+      setCurrentSec((prev) =>
+        Math.abs(prev - media) < 0.012 ? prev : media,
+      );
       const idx = activeLineIndexAt(lineStarts, media);
       if (idx < 0) return;
       const line = transcript.lines[idx];
       if (!line) return;
-      setActiveId(line.id);
+      setActiveId((prev) => (prev === line.id ? prev : line.id));
     };
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onEnded = () => setPlaying(false);
+    const tick = () => {
+      syncFromMedia();
+      if (!a.paused && !a.ended) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+    const onPlay = () => {
+      setPlaying(true);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(tick);
+    };
+    const onPause = () => {
+      setPlaying(false);
+      cancelAnimationFrame(raf);
+      syncFromMedia();
+    };
+    const onEnded = () => {
+      setPlaying(false);
+      cancelAnimationFrame(raf);
+      syncFromMedia();
+    };
+    const onSeeked = () => syncFromMedia();
 
-    a.addEventListener("timeupdate", onTime);
     a.addEventListener("play", onPlay);
     a.addEventListener("pause", onPause);
     a.addEventListener("ended", onEnded);
+    a.addEventListener("seeked", onSeeked);
+    // 일시정지·탭 복귀 때도 한 번 맞춘다. 재생 중 단어 포커스는 rAF가 담당.
+    a.addEventListener("timeupdate", syncFromMedia);
+
+    if (!a.paused && !a.ended) {
+      raf = requestAnimationFrame(tick);
+    } else {
+      syncFromMedia();
+    }
 
     return () => {
-      a.removeEventListener("timeupdate", onTime);
+      cancelAnimationFrame(raf);
       a.removeEventListener("play", onPlay);
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnded);
+      a.removeEventListener("seeked", onSeeked);
+      a.removeEventListener("timeupdate", syncFromMedia);
     };
   }, [hasAudio, lineStarts, settings.muted, settings.rate, settings.volume, transcript.lines]);
 
@@ -559,29 +629,31 @@ export function MeetingChatReplay({
     else a.pause();
   }
 
-  function seekToLine(line: TranscriptLine) {
-    const a = audioRef.current;
-    if (!a || !hasAudio) {
+  const seekToLine = useCallback(
+    (line: TranscriptLine) => {
+      const a = audioRef.current;
+      if (!a || !hasAudio) {
+        setActiveId(line.id);
+        return;
+      }
+      const lineSec = lineStartSec(line);
+      const dur =
+        readMediaDurationSec(a) || durationSec || fallbackDurationSec;
+      if (dur > 0 && lineSec > dur + 0.5) {
+        setActiveId(line.id);
+        return;
+      }
+      const media = Math.min(
+        Math.max(0, lineSec),
+        Math.max(0, dur - 0.05),
+      );
+      a.currentTime = media;
+      setCurrentSec(media);
       setActiveId(line.id);
-      return;
-    }
-    const lineSec = lineStartSec(line);
-    const dur =
-      readMediaDurationSec(a) || durationSec || fallbackDurationSec;
-    if (dur > 0 && lineSec > dur + 0.5) {
-      // 녹음 길이 밖 대사 — 재생만 맞추지 않고 하이라이트만.
-      setActiveId(line.id);
-      return;
-    }
-    const media = Math.min(
-      Math.max(0, lineSec),
-      Math.max(0, dur - 0.05),
-    );
-    a.currentTime = media;
-    setCurrentSec(media);
-    setActiveId(line.id);
-    void a.play();
-  }
+      void a.play();
+    },
+    [hasAudio, durationSec, fallbackDurationSec],
+  );
 
   function seekRatio(ratio: number) {
     const a = audioRef.current;
@@ -641,22 +713,13 @@ export function MeetingChatReplay({
           </Button>
         </div>
         <div className="flex min-w-0 items-center justify-center justify-self-stretch px-1">
-          <button
-            type="button"
-            onClick={() => setTitleExpanded((v) => !v)}
-            aria-expanded={titleExpanded}
+          <MeetingTitleHeading
+            meetingId={meeting.id}
             title={meeting.title}
-            className="w-full min-w-0 cursor-pointer text-center"
-          >
-            <h1
-              className={cn(
-                "text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-xl",
-                titleExpanded ? "line-clamp-2 break-words" : "truncate",
-              )}
-            >
-              {meeting.title}
-            </h1>
-          </button>
+            canEdit={canEditTitle}
+            align="center"
+            size="header"
+          />
         </div>
         <div className="min-w-0 shrink-0 justify-self-end">
           <ChatReplayTools
@@ -677,18 +740,16 @@ export function MeetingChatReplay({
           <ul className="flex flex-col gap-3.5">
             {transcript.lines.map((line) => (
               <li key={line.id}>
-                <ReplayBubble
+                <ReplayBubbleMemo
                   line={line}
                   participants={meeting.participants}
                   meName={meName}
                   maskStyle={maskStyle}
                   active={activeId === line.id}
-                  currentSec={currentSec}
-                  onSeek={hasAudio ? () => seekToLine(line) : undefined}
-                  onMemoChange={(next) => setLineMemo(line.id, next)}
-                  onApplyCorrection={(correction) =>
-                    applyCorrection(line.id, correction)
-                  }
+                  currentSec={activeId === line.id ? currentSec : 0}
+                  onSeek={hasAudio ? seekToLine : undefined}
+                  onMemoChange={handleMemoChange}
+                  onApplyCorrection={handleApplyCorrection}
                 />
               </li>
             ))}

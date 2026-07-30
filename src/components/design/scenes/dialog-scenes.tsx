@@ -7,6 +7,7 @@ import { PreviewStage } from "@/components/design/preview-stage";
 import { NotificationPanel } from "@/components/layout/notification-panel";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
+import { CreateTeamFirstDialog } from "@/components/team/create-team-first-dialog";
 import { DuplicateVaultNameDialog } from "@/components/vault/duplicate-name-dialog";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { fixtureNotificationsExpand } from "@/lib/page-ux-fixtures";
@@ -152,5 +153,43 @@ export function SceneMaskStylePopup() {
     <div className="flex h-full min-h-full items-start justify-end pb-40 pr-4 pt-4">
       <MaskStylePopup value={style} onChange={setStyle} forceOpen />
     </div>
+  );
+}
+
+/** 설정: 팀 없음 → 먼저 만들기 */
+export function SceneCreateTeamFirst() {
+  const [open, setOpen] = useState(true);
+  return (
+    <PreviewStage
+      hint="시스템 설정에서 팀 관리로 갈 때 팀이 없을 때."
+      open={open}
+      onReopen={() => setOpen(true)}
+    >
+      <CreateTeamFirstDialog
+        open={open}
+        contained
+        variant="no-team"
+        onClose={() => setOpen(false)}
+      />
+    </PreviewStage>
+  );
+}
+
+/** 설정: 팀 기능 준비중 */
+export function SceneTeamSettingsOff() {
+  const [open, setOpen] = useState(true);
+  return (
+    <PreviewStage
+      hint="팀 설정은 오픈 준비중이에요"
+      open={open}
+      onReopen={() => setOpen(true)}
+    >
+      <CreateTeamFirstDialog
+        open={open}
+        contained
+        variant="feature-off"
+        onClose={() => setOpen(false)}
+      />
+    </PreviewStage>
   );
 }

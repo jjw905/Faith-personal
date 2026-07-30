@@ -22,6 +22,13 @@ export {
   SCHEDULE_LOCK_NAMESPACE,
 };
 
+export {
+  clampParticipantsToSeatLimit,
+  meetingCardStatus,
+  validateScheduleInput,
+  type ScheduleInput,
+} from "@/lib/team/schedule-input";
+
 const ACTIVE_SCHEDULE_STATES = ["SCHEDULED", "ACTIVE"] as const;
 
 export type Tx = Prisma.TransactionClient;
@@ -135,80 +142,4 @@ export async function accessibleMeetingIdsForUser(userId: string) {
     select: { id: true },
   });
   return new Set(rows.map((row) => row.id));
-}
-
-export type ScheduleInput = {
-  title: string;
-  scheduledStartAt: Date;
-  durationMinutes: number;
-  organizerId: string;
-  participantIds: string[];
-  backupHostId?: string | null;
-};
-
-export function validateScheduleInput(body: {
-  title?: string;
-  scheduledStartAt?: string;
-  durationMinutes?: number;
-  organizerId?: string;
-  participantIds?: string[];
-  backupHostId?: string | null;
-}): { ok: true; value: ScheduleInput } | { ok: false; message: string } {
-  const title = body.title?.trim().slice(0, 100);
-  const scheduledStartAt = body.scheduledStartAt
-    ? new Date(body.scheduledStartAt)
-    : null;
-  const durationMinutes = Number(body.durationMinutes);
-  const organizerId = body.organizerId?.trim();
-  const participantIds = Array.from(
-    new Set((body.participantIds ?? []).filter(Boolean)),
-  );
-  if (!title) return { ok: false, message: "회의 제목을 입력해 주세요." };
-  if (!scheduledStartAt || Number.isNaN(scheduledStartAt.getTime())) {
-    return { ok: false, message: "시작 시각을 확인해 주세요." };
-  }
-  if (
-    !Number.isFinite(durationMinutes) ||
-    durationMinutes < 5 ||
-    durationMinutes > 120
-  ) {
-    return { ok: false, message: "회의 시간은 5~120분입니다." };
-  }
-  if (!organizerId) return { ok: false, message: "주최자를 지정해 주세요." };
-  if (!participantIds.includes(organizerId)) {
-    participantIds.push(organizerId);
-  }
-  if (participantIds.length < 1) {
-    return { ok: false, message: "초대 참가자가 필요합니다." };
-  }
-  if (body.backupHostId && !participantIds.includes(body.backupHostId)) {
-    return { ok: false, message: "대리 주최자는 초대된 참가자여야 합니다." };
-  }
-  return {
-    ok: true,
-    value: {
-      title,
-      scheduledStartAt,
-      durationMinutes,
-      organizerId,
-      participantIds,
-      backupHostId: body.backupHostId ?? null,
-    },
-  };
-}
-
-export function meetingCardStatus(params: {
-  state: string;
-  canceledAt: Date | null;
-  derivedPhase: string;
-}) {
-  if (params.state === "CANCELED" || params.canceledAt) return "취소됨";
-  if (params.derivedPhase === "ended" || params.state === "ENDED") return "종료";
-  if (params.derivedPhase === "in_progress" || params.state === "ACTIVE") {
-    return "진행 중";
-  }
-  if (params.derivedPhase === "join_open") return "입장 가능";
-  if (params.derivedPhase === "host_absence_warn") return "주최자 대기";
-  if (params.derivedPhase === "host_absence_close") return "주최자 부재로 종료";
-  return "예정";
 }

@@ -57,7 +57,7 @@ export function SurveyStatsDashboard({
     <div className="flex flex-col gap-6">
       <SectionCard
         title="참여 현황"
-        description="결제 의향, 성능 만족도 수요조사 응답 요약"
+        description="결제 의향, 성능 만족도 설문 응답 요약"
         action={
           <button
             type="button"
@@ -89,7 +89,7 @@ export function SurveyStatsDashboard({
           <StatCell
             label="평균 만족도"
             value={summary.avgSatisfaction.toFixed(1)}
-            hint="받아쓰기(STT) 정확도, 5점 만점"
+            hint="AI 회의록 성능, 5점 만점"
           />
         </div>
       </SectionCard>
@@ -126,7 +126,7 @@ export function SurveyStatsDashboard({
             />
           </SectionCard>
 
-          <SectionCard title="받아쓰기 만족도" description="1(불만족) ~ 5(매우 만족)">
+          <SectionCard title="AI 회의록 성능" description="1(불만족) ~ 5(매우 만족)">
             <BarList
               entries={sortedEntries(summary.satisfactionCounts)}
               max={maxSatisfaction}

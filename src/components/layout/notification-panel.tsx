@@ -23,7 +23,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   NOTIFICATION_RECENT_DISPLAY_DAYS,
-  readDataRetentionDaysFromStorage,
 } from "@/lib/data-retention";
 import {
   fixtureNotificationsExpand,
@@ -209,11 +208,7 @@ export function NotificationPanel({
 
     setLoading(true);
     try {
-      const retentionDays = readDataRetentionDaysFromStorage();
-      const q = new URLSearchParams({
-        retentionDays: String(retentionDays),
-      });
-      const res = await fetch(`/api/notifications?${q}`, {
+      const res = await fetch("/api/notifications", {
         cache: "no-store",
       });
       const data = (await res.json()) as {
@@ -253,11 +248,10 @@ export function NotificationPanel({
       setTab("all");
       return;
     }
-    const retentionDays = readDataRetentionDaysFromStorage();
     const res = await fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ all: true, retentionDays }),
+      body: JSON.stringify({ all: true }),
     });
     const data = (await res.json()) as { ok?: boolean; unreadCount?: number };
     if (res.ok && data.ok) {
@@ -276,11 +270,10 @@ export function NotificationPanel({
       emitNotificationsChanged(Math.max(0, unread.length - 1));
       return;
     }
-    const retentionDays = readDataRetentionDaysFromStorage();
     const res = await fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: [id], retentionDays }),
+      body: JSON.stringify({ ids: [id] }),
     });
     const data = (await res.json()) as { ok?: boolean; unreadCount?: number };
     if (res.ok && data.ok) {
@@ -298,11 +291,10 @@ export function NotificationPanel({
     );
     emitNotificationsChanged(Math.max(0, unread.filter((n) => n.unread).length - 1));
     if (softActions || status !== "authenticated") return;
-    const retentionDays = readDataRetentionDaysFromStorage();
     void fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: [id], retentionDays }),
+      body: JSON.stringify({ ids: [id] }),
     }).then(async (res) => {
       if (!res.ok) return;
       const data = (await res.json()) as { ok?: boolean; unreadCount?: number };

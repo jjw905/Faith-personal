@@ -34,7 +34,7 @@ export async function POST(request: Request, context: RouteContext) {
       if (audio instanceof File) {
         if (audio.size > 4 * 1024 * 1024) {
           return NextResponse.json(
-            { ok: false, message: "재전사 음성 구간이 너무 큽니다." },
+            { ok: false, message: "재받아쓰기 음성 구간이 너무 큽니다." },
             { status: 413 },
           );
         }
@@ -55,7 +55,7 @@ export async function POST(request: Request, context: RouteContext) {
   const text = body.text?.trim();
   if (!itemId || !text || text.length > 8_000) {
     return NextResponse.json(
-      { ok: false, message: "전사 발화 형식이 올바르지 않습니다." },
+      { ok: false, message: "받아쓰기 발화 형식이 올바르지 않습니다." },
       { status: 400 },
     );
   }
@@ -98,7 +98,7 @@ export async function POST(request: Request, context: RouteContext) {
         message:
           error instanceof Error
             ? error.message
-            : "전사 발화를 저장하지 못했습니다.",
+            : "받아쓰기 발화를 저장하지 못했습니다.",
       },
       { status: 404 },
     );

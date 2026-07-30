@@ -10,6 +10,7 @@ import {
 } from "@/lib/meetings-data";
 import { resolveMeetingReplayAudio } from "@/lib/meeting-replay-audio";
 import { requireUser } from "@/lib/require-user";
+import { getUserMeeting } from "@/lib/user-meetings-store";
 
 export default async function MeetingChatPage({
   params,
@@ -28,6 +29,10 @@ export default async function MeetingChatPage({
 
   const transcript = getMeetingTranscript(id);
   const audio = resolveMeetingReplayAudio({ meeting, transcript });
+  const userRow = getUserMeeting(id);
+  const canEditTitle = Boolean(
+    userRow && userRow.userId === session.user.id,
+  );
 
   return (
     <PageContainer
@@ -41,6 +46,7 @@ export default async function MeetingChatPage({
           transcript={transcript}
           audioSrc={audio?.src}
           audioLabel={audio?.label}
+          canEditTitle={canEditTitle}
         />
       </Suspense>
     </PageContainer>

@@ -52,7 +52,7 @@ const PROFILES: Record<WorkspaceId, WorkspaceProfile> = {
     title: "개인",
     subtitle: "내 회의만 보는 공간",
     meetingHeadline: "내 회의",
-    ctaStart: "기록 시작",
+    ctaStart: "실시간 기록",
     ctaUpload: "파일 올리기",
     upcomingTitle: "내 일정",
     upcomingEmpty: "잡혀 있는 개인 일정이 없습니다.",

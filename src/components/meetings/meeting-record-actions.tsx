@@ -119,19 +119,32 @@ export function MeetingTitleHeading({
   title,
   canEdit,
   className,
+  align = "start",
+  size = "page",
 }: {
   meetingId: string;
   title: string;
   canEdit: boolean;
   className?: string;
+  align?: "start" | "center";
+  /** page: 상세 본문, header: 대화·다시듣기 상단 */
+  size?: "page" | "header";
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
+  const [displayTitle, setDisplayTitle] = useState(title);
   const [value, setValue] = useState(title);
   const [busy, setBusy] = useState(false);
 
+  const titleClass =
+    size === "header"
+      ? "text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-xl"
+      : "text-2xl font-bold tracking-tight text-foreground";
+  const alignClass = align === "center" ? "text-center" : "text-left";
+
   useEffect(() => {
+    setDisplayTitle(title);
     setValue(title);
   }, [title]);
 
@@ -145,9 +158,9 @@ export function MeetingTitleHeading({
 
   async function saveTitle() {
     const next = value.trim();
-    if (!next || next === title || busy) {
+    if (!next || next === displayTitle || busy) {
       setEditing(false);
-      setValue(title);
+      setValue(displayTitle);
       return;
     }
     setBusy(true);
@@ -161,10 +174,12 @@ export function MeetingTitleHeading({
       if (!res.ok || !data.ok) {
         throw new Error(data.message ?? "수정 실패");
       }
+      setDisplayTitle(next);
+      setValue(next);
       setEditing(false);
       router.refresh();
     } catch {
-      setValue(title);
+      setValue(displayTitle);
       setEditing(false);
     } finally {
       setBusy(false);
@@ -172,19 +187,14 @@ export function MeetingTitleHeading({
   }
 
   function cancel() {
-    setValue(title);
+    setValue(displayTitle);
     setEditing(false);
   }
 
   if (!canEdit) {
     return (
-      <h1
-        className={cn(
-          "min-w-0 text-2xl font-bold tracking-tight text-foreground",
-          className,
-        )}
-      >
-        {title}
+      <h1 className={cn("min-w-0 truncate", titleClass, alignClass, className)}>
+        {displayTitle}
       </h1>
     );
   }
@@ -211,7 +221,11 @@ export function MeetingTitleHeading({
           }}
           disabled={busy}
           aria-label="회의 제목"
-          className="w-full border-b border-foreground bg-transparent py-0.5 text-2xl font-bold tracking-tight text-foreground outline-none placeholder:text-muted disabled:opacity-60"
+          className={cn(
+            "w-full border-b border-foreground bg-transparent py-0.5 outline-none placeholder:text-muted disabled:opacity-60",
+            titleClass,
+            alignClass,
+          )}
         />
       </form>
     );
@@ -222,12 +236,22 @@ export function MeetingTitleHeading({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="group max-w-full cursor-text rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        className={cn(
+          "group max-w-full cursor-text rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+          size === "header" ? "min-h-12 py-2" : "",
+          align === "center" ? "mx-auto block w-full" : "text-left",
+        )}
         title="제목 수정"
-        aria-label={`제목 수정: ${title}`}
+        aria-label={`제목 수정: ${displayTitle}`}
       >
-        <span className="text-2xl font-bold tracking-tight text-foreground decoration-muted/50 underline-offset-4 group-hover:underline">
-          {title}
+        <span
+          className={cn(
+            "inline max-w-full decoration-muted/50 underline-offset-4 group-hover:underline",
+            titleClass,
+            align === "center" ? "line-clamp-2 break-words" : "",
+          )}
+        >
+          {displayTitle}
           <Pencil
             className="ml-1 inline-block h-3.5 w-3.5 shrink-0 translate-y-[-0.1em] text-muted transition-colors group-hover:text-foreground"
             strokeWidth={2}

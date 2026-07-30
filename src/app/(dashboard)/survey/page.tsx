@@ -19,8 +19,8 @@ export default async function SurveyPage() {
     <PageContainer soft>
       <div className="mx-auto w-full max-w-xl space-y-6">
         <header className="min-w-0 space-y-1.5">
-          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
-            {completed ? "설문 참여 완료" : "수요조사에 참여해 주세요"}
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
+            {completed ? "설문 참여 완료" : "설문에 참여해 주세요"}
           </h1>
           <p className="text-base text-muted">
             {completed

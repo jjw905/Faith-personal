@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -7,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { toFile } from "openai/uploads";
 
@@ -37,6 +39,13 @@ const SILENCE_NOISE_DB = -32;
 const SILENCE_MIN_SEC = 0.35;
 /** 목표 분할 지점에서 이 범위 안의 무음까지만 경계로 당긴다. */
 const SILENCE_SEARCH_SEC = 25;
+/**
+ * whisper 타이밍 패스 앞 침묵.
+ * 길면 중간 발화를 통째로 빼먹는 경우가 있어, 이 길이 이상이면 잘라 보낸다.
+ */
+const LEADING_SILENCE_TRIM_MIN_SEC = 1.5;
+/** 발화 시작이 잘리지 않게 남기는 여유. */
+const LEADING_SPEECH_PAD_SEC = 0.15;
 
 export type SttUsageTotals = {
   inputTokens: number;
@@ -247,6 +256,42 @@ function detectSilences(audioPath: string): SilenceSpan[] {
   return spans;
 }
 
+/**
+ * 파일 맨 앞 침묵이 끝나면 그 시각.
+ * 없거나 짧으면 0. whisper에 긴 앞 침묵을 넣으면 뒤 발화를 건너뛴다.
+ */
+function leadingSilenceTrimSec(audioPath: string): number {
+  const first = detectSilences(audioPath)[0];
+  if (!first || first.startSec > 0.25) return 0;
+  if (first.endSec < LEADING_SILENCE_TRIM_MIN_SEC) return 0;
+  return Math.max(0, first.endSec - LEADING_SPEECH_PAD_SEC);
+}
+
+function extractAudioFromSec(sourcePath: string, startSec: number, outPath: string) {
+  execFileSync(
+    requireAudioToolPath("ffmpeg"),
+    [
+      "-y",
+      "-v",
+      "error",
+      "-ss",
+      String(startSec),
+      "-i",
+      sourcePath,
+      "-c:a",
+      "libmp3lame",
+      "-q:a",
+      "4",
+      outPath,
+    ],
+    {
+      encoding: "utf8",
+      timeout: CHUNK_ENCODE_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    },
+  );
+}
+
 /** 목표 지점에서 가장 가까운 무음 한가운데. 없으면 목표 그대로. */
 function cutPointsAtSilence(
   durationSec: number,
@@ -419,7 +464,7 @@ function parseVerboseSegments(
 function parseVerboseWords(res: unknown, offsetSec: number): WordTiming[] {
   const words = (res as { words?: unknown })?.words;
   if (!Array.isArray(words)) return [];
-  const out: WordTiming[] = [];
+  const raw: WordTiming[] = [];
   for (const w of words) {
     const row = w as { word?: string; start?: number; end?: number };
     const text = (row.word || "").trim();
@@ -427,12 +472,42 @@ function parseVerboseWords(res: unknown, offsetSec: number): WordTiming[] {
     const start = Number(row.start);
     const end = Number(row.end);
     if (!Number.isFinite(start)) continue;
-    out.push({
+    raw.push({
       text,
       startSec: offsetSec + Math.max(0, start),
       endSec:
         offsetSec +
         (Number.isFinite(end) ? Math.max(start, end) : Math.max(0, start)),
+    });
+  }
+  return sanitizeWordTimings(raw);
+}
+
+/** whisper가 start==end로 주는 토큰을 재생 포커스에 쓸 수 있게 고친다. */
+function sanitizeWordTimings(words: WordTiming[]): WordTiming[] {
+  if (words.length === 0) return [];
+  const sorted = [...words].sort(
+    (a, b) => a.startSec - b.startSec || a.endSec - b.endSec,
+  );
+  const MIN_DUR = 0.08;
+  const out: WordTiming[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const cur = sorted[i]!;
+    const nextStart = sorted[i + 1]?.startSec;
+    let endSec = cur.endSec;
+    if (!(endSec > cur.startSec)) {
+      endSec =
+        typeof nextStart === "number" && nextStart > cur.startSec
+          ? Math.min(nextStart, cur.startSec + MIN_DUR)
+          : cur.startSec + MIN_DUR;
+    } else if (typeof nextStart === "number" && endSec > nextStart) {
+      // 다음 단어와 겹치면 경계까지만.
+      endSec = Math.max(cur.startSec + 0.02, nextStart);
+    }
+    out.push({
+      text: cur.text,
+      startSec: cur.startSec,
+      endSec,
     });
   }
   return out;
@@ -573,7 +648,7 @@ async function timeChunkWithRealtimeMini(
     const detail = err instanceof Error ? err.message : String(err);
     console.error("[stt] mini Realtime 타이밍 패스 실패", detail);
     throw new Error(
-      `실측 시각(타이밍) 전사에 실패했습니다. ${detail}`,
+      `실측 시각(타이밍) 받아쓰기에 실패했습니다. ${detail}`,
     );
   }
 }
@@ -624,25 +699,58 @@ async function timeChunkWithWhisperWords(
   audioPath: string,
   glossary?: string[],
 ): Promise<{ timed: TimedSegment[]; words: WordTiming[]; durationBillSec: number }> {
-  const bytes = readFileSync(audioPath);
-  const name = basename(audioPath) || "timing.mp3";
-  const res = await transcribeChunkText(
-    "whisper-1",
-    bytes,
-    name,
-    firstPrompt(glossary),
-    { wordTimestamps: true },
-  );
-  if (res.timed.length === 0) {
-    throw new Error(
-      "실측 시각(타이밍) 결과가 비어 있습니다. 잠시 후 다시 시도하거나 다른 파일로 올려 주세요.",
+  const leadSec = leadingSilenceTrimSec(audioPath);
+  let pathForWhisper = audioPath;
+  let trimSec = 0;
+  let tempPath: string | null = null;
+  try {
+    if (leadSec > 0) {
+      const candidate = join(
+        tmpdir(),
+        `faith-whisper-lead-${randomBytes(8).toString("hex")}.mp3`,
+      );
+      try {
+        extractAudioFromSec(audioPath, leadSec, candidate);
+        tempPath = candidate;
+        pathForWhisper = candidate;
+        trimSec = leadSec;
+      } catch {
+        // 침묵 잘라내기 실패는 실측 타이밍 자체를 막지 않는다. 원본으로 폴백.
+        rmSync(candidate, { force: true });
+      }
+    }
+
+    const bytes = readFileSync(pathForWhisper);
+    const name = basename(audioPath) || "timing.mp3";
+    const res = await transcribeChunkText(
+      "whisper-1",
+      bytes,
+      name,
+      firstPrompt(glossary),
+      { wordTimestamps: true },
     );
+    if (res.timed.length === 0) {
+      throw new Error(
+        "실측 시각(타이밍) 결과가 비어 있습니다. 잠시 후 다시 시도하거나 다른 파일로 올려 주세요.",
+      );
+    }
+    return {
+      timed: res.timed.map((seg) => ({
+        ...seg,
+        startSec: seg.startSec + trimSec,
+        endSec: seg.endSec + trimSec,
+      })),
+      words: res.words.map((word) => ({
+        ...word,
+        startSec: word.startSec + trimSec,
+        endSec: word.endSec + trimSec,
+      })),
+      // 요금은 실제로 whisper에 넣은 길이. 자른 앞 침묵은 청구하지 않는다.
+      durationBillSec: res.durationSec,
+    };
+  } finally {
+    if (tempPath) rmSync(tempPath, { force: true });
   }
-  return {
-    timed: res.timed,
-    words: res.words,
-    durationBillSec: res.durationSec,
-  };
 }
 
 /** 오디오 분 단위 요금과 토큰 요금을 합친다. 타이밍 패스는 별도 모델 요금이 따로 붙는다. */

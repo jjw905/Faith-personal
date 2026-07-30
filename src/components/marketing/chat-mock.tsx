@@ -11,91 +11,6 @@ import {
 
 import { cn } from "@/lib/utils";
 
-/** 마우스 포인터 아이콘. */
-function CursorIcon() {
-  return (
-    <svg
-      width="30"
-      height="30"
-      viewBox="0 0 24 24"
-      fill="none"
-      style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.35))" }}
-    >
-      <path
-        d="M5 3l14 8-6 1.5L10 20 5 3z"
-        fill="#1d1d1f"
-        stroke="#ffffff"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** 커서 접근 → 탭 순간에 마스킹 해제 → 커서 퇴장. */
-const MASK_WAIT_MS = 700;
-const MASK_TAP_MS = 920;
-/** cursor-tap 키프레임 탭 지점(≈58%)에 맞춤 */
-const MASK_PRESS_RATIO = 0.58;
-
-/** 마스킹 — blur 대신 단색 칩(합성 비용↓). */
-function Masked({ children }: { children: ReactNode }) {
-  const [revealed, setRevealed] = useState(false);
-  const [cursorOn, setCursorOn] = useState(false);
-  const [rippleOn, setRippleOn] = useState(false);
-
-  useEffect(() => {
-    const pressAt = Math.round(MASK_TAP_MS * MASK_PRESS_RATIO);
-    const toCursor = window.setTimeout(() => setCursorOn(true), MASK_WAIT_MS);
-    const toPress = window.setTimeout(() => {
-      setRippleOn(true);
-      setRevealed(true);
-    }, MASK_WAIT_MS + pressAt);
-    const toCursorOff = window.setTimeout(
-      () => {
-        setCursorOn(false);
-        setRippleOn(false);
-      },
-      MASK_WAIT_MS + MASK_TAP_MS,
-    );
-    return () => {
-      window.clearTimeout(toCursor);
-      window.clearTimeout(toPress);
-      window.clearTimeout(toCursorOff);
-    };
-  }, []);
-
-  return (
-    <span className="relative mx-0.5 inline-block align-baseline">
-      <span
-        className={cn(
-          "inline rounded px-1 font-medium transition-colors duration-150",
-          revealed
-            ? "bg-transparent text-inherit"
-            : "select-none bg-surface-2 text-transparent",
-        )}
-        aria-hidden={!revealed}
-      >
-        {children}
-      </span>
-      {rippleOn && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-8 w-8 -translate-x-1/2 -translate-y-1/2 animate-[tap-ripple_480ms_ease-out] rounded-full bg-foreground/18"
-        />
-      )}
-      {cursorOn && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -bottom-3 left-1/2 z-30 animate-[cursor-tap_920ms_ease-out]"
-        >
-          <CursorIcon />
-        </span>
-      )}
-    </span>
-  );
-}
-
 type Side = "left" | "right";
 
 const TEAM: Record<string, string> = {
@@ -114,6 +29,7 @@ type ScriptLine = {
   concurrent?: boolean;
 };
 
+/** 히어로 목업 — 화자 구분 받아쓰기, 결정·후속 조치가 남는 회의 흐름. */
 const SCRIPT: ScriptLine[] = [
   {
     side: "left",
@@ -149,18 +65,14 @@ const SCRIPT: ScriptLine[] = [
     name: "박지우",
     initial: "박",
     delay: 2000,
-    content: "좋아요. 혹시 A사 담당자 연락처 있으신가요?",
+    content: "좋아요. 데모 환경은 준비됐나요?",
   },
   {
     side: "right",
     name: "김서연",
     initial: "김",
     delay: 2300,
-    content: (
-      <>
-        네, 담당자 번호는 <Masked>010-2847-3916</Masked> 입니다.
-      </>
-    ),
+    content: "어제 스테이징에 올려뒀고, 샘플 계정 세 개도 준비했습니다.",
   },
   {
     side: "left",
@@ -174,40 +86,7 @@ const SCRIPT: ScriptLine[] = [
     name: "최민준",
     initial: "최",
     delay: 2100,
-    content: "감사합니다. 데모 계정은 어제 준비 끝났어요.",
-  },
-  {
-    side: "left",
-    name: "박지우",
-    initial: "박",
-    delay: 2000,
-    content: "결제 건도 확인할게요. 승인 내역 공유 가능할까요?",
-  },
-  {
-    side: "right",
-    name: "최민준",
-    initial: "최",
-    delay: 2300,
-    content: (
-      <>
-        카드번호 <Masked>1681-4920-3371-5445</Masked> 로 결제 완료됐습니다.
-      </>
-    ),
-  },
-  {
-    side: "left",
-    name: "김서연",
-    initial: "김",
-    delay: 2000,
-    content: "영수증은 고객사에도 같이 보내드릴까요?",
-  },
-  {
-    side: "right",
-    name: "이도현",
-    initial: "이",
-    delay: 1900,
-    concurrent: true,
-    content: "네, PDF로 보내주시면 됩니다.",
+    content: "감사합니다. 실시간 받아쓰기 데모도 같이 보여드릴게요.",
   },
   {
     side: "left",
@@ -228,25 +107,22 @@ const SCRIPT: ScriptLine[] = [
     name: "이도현",
     initial: "이",
     delay: 2000,
-    content: "계약서 회신 메일 주소만 알려주세요.",
+    concurrent: true,
+    content: "회신은 목요일까지로 잡으면 일정에 맞습니다.",
   },
   {
     side: "right",
     name: "최민준",
     initial: "최",
-    delay: 2300,
-    content: (
-      <>
-        <Masked>legal.b@company.kr</Masked> 로 보내주시면 됩니다.
-      </>
-    ),
+    delay: 2100,
+    content: "결정 사항은 Faith 회의록에 바로 남겨둘게요.",
   },
   {
     side: "left",
     name: "박지우",
     initial: "박",
     delay: 2000,
-    content: "출장 건은 항공편 예약만 남았죠?",
+    content: "후속 조치는 서연 님이 초안, 민준 님이 데모 점검으로 정리하죠.",
   },
   {
     side: "right",
@@ -254,44 +130,19 @@ const SCRIPT: ScriptLine[] = [
     initial: "김",
     delay: 2100,
     concurrent: true,
-    content: "네, 화요일 오전 출발로 잡혀 있어요. 숙소도 확정됐습니다.",
+    content: "네, 요약이랑 타임라인도 회의 끝나면 바로 확인해 볼게요.",
   },
   {
     side: "left",
     name: "이도현",
     initial: "이",
     delay: 2000,
-    content: "여권 정보만 한 번 더 확인해 주세요.",
+    content: "좋습니다. 다음 안건은 월요일에 이어서 보죠.",
   },
   {
     side: "right",
     name: "최민준",
     initial: "최",
-    delay: 2300,
-    content: (
-      <>
-        여권번호는 <Masked>M123A4567</Masked> 입니다.
-      </>
-    ),
-  },
-  {
-    side: "left",
-    name: "박지우",
-    initial: "박",
-    delay: 2100,
-    content: "좋습니다. 민감정보는 Faith가 자동으로 가리니 회의록은 그대로 공유해도 됩니다.",
-  },
-  {
-    side: "right",
-    name: "김서연",
-    initial: "김",
-    delay: 2200,
-    content: "네, 다음 안건은 월요일에 이어서 보죠.",
-  },
-  {
-    side: "left",
-    name: "이도현",
-    initial: "이",
     delay: 1900,
     content: "알겠습니다. 오늘 회의는 여기까지로 하겠습니다.",
   },
@@ -586,7 +437,7 @@ export function ChatMock() {
           data-chat-feed
           className="min-h-0 flex-1 overflow-hidden"
         >
-          <div ref={listRef} className="flex flex-col gap-3.5 px-2 pb-1 pt-6">
+          <div ref={listRef} className="flex flex-col gap-4 px-2 pb-1 pt-6 max-md:gap-5 xl:gap-3.5">
             <ChatDateDivider label={dateLabel} />
             {visible.map((msg) => (
               <MockBubble

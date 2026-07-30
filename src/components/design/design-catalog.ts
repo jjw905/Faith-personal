@@ -39,12 +39,14 @@ import {
   SceneSignupSocial,
 } from "@/components/design/scenes/auth-scenes";
 import {
+  SceneCreateTeamFirst,
   SceneDuplicateVaultName,
   SceneMaskStylePopup,
   SceneNotificationPanel,
   SceneRecordsDeleteConfirm,
   SceneRecordsDeleteMany,
   SceneRecordsDownloadConfirm,
+  SceneTeamSettingsOff,
   SceneVaultPicker,
 } from "@/components/design/scenes/dialog-scenes";
 import {
@@ -386,6 +388,20 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         kind: "popup",
         Preview: SceneVaultPicker,
       },
+      {
+        id: "create-team-first",
+        label: "팀 먼저 만들기",
+        route: "시스템 설정",
+        kind: "popup",
+        Preview: SceneCreateTeamFirst,
+      },
+      {
+        id: "team-settings-off",
+        label: "팀 설정 준비중",
+        route: "시스템 설정",
+        kind: "popup",
+        Preview: SceneTeamSettingsOff,
+      },
     ],
   },
   {
@@ -451,7 +467,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
     scenes: [
       {
         id: "survey-form",
-        label: "수요조사 설문",
+        label: "설문",
         route: "/survey",
         kind: "trigger",
         Preview: SceneSurveyForm,
@@ -465,7 +481,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
       },
       {
         id: "survey-consent",
-        label: "수요조사 기간 안내",
+        label: "오픈 준비 기간 안내",
         route: "최초 진입",
         kind: "popup",
         trigger: "DemandSurveyConsentGate",

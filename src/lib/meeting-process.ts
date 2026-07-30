@@ -38,7 +38,21 @@ export function meetingProcessDetail(
   errorMessage?: string | null,
 ): string {
   if (phase === "error" || phase === "empty") {
-    return errorMessage?.trim() || MEETING_PROCESS_LABEL[phase];
+    const msg = errorMessage?.trim();
+    if (phase === "error" && msg && isUploadQuotaErrorMessage(msg)) {
+      return "한도";
+    }
+    return msg || MEETING_PROCESS_LABEL[phase];
   }
   return MEETING_PROCESS_LABEL[phase];
+}
+
+/** 쿼터 초과 실패 메시지인지. 활동 목록 짧은 라벨에 쓴다. */
+export function isUploadQuotaErrorMessage(message: string): boolean {
+  const t = message.trim();
+  return (
+    t.includes("분석 가능 시간") ||
+    t.includes("무료 분석 시간") ||
+    t.includes("모두 사용")
+  );
 }

@@ -239,7 +239,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
     <PageContainer soft>
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <header className="min-w-0">
-          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
             계정 설정
           </h1>
         </header>

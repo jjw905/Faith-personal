@@ -12,7 +12,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { useAppContext } from "@/context/app-context";
-import { MEETING_PROCESS_LABEL } from "@/lib/meeting-process";
+import {
+  isUploadQuotaErrorMessage,
+  MEETING_PROCESS_LABEL,
+} from "@/lib/meeting-process";
 import {
   getProcessingByWorkspace,
   type ProcessItem,
@@ -49,8 +52,11 @@ function statusVisual(item: ProcessItem) {
     };
   }
   if (isErrorProcess(item)) {
+    const quota =
+      typeof item.detail === "string" &&
+      (item.detail === "한도" || isUploadQuotaErrorMessage(item.detail));
     return {
-      label: MEETING_PROCESS_LABEL.error,
+      label: quota ? "한도" : MEETING_PROCESS_LABEL.error,
       kind: "error" as const,
       className: "bg-masked-soft text-masked",
     };

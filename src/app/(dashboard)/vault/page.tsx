@@ -36,6 +36,7 @@ import {
 import { VaultMobileActionBar } from "@/components/vault/vault-mobile-action-bar";
 import { VaultUploadDialog } from "@/components/vault/vault-upload-dialog";
 import { DuplicateVaultNameDialog } from "@/components/vault/duplicate-name-dialog";
+import { UsageLimitDialog } from "@/components/dashboard/usage-limit-dialog";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   fixtureVaultItemsFull,
@@ -140,6 +141,7 @@ export default function VaultPage() {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [usageDialogOpen, setUsageDialogOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [previewDuplicateOpen, setPreviewDuplicateOpen] = useState(false);
   const [selectMode, setSelectMode] = useState<"download" | "delete" | null>(
@@ -438,7 +440,7 @@ export default function VaultPage() {
         className="mx-auto flex w-full max-w-5xl flex-col gap-2 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:gap-3 md:pb-0"
       >
         <header className="relative z-20 flex min-w-0 shrink-0 flex-col gap-1.5 md:gap-2.5">
-          <h1 className="shrink-0 text-2xl font-bold leading-none tracking-tight text-foreground">
+          <h1 className="shrink-0 text-2xl font-bold leading-tight tracking-tight text-foreground">
             보관함
           </h1>
           <div className="min-w-0 md:hidden">
@@ -512,10 +514,13 @@ export default function VaultPage() {
                   <Button
                     type="button"
                     className="h-11 cursor-pointer gap-2 rounded-full px-5 text-[15px]"
-                    disabled={busy || quotaFull}
+                    disabled={busy}
                     aria-label="올리기"
                     onClick={() => {
-                      if (quotaFull) return;
+                      if (quotaFull) {
+                        setUsageDialogOpen(true);
+                        return;
+                      }
                       setError(null);
                       setUploadOpen(true);
                     }}
@@ -569,7 +574,10 @@ export default function VaultPage() {
           quotaFull={quotaFull}
           hasFiles={filtered.length > 0}
           onUpload={() => {
-            if (quotaFull) return;
+            if (quotaFull) {
+              setUsageDialogOpen(true);
+              return;
+            }
             setError(null);
             setUploadOpen(true);
           }}
@@ -585,9 +593,14 @@ export default function VaultPage() {
         />
 
         {quotaFull ? (
-          <p className="text-base font-medium text-red-600" role="status">
-            보관함 용량이 가득 찼습니다. 파일을 비운 뒤 다시 올려 주세요.
-          </p>
+          <button
+            type="button"
+            role="status"
+            onClick={() => setUsageDialogOpen(true)}
+            className="cursor-pointer text-left text-base font-medium text-red-600 underline-offset-2 hover:underline"
+          >
+            보관함 용량이 가득 찼습니다. 자세히 보기
+          </button>
         ) : null}
 
         <VaultFloatSearch
@@ -609,6 +622,10 @@ export default function VaultPage() {
             setUploadOpen(false);
           }}
           onUpload={ingestFiles}
+          onQuotaFull={() => {
+            setUploadOpen(false);
+            setUsageDialogOpen(true);
+          }}
         />
 
         <DuplicateVaultNameDialog
@@ -639,6 +656,13 @@ export default function VaultPage() {
           }}
         />
 
+        <UsageLimitDialog
+          open={usageDialogOpen}
+          variant="storage"
+          storageStatus={viewUsage}
+          onClose={() => setUsageDialogOpen(false)}
+        />
+
         {error && !uploadOpen ? (
           <p className="text-base text-red-600" role="alert">
             {error}
@@ -655,7 +679,11 @@ export default function VaultPage() {
           onDrop={(event) => {
             event.preventDefault();
             setDragOver(false);
-            if (quotaFull || busy) return;
+            if (busy) return;
+            if (quotaFull) {
+              setUsageDialogOpen(true);
+              return;
+            }
             void ingestFiles(event.dataTransfer.files);
           }}
           className={cn(

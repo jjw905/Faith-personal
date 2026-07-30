@@ -6,7 +6,7 @@ import { TeamWorkspacePanel } from "@/components/team/team-workspace-panel";
 import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 
 export default function TeamPage() {
-  // 결제 수요조사 기간에는 팀 기능을 열지 않는다. 코드·데이터는 그대로 두고
+  // 오픈 준비 기간에는 팀 기능을 열지 않는다. 코드·데이터는 그대로 두고
   // 진입 경로만 막는다. 다시 열 때는 TEAM_FEATURE_ENABLED만 true로 되돌리면 된다.
   if (!TEAM_FEATURE_ENABLED) {
     redirect("/dashboard");

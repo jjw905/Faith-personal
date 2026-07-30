@@ -183,7 +183,7 @@ export function alignDialogueToTimedSegments(
   if (timed.length === 0) {
     if (!options?.allowEstimateFallback) {
       throw new Error(
-        "STT 실측 시각(timedSegments)이 없어 대화 싱크를 맞출 수 없습니다.",
+        "받아쓰기 실측 시각이 없어 대화 싱크를 맞출 수 없습니다.",
       );
     }
     const totalChars = dialogue.reduce((s, d) => s + d.text.length, 0) || 1;
@@ -402,13 +402,61 @@ export function alignDialogueToTimedSegments(
  * 단어부터 순서대로 줄 텍스트에서 다시 찾는다 — 못 찾으면 그 단어는 건너뛴다
  * (하이라이트가 한 박자 밀리는 대신 엉뚱한 자리를 가리키지 않는다).
  */
+function findWordInLine(
+  text: string,
+  needle: string,
+  from: number,
+): { start: number; end: number } | null {
+  if (!needle) return null;
+  const exact = text.indexOf(needle, from);
+  if (exact >= 0) {
+    return { start: exact, end: exact + needle.length };
+  }
+  // 문장부호만 다른 경우(예: "한국," vs "한국")를 한 번 더 시도한다.
+  const stripped = needle.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+  if (!stripped || stripped === needle) return null;
+  const at = text.indexOf(stripped, from);
+  if (at < 0) return null;
+  return { start: at, end: at + stripped.length };
+}
+
+/** 배정 전에 start==end, 역전, 겹침을 정리한다. */
+function sanitizeAssignedSourceWords(words: WordTiming[]): WordTiming[] {
+  const sorted = [...words]
+    .filter((w) => w.text.trim().length > 0 && Number.isFinite(w.startSec))
+    .sort((a, b) => a.startSec - b.startSec || a.endSec - b.endSec);
+  const MIN_DUR = 0.08;
+  const out: WordTiming[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const cur = sorted[i]!;
+    const nextStart = sorted[i + 1]?.startSec;
+    let endSec = Number.isFinite(cur.endSec) ? cur.endSec : cur.startSec;
+    if (!(endSec > cur.startSec)) {
+      endSec =
+        typeof nextStart === "number" && nextStart > cur.startSec
+          ? Math.min(nextStart, cur.startSec + MIN_DUR)
+          : cur.startSec + MIN_DUR;
+    } else if (typeof nextStart === "number" && endSec > nextStart) {
+      endSec = Math.max(cur.startSec + 0.02, nextStart);
+    }
+    // 같은 startSec이 여러 개면 살짝 밀어 포커스가 한 단어에만 머물게 한다.
+    const startSec =
+      out.length > 0 && cur.startSec <= out[out.length - 1]!.startSec
+        ? out[out.length - 1]!.startSec + 0.02
+        : cur.startSec;
+    if (!(endSec > startSec)) endSec = startSec + MIN_DUR;
+    out.push({ text: cur.text.trim(), startSec, endSec });
+  }
+  return out;
+}
+
 export function assignWordTimingsToLines(
   lines: TranscriptLine[],
   words: WordTiming[],
   durationSec: number,
 ): TranscriptLine[] {
   if (words.length === 0 || lines.length === 0) return lines;
-  const sorted = [...words].sort((a, b) => a.startSec - b.startSec);
+  const sorted = sanitizeAssignedSourceWords(words);
   const starts = lines.map((line) =>
     typeof line.startSec === "number" ? line.startSec : 0,
   );
@@ -430,16 +478,16 @@ export function assignWordTimingsToLines(
       k += 1;
       const needle = w.text.trim();
       if (!needle) continue;
-      const at = text.indexOf(needle, textCursor);
-      if (at < 0) continue;
+      const hit = findWordInLine(text, needle, textCursor);
+      if (!hit) continue;
       assigned.push({
-        text: needle,
+        text: text.slice(hit.start, hit.end),
         startSec: w.startSec,
         endSec: w.endSec,
-        startOffset: at,
-        endOffset: at + needle.length,
+        startOffset: hit.start,
+        endOffset: hit.end,
       });
-      textCursor = at + needle.length;
+      textCursor = hit.end;
     }
     if (assigned.length === 0) return line;
     return { ...line, words: assigned };

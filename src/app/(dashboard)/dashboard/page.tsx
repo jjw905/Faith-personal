@@ -38,10 +38,10 @@ function TodayHeading({ meetingHeadline }: { meetingHeadline: string }) {
 
   return (
     <div className="min-w-0">
-      <p className="text-base font-medium leading-none text-muted">
+      <p className="text-base font-medium leading-tight text-muted">
         {dateLabel} {weekdayLabel}
       </p>
-      <h1 className="mt-2 text-2xl font-bold leading-none tracking-tight text-foreground">
+      <h1 className="mt-2 text-2xl font-bold leading-tight tracking-tight text-foreground">
         {meetingHeadline}
       </h1>
     </div>
@@ -63,6 +63,7 @@ export default function DashboardPage() {
     getMeetingsByWorkspace(workspaceId),
   );
   const [recordsBar, setRecordsBar] = useState<RecordsBarState | null>(null);
+  const [purgeNotice, setPurgeNotice] = useState<string | null>(null);
   const uploadZoneRef = useRef<AudioUploadZoneHandle>(null);
 
   const refreshMeetings = useCallback(async () => {
@@ -85,7 +86,18 @@ export default function DashboardPage() {
       const data = (await res.json()) as {
         ok?: boolean;
         meetings?: Meeting[];
+        purgedCount?: number;
       };
+      if (
+        typeof data.purgedCount === "number" &&
+        data.purgedCount > 0 &&
+        !sessionStorage.getItem("faith.purge.notice.shown")
+      ) {
+        sessionStorage.setItem("faith.purge.notice.shown", "1");
+        setPurgeNotice(
+          `보존 기간이 지난 회의 기록 ${data.purgedCount}개를 정리했습니다.`,
+        );
+      }
       if (data.ok && Array.isArray(data.meetings)) {
         const next = data.meetings.filter(
           (m) => !hidden.has(m.id) && m.status !== "in_progress",
@@ -164,6 +176,23 @@ export default function DashboardPage() {
     <PageContainer soft>
       <div className="flex flex-col gap-4 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:pb-0">
         <TodayHeading meetingHeadline={profile.meetingHeadline} />
+
+        {purgeNotice ? (
+          <div
+            role="status"
+            className="flex items-start justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-base text-foreground"
+          >
+            <p className="min-w-0 flex-1 leading-snug">{purgeNotice}</p>
+            <button
+              type="button"
+              className="shrink-0 min-h-12 min-w-12 rounded-lg text-base text-muted hover:bg-muted/20 hover:text-foreground"
+              onClick={() => setPurgeNotice(null)}
+              aria-label="닫기"
+            >
+              닫기
+            </button>
+          </div>
+        ) : null}
 
         <section className="space-y-3">
           <AudioUploadZone

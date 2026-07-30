@@ -64,7 +64,9 @@ export default async function MeetingDetailPage({
     userRow && userRow.phase !== "done",
   );
   const showDetailBody = !processing && !failed;
-  const canEditMeta = Boolean(userRow);
+  const canEditMeta = Boolean(
+    userRow && userRow.userId === session.user.id,
+  );
 
   return (
     <PageContainer white>

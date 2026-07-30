@@ -331,7 +331,7 @@ export function buildMeetingFromDiarize(input: DiarizeMeetingInput): {
     meeting: {
       id: input.meetingId,
       title: input.title,
-      tags: input.tags ?? ["STT", "화자분리"],
+      tags: input.tags ?? ["받아쓰기", "화자분리"],
       summaryTags: input.summaryTags ?? ["AI", "화자"],
       daysAgo: input.daysAgo ?? 0,
       time: input.time ?? "12:00:00",

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        message: "수요조사 기간에는 실시간 기록을 제공하지 않습니다. 업로드 분석을 이용해 주세요.",
+        message: "실시간 기록은 오픈 준비중이에요. 업로드 분석을 이용해 주세요.",
       },
       { status: 403 },
     );

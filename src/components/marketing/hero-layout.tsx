@@ -66,7 +66,7 @@ export function HeroLayout({
   }, []);
 
   return (
-    <Container className="relative z-10 mt-12 grid w-full items-center gap-10 pb-3 pt-3 xl:mt-20 xl:grid-cols-2 xl:gap-16 xl:pb-4 xl:pt-4">
+    <Container className="relative z-10 mt-10 grid w-full items-center gap-14 pb-4 pt-4 max-md:mt-8 max-md:gap-16 xl:mt-20 xl:grid-cols-2 xl:gap-16 xl:pb-4 xl:pt-4">
       <div ref={introRef} className="min-w-0 will-change-transform">
         {intro}
       </div>

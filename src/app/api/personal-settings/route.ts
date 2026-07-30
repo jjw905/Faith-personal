@@ -33,6 +33,34 @@ export async function PATCH(request: Request) {
   } catch {
     return NextResponse.json({ ok: false, message: "잘못된 요청입니다." }, { status: 400 });
   }
+  const existing = await prisma.userPersonalSettings.findUnique({
+    where: { userId: session.user.id },
+    select: { displayPrefs: true },
+  });
+  const rawPrefs =
+    existing?.displayPrefs &&
+    typeof existing.displayPrefs === "object" &&
+    !Array.isArray(existing.displayPrefs)
+      ? { ...(existing.displayPrefs as Record<string, unknown>) }
+      : {};
+  const ACCOUNT_DISPLAY_KEYS = new Set([
+    "autoMask",
+    "speakerSplit",
+    "summaryLang",
+  ]);
+  const incomingDisplay =
+    body.displayPrefs && typeof body.displayPrefs === "object"
+      ? Object.fromEntries(
+          Object.entries(body.displayPrefs).filter(
+            ([key]) => !ACCOUNT_DISPLAY_KEYS.has(key),
+          ),
+        )
+      : null;
+  const mergedDisplayPrefs =
+    incomingDisplay && Object.keys(incomingDisplay).length > 0
+      ? ({ ...rawPrefs, ...incomingDisplay } as Prisma.InputJsonValue)
+      : undefined;
+
   const settings = await prisma.userPersonalSettings.upsert({
     where: { userId: session.user.id },
     create: {
@@ -43,9 +71,7 @@ export async function PATCH(request: Request) {
         body.notificationSoundEnabled === undefined
           ? true
           : Boolean(body.notificationSoundEnabled),
-      ...(body.displayPrefs
-        ? { displayPrefs: body.displayPrefs as Prisma.InputJsonValue }
-        : {}),
+      ...(mergedDisplayPrefs ? { displayPrefs: mergedDisplayPrefs } : {}),
     },
     update: {
       ...(typeof body.defaultMicrophoneOn === "boolean"
@@ -57,9 +83,7 @@ export async function PATCH(request: Request) {
       ...(typeof body.notificationSoundEnabled === "boolean"
         ? { notificationSoundEnabled: body.notificationSoundEnabled }
         : {}),
-      ...(body.displayPrefs
-        ? { displayPrefs: body.displayPrefs as Prisma.InputJsonValue }
-        : {}),
+      ...(mergedDisplayPrefs ? { displayPrefs: mergedDisplayPrefs } : {}),
     },
   });
   return NextResponse.json({ ok: true, settings });

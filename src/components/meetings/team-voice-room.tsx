@@ -25,6 +25,10 @@ import {
   PersonAvatar,
   displayPersonName,
 } from "@/components/people/person-avatar";
+import {
+  ParticipantChipPicker,
+  type ParticipantOption,
+} from "@/components/team/participant-chip-picker";
 import { Button } from "@/components/ui/button";
 import { useRealtimeTranscription } from "@/hooks/use-realtime-transcription";
 import { cn } from "@/lib/utils";
@@ -46,6 +50,12 @@ type MeetingPhase =
   | "host_absence_warn"
   | "host_absence_close";
 
+type PrejoinInvitee = {
+  userId: string;
+  name: string | null;
+  handle: string | null;
+};
+
 export function TeamVoiceRoom({
   teamMeetingId,
   title,
@@ -65,8 +75,19 @@ export function TeamVoiceRoom({
   const [level, setLevel] = useState(0);
   const [recordingActive, setRecordingActive] = useState(false);
   const [phase, setPhase] = useState<MeetingPhase | undefined>(initialPhase);
+  const [canReplaceParticipants, setCanReplaceParticipants] = useState(false);
+  const [isOrganizer, setIsOrganizer] = useState(false);
+  const [organizerId, setOrganizerId] = useState<string | null>(null);
+  const [teamMembers, setTeamMembers] = useState<ParticipantOption[]>([]);
+  const [participantIds, setParticipantIds] = useState<string[]>([]);
+  const [invitees, setInvitees] = useState<PrejoinInvitee[]>([]);
+  const [inviteSaving, setInviteSaving] = useState(false);
+  const [inviteNote, setInviteNote] = useState("");
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const inviteSaveSeqRef = useRef(0);
+  const participantIdsRef = useRef<string[]>([]);
+  participantIdsRef.current = participantIds;
 
   useEffect(() => {
     let active = true;
@@ -79,9 +100,26 @@ export function TeamVoiceRoom({
         ok?: boolean;
         meeting?: {
           recordingActive?: boolean;
-          team?: { policy?: { forceMicrophoneOff?: boolean } };
+          organizerId?: string;
+          teamId?: string;
+          team?: {
+            id?: string;
+            policy?: { forceMicrophoneOff?: boolean };
+          };
+          access?: Array<{
+            userId: string;
+            isParticipant?: boolean;
+            user?: {
+              id?: string;
+              name: string | null;
+              handle: string | null;
+            };
+          }>;
         };
-        derived?: { phase?: MeetingPhase };
+        derived?: {
+          phase?: MeetingPhase;
+          canReplaceParticipants?: boolean;
+        };
         message?: string;
       };
       const settingsJson = (await settingsRes.json()) as {
@@ -92,20 +130,58 @@ export function TeamVoiceRoom({
         };
       };
       if (!active) return;
-      if (!meetingRes.ok || !meetingJson.ok) {
+      if (!meetingRes.ok || !meetingJson.ok || !meetingJson.meeting) {
         setError(meetingJson.message ?? "회의 정보를 불러오지 못했습니다.");
         return;
       }
-      const forcedOff = Boolean(
-        meetingJson.meeting?.team?.policy?.forceMicrophoneOff,
-      );
+      const meeting = meetingJson.meeting;
+      const forcedOff = Boolean(meeting.team?.policy?.forceMicrophoneOff);
       setMicOn(
         forcedOff ? false : Boolean(settingsJson.settings?.defaultMicrophoneOn),
       );
       setDeviceId(settingsJson.settings?.preferredInputDeviceId ?? "");
-      setRecordingActive(Boolean(meetingJson.meeting?.recordingActive));
+      setRecordingActive(Boolean(meeting.recordingActive));
       if (meetingJson.derived?.phase) {
         setPhase(meetingJson.derived.phase);
+      }
+      setCanReplaceParticipants(
+        Boolean(meetingJson.derived?.canReplaceParticipants),
+      );
+      setOrganizerId(meeting.organizerId ?? null);
+
+      const participantRows = (meeting.access ?? []).filter(
+        (row) => row.isParticipant,
+      );
+      const selected = participantRows
+        .map((row) => row.userId)
+        .filter((id) => id !== meeting.organizerId);
+      setParticipantIds(selected);
+      setInvitees(
+        participantRows
+          .filter((row) => row.userId !== meeting.organizerId)
+          .map((row) => ({
+            userId: row.userId,
+            name: row.user?.name ?? null,
+            handle: row.user?.handle ?? null,
+          })),
+      );
+
+      const teamId = meeting.teamId ?? meeting.team?.id;
+      if (teamId) {
+        const teamRes = await fetch(`/api/teams/${teamId}`, {
+          cache: "no-store",
+        });
+        const teamJson = (await teamRes.json()) as {
+          ok?: boolean;
+          members?: ParticipantOption[];
+          currentMember?: { userId: string };
+        };
+        if (!active) return;
+        const me = teamJson.currentMember?.userId;
+        setIsOrganizer(Boolean(me && me === meeting.organizerId));
+        setTeamMembers(
+          (teamJson.members ?? []).filter((member) => member.userId !== me),
+        );
       }
       setPrejoinReady(true);
       try {
@@ -177,7 +253,60 @@ export function TeamVoiceRoom({
     };
   }, [connection, deviceId, micOn]);
 
+  async function saveInvitees(nextIds: string[]) {
+    if (!canReplaceParticipants || !isOrganizer || !organizerId) return;
+    const previous = participantIdsRef.current;
+    if (nextIds.length === 0) {
+      setInviteNote("함께할 팀원을 한 명 이상 선택해 주세요.");
+      return;
+    }
+    const seq = ++inviteSaveSeqRef.current;
+    setParticipantIds(nextIds);
+    setInviteSaving(true);
+    setInviteNote("");
+    try {
+      const response = await fetch(`/api/team-meetings/${teamMeetingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantIds: [...nextIds, organizerId],
+        }),
+      });
+      const data = (await response.json()) as { ok?: boolean; message?: string };
+      if (seq !== inviteSaveSeqRef.current) return;
+      if (!response.ok || !data.ok) {
+        setParticipantIds(previous);
+        setInviteNote(data.message ?? "초대를 저장하지 못했습니다.");
+        return;
+      }
+      setInvitees(
+        teamMembers
+          .filter((member) => nextIds.includes(member.userId))
+          .map((member) => ({
+            userId: member.userId,
+            name: member.user.name,
+            handle: member.user.handle,
+          })),
+      );
+    } catch {
+      if (seq !== inviteSaveSeqRef.current) return;
+      setParticipantIds(previous);
+      setInviteNote("초대를 저장하지 못했습니다.");
+    } finally {
+      if (seq === inviteSaveSeqRef.current) {
+        setInviteSaving(false);
+      }
+    }
+  }
+
+  const needsInviteBeforeJoin =
+    isOrganizer && canReplaceParticipants && participantIds.length === 0;
+
   async function joinRoom() {
+    if (needsInviteBeforeJoin) {
+      setError("함께할 팀원을 초대한 뒤 입장해 주세요.");
+      return;
+    }
     setJoining(true);
     setError("");
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -201,7 +330,7 @@ export function TeamVoiceRoom({
     setConnection(data);
   }
 
-  if (error && !connection) {
+  if (error && !connection && !prejoinReady) {
     return (
       <div className="rounded-2xl bg-card p-6 text-base text-foreground shadow-soft">
         {error}
@@ -221,6 +350,7 @@ export function TeamVoiceRoom({
 
   if (!connection) {
     const waiting = phase === "join_open" || phase === "host_absence_warn";
+    const canEditInvite = isOrganizer && canReplaceParticipants;
     return (
       <section className="rounded-2xl bg-card p-5 shadow-soft sm:p-7">
         <div className="flex flex-wrap items-center gap-2">
@@ -239,7 +369,47 @@ export function TeamVoiceRoom({
             음성은 사용할 수 있습니다. 기록은 시작 전이면 꺼져 있습니다.
           </p>
         ) : null}
-        <div className="mt-6 space-y-4">
+
+        <div className="mt-6 space-y-5">
+          {canEditInvite ? (
+            <ParticipantChipPicker
+              members={teamMembers}
+              selectedIds={participantIds}
+              required
+              disabled={inviteSaving}
+              onChange={(ids) => {
+                void saveInvitees(ids);
+              }}
+            />
+          ) : invitees.length > 0 ? (
+            <div>
+              <p className="text-base font-medium">초대된 팀원</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {invitees.map((person) => {
+                  const name = displayPersonName(person.name, person.handle);
+                  return (
+                    <span
+                      key={person.userId}
+                      className="inline-flex min-h-12 items-center gap-2 rounded-full border border-border bg-surface py-1.5 pl-1.5 pr-3 text-base font-medium"
+                    >
+                      <PersonAvatar
+                        name={name}
+                        size="sm"
+                        className="border-transparent"
+                      />
+                      <span className="max-w-[8rem] truncate">{name}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          {inviteNote ? (
+            <p className="text-base text-muted" role="status">
+              {inviteNote}
+            </p>
+          ) : null}
+
           <div className="flex min-h-14 items-center justify-between gap-4">
             <span className="text-base font-medium">마이크</span>
             <Button
@@ -294,11 +464,24 @@ export function TeamVoiceRoom({
           {error ? <p className="text-base text-muted">{error}</p> : null}
           <Button
             className="min-h-12 w-full rounded-full"
-            disabled={joining}
+            disabled={joining || inviteSaving || needsInviteBeforeJoin}
             onClick={() => void joinRoom()}
           >
-            {joining ? "입장 중" : "입장"}
+            {joining
+              ? "입장 중"
+              : needsInviteBeforeJoin
+                ? "팀원 선택 후 입장"
+                : "입장"}
           </Button>
+          {isOrganizer && canReplaceParticipants ? (
+            <Button
+              asChild
+              variant="ghost"
+              className="min-h-12 w-full rounded-full"
+            >
+              <Link href="/team">돌아가기</Link>
+            </Button>
+          ) : null}
         </div>
       </section>
     );
@@ -564,7 +747,7 @@ function VoiceRoomBody({
           });
           if (!started) {
             setRecordingNote(
-              "내 마이크 전사를 시작하지 못했습니다. 다른 참가자 기록은 계속됩니다.",
+              "내 마이크 받아쓰기를 시작하지 못했습니다. 다른 참가자 기록은 계속됩니다.",
             );
           }
         }

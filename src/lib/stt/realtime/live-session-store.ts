@@ -186,7 +186,7 @@ export async function persistRealtimeUtterance(params: {
   if (!session) throw new Error("실시간 기록 세션을 찾을 수 없습니다.");
 
   const text = params.text.trim().slice(0, 8_000);
-  if (!text) throw new Error("전사 내용이 비어 있습니다.");
+  if (!text) throw new Error("받아쓰기 내용이 비어 있습니다.");
 
   const existing = await prisma.realtimeSttUtterance.findUnique({
     where: {
@@ -501,7 +501,7 @@ export async function completeRealtimeTeamRun(params: {
     },
   });
   if (sessions.length === 0) {
-    throw new Error("저장된 팀 전사 세션이 없습니다.");
+    throw new Error("저장된 팀 받아쓰기 세션이 없습니다.");
   }
 
   const endedAt = new Date();

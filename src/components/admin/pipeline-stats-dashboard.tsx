@@ -25,7 +25,7 @@ const CARD_SHADOW =
   "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
 
 const STAGE_LABEL: Record<string, string> = {
-  stt: "전사",
+  stt: "받아쓰기",
   moderation: "검열",
   structure: "구조화",
   other: "기타",

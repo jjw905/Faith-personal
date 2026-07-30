@@ -97,6 +97,7 @@ export async function createNotification(params: {
 export async function listVisibleNotifications(
   userId: string,
   requestedRetention?: DataRetentionDays,
+  options?: { purge?: boolean },
 ) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -114,13 +115,17 @@ export async function listVisibleNotifications(
   const recentCutoff = new Date(
     now.getTime() - NOTIFICATION_RECENT_DISPLAY_DAYS * 24 * 60 * 60 * 1000,
   );
-  await prisma.notification.deleteMany({
-    where: { userId, createdAt: { lt: retentionCutoff } },
-  });
+  // 배지 countOnly 폴링마다 삭제하면 불필요하게 무겁다. 목록 열 때만 purge.
+  if (options?.purge !== false) {
+    await prisma.notification.deleteMany({
+      where: { userId, createdAt: { lt: retentionCutoff } },
+    });
+  }
   const rows = await prisma.notification.findMany({
     where: {
       userId,
       dismissedAt: null,
+      createdAt: { gte: retentionCutoff },
       OR: [
         { confirmedAt: null, readAt: null },
         { readAt: { gte: recentCutoff } },
@@ -177,7 +182,11 @@ export async function setUserNotificationRetention(
 ) {
   await prisma.user.update({
     where: { id: userId },
-    data: { notificationRetentionDays: retentionDays },
+    data: {
+      notificationRetentionDays: retentionDays,
+      // 레거시 알림 API로만 바꿀 때도 회의 보존과 어긋나지 않게 같이 맞춘다.
+      meetingRetentionDays: retentionDays,
+    },
   });
 }
 

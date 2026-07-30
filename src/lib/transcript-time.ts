@@ -89,20 +89,46 @@ export function readMediaDurationSec(el: HTMLMediaElement): number {
 }
 
 /**
- * 현재 재생 시각에 맞는 단어 하나 (노래방 자막처럼 재생 중인 말풍선 안에서
- * 지금 말하는 단어를 찾는다). 단어 사이 짧은 공백은 직전 단어를 그대로 유지해
- * 하이라이트가 깜빡이지 않게 한다.
+ * 말하기 바로 전에 다음 단어로 포커스가 넘어가게 하는 선행 시간(초).
+ * 클로바노트처럼 발화 직전에 형광펜이 먼저 붙는 느낌을 낸다.
+ */
+export const WORD_FOCUS_LOOKAHEAD_SEC = 0.1;
+
+/**
+ * 현재 재생 시각에 맞는 단어 하나.
+ * 1) 지금 말하는 중이면 그 단어
+ * 2) 곧(lookahead) 시작할 다음 단어가 있으면 그 단어(발화 직전 포커스)
+ * 3) 아니면 직전에 말했던 단어를 유지(단어 사이 공백에서 깜빡임 방지)
  */
 export function activeWordAt<
   T extends { startSec: number; endSec: number },
->(words: T[] | undefined, currentSec: number): T | null {
+>(
+  words: T[] | undefined,
+  currentSec: number,
+  lookaheadSec: number = WORD_FOCUS_LOOKAHEAD_SEC,
+): T | null {
   if (!words || words.length === 0) return null;
-  for (let i = 0; i < words.length; i++) {
-    const w = words[i]!;
-    if (currentSec < w.startSec) {
-      return i > 0 ? words[i - 1]! : null;
+  const lookahead = Math.max(0, lookaheadSec);
+
+  for (const word of words) {
+    if (currentSec >= word.startSec && currentSec < word.endSec) {
+      return word;
     }
-    if (currentSec < w.endSec) return w;
   }
-  return words[words.length - 1]!;
+
+  for (const word of words) {
+    if (
+      word.startSec > currentSec &&
+      word.startSec <= currentSec + lookahead
+    ) {
+      return word;
+    }
+  }
+
+  let prev: T | null = null;
+  for (const word of words) {
+    if (word.startSec <= currentSec) prev = word;
+    else break;
+  }
+  return prev;
 }

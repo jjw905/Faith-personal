@@ -40,7 +40,7 @@ export default async function AiUsagePage() {
     <PageContainer soft>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <header className="min-w-0">
-          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
             AI 사용량
           </h1>
         </header>

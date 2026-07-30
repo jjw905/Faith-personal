@@ -62,6 +62,7 @@ export function TeamMeetingComposer({
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [backupHostId, setBackupHostId] = useState("");
   const [backupOpen, setBackupOpen] = useState(false);
+  const [localMessage, setLocalMessage] = useState("");
 
   const presetActive = useMemo(
     () =>
@@ -72,7 +73,30 @@ export function TeamMeetingComposer({
     [customDuration, durationMinutes],
   );
 
+  const canSubmit =
+    title.trim().length > 0 &&
+    participantIds.length > 0 &&
+    members.length > 0 &&
+    (intent === "start" || Boolean(start));
+
   function submit() {
+    if (members.length === 0) {
+      setLocalMessage("함께할 팀원을 먼저 팀에 초대해 주세요.");
+      return;
+    }
+    if (participantIds.length === 0) {
+      setLocalMessage("함께할 팀원을 선택해 주세요.");
+      return;
+    }
+    if (!title.trim()) {
+      setLocalMessage("제목을 확인해 주세요.");
+      return;
+    }
+    if (intent === "schedule" && !start) {
+      setLocalMessage("시작 시각을 확인해 주세요.");
+      return;
+    }
+    setLocalMessage("");
     void onSubmit({
       intent,
       title,
@@ -82,6 +106,8 @@ export function TeamMeetingComposer({
       backupHostId,
     });
   }
+
+  const displayMessage = localMessage || message;
 
   return (
     <div className={cn("space-y-5", className)}>
@@ -100,7 +126,10 @@ export function TeamMeetingComposer({
                 key={value}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => setIntent(value)}
+                onClick={() => {
+                  setIntent(value);
+                  setLocalMessage("");
+                }}
                 className={cn(
                   "group flex min-h-24 items-center gap-3 rounded-2xl px-4 text-left shadow-soft transition-colors duration-150",
                   selected
@@ -155,6 +184,18 @@ export function TeamMeetingComposer({
           placeholder="제목"
         />
       </label>
+
+      <ParticipantChipPicker
+        members={members}
+        selectedIds={participantIds}
+        required
+        onChange={(ids) => {
+          setParticipantIds(ids);
+          setLocalMessage("");
+          if (!ids.includes(backupHostId)) setBackupHostId("");
+          if (ids.length === 0) setBackupOpen(false);
+        }}
+      />
 
       <div
         className={cn(
@@ -239,16 +280,6 @@ export function TeamMeetingComposer({
         ) : null}
       </div>
 
-      <ParticipantChipPicker
-        members={members}
-        selectedIds={participantIds}
-        onChange={(ids) => {
-          setParticipantIds(ids);
-          if (!ids.includes(backupHostId)) setBackupHostId("");
-          if (ids.length === 0) setBackupOpen(false);
-        }}
-      />
-
       {participantIds.length > 0 ? (
         <div>
           {!backupOpen ? (
@@ -285,7 +316,11 @@ export function TeamMeetingComposer({
         </div>
       ) : null}
 
-      {message ? <p className="text-base text-muted">{message}</p> : null}
+      {displayMessage ? (
+        <p className="text-base text-muted" role="status">
+          {displayMessage}
+        </p>
+      ) : null}
 
       <Button
         className={cn(
@@ -293,9 +328,15 @@ export function TeamMeetingComposer({
           compact ? "w-full" : "w-full sm:w-auto sm:min-w-[10rem]",
         )}
         onClick={submit}
-        disabled={saving || teamsLoading}
+        disabled={saving || teamsLoading || !canSubmit}
       >
-        {saving ? "처리 중" : intent === "start" ? "시작" : "만들기"}
+        {saving
+          ? "처리 중"
+          : intent === "start"
+            ? participantIds.length > 0
+              ? "초대 후 시작"
+              : "팀원 선택 후 시작"
+            : "만들기"}
       </Button>
     </div>
   );

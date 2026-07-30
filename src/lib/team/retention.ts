@@ -18,7 +18,9 @@ export {
  * Soft-delete / trash for team meetings is not modeled in Prisma
  * (`deletedAt` / trash tables do not exist). Do not expose a 7-day trash
  * lifecycle until that storage exists. Meeting records use team policy
- * retentionDays (30/60/90) for policy configuration only today.
+ * retentionDays (30/60/90) for policy configuration only today —
+ * 실제 자동 삭제는 미구현이다. 개인 보존 설정(purgeExpiredUserMeetings)도
+ * workspace=personal 만 지우며 팀 JSON은 건드리지 않는다.
  */
 export async function purgeExpiredTeamAuditLogs(params?: {
   teamId?: string;

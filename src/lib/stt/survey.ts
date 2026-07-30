@@ -1,5 +1,5 @@
 /**
- * 결제 의향·성능 만족도 수요조사 문항. 문구는 응답 부담을 줄이기 위해
+ * 결제 의향·성능 만족도 설문 문항. 문구는 응답 부담을 줄이기 위해
  * 일반 설문 사이트(구글 폼 등)에서 쓰는 "가장 가까운 답을 골라주세요" 톤을 따른다.
  * 값은 전부 구조화된 선택형 + 척도라 별도 가공 없이 바로 집계할 수 있다.
  */
@@ -31,7 +31,6 @@ export const PRICE_PREFERENCE_LABELS: Record<PricePreference, string> = {
 export const FEATURE_KEYS = [
   "diarization",
   "summary_timeline",
-  "correction_suggest",
   "memo",
   "playback_sync",
 ] as const;
@@ -40,7 +39,6 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
   diarization: "화자 구분(누가 말했는지 자동 표시)",
   summary_timeline: "자동 요약과 타임라인",
-  correction_suggest: "잘못 알아들은 단어 보정 추천",
   memo: "대화기록에 메모 남기기",
   playback_sync: "재생 중 실시간 구간 하이라이트",
 };
@@ -58,7 +56,7 @@ export const STT_SATISFACTION_LABELS: Record<number, string> = {
 export const IMPROVEMENT_NOTE_MAX = 500;
 
 /**
- * 결제 수요조사 기간 한정 월간 업로드 분석 쿼터 분(分) 값. 클라이언트 컴포넌트에서도
+ * 오픈 준비 기간 한정 월간 업로드 분석 쿼터 분(分) 값. 클라이언트 컴포넌트에서도
  * 안전하게 쓸 수 있도록 서버 전용 모듈(usage-quota.ts, prisma 의존)과 분리해 여기 둔다.
  */
 export const FREE_MONTHLY_MINUTES = 20;
@@ -114,7 +112,7 @@ export function validateSurveyResponse(
     sttSatisfaction < STT_SATISFACTION_MIN ||
     sttSatisfaction > STT_SATISFACTION_MAX
   ) {
-    return { ok: false, message: "받아쓰기 만족도를 선택해 주세요." };
+    return { ok: false, message: "AI 회의록 성능을 선택해 주세요." };
   }
 
   const featurePrioritiesRaw = body.featurePriorities;

@@ -27,7 +27,20 @@ export async function reconcileTeamMeeting(meetingId: string, now = new Date()) 
 
   const derived = deriveMeetingState(meeting, now);
 
-  if (derived.shouldCloseForHostAbsence && meeting.state !== "ENDED") {
+  // 주최자 부재 종료는 "초대자가 이미 방에 들어온 뒤"에만 적용한다.
+  // 바로 시작 로비에서 마이크만 맞추는 동안 10분 지나 오종료되는 것을 막는다.
+  const guestWaitingInRoom = meeting.access.some(
+    (row) =>
+      row.isParticipant &&
+      Boolean(row.joinedAt) &&
+      row.userId !== meeting.organizerId,
+  );
+
+  if (
+    derived.shouldCloseForHostAbsence &&
+    meeting.state !== "ENDED" &&
+    guestWaitingInRoom
+  ) {
     if (meeting.livekitRoomName) {
       await closeLiveKitRoom(meeting.livekitRoomName).catch(() => undefined);
     }
@@ -50,7 +63,36 @@ export async function reconcileTeamMeeting(meetingId: string, now = new Date()) 
     return { meeting: updated, derived: deriveMeetingState(updated, now) };
   }
 
-  if (derived.shouldWarnHostAbsence) {
+  // 예정 종료 시각이 지났는데 아무도 입장하지 않으면 취소로 정리한다.
+  if (
+    meeting.state === "SCHEDULED" &&
+    !meeting.hostPresentAt &&
+    derived.scheduledEndMs != null &&
+    now.getTime() >= derived.scheduledEndMs &&
+    !meeting.access.some((row) => Boolean(row.joinedAt))
+  ) {
+    const updated = await prisma.teamMeeting.update({
+      where: { id: meeting.id },
+      data: {
+        state: "CANCELED",
+        canceledAt: now,
+        endedAt: now,
+        endReason: "CANCELED",
+      },
+    });
+    if (meeting.livekitRoomName) {
+      await closeLiveKitRoom(meeting.livekitRoomName).catch(() => undefined);
+    }
+    await writeTeamAudit({
+      teamId: meeting.teamId,
+      meetingId: meeting.id,
+      action: "meeting.canceled",
+      metadata: { reason: "unstarted_past_end" },
+    });
+    return { meeting: updated, derived: deriveMeetingState(updated, now) };
+  }
+
+  if (derived.shouldWarnHostAbsence && guestWaitingInRoom) {
     await prisma.teamMeeting.update({
       where: { id: meeting.id },
       data: { absenceWarnedAt: now },
@@ -72,7 +114,8 @@ export async function reconcileTeamMeeting(meetingId: string, now = new Date()) 
     // Room is pre-created at schedule time; keep SCHEDULED until host arrives or start.
   }
 
-  if (derived.shouldEmitMissed) {
+  // 주최자가 아직 방에 입장하기 전에는 「불참」 알림을 보내지 않는다.
+  if (derived.shouldEmitMissed && meeting.hostPresentAt) {
     await Promise.all(
       meeting.access
         .filter(

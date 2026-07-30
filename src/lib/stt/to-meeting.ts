@@ -369,7 +369,7 @@ export function placeholderMeeting(params: {
     meeting: {
       id: params.meetingId,
       title: params.title,
-      tags: ["STT", "처리중"],
+      tags: ["받아쓰기", "처리중"],
       summaryTags: [],
       date: params.date?.trim() || new Date().toISOString(),
       duration: durationLabel,

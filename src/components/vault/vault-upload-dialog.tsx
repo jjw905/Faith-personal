@@ -35,6 +35,7 @@ export function VaultUploadDialog({
   error,
   onClose,
   onUpload,
+  onQuotaFull,
 }: {
   open: boolean;
   usage: VaultUsage | null;
@@ -42,6 +43,8 @@ export function VaultUploadDialog({
   error: string | null;
   onClose: () => void;
   onUpload: (files: FileList | File[]) => Promise<void> | void;
+  /** 용량 가득 참이면 부모 UsageLimitDialog로 넘긴다. */
+  onQuotaFull?: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [guideError, setGuideError] = useState<string | null>(null);
@@ -69,6 +72,10 @@ export function VaultUploadDialog({
   function tryUpload(fileList: FileList | File[]) {
     const files = Array.from(fileList);
     if (files.length === 0) return;
+    if ((usage?.remaining ?? 1) <= 0) {
+      onQuotaFull?.();
+      return;
+    }
     const remaining = usage?.remaining ?? null;
     const message = validateVaultUploadFiles(files, remaining);
     if (message) {
@@ -194,14 +201,22 @@ export function VaultUploadDialog({
                   </li>
                 ))}
               </ul>
-              {alertText || quotaFull ? (
+              {alertText ? (
                 <p
                   className="relative z-20 max-w-xl px-2 text-center text-base font-medium text-red-600"
                   role="alert"
                 >
-                  {alertText ??
-                    "보관함 용량이 가득 찼습니다. 파일을 비운 뒤 다시 올려 주세요."}
+                  {alertText}
                 </p>
+              ) : null}
+              {quotaFull && !alertText ? (
+                <button
+                  type="button"
+                  className="relative z-20 min-h-12 rounded-xl px-4 text-base font-semibold text-primary hover:underline"
+                  onClick={() => onQuotaFull?.()}
+                >
+                  용량이 가득 찼어요. 자세히 보기
+                </button>
               ) : null}
             </>
           )}

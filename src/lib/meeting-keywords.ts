@@ -21,7 +21,7 @@ export const MEETING_KEYWORD_HINTS = [
 
 /** 처리·파이프라인·섹션 라벨처럼 보이는 태그 제외 */
 const PROCESS_LIKE =
-  /변환|마스킹\s*중|처리\s*중|처리\s*완료|^완료$|^예정$|^실패$|업로드\s*완료|녹음\s*완료|^(?:STT|업로드|요약|타임라인|처리중|AI|diarize|화자분리|녹음|변환|실패)$/i;
+  /변환|마스킹\s*중|처리\s*중|처리\s*완료|^완료$|^예정$|^실패$|업로드\s*완료|녹음\s*완료|^(?:STT|받아쓰기|업로드|요약|타임라인|처리중|AI|diarize|화자분리|녹음|변환|실패)$/i;
 
 function cleanKeyword(raw: string): string | null {
   const t = raw.trim().replace(/^#/, "");

@@ -35,7 +35,7 @@ export default async function PipelineStatsPage() {
     <PageContainer soft>
       <div className="mx-auto w-full max-w-6xl space-y-6">
         <header className="min-w-0">
-          <h1 className="text-2xl font-bold leading-none tracking-tight text-foreground">
+          <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground">
             파이프라인 통계
           </h1>
         </header>

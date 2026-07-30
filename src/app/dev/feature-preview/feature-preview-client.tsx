@@ -104,12 +104,12 @@ export function FeaturePreviewClient() {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">1. 제작중</h2>
         <p className="text-xs text-muted">
-          기록 시작 아래. 파일명 + 진행 표시. 끝나면 사라짐.
+          실시간 기록 아래. 파일명 + 진행 표시. 끝나면 사라짐.
         </p>
         <div className="rounded-2xl border border-dashed border-border bg-surface/40 p-4">
           <div className="mb-3 grid grid-cols-2 gap-2 sm:gap-3">
             <div className="flex h-16 items-center rounded-2xl bg-primary px-4 text-sm font-semibold text-primary-foreground">
-              기록 시작
+              실시간 기록
             </div>
             <div className="flex h-16 items-center rounded-2xl bg-card px-4 text-sm font-semibold shadow-soft">
               파일 올리기
@@ -144,7 +144,7 @@ export function FeaturePreviewClient() {
         </div>
         <div className="rounded-2xl bg-card p-4 shadow-soft">
           <p className="mb-3 text-xs text-muted">
-            실시간 전사 중 초안을 로컬에 임시 저장하는 목업
+            실시간 받아쓰기 중 초안을 로컬에 임시 저장하는 목업
             {savedAt ? `, 마지막 저장 ${savedAt}` : ""}
           </p>
           <ul className="space-y-2">

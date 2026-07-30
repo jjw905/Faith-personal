@@ -436,7 +436,7 @@ export function suggestSecondPassCorrections(params: {
       lineIndex: params.lineIndex ?? 0,
       suggestion: candidate.word,
       wrong: occurrence.text,
-      reason: "재전사와 확인된 회의 용어가 일치함",
+      reason: "재받아쓰기와 확인된 회의 용어가 일치함",
       similarity: candidate.similarity,
       dictionaryVerified: true,
       source: "second-pass",

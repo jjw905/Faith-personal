@@ -30,7 +30,7 @@ const TIER_CTA: Record<CatalogPlanId, TierCta> = {
   TEAM: { label: "Team 시작", href: "/signup?plan=team" },
 };
 
-/** 수요조사 기간에는 Free만 가입 가능. Pro/Team은 카드는 그대로 보이되 시작 버튼만 잠근다. */
+/** 오픈 준비 기간에는 Free만 가입 가능. Pro/Team은 카드는 그대로 보이되 시작 버튼만 잠근다. */
 const TIER_LOCKED: Record<CatalogPlanId, boolean> = {
   FREE: false,
   PRO: !PAID_PLANS_ENABLED,

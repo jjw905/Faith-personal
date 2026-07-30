@@ -134,7 +134,9 @@ function mapSttFraction(fraction: number): number {
  */
 async function diarizeUpload(
   audioPath: string,
+  enabled: boolean,
 ): Promise<DiarizationResult | null> {
+  if (!enabled) return null;
   const available = diarizationAvailability();
   if (!available.ok) {
     console.warn(`[stt] 화자분리 없이 진행: ${available.reason}`);
@@ -162,7 +164,10 @@ export async function processUploadedMeeting(params: {
    * 되어야 하며, 회의 처리 자체는 여전히 자동(모델 파이프라인)으로 끝난다.
    */
   bypassModeration?: boolean;
+  /** 개인 설정 기본값. false면 화자분리 단계를 건너뛴다(비용·시간 절약). 기본 true. */
+  speakerSplit?: boolean;
 }) {
+  const speakerSplitEnabled = params.speakerSplit !== false;
   const workDir = workDirForMeeting(params.meetingId);
   const progress = (
     percent: number,
@@ -202,7 +207,7 @@ export async function processUploadedMeeting(params: {
     if (hasAudioTools()) {
       const durationSec = probeDurationSec(audioPath);
       assertUploadAudioDuration(durationSec);
-      // 전사(비용 발생) 전에 이번 주기 쿼터를 확인한다. 결제 수요조사 기간
+      // 전사(비용 발생) 전에 이번 주기 쿼터를 확인한다. 오픈 준비 기간
       // 한정: 기본 월 20분, 설문 응답 시 월 60분까지.
       currentStage = "quota";
       quotaReservation = await assertUploadQuota({
@@ -244,7 +249,7 @@ export async function processUploadedMeeting(params: {
           });
         },
       }),
-      diarizeUpload(audioPath),
+      diarizeUpload(audioPath, speakerSplitEnabled),
     ]);
 
     if (!stt.text.trim()) {
@@ -252,7 +257,7 @@ export async function processUploadedMeeting(params: {
         meetingId: params.meetingId,
         model: params.model,
       });
-      throw new Error("전사 결과가 비어 있습니다. 다른 파일로 다시 시도해 주세요.");
+      throw new Error("받아쓰기 결과가 비어 있습니다. 다른 파일로 다시 시도해 주세요.");
     }
     if (!stt.timedSegments.length) {
       console.error("[stt] 실측 시각(타이밍) 구간이 비어 있음", {
@@ -326,6 +331,23 @@ export async function processUploadedMeeting(params: {
     const { structure, usage: structureUsage } = await buildSemanticStructure(
       structureInput,
       stt.durationSec,
+      {
+        onProgress: ({ partIndex, partCount, attempt, depth }) => {
+          const pct = Math.min(
+            PROGRESS.structureDone - 1,
+            PROGRESS.structureStart + Math.min(16, Math.max(0, attempt - 1) * 3),
+          );
+          let stageLabel = "분석하는 중";
+          if (depth > 0) {
+            stageLabel = `분석하는 중 (보완 ${attempt})`;
+          } else if (partCount > 1) {
+            stageLabel = `분석하는 중 (${partIndex + 1}/${partCount})`;
+          } else if (attempt > 1) {
+            stageLabel = `분석하는 중 (${attempt})`;
+          }
+          progress(pct, { phase: "structuring", stageLabel });
+        },
+      },
     );
     progress(PROGRESS.structureDone, { stageLabel: "타임라인 작성하는 중" });
     statsTopicBucket = structure.topicBucket;
