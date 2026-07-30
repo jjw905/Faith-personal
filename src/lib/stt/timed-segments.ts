@@ -450,6 +450,16 @@ function sanitizeAssignedSourceWords(words: WordTiming[]): WordTiming[] {
   return out;
 }
 
+/**
+ * 줄 시작 추정(앵커 실패 → 글자 수 보간)이 다음 줄 시작 바로 앞으로 밀리면
+ * 이 줄의 창이 실제 발화 길이보다 훨씬 좁아져 단어가 하나도 안 걸린다
+ * ("이상입니다. 네. OO 기자님." 같은 짧은 인계 문장에서 반복 확인됨).
+ * 그 결과 재생 중 포커싱이 그 줄에서 멈췄다가 다음 줄에서 갑자기 시작된
+ * 것처럼 보인다. 앞줄이 실제로 다 쓴 시각 이후, 아직 아무도 안 쓴 빈
+ * 시간대까지만 되돌아가 다시 찾는다 — 앞줄 몫을 빼앗지 않는다.
+ */
+const WORD_WINDOW_WIDEN_SEC = 6;
+
 export function assignWordTimingsToLines(
   lines: TranscriptLine[],
   words: WordTiming[],
@@ -461,21 +471,16 @@ export function assignWordTimingsToLines(
     typeof line.startSec === "number" ? line.startSec : 0,
   );
 
-  let cursor = 0;
-  return lines.map((line, i) => {
-    const from = starts[i]!;
-    const to = i + 1 < lines.length ? starts[i + 1]! : Math.max(from, durationSec);
-    while (cursor < sorted.length && sorted[cursor]!.startSec < from) cursor += 1;
-
-    const text = line.text ?? "";
-    if (!text) return line;
-
+  const collect = (
+    text: string,
+    windowFrom: number,
+    windowTo: number,
+  ): TranscriptWordTiming[] => {
     const assigned: TranscriptWordTiming[] = [];
     let textCursor = 0;
-    let k = cursor;
-    while (k < sorted.length && sorted[k]!.startSec < to) {
-      const w = sorted[k]!;
-      k += 1;
+    for (const w of sorted) {
+      if (w.startSec < windowFrom) continue;
+      if (w.startSec >= windowTo) break;
       const needle = w.text.trim();
       if (!needle) continue;
       const hit = findWordInLine(text, needle, textCursor);
@@ -489,7 +494,38 @@ export function assignWordTimingsToLines(
       });
       textCursor = hit.end;
     }
-    if (assigned.length === 0) return line;
+    return assigned;
+  };
+
+  let prevLineWordsEnd = 0;
+  return lines.map((line, i) => {
+    const from = starts[i]!;
+    const to = i + 1 < lines.length ? starts[i + 1]! : Math.max(from, durationSec);
+    const text = line.text ?? "";
+    if (!text) {
+      prevLineWordsEnd = Math.max(prevLineWordsEnd, from);
+      return line;
+    }
+
+    let assigned = collect(text, from, to);
+    if (assigned.length === 0) {
+      const widenedFrom = Math.max(
+        prevLineWordsEnd,
+        from - WORD_WINDOW_WIDEN_SEC,
+      );
+      if (widenedFrom < from) {
+        assigned = collect(text, widenedFrom, to);
+      }
+    }
+
+    if (assigned.length === 0) {
+      prevLineWordsEnd = Math.max(prevLineWordsEnd, from);
+      return line;
+    }
+    prevLineWordsEnd = Math.max(
+      prevLineWordsEnd,
+      assigned[assigned.length - 1]!.endSec,
+    );
     return { ...line, words: assigned };
   });
 }

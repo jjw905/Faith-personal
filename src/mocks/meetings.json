@@ -9,11 +9,11 @@
         "추경"
       ],
       "summaryTags": [
-        "추가경정 예산안",
-        "소위원회",
-        "노동자 농성"
+        "예산안",
+        "노동자 농성",
+        "폭행 사건"
       ],
-      "date": "2026-07-27T02:33:00.000Z",
+      "date": "2026-07-31T02:33:00.000Z",
       "duration": "18분 27초",
       "participants": [
         {
@@ -24,7 +24,7 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "회의를 주재하며 의결을 진행한 위원장",
+          "summary": "회의를 개의하고 안건을 상정한 위원장.",
           "tags": [
             "위원장",
             "회의 진행"
@@ -38,10 +38,10 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "소위원회 심사 결과를 보고한 예산결산기금심사소위원장",
+          "summary": "소위원회 심사 결과를 보고한 위원.",
           "tags": [
-            "소위원장",
-            "예산안"
+            "소위원",
+            "예산 심사"
           ]
         },
         {
@@ -52,10 +52,10 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "환경부 장관으로서 인사 말씀을 한 발언자",
+          "summary": "환경부 장관으로 인사 말씀을 한 발언자.",
           "tags": [
-            "장관",
-            "인사"
+            "정부",
+            "환경부"
           ]
         },
         {
@@ -66,10 +66,10 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "고용노동부 장관 직무대행으로서 인사 말씀을 한 발언자",
+          "summary": "고용노동부 장관으로 인사 말씀을 한 발언자.",
           "tags": [
-            "장관",
-            "인사"
+            "정부",
+            "고용노동부"
           ]
         },
         {
@@ -80,10 +80,10 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "비정규직 노동자 관련 발언을 한 의원",
+          "summary": "비정규직 노동자 사건에 대해 발언한 의원.",
           "tags": [
             "의원",
-            "노동자"
+            "비정규직"
           ]
         },
         {
@@ -94,10 +94,11 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "고용노동부의 진상조사 필요성 강조.",
+          "summary": "부상자의 위중한 상황을 언급.",
           "tags": [
-            "고용노동부",
-            "조사"
+            "부상",
+            "농성",
+            "지자체"
           ]
         }
       ],
@@ -115,11 +116,11 @@
         "정책"
       ],
       "summaryTags": [
-        "정책 생중계",
-        "투명성",
-        "언론 소통"
+        "생중계 확대",
+        "디지털 소통",
+        "정책 방향"
       ],
-      "date": "2026-07-27T05:00:00.000Z",
+      "date": "2026-07-31T05:00:00.000Z",
       "duration": "11분 36초",
       "participants": [
         {
@@ -130,9 +131,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "정책 생중계 확대 방안을 발표하고 설명했습니다.",
+          "summary": "정책 생중계 확대 방침을 발표했습니다.",
           "tags": [
-            "홍보소통수석",
+            "홍보",
             "정책"
           ]
         },
@@ -144,38 +145,37 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "생중계 예시와 관련된 질문을 했습니다.",
+          "summary": "생중계 예시에 대해 질문했습니다.",
           "tags": [
             "기자",
             "질문"
           ]
         },
         {
-          "id": "spk-2",
-          "name": "홍민기 기자",
-          "initials": "홍",
+          "id": "spk-C",
+          "name": "화자 C",
+          "initials": "C",
           "color": "bg-violet-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "회의 진행 중 격려의 말을 전했습니다.",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "회의 참석자들에게 감사 인사.",
           "tags": [
-            "기자",
-            "격려"
+            "감사"
           ]
         },
         {
-          "id": "spk-3",
-          "name": "김용록",
-          "initials": "김",
+          "id": "spk-D",
+          "name": "화자 D",
+          "initials": "D",
           "color": "bg-amber-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "디지털 담당관의 역할과 생중계 신청 활성화에 대해 질문했습니다.",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "KTV 영상 오픈과 디지털 담당관에 대해 질문.",
           "tags": [
-            "기자",
-            "질문"
+            "미디어",
+            "디지털"
           ]
         },
         {
@@ -186,52 +186,52 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "AI 화자 분리 라벨",
-          "summary": "인사 관련 질문을 했습니다.",
+          "summary": "인사 관련 질문을 함.",
           "tags": [
-            "기자",
+            "인사",
             "질문"
           ]
         },
         {
-          "id": "spk-5",
-          "name": "선재원 기자",
-          "initials": "선",
+          "id": "spk-F",
+          "name": "화자 F",
+          "initials": "F",
           "color": "bg-cyan-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "생중계 기준에 대한 질문을 했습니다.",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "생중계 기준에 대한 의문을 제기.",
           "tags": [
-            "기자",
-            "질문"
+            "생중계",
+            "기준"
           ]
         },
         {
-          "id": "spk-6",
-          "name": "이경태 기자",
-          "initials": "이",
+          "id": "spk-G",
+          "name": "화자 G",
+          "initials": "G",
           "color": "bg-orange-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "KTV의 인력과 예산에 대한 질문을 했습니다.",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "KTV의 예산 배분 필요성을 언급.",
           "tags": [
-            "기자",
-            "질문"
+            "KTV",
+            "예산"
           ]
         },
         {
-          "id": "spk-7",
-          "name": "김안진",
-          "initials": "김",
+          "id": "spk-H",
+          "name": "화자 H",
+          "initials": "H",
           "color": "bg-slate-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "대화 속 호명으로 추정",
-          "summary": "대통령의 민생 행보에 대한 질문을 했습니다.",
+          "recognitionNote": "AI 화자 분리 라벨",
+          "summary": "대통령의 민생 행보에 대한 기대감을 표현.",
           "tags": [
-            "기자",
-            "질문"
+            "민생",
+            "기대"
           ]
         }
       ],
