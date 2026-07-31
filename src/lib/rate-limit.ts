@@ -27,10 +27,10 @@ export function clientIpFromHeaders(headers: Headers): string {
   const trustProxy =
     process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true";
 
-  // Cloudflare 엣지 헤더는 프로덕션(또는 TRUST_PROXY)에서만 신뢰.
-  // 로컬/직접 오리진 접근에서 X-Forwarded-For 위조로 IP 한도를 우회하지 못하게 한다.
+  // 프록시 헤더는 배포 환경이 명시적으로 TRUST_PROXY를 켠 경우만 신뢰한다.
+  // production이라는 이유만으로 신뢰하면 직접 오리진 요청이 CF 헤더를 위조할 수 있다.
   const cf = headers.get("cf-connecting-ip")?.trim();
-  if (cf && (trustProxy || process.env.NODE_ENV === "production")) {
+  if (cf && trustProxy) {
     return cf;
   }
 

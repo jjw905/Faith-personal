@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { MeetingAccessNotice } from "@/components/meetings/meeting-access-notice";
 import { MeetingChatReplay } from "@/components/meetings/meeting-chat-replay";
 import { canReadMeeting } from "@/lib/meeting-access";
 import {
@@ -10,6 +11,7 @@ import {
 } from "@/lib/meetings-data";
 import { resolveMeetingReplayAudio } from "@/lib/meeting-replay-audio";
 import { requireUser } from "@/lib/require-user";
+import { maskTeamMeeting, maskTeamTranscript } from "@/lib/team/masked-meeting-content";
 import { getUserMeeting } from "@/lib/user-meetings-store";
 
 export default async function MeetingChatPage({
@@ -22,13 +24,28 @@ export default async function MeetingChatPage({
   if (!session) notFound();
 
   const access = await canReadMeeting(id, session.user.id);
+  if (!access.allowed && access.acknowledgementRequired) {
+    return (
+      <PageContainer white hideFooter>
+        <MeetingAccessNotice />
+      </PageContainer>
+    );
+  }
   if (!access.allowed) notFound();
 
-  const meeting = getMeetingById(id);
-  if (!meeting) notFound();
-
-  const transcript = getMeetingTranscript(id);
-  const audio = resolveMeetingReplayAudio({ meeting, transcript });
+  const rawMeeting = getMeetingById(id);
+  if (!rawMeeting) notFound();
+  const names = rawMeeting.participants.map((participant) => participant.name);
+  const meeting = access.maskedOnly
+    ? maskTeamMeeting(rawMeeting, names)
+    : rawMeeting;
+  const rawTranscript = getMeetingTranscript(id);
+  const transcript = access.maskedOnly
+    ? maskTeamTranscript(rawTranscript, names)
+    : rawTranscript;
+  const audio = access.maskedOnly
+    ? null
+    : resolveMeetingReplayAudio({ meeting, transcript });
   const userRow = getUserMeeting(id);
   const canEditTitle = Boolean(
     userRow && userRow.userId === session.user.id,

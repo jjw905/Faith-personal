@@ -183,7 +183,7 @@ def run_sherpa(
         }
         for item in result
     ]
-    model = "pyannote-segmentation-3.0+3D-Speaker(sherpa-onnx)"
+    model = f"pyannote-segmentation-3.0+{embedding_path.stem}(sherpa-onnx)"
     return segments, model, "cpu"
 
 

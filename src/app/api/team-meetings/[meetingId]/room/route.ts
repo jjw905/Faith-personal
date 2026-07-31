@@ -2,25 +2,57 @@ import { NextResponse } from "next/server";
 
 import { closeLiveKitRoom, removeLiveKitParticipant } from "@/lib/livekit-admin";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import { effectiveHostId } from "@/lib/team/meeting-lifecycle";
 import { writeTeamAudit } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ meetingId: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { meetingId } = await context.params;
   const meeting = await prisma.teamMeeting.findUnique({ where: { id: meetingId } });
+  const membership = meeting
+    ? await prisma.teamMember.findUnique({
+        where: {
+          teamId_userId: {
+            teamId: meeting.teamId,
+            userId: session.user.id,
+          },
+        },
+        select: { id: true },
+      })
+    : null;
   if (
     !meeting ||
+    !membership ||
     !meeting.livekitRoomName ||
     effectiveHostId(meeting) !== session.user.id
   ) {
     return NextResponse.json({ ok: false, message: "진행자 권한이 없습니다." }, { status: 403 });
+  }
+  if (meeting.organizerId !== session.user.id) {
+    const access = await prisma.teamMeetingAccess.findUnique({
+      where: {
+        meetingId_userId: { meetingId, userId: session.user.id },
+      },
+      select: { acknowledgedAt: true },
+    });
+    if (!access?.acknowledgedAt) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "MEETING_ACK_REQUIRED",
+          message: "참석 확인 후 회의 진행 권한을 사용할 수 있습니다.",
+        },
+        { status: 409 },
+      );
+    }
   }
   let body: { userId?: string };
   try {
@@ -33,7 +65,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
   await prisma.teamMeetingAccess.updateMany({
     where: { meetingId, userId: body.userId },
-    data: { isParticipant: false },
+    data: { isParticipant: false, acknowledgedAt: null },
   });
   await removeLiveKitParticipant(meeting.livekitRoomName, body.userId).catch(
     () => undefined,
@@ -50,14 +82,42 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { meetingId } = await context.params;
   const meeting = await prisma.teamMeeting.findUnique({ where: { id: meetingId } });
-  if (!meeting || effectiveHostId(meeting) !== session.user.id) {
+  const membership = meeting
+    ? await prisma.teamMember.findUnique({
+        where: {
+          teamId_userId: {
+            teamId: meeting.teamId,
+            userId: session.user.id,
+          },
+        },
+        select: { id: true },
+      })
+    : null;
+  if (!meeting || !membership || effectiveHostId(meeting) !== session.user.id) {
     return NextResponse.json({ ok: false, message: "진행자만 회의를 종료할 수 있습니다." }, { status: 403 });
+  }
+  if (meeting.organizerId !== session.user.id) {
+    const access = await prisma.teamMeetingAccess.findUnique({
+      where: {
+        meetingId_userId: { meetingId, userId: session.user.id },
+      },
+      select: { acknowledgedAt: true },
+    });
+    if (!access?.acknowledgedAt) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "MEETING_ACK_REQUIRED",
+          message: "참석 확인 후 회의를 종료할 수 있습니다.",
+        },
+        { status: 409 },
+      );
+    }
   }
   if (meeting.livekitRoomName) {
     await closeLiveKitRoom(meeting.livekitRoomName).catch(() => undefined);

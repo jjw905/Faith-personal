@@ -36,6 +36,7 @@ import {
 import { MaskedText } from "@/components/meetings/masked-text";
 import { CorrectionHint } from "@/components/meetings/correction-hint";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
+import { PersonalRealtimeStartDialog } from "@/components/meetings/personal-realtime-start-dialog";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { useAppContext } from "@/context/app-context";
 import { useAccountDisplayPrefs } from "@/hooks/use-account-display-prefs";
@@ -1054,6 +1055,9 @@ export function NewMeetingSession() {
   } = useFileUpload();
 
   const [inMeeting, setInMeeting] = useState(false);
+  const [realtimeStartOpen, setRealtimeStartOpen] = useState(false);
+  const [sharedRealtimeStarting, setSharedRealtimeStarting] = useState(false);
+  const [sharedRealtimeError, setSharedRealtimeError] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -1308,17 +1312,60 @@ export function NewMeetingSession() {
     await stopRealtime();
   }
 
+  async function startSoloMeeting() {
+    setRealtimeStartOpen(false);
+    setInMeeting(true);
+    if (autoOpenTimelineOnStart) {
+      setTimelineOpen(true);
+    }
+    const started = await startRealtime({ title: meetingTitle });
+    if (!started) setInMeeting(false);
+  }
+
+  async function startSharedMeeting(inviteeIds: string[]) {
+    setSharedRealtimeStarting(true);
+    setSharedRealtimeError("");
+    try {
+      const response = await fetch("/api/personal-realtime/meetings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: meetingTitle, inviteeIds }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        href?: string;
+        blockedCount?: number;
+        message?: string;
+      };
+      if (!response.ok || !data.ok || !data.href) {
+        throw new Error(data.message ?? "개인 공동 기록을 준비하지 못했습니다.");
+      }
+      if (data.blockedCount) {
+        // The server excludes members who enabled invite rejection. The
+        // meeting still opens with the accepted invitees.
+        setSharedRealtimeError(
+          `초대 거부 설정으로 ${data.blockedCount}명은 제외되었습니다.`,
+        );
+      }
+      window.location.assign(data.href);
+    } catch (caught) {
+      setSharedRealtimeError(
+        caught instanceof Error
+          ? caught.message
+          : "개인 공동 기록을 준비하지 못했습니다.",
+      );
+    } finally {
+      setSharedRealtimeStarting(false);
+    }
+  }
+
   async function handleRecordToggle() {
     if (isRecording) {
       await stopMeeting();
     } else {
       if (!REALTIME_FEATURE_ENABLED) return;
-      setInMeeting(true);
-      if (autoOpenTimelineOnStart) {
-        setTimelineOpen(true);
-      }
-      const started = await startRealtime({ title: meetingTitle });
-      if (!started) setInMeeting(false);
+      setSharedRealtimeError("");
+      setRealtimeStartOpen(true);
     }
   }
 
@@ -1782,6 +1829,16 @@ export function NewMeetingSession() {
         open={vaultAttachOpen}
         onClose={() => setVaultAttachOpen(false)}
         onPick={onVaultAttachPick}
+      />
+
+      <PersonalRealtimeStartDialog
+        open={realtimeStartOpen}
+        title={meetingTitle}
+        saving={sharedRealtimeStarting}
+        externalMessage={sharedRealtimeError}
+        onClose={() => setRealtimeStartOpen(false)}
+        onSolo={() => void startSoloMeeting()}
+        onShared={(inviteeIds) => void startSharedMeeting(inviteeIds)}
       />
 
       {isTimelineSheet ? (

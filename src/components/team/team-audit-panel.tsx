@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, ScrollText } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -21,7 +21,7 @@ type AuditLog = {
 const PAGE_AUDIT = 12;
 
 const CARD_SHADOW =
-  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+  "panel-surface rounded-2xl";
 
 /** 짧은 한글 라벨. 없으면 action 그대로. */
 const ACTION_LABEL: Record<string, string> = {
@@ -312,8 +312,7 @@ export function TeamAuditPanel() {
           CARD_SHADOW,
         )}
       >
-        <ScrollText className="h-8 w-8 text-muted" aria-hidden />
-        <p className="mt-3 text-base text-muted">
+        <p className="text-base text-muted">
           {previewDenied
             ? "감사 로그는 팀 대표만 볼 수 있습니다."
             : message}

@@ -2,17 +2,19 @@ import { NextResponse } from "next/server";
 import { AccessToken } from "livekit-server-sdk";
 
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import { deriveMeetingState, effectiveHostId } from "@/lib/team/meeting-lifecycle";
 import { markParticipantJoined } from "@/lib/team/reconcile-meeting";
 import { reconcileTeamMeeting } from "@/lib/team/reconcile-meeting";
 import { resolveEntryMicrophoneOn } from "@/lib/team/settings-precedence";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 export async function POST(request: Request) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   let body: { teamMeetingId?: string };
   try {
     body = await request.json();
@@ -23,7 +25,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "회의 ID가 필요합니다." }, { status: 400 });
   }
 
-  await reconcileTeamMeeting(body.teamMeetingId);
   const meeting = await prisma.teamMeeting.findUnique({
     where: { id: body.teamMeetingId },
     include: {
@@ -43,19 +44,47 @@ export async function POST(request: Request) {
       })
     : null;
   const access = meeting?.access[0];
-  const derived = meeting ? deriveMeetingState(meeting) : null;
+  if (
+    !meeting ||
+    !membership ||
+    !(
+      meeting.organizerId === session.user.id ||
+      access?.isParticipant
+    )
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "음성 회의 참가 권한이 없습니다." },
+      { status: 403 },
+    );
+  }
+  const reconciled = await reconcileTeamMeeting(body.teamMeetingId);
+  const currentMeeting = reconciled?.meeting
+    ? { ...meeting, ...reconciled.meeting }
+    : meeting;
+  const derived = deriveMeetingState(currentMeeting);
   const canJoin =
-    meeting &&
-    membership &&
-    meeting.mode === "ONLINE" &&
-    meeting.state !== "CANCELED" &&
-    meeting.state !== "ENDED" &&
-    meeting.livekitRoomName &&
+    currentMeeting.mode === "ONLINE" &&
+    currentMeeting.state !== "CANCELED" &&
+    currentMeeting.state !== "ENDED" &&
+    currentMeeting.livekitRoomName &&
     derived?.canJoin &&
-    (meeting.organizerId === session.user.id || access?.isParticipant);
+    (currentMeeting.organizerId === session.user.id || access?.isParticipant);
 
-  if (!canJoin || !meeting?.livekitRoomName || !derived) {
+  if (!canJoin || !currentMeeting.livekitRoomName) {
     return NextResponse.json({ ok: false, message: "음성 회의 참가 권한이 없습니다." }, { status: 403 });
+  }
+  if (
+    currentMeeting.organizerId !== session.user.id &&
+    !currentMeeting.access[0]?.acknowledgedAt
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "MEETING_ACK_REQUIRED",
+        message: "참석 확인 후 음성 회의에 입장할 수 있습니다.",
+      },
+      { status: 409 },
+    );
   }
 
   const url = process.env.LIVEKIT_URL;
@@ -66,19 +95,19 @@ export async function POST(request: Request) {
   }
 
   await markParticipantJoined({
-    meetingId: meeting.id,
+    meetingId: currentMeeting.id,
     userId: session.user.id,
   });
 
-  const hostId = effectiveHostId(meeting);
+  const hostId = effectiveHostId(currentMeeting);
   const isHost = hostId === session.user.id;
   const personal = await prisma.userPersonalSettings.findUnique({
     where: { userId: session.user.id },
   });
   const mic = resolveEntryMicrophoneOn({
     inTeamWorkspace: true,
-    team: meeting.team.policy
-      ? { forceMicrophoneOff: meeting.team.policy.forceMicrophoneOff }
+    team: currentMeeting.team.policy
+      ? { forceMicrophoneOff: currentMeeting.team.policy.forceMicrophoneOff }
       : null,
     personal: {
       defaultMicrophoneOn: personal?.defaultMicrophoneOn ?? false,
@@ -91,15 +120,18 @@ export async function POST(request: Request) {
     name: session.user.name || "사용자",
     ttl: "2h",
     metadata: JSON.stringify({
-      teamMeetingId: meeting.id,
-      teamId: meeting.teamId,
+      teamMeetingId: currentMeeting.id,
+      teamId: currentMeeting.teamId,
       role: isHost ? "host" : "participant",
     }),
   });
   token.addGrant({
     roomJoin: true,
-    room: meeting.livekitRoomName,
+    room: currentMeeting.livekitRoomName,
     canPublish: true,
+    ...(currentMeeting.team.policy?.forceMicrophoneOff
+      ? { canPublishSources: [] }
+      : {}),
     canSubscribe: true,
     canPublishData: true,
     roomAdmin: isHost,
@@ -109,9 +141,9 @@ export async function POST(request: Request) {
     ok: true,
     token: await token.toJwt(),
     url,
-    roomName: meeting.livekitRoomName,
+    roomName: currentMeeting.livekitRoomName,
     isHost,
-    recordingActive: meeting.recordingActive,
+    recordingActive: currentMeeting.recordingActive,
     micDefaults: mic,
     serverNow: new Date().toISOString(),
     derived,

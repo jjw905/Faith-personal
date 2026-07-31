@@ -4,11 +4,10 @@ import { NextResponse } from "next/server";
 
 import type { TeamRole } from "@prisma/client";
 
-import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
+import { TEAM_FEATURE_ADMIN_ONLY } from "@/lib/feature-flags";
 import { createNotification } from "@/lib/notifications-store";
 import { prisma } from "@/lib/prisma";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
-import { requireUser } from "@/lib/require-user";
 import {
   getTeamMember,
   hasTeamCapability,
@@ -16,17 +15,17 @@ import {
   writeTeamAudit,
 } from "@/lib/team-permissions";
 import { TEAM_INVITE_TTL_MS } from "@/lib/team-permission-matrix";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ teamId: string }> };
 
 export async function GET(_: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json(
-      { ok: false, message: "로그인이 필요합니다." },
-      { status: 401 },
-    );
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const member = await getTeamMember(teamId, session.user.id);
   if (!member) {
@@ -58,19 +57,9 @@ export async function GET(_: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  if (!TEAM_FEATURE_ENABLED) {
-    return NextResponse.json(
-      { ok: false, message: "팀 기능은 오픈 준비중이에요." },
-      { status: 403 },
-    );
-  }
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json(
-      { ok: false, message: "로그인이 필요합니다." },
-      { status: 401 },
-    );
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const membership = await getTeamMember(teamId, session.user.id);
   if (!membership) {
@@ -124,7 +113,7 @@ export async function POST(request: Request, context: RouteContext) {
   const [target, existing, memberCount, pendingCount] = await Promise.all([
     prisma.user.findUnique({
       where: { id: body.userId },
-      select: { id: true, name: true, disabled: true },
+      select: { id: true, name: true, disabled: true, role: true },
     }),
     prisma.teamMember.findUnique({
       where: { teamId_userId: { teamId, userId: body.userId } },
@@ -139,6 +128,12 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json(
       { ok: false, message: "초대할 수 없는 사용자입니다." },
       { status: 404 },
+    );
+  }
+  if (TEAM_FEATURE_ADMIN_ONLY && target.role !== "ADMIN") {
+    return NextResponse.json(
+      { ok: false, message: "현재는 관리자 계정만 팀에 초대할 수 있습니다." },
+      { status: 403 },
     );
   }
   if (existing) {
@@ -157,31 +152,59 @@ export async function POST(request: Request, context: RouteContext) {
   const token = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const expiresAt = new Date(Date.now() + TEAM_INVITE_TTL_MS);
-  const invite = await prisma.$transaction(async (tx) => {
-    await tx.teamInvite.updateMany({
-      where: { teamId, invitedUserId: body.userId, status: "PENDING" },
-      data: { status: "CANCELED", respondedAt: new Date() },
+  const invite = await prisma
+    .$transaction(async (tx) => {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "teams" WHERE id = ${teamId} FOR UPDATE
+      `;
+      const liveMemberCount = await tx.teamMember.count({ where: { teamId } });
+      const livePendingCount = await tx.teamInvite.count({
+        where: {
+          teamId,
+          status: "PENDING",
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (liveMemberCount + livePendingCount >= actor.team.seatLimit) {
+        throw new Error("TEAM_SEAT_UNAVAILABLE");
+      }
+      await tx.teamInvite.updateMany({
+        where: { teamId, invitedUserId: body.userId, status: "PENDING" },
+        data: { status: "CANCELED", respondedAt: new Date() },
+      });
+      return tx.teamInvite.create({
+        data: {
+          teamId,
+          invitedUserId: body.userId!,
+          invitedById: session.user.id,
+          tokenHash,
+          role,
+          canInvite: Boolean(body.canInvite),
+          canCreateMeeting: Boolean(body.canCreateMeeting),
+          canManageRecordAccess: Boolean(body.canManageRecordAccess),
+          expiresAt,
+        },
+      });
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Error && error.message === "TEAM_SEAT_UNAVAILABLE") {
+        return null;
+      }
+      throw error;
     });
-    return tx.teamInvite.create({
-      data: {
-        teamId,
-        invitedUserId: body.userId!,
-        invitedById: session.user.id,
-        tokenHash,
-        role,
-        canInvite: Boolean(body.canInvite),
-        canCreateMeeting: Boolean(body.canCreateMeeting),
-        canManageRecordAccess: Boolean(body.canManageRecordAccess),
-        expiresAt,
-      },
-    });
-  });
+  if (!invite) {
+    return NextResponse.json(
+      { ok: false, message: "팀 좌석이 부족합니다." },
+      { status: 409 },
+    );
+  }
   await Promise.all([
     createNotification({
       userId: body.userId,
       type: "invite",
       title: `${actor.team.name} 팀 초대`,
       body: "1시간 안에 초대를 수락하거나 거절해 주세요.",
+      teamId,
       data: { inviteId: invite.id, teamId, expiresAt: expiresAt.toISOString() },
     }),
     writeTeamAudit({

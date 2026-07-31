@@ -1,24 +1,24 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 
+import { evaluateKmsRuntime } from "@/lib/kms-runtime-policy";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import {
   getTeamMember,
   hasTeamCapability,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ teamId: string }> };
 
 export async function GET(_: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json(
-      { ok: false, message: "로그인이 필요합니다." },
-      { status: 401 },
-    );
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const membership = await getTeamMember(teamId, session.user.id);
   if (!membership) {
@@ -38,7 +38,6 @@ export async function GET(_: Request, context: RouteContext) {
             email: true,
             image: true,
             handle: true,
-            inviteCode: true,
           },
         },
       },
@@ -84,6 +83,7 @@ export async function GET(_: Request, context: RouteContext) {
       take: 20,
     }),
   ]);
+  const kms = evaluateKmsRuntime();
   return NextResponse.json({
     ok: true,
     team: {
@@ -98,17 +98,18 @@ export async function GET(_: Request, context: RouteContext) {
     members,
     invites,
     meetings,
+    security: {
+      encryptionManagedBy: "service",
+      kmsReady: kms.allowed,
+      kmsReason: kms.allowed ? null : kms.reason,
+    },
   });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json(
-      { ok: false, message: "로그인이 필요합니다." },
-      { status: 401 },
-    );
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const membership = await getTeamMember(teamId, session.user.id);
   if (!membership || !hasTeamCapability(membership, "manageTeam")) {
@@ -155,6 +156,17 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json(
       { ok: false, message: "팀 보안 정책은 팀 대표만 변경할 수 있습니다." },
       { status: 403 },
+    );
+  }
+  if (body.allowExternalSharing === true) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "TEAM_EXTERNAL_SHARING_UNAVAILABLE",
+        message:
+          "외부 공유는 공개 열람 링크가 준비된 뒤 제공됩니다. 현재는 켤 수 없습니다.",
+      },
+      { status: 409 },
     );
   }
   const retentionDays = [30, 60, 90].includes(Number(body.retentionDays))

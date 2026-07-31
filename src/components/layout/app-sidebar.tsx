@@ -18,6 +18,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SidebarUsage } from "@/components/layout/sidebar-usage";
 import { UserProfile } from "@/components/layout/user-profile";
 import { useAppContext } from "@/context/app-context";
 import { useNotificationsUi } from "@/context/notifications-ui-context";
@@ -33,13 +34,20 @@ import {
   OPS_NAV_ITEMS,
   TEAM_NAV_ITEMS,
   type NavItem,
+  type TeamNavCapability,
 } from "@/lib/constants";
-import { DEMAND_SURVEY_ACTIVE, TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
+import {
+  DEMAND_SURVEY_ACTIVE,
+  TEAM_FEATURE_ADMIN_ONLY,
+  TEAM_FEATURE_ENABLED,
+} from "@/lib/feature-flags";
 import { SURVEY_COMPLETED_EVENT } from "@/lib/stt/survey";
 import { cn } from "@/lib/utils";
 import { isMeetingsRoute, isTeamRoute } from "@/lib/workspace-route";
 
 const SIDEBAR_COLLAPSED_KEY = "faith.sidebar.collapsed";
+const SIDEBAR_OPS_OPEN_KEY = "faith.sidebar.opsOpen";
+const SIDEBAR_DEV_OPEN_KEY = "faith.sidebar.devOpen";
 
 interface AppSidebarProps {
   mobileOpen?: boolean;
@@ -63,6 +71,105 @@ function isNavActive(pathname: string, href: string) {
     return pathname === "/changelog";
   }
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function sectionHasActive(pathname: string, items: NavItem[]) {
+  return items.some((item) => isNavActive(pathname, item.href));
+}
+
+type TeamNavSubject = {
+  role: "OWNER" | "ADMIN" | "MEMBER";
+  canInvite: boolean;
+  canCreateMeeting: boolean;
+  canManageRecordAccess: boolean;
+};
+
+function canUseTeamNav(
+  team: TeamNavSubject,
+  viewRole: TeamNavSubject["role"],
+  capability: TeamNavCapability,
+  previewing: boolean,
+) {
+  if (viewRole === "OWNER") return true;
+  if (capability === "owner" || capability === "viewAudit") return false;
+  if (viewRole === "ADMIN") return true;
+  if (previewing || capability === "manageTeam") return false;
+  if (capability === "invite") return team.canInvite;
+  if (capability === "createMeeting") return team.canCreateMeeting;
+  return team.canManageRecordAccess;
+}
+
+function readStoredOpen(key: string, fallback = true): boolean {
+  try {
+    const v = window.localStorage.getItem(key);
+    if (v === null) return fallback;
+    return v === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredOpen(key: string, open: boolean) {
+  try {
+    window.localStorage.setItem(key, open ? "1" : "0");
+  } catch {
+    /* ignore */
+  }
+}
+
+function AdminNavSection({
+  label,
+  open,
+  onToggle,
+  items,
+  pathname,
+  onNavigate,
+  rail,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  items: NavItem[];
+  pathname: string;
+  onNavigate?: () => void;
+  rail: boolean;
+}) {
+  return (
+    <div className="mt-5">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={open ? `${label} 접기` : `${label} 펼치기`}
+        onClick={onToggle}
+        className={cn(
+          "flex min-h-12 w-full cursor-pointer items-center gap-1 rounded-xl px-3 text-sm font-semibold tracking-wide text-muted-2 outline-none transition-colors",
+          "hover:bg-surface-2 hover:text-foreground",
+          "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
+          rail && "lg:sr-only",
+        )}
+      >
+        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        {open ? (
+          <ChevronDown className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+        )}
+      </button>
+      {open ? (
+        <div className="space-y-0.5">
+          {items.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={isNavActive(pathname, item.href)}
+              onNavigate={onNavigate}
+              collapsed={rail}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function NavLink({
@@ -131,11 +238,13 @@ function MeetingsNav({
   pathname,
   onNavigate,
   collapsed = false,
+  teamEnabled,
 }: {
   item: NavItem;
   pathname: string;
   onNavigate?: () => void;
   collapsed?: boolean;
+  teamEnabled: boolean;
 }) {
   const { workspaceId, setWorkspaceId, activeTeamId, setActiveTeamId } =
     useAppContext();
@@ -146,7 +255,12 @@ function MeetingsNav({
   const sectionActive = meetingsActive || teamRouteActive;
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [teams, setTeams] = useState<
-    Array<{ id: string; name: string; role: "OWNER" | "ADMIN" | "MEMBER" }>
+    Array<
+      {
+        id: string;
+        name: string;
+      } & TeamNavSubject
+    >
   >([]);
   const open = userOpen ?? true;
   const Icon = item.icon;
@@ -158,7 +272,7 @@ function MeetingsNav({
   teamRouteActiveRef.current = teamRouteActive;
 
   useEffect(() => {
-    if (!TEAM_FEATURE_ENABLED) return;
+    if (!teamEnabled) return;
     let cancelled = false;
 
     async function loadTeams() {
@@ -170,6 +284,9 @@ function MeetingsNav({
             id: string;
             name: string;
             role: "OWNER" | "ADMIN" | "MEMBER";
+            canInvite: boolean;
+            canCreateMeeting: boolean;
+            canManageRecordAccess: boolean;
           }>;
         };
         if (cancelled || !response.ok || !data.ok) return;
@@ -195,7 +312,7 @@ function MeetingsNav({
     return () => {
       cancelled = true;
     };
-  }, [setActiveTeamId, setWorkspaceId]);
+  }, [setActiveTeamId, setWorkspaceId, teamEnabled]);
 
   if (collapsed) {
     return (
@@ -283,16 +400,24 @@ function MeetingsNav({
       {open ? (
         <ul className="mt-0.5 space-y-0.5 border-l border-border ml-5 pl-2">
           <li>
-            {!TEAM_FEATURE_ENABLED ? (
+            {!teamEnabled ? (
               <span
                 aria-disabled="true"
-                title="팀 설정은 오픈 준비중이에요"
+                title={
+                  TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
+                    ? "팀 기능은 관리자에게만 제공됩니다"
+                    : "팀 설정은 오픈 준비중이에요"
+                }
                 className="flex min-h-12 cursor-not-allowed items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-2 opacity-50"
               >
                 <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-muted-2">
                   <UsersRound className="h-4 w-4" strokeWidth={1.75} />
                 </span>
-                <span className="flex-1">팀</span>
+                <span className="flex-1">
+                  {TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
+                    ? "팀, 관리자 전용"
+                    : "팀"}
+                </span>
               </span>
             ) : teams.length === 0 ? (
               <Link
@@ -328,11 +453,21 @@ function MeetingsNav({
                     activeTeamId === team.id
                       ? resolveRole(team.role)
                       : team.role;
+                  const previewingTeam =
+                    isPreviewing && activeTeamId === team.id;
+                  const visibleTeamNavItems = TEAM_NAV_ITEMS.filter((sub) =>
+                    canUseTeamNav(
+                      team,
+                      viewRole,
+                      sub.capability,
+                      previewingTeam,
+                    ),
+                  );
                   // 팀 화면(/team, 감사, 팀 회의)에 있을 때만 하위 메뉴 유지.
                   // 개인 워크스페이스, 보관함, 도움말 등으로 나가면 접는다.
                   const showTeamChildren =
                     activeTeamId === team.id &&
-                    viewRole !== "MEMBER" &&
+                    visibleTeamNavItems.length > 0 &&
                     teamRouteActive;
 
                   return (
@@ -365,7 +500,7 @@ function MeetingsNav({
                           aria-hidden
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate">팀</span>
+                          <span className="block truncate">{team.name}</span>
                           {viewRole === "MEMBER" ||
                           (isPreviewing &&
                             activeTeamId === team.id &&
@@ -375,7 +510,7 @@ function MeetingsNav({
                             </span>
                           ) : null}
                         </span>
-                        {viewRole !== "MEMBER" ? (
+                        {visibleTeamNavItems.length > 0 ? (
                           <ChevronRight
                             className={cn(
                               "h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
@@ -403,10 +538,7 @@ function MeetingsNav({
                       >
                         <div className="overflow-hidden">
                           <ul className="mt-0.5 space-y-0.5 border-l border-border ml-3 pl-2">
-                            {TEAM_NAV_ITEMS.filter((sub) =>
-                              sub.roles.some((role) => role === viewRole),
-                            ).map((sub) => {
-                              const SubIcon = sub.icon;
+                            {visibleTeamNavItems.map((sub) => {
                               const [subPath, subQuery] = sub.href.split("?");
                               const subManage = subQuery
                                 ? new URLSearchParams(subQuery).get("manage")
@@ -427,22 +559,13 @@ function MeetingsNav({
                                       onNavigate?.();
                                     }}
                                     className={cn(
-                                      "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
+                                      "flex min-h-10 cursor-pointer items-center rounded-lg px-2.5 py-2 text-sm transition-colors",
                                       "hover:bg-surface-2 hover:text-foreground",
                                       subActive
                                         ? "bg-primary-soft font-medium text-primary"
                                         : "font-normal text-muted-2",
                                     )}
                                   >
-                                    <SubIcon
-                                      className={cn(
-                                        "h-4 w-4 shrink-0",
-                                        subActive
-                                          ? "text-primary"
-                                          : "text-muted-2",
-                                      )}
-                                      strokeWidth={1.75}
-                                    />
                                     <span className="truncate">{sub.title}</span>
                                   </Link>
                                 </li>
@@ -504,9 +627,14 @@ export function AppSidebar({
   const { setWorkspaceId, notificationCount } = useAppContext();
   const { open: notificationsOpen, openNotifications } = useNotificationsUi();
   const isAdmin = session?.user?.role === "ADMIN";
+  const teamEnabled =
+    TEAM_FEATURE_ENABLED &&
+    (!TEAM_FEATURE_ADMIN_ONLY || isAdmin);
   const [collapsed, setCollapsed] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [surveyGiftAvailable, setSurveyGiftAvailable] = useState(false);
+  const [opsOpen, setOpsOpen] = useState(true);
+  const [devOpen, setDevOpen] = useState(true);
 
   useEffect(() => {
     onMobileClose?.();
@@ -548,6 +676,8 @@ export function AppSidebar({
     } catch {
       setCollapsed(false);
     }
+    setOpsOpen(readStoredOpen(SIDEBAR_OPS_OPEN_KEY, true));
+    setDevOpen(readStoredOpen(SIDEBAR_DEV_OPEN_KEY, true));
   }, []);
 
   useEffect(() => {
@@ -570,8 +700,28 @@ export function AppSidebar({
     });
   }
 
+  function toggleOpsOpen() {
+    setOpsOpen((current) => {
+      const next = !current;
+      writeStoredOpen(SIDEBAR_OPS_OPEN_KEY, next);
+      return next;
+    });
+  }
+
+  function toggleDevOpen() {
+    setDevOpen((current) => {
+      const next = !current;
+      writeStoredOpen(SIDEBAR_DEV_OPEN_KEY, next);
+      return next;
+    });
+  }
+
   // 모바일 드로어는 항상 펼침, 데스크톱만 레일 모드
   const rail = collapsed && isDesktop;
+  const opsSectionOpen =
+    opsOpen || sectionHasActive(pathname, OPS_NAV_ITEMS);
+  const devSectionOpen =
+    devOpen || sectionHasActive(pathname, DEV_NAV_ITEMS);
 
   return (
     <>
@@ -638,6 +788,7 @@ export function AppSidebar({
                   pathname={pathname}
                   onNavigate={onMobileClose}
                   collapsed={rail}
+                  teamEnabled={teamEnabled}
                 />
               ) : (
                 <NavLink
@@ -663,50 +814,31 @@ export function AppSidebar({
             )}
           </div>
 
+          <SidebarUsage
+            collapsed={rail}
+            onNavigate={onMobileClose}
+          />
+
           {isAdmin ? (
             <>
-              <div className="mt-5">
-                <p
-                  className={cn(
-                    "px-3 pb-1.5 text-sm font-semibold tracking-wide text-muted-2",
-                    rail && "lg:sr-only",
-                  )}
-                >
-                  운영
-                </p>
-                <div className="space-y-0.5">
-                  {OPS_NAV_ITEMS.map((item) => (
-                    <NavLink
-                      key={item.href}
-                      item={item}
-                      active={isNavActive(pathname, item.href)}
-                      onNavigate={onMobileClose}
-                      collapsed={rail}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="mt-5">
-                <p
-                  className={cn(
-                    "px-3 pb-1.5 text-sm font-semibold tracking-wide text-muted-2",
-                    rail && "lg:sr-only",
-                  )}
-                >
-                  개발자
-                </p>
-                <div className="space-y-0.5">
-                  {DEV_NAV_ITEMS.map((item) => (
-                    <NavLink
-                      key={item.href}
-                      item={item}
-                      active={isNavActive(pathname, item.href)}
-                      onNavigate={onMobileClose}
-                      collapsed={rail}
-                    />
-                  ))}
-                </div>
-              </div>
+              <AdminNavSection
+                label="운영"
+                open={opsSectionOpen}
+                onToggle={toggleOpsOpen}
+                items={OPS_NAV_ITEMS}
+                pathname={pathname}
+                onNavigate={onMobileClose}
+                rail={rail}
+              />
+              <AdminNavSection
+                label="개발자"
+                open={devSectionOpen}
+                onToggle={toggleDevOpen}
+                items={DEV_NAV_ITEMS}
+                pathname={pathname}
+                onNavigate={onMobileClose}
+                rail={rail}
+              />
             </>
           ) : null}
         </nav>

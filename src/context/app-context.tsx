@@ -11,7 +11,10 @@ import {
   useState,
 } from "react";
 
-import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
+import {
+  TEAM_FEATURE_ADMIN_ONLY,
+  TEAM_FEATURE_ENABLED,
+} from "@/lib/feature-flags";
 import { routeWorkspaceId } from "@/lib/workspace-route";
 import { WORKSPACES, type Workspace, type WorkspaceId } from "@/lib/workspaces";
 import type { User } from "@/types/user";
@@ -75,9 +78,9 @@ function readAutoTimelinePref(): boolean {
   }
 }
 
-function readWorkspaceId(): WorkspaceId {
+function readWorkspaceId(teamFeatureEnabled: boolean): WorkspaceId {
   if (typeof window === "undefined") return "personal";
-  if (!TEAM_FEATURE_ENABLED) return "personal";
+  if (!teamFeatureEnabled) return "personal";
   try {
     const raw = window.localStorage.getItem(WORKSPACE_KEY);
     if (raw === "personal" || raw === "team") return raw;
@@ -100,14 +103,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // 팀 전용 경로에서는 경로가 워크스페이스를 확정한다.
   // 그 밖에서는 사용자가 고른 값을 쓴다. 상태를 경로에 맞춰 되쓰지 않으므로 서로 덮어쓸 일이 없다.
   const workspaceId = routeWorkspaceId(pathname) ?? chosenWorkspaceId;
+  const teamFeatureForUser =
+    TEAM_FEATURE_ENABLED &&
+    (!TEAM_FEATURE_ADMIN_ONLY || session?.user?.role === "ADMIN");
 
   useEffect(() => {
     queueMicrotask(() => {
-      setChosenWorkspaceId(readWorkspaceId());
+      setChosenWorkspaceId(readWorkspaceId(teamFeatureForUser));
       setActiveTeamIdState(window.localStorage.getItem(ACTIVE_TEAM_KEY));
       setAutoOpenTimelineOnStartState(readAutoTimelinePref());
     });
-  }, []);
+  }, [teamFeatureForUser]);
 
   useEffect(() => {
     if (status !== "authenticated" || !session?.user?.id) {
@@ -149,14 +155,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [session?.user?.id, status]);
 
-  const setWorkspaceId = useCallback((id: WorkspaceId) => {
-    setChosenWorkspaceId(id);
-    try {
-      window.localStorage.setItem(WORKSPACE_KEY, id);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const setWorkspaceId = useCallback(
+    (id: WorkspaceId) => {
+      const nextId = id === "team" && !teamFeatureForUser ? "personal" : id;
+      setChosenWorkspaceId(nextId);
+      try {
+        window.localStorage.setItem(WORKSPACE_KEY, nextId);
+      } catch {
+        /* ignore */
+      }
+    },
+    [teamFeatureForUser],
+  );
 
   const setAutoOpenTimelineOnStart = useCallback((value: boolean) => {
     setAutoOpenTimelineOnStartState(value);

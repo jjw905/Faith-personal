@@ -14,6 +14,10 @@ import {
   type UserMeetingRecord,
 } from "@/lib/user-meetings-store";
 import type { WorkspaceId } from "@/lib/workspaces";
+import {
+  getTeamFeatureAccess,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 const DONE_ACTIVITY_LIMIT = 12;
 
@@ -91,6 +95,10 @@ export async function GET(request: Request) {
   const workspace = (
     url.searchParams.get("workspace") === "team" ? "team" : "personal"
   ) as WorkspaceId;
+  if (workspace === "team") {
+    const teamFeature = await getTeamFeatureAccess(session.user.id);
+    if (!teamFeature.ok) return teamFeatureFailureResponse(teamFeature);
+  }
 
   // 알림 목록과 같은 패턴: 조회 전 보존 기간이 지난 개인 회의 기록을 지연 삭제한다.
   // 이미 사용자가 고지·선택한 기간을 적용하는 것이라, 기간을 "줄일 때"의 확인 다이얼로그와는 별개다.
@@ -107,10 +115,40 @@ export async function GET(request: Request) {
     purgedCount = result.deleted;
   }
 
-  const meetings = getMeetingsForUser(session.user.id, workspace);
-  const inWorkspace = listUserMeetings(session.user.id).filter(
+  let meetings = getMeetingsForUser(session.user.id, workspace);
+  let inWorkspace = listUserMeetings(session.user.id).filter(
     (r) => r.workspace === workspace,
   );
+  if (workspace === "team" && inWorkspace.length > 0) {
+    const ids = inWorkspace.map((row) => row.id);
+    const accessibleTeamMeetings = await prisma.teamMeeting.findMany({
+      where: {
+        OR: [
+          { id: { in: ids } },
+          { legacyMeetingId: { in: ids } },
+        ],
+        team: { members: { some: { userId: session.user.id } } },
+      },
+      select: { id: true, legacyMeetingId: true },
+    });
+    const accessibleIds = new Set(
+      accessibleTeamMeetings.flatMap((meeting) =>
+        [meeting.id, meeting.legacyMeetingId].filter(
+          (id): id is string => Boolean(id),
+        ),
+      ),
+    );
+    inWorkspace = inWorkspace.filter((row) => accessibleIds.has(row.id));
+    const userMeetingIds = new Set(
+      listUserMeetings(session.user.id)
+        .filter((row) => row.workspace === workspace)
+        .map((row) => row.id),
+    );
+    meetings = meetings.filter(
+      (meeting) =>
+        !userMeetingIds.has(meeting.id) || accessibleIds.has(meeting.id),
+    );
+  }
   const activeRows = inWorkspace.filter((r) => isActivePhase(r.phase));
   const settledRows = inWorkspace
     .filter((r) => !isActivePhase(r.phase))

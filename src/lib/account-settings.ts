@@ -9,6 +9,9 @@ export type SummaryLanguage = (typeof SUMMARY_LANGUAGES)[number];
 /** 현재 실제로 지원하는 언어. en은 UI·API 모두 준비중(강제 ko). */
 export const SUMMARY_LANGUAGE_ACTIVE: SummaryLanguage = "ko";
 
+export const REALTIME_INVITE_POLICIES = ["allow", "reject"] as const;
+export type RealtimeInvitePolicy = (typeof REALTIME_INVITE_POLICIES)[number];
+
 export type AccountDisplayPrefs = {
   /** 회의 기록을 열 때 기본으로 개인정보를 가릴지. */
   autoMask: boolean;
@@ -16,12 +19,15 @@ export type AccountDisplayPrefs = {
   speakerSplit: boolean;
   /** 요약/타임라인 기본 언어. */
   summaryLang: SummaryLanguage;
+  /** 개인 공동 실시간 초대를 받을지. */
+  realtimeInvitePolicy: RealtimeInvitePolicy;
 };
 
 export const DEFAULT_ACCOUNT_DISPLAY_PREFS: AccountDisplayPrefs = {
   autoMask: true,
   speakerSplit: true,
   summaryLang: "ko",
+  realtimeInvitePolicy: "allow",
 };
 
 export function parseAccountDisplayPrefs(raw: unknown): AccountDisplayPrefs {
@@ -43,5 +49,12 @@ export function parseAccountDisplayPrefs(raw: unknown): AccountDisplayPrefs {
       SUMMARY_LANGUAGES.includes(obj.summaryLang as SummaryLanguage)
         ? (obj.summaryLang as SummaryLanguage)
         : DEFAULT_ACCOUNT_DISPLAY_PREFS.summaryLang,
+    realtimeInvitePolicy:
+      typeof obj.realtimeInvitePolicy === "string" &&
+      REALTIME_INVITE_POLICIES.includes(
+        obj.realtimeInvitePolicy as RealtimeInvitePolicy,
+      )
+        ? (obj.realtimeInvitePolicy as RealtimeInvitePolicy)
+        : DEFAULT_ACCOUNT_DISPLAY_PREFS.realtimeInvitePolicy,
   };
 }

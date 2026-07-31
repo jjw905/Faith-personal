@@ -69,8 +69,11 @@ export async function acknowledgeMeetingInvite(params: {
         },
       },
     });
-    if (!access || !access.isParticipant) {
-      return { ok: false as const, message: "초대된 회의가 아닙니다." };
+    if (!access || (!access.isParticipant && !access.canReadMasked)) {
+      return {
+        ok: false as const,
+        message: "회의 접근 권한이 없습니다.",
+      };
     }
     if (!access.acknowledgedAt) {
       await tx.teamMeetingAccess.update({

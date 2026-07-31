@@ -4,16 +4,24 @@ import { NextResponse } from "next/server";
 
 import { REALTIME_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/require-user";
 import { buildGlossary } from "@/lib/stt/glossary";
-import { seoulDateKey } from "@/lib/meeting-date";
 import {
   createLiveMeetingId,
   ensureLiveMeetingRecord,
 } from "@/lib/stt/realtime/live-session-store";
 import { REALTIME_STT_MINI } from "@/lib/stt/realtime/types";
 import { effectiveHostId } from "@/lib/team/meeting-lifecycle";
-import { listUserMeetings } from "@/lib/user-meetings-store";
+import { getUploadQuotaStatus } from "@/lib/stt/usage-quota";
+import {
+  getTeamFeatureAccess,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
+import {
+  getPersonalRealtimeMeeting,
+  isPersonalRealtimeParticipant,
+} from "@/lib/personal-realtime";
 
 const CLIENT_SECRET_ENDPOINT =
   "https://api.openai.com/v1/realtime/client_secrets";
@@ -36,10 +44,17 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   }
+  const sessionLimit = rateLimit({
+    key: `realtime-session:${userSession.user.id}:${clientIp(request)}`,
+    limit: 20,
+    windowMs: 60 * 60_000,
+  });
+  if (!sessionLimit.ok) return rateLimitResponse(sessionLimit.retryAfterSec);
 
   let body: {
     title?: string;
     teamMeetingId?: string;
+    personalMeetingId?: string;
     reconnectSessionId?: string;
   };
   try {
@@ -60,46 +75,27 @@ export async function POST(request: Request) {
   }
 
   const reconnectRequested = Boolean(body.reconnectSessionId?.trim());
-  if (!reconnectRequested) {
-    const activeSessions = await prisma.realtimeSttSession.count({
-      where: { userId: userSession.user.id, status: "ACTIVE" },
-    });
-    if (activeSessions > 0) {
-      return NextResponse.json(
-        { ok: false, message: "이미 진행 중인 실시간 기록이 있습니다." },
-        { status: 409 },
-      );
-    }
-    // ADMIN은 개발·검증용이라 월 무료 한도에서 제외한다.
-    if (
-      !body.teamMeetingId?.trim() &&
-      userSession.user.role !== "ADMIN" &&
-      userSession.user.plan === "FREE"
-    ) {
-      const month = seoulDateKey(new Date().toISOString()).slice(0, 7);
-      const meetingsThisMonth = listUserMeetings(userSession.user.id).filter(
-        (meeting) => seoulDateKey(meeting.createdAt).startsWith(month),
-      ).length;
-      if (meetingsThisMonth >= 5) {
-        return NextResponse.json(
-          { ok: false, message: "이번 달 무료 회의 사용량을 모두 사용했습니다." },
-          { status: 429 },
-        );
-      }
-    }
-  }
 
   const requestedTitle = body.title?.trim().slice(0, 120) || "실시간 회의";
   let teamMeetingId = body.teamMeetingId?.trim();
+  let personalMeetingId = body.personalMeetingId?.trim();
   const reconnectSessionId = body.reconnectSessionId?.trim();
   let meetingId = createLiveMeetingId();
   let runId: string = randomUUID();
   let title = requestedTitle;
   let workspace: "personal" | "team" = "personal";
   let ownerUserId = userSession.user.id;
+  let quotaUserId = userSession.user.id;
   let participantNames = userSession.user.name
     ? [userSession.user.name]
     : [];
+
+  if (teamMeetingId && personalMeetingId) {
+    return NextResponse.json(
+      { ok: false, message: "팀 회의와 개인 회의를 동시에 지정할 수 없습니다." },
+      { status: 400 },
+    );
+  }
 
   if (reconnectSessionId) {
     const existing = await prisma.realtimeSttSession.findFirst({
@@ -113,7 +109,24 @@ export async function POST(request: Request) {
           include: {
             access: {
               where: { isParticipant: true },
-              select: { user: { select: { name: true } } },
+              select: {
+                userId: true,
+                acknowledgedAt: true,
+                user: { select: { name: true } },
+              },
+            },
+          },
+        },
+        personalMeeting: {
+          include: {
+            owner: { select: { id: true } },
+            access: {
+              where: { status: "ACCEPTED" },
+              select: {
+                userId: true,
+                status: true,
+                user: { select: { name: true } },
+              },
             },
           },
         },
@@ -125,11 +138,65 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
+    if (existing.teamMeetingId) {
+      const teamFeature = await getTeamFeatureAccess(userSession.user.id);
+      if (!teamFeature.ok) return teamFeatureFailureResponse(teamFeature);
+      if (existing.teamMeeting) {
+        const membership = await prisma.teamMember.findUnique({
+          where: {
+            teamId_userId: {
+              teamId: existing.teamMeeting.teamId,
+              userId: userSession.user.id,
+            },
+          },
+          select: { id: true },
+        });
+        if (!membership) {
+          return NextResponse.json(
+            { ok: false, message: "팀 회의 접근 권한이 없습니다." },
+            { status: 403 },
+          );
+        }
+      }
+      const existingAccess = existing.teamMeeting?.access.find(
+        (access) => access.userId === userSession.user.id,
+      );
+      if (
+        existing.teamMeeting &&
+        existing.teamMeeting.organizerId !== userSession.user.id &&
+        !existingAccess?.acknowledgedAt
+      ) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "MEETING_ACK_REQUIRED",
+            message: "참석 확인 후 실시간 기록에 연결할 수 있습니다.",
+          },
+          { status: 409 },
+        );
+      }
+    } else if (existing.personalMeetingId) {
+      if (
+        !existing.personalMeeting ||
+        !["LOBBY", "ACTIVE"].includes(existing.personalMeeting.state) ||
+        !isPersonalRealtimeParticipant({
+          meeting: existing.personalMeeting,
+          userId: userSession.user.id,
+        })
+      ) {
+        return NextResponse.json(
+          { ok: false, message: "개인 실시간 회의 접근 권한이 없습니다." },
+          { status: 403 },
+        );
+      }
+    }
     meetingId = existing.meetingId;
     runId = existing.runId;
     title = existing.title;
     teamMeetingId = existing.teamMeetingId ?? undefined;
+    personalMeetingId = existing.personalMeetingId ?? undefined;
     workspace = existing.teamMeetingId ? "team" : "personal";
+    quotaUserId = existing.personalMeeting?.owner.id ?? userSession.user.id;
     participantNames = [
       ...new Set(
         [
@@ -137,10 +204,15 @@ export async function POST(request: Request) {
           ...(existing.teamMeeting?.access.map((access) =>
             access.user.name?.trim(),
           ) ?? []),
+          ...(existing.personalMeeting?.access.map((access) =>
+            access.user.name?.trim(),
+          ) ?? []),
         ].filter((name): name is string => Boolean(name)),
       ),
     ];
   } else if (teamMeetingId) {
+    const teamFeature = await getTeamFeatureAccess(userSession.user.id);
+    if (!teamFeature.ok) return teamFeatureFailureResponse(teamFeature);
     const teamMeeting = await prisma.teamMeeting.findUnique({
       where: { id: teamMeetingId },
       include: {
@@ -148,6 +220,7 @@ export async function POST(request: Request) {
           where: { isParticipant: true },
           select: {
             userId: true,
+            acknowledgedAt: true,
             user: { select: { name: true } },
           },
         },
@@ -157,6 +230,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, message: "팀 회의를 찾을 수 없습니다." },
         { status: 404 },
+      );
+    }
+    const membership = await prisma.teamMember.findUnique({
+      where: {
+        teamId_userId: {
+          teamId: teamMeeting.teamId,
+          userId: userSession.user.id,
+        },
+      },
+      select: { id: true },
+    });
+    if (!membership) {
+      return NextResponse.json(
+        { ok: false, message: "팀 회의 접근 권한이 없습니다." },
+        { status: 403 },
       );
     }
     const isParticipant =
@@ -169,6 +257,22 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { ok: false, message: "회의 참가자만 기록할 수 있습니다." },
         { status: 403 },
+      );
+    }
+    const currentAccess = teamMeeting.access.find(
+      (access) => access.userId === userSession.user.id,
+    );
+    if (
+      teamMeeting.organizerId !== userSession.user.id &&
+      !currentAccess?.acknowledgedAt
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "MEETING_ACK_REQUIRED",
+          message: "참석 확인 후 실시간 기록을 시작할 수 있습니다.",
+        },
+        { status: 409 },
       );
     }
     if (!teamMeeting.recordingActive || !teamMeeting.sttRunId) {
@@ -197,6 +301,77 @@ export async function POST(request: Request) {
         where: { id: teamMeeting.id },
         data: { legacyMeetingId: meetingId },
       });
+    }
+  } else if (personalMeetingId) {
+    const personalMeeting = await getPersonalRealtimeMeeting(personalMeetingId);
+    if (!personalMeeting) {
+      return NextResponse.json(
+        { ok: false, message: "개인 실시간 회의를 찾을 수 없습니다." },
+        { status: 404 },
+      );
+    }
+    if (!["LOBBY", "ACTIVE"].includes(personalMeeting.state)) {
+      return NextResponse.json(
+        { ok: false, message: "이미 종료된 개인 실시간 회의입니다." },
+        { status: 409 },
+      );
+    }
+    if (
+      !isPersonalRealtimeParticipant({
+        meeting: personalMeeting,
+        userId: userSession.user.id,
+      })
+    ) {
+      return NextResponse.json(
+        { ok: false, message: "개인 실시간 회의 참가 권한이 없습니다." },
+        { status: 403 },
+      );
+    }
+    workspace = "personal";
+    title = personalMeeting.title;
+    runId = personalMeeting.runId;
+    meetingId = personalMeeting.legacyMeetingId ?? `mtg-live-${personalMeeting.id}`;
+    ownerUserId = personalMeeting.ownerId;
+    quotaUserId = personalMeeting.ownerId;
+    participantNames = [
+      ...new Set(
+        personalMeeting.access
+          .filter((access) => access.status === "ACCEPTED")
+          .map((access) => access.user.name?.trim())
+          .filter((name): name is string => Boolean(name)),
+      ),
+    ];
+    if (!personalMeeting.legacyMeetingId) {
+      await prisma.personalRealtimeMeeting.update({
+        where: { id: personalMeeting.id },
+        data: { legacyMeetingId: meetingId },
+      });
+    }
+  }
+
+  if (!reconnectRequested) {
+    const activeSessions = await prisma.realtimeSttSession.count({
+      where: { userId: userSession.user.id, status: "ACTIVE" },
+    });
+    if (activeSessions > 0) {
+      return NextResponse.json(
+        { ok: false, message: "이미 진행 중인 실시간 기록이 있습니다." },
+        { status: 409 },
+      );
+    }
+    if (!teamMeetingId) {
+      const quota = await getUploadQuotaStatus(quotaUserId);
+      if (quota.enforced && quota.remainingSec <= 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "ANALYSIS_GRACE_EXHAUSTED",
+            message:
+              "분 잔량과 5분 유예를 모두 사용했습니다. 분 팩 구매 후 다시 시작해 주세요.",
+          },
+          { status: 429 },
+        );
+      }
     }
   }
 
@@ -274,6 +449,7 @@ export async function POST(request: Request) {
         runId,
         userId: userSession.user.id,
         teamMeetingId: teamMeetingId || null,
+        personalMeetingId: personalMeetingId || null,
         title,
       },
     });

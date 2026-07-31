@@ -1,7 +1,14 @@
 "use client";
 
-import { Download, MoreVertical, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  AlignVerticalJustifyCenter,
+  Download,
+  Highlighter,
+  MoreVertical,
+  Share2,
+  X,
+} from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import {
@@ -9,6 +16,9 @@ import {
 } from "@/components/meetings/meeting-record-actions";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MaterialSymbol } from "@/components/ui/material-symbol";
+import type { ChatReplaySettings } from "@/components/meetings/meeting-chat-replay-bar";
+import type { MeetingExportFormat } from "@/lib/meeting-export";
+import { shareMeetingLink } from "@/lib/meeting-share";
 import type { MaskStyle } from "@/lib/masking/types";
 import { cn } from "@/lib/utils";
 import type { Meeting } from "@/types/meeting";
@@ -17,21 +27,89 @@ import type { MeetingTranscript } from "@/types/transcript";
 const toolBtn =
   "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full transition-[transform,background-color,color,box-shadow] duration-150 ease-out active:scale-95 motion-reduce:active:scale-100 md:h-10 md:w-10";
 
-/** 마스킹. 모바일은 … → 아이콘, 가림은 아이콘 탭 후 방식 선택. */
+function ReplayToggleBtn({
+  pressed,
+  label,
+  onClick,
+  className,
+  children,
+}: {
+  pressed: boolean;
+  label: string;
+  onClick: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cn(
+        toolBtn,
+        pressed
+          ? "bg-foreground text-background shadow-soft"
+          : "bg-card text-muted hover:bg-surface-2 hover:text-foreground",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ToolIconBtn({
+  label,
+  onClick,
+  className,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cn(
+        toolBtn,
+        "bg-card text-muted hover:bg-surface-2 hover:text-foreground",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** 채팅 따라가기 · 단어 포커스 · 다운로드 · 공유 · 마스킹. */
 export function ChatReplayTools({
   meeting,
   transcript,
   maskStyle,
   onMaskChange,
+  followChat,
+  wordFocus,
+  onReplaySettingsChange,
 }: {
   meeting: Meeting;
   transcript: MeetingTranscript;
   maskStyle: MaskStyle;
   onMaskChange: (next: MaskStyle) => void;
+  followChat: boolean;
+  wordFocus: boolean;
+  onReplaySettingsChange: (partial: Partial<ChatReplaySettings>) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [maskOpen, setMaskOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [shareHint, setShareHint] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -53,90 +131,181 @@ export function ChatReplayTools({
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (!shareHint) return;
+    const t = window.setTimeout(() => setShareHint(null), 1800);
+    return () => window.clearTimeout(t);
+  }, [shareHint]);
+
+  async function onShare() {
+    if (meeting.workspace === "team") {
+      try {
+        const response = await fetch(
+          `/api/team-meetings/${encodeURIComponent(meeting.id)}/share`,
+          { method: "POST" },
+        );
+        const data = (await response.json()) as { message?: string };
+        if (!response.ok) {
+          setShareHint(data.message ?? "팀 기록은 외부로 공유할 수 없습니다");
+          return;
+        }
+      } catch {
+        setShareHint("공유 정책을 확인하지 못했습니다");
+        return;
+      }
+    }
+    const result = await shareMeetingLink({ title: meeting.title });
+    if (result === "copied") setShareHint("링크를 복사했습니다");
+    else if (result === "failed") setShareHint("공유에 실패했습니다");
+  }
+
+  function renderDownloadBtn(className?: string) {
+    return (
+      <ToolIconBtn
+        label="다운로드"
+        className={className}
+        onClick={() => setDownloadOpen(true)}
+      >
+        <Download className="h-5 w-5" strokeWidth={1.75} />
+      </ToolIconBtn>
+    );
+  }
+
+  function renderShareBtn(className?: string) {
+    return (
+      <ToolIconBtn
+        label="공유"
+        className={className}
+        onClick={() => void onShare()}
+      >
+        <Share2 className="h-5 w-5" strokeWidth={1.75} />
+      </ToolIconBtn>
+    );
+  }
+
   return (
     <>
-      {/* 모바일: 세로 … → 다운로드 + 가림(아이콘). 가림 탭 시 방식 패널 */}
-      <div ref={menuRef} className="relative md:hidden">
-        <button
-          ref={moreBtnRef}
-          type="button"
-          aria-expanded={menuOpen}
-          aria-controls={menuId}
-          aria-label={menuOpen ? "메뉴 닫기" : "더보기"}
-          title={menuOpen ? "닫기" : "더보기"}
-          onClick={() => setMenuOpen((v) => !v)}
-          className={cn(
-            toolBtn,
-            menuOpen
-              ? "bg-foreground text-background shadow-soft"
-              : "bg-card text-muted hover:bg-surface-2 hover:text-foreground",
-          )}
-        >
-          {menuOpen ? (
-            <X className="h-6 w-6" strokeWidth={1.75} />
-          ) : (
-            <MoreVertical className="h-6 w-6" strokeWidth={1.75} />
-          )}
-        </button>
-
-        {menuOpen ? (
-          <div
-            id={menuId}
-            role="menu"
-            aria-label="다시듣기 메뉴"
-            className="chat-more-drop absolute right-0 top-[calc(100%+0.4rem)] z-40 flex items-center gap-2 rounded-2xl border border-border bg-card p-1.5 shadow-float"
+      {/*
+        모든 폭: 다운로드·공유는 항상 노출.
+        모바일: 따라가기·포커스·가림은 … 메뉴.
+        데스크톱: 도구 전부 한 줄.
+      */}
+      <div className="relative flex items-center justify-end gap-1.5">
+        <div className="hidden items-center gap-1.5 md:flex">
+          <ReplayToggleBtn
+            pressed={followChat}
+            label="채팅 따라가기"
+            onClick={() => onReplaySettingsChange({ followChat: !followChat })}
           >
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="다운로드"
-              title="다운로드"
-              className={cn(
-                toolBtn,
-                "bg-surface text-foreground hover:bg-surface-2",
-              )}
-              onClick={() => {
-                setMenuOpen(false);
-                setDownloadOpen(true);
-              }}
+            <AlignVerticalJustifyCenter className="h-5 w-5" strokeWidth={1.75} />
+          </ReplayToggleBtn>
+          <ReplayToggleBtn
+            pressed={wordFocus}
+            label="단어 포커스"
+            onClick={() => onReplaySettingsChange({ wordFocus: !wordFocus })}
+          >
+            <Highlighter className="h-5 w-5" strokeWidth={1.75} />
+          </ReplayToggleBtn>
+          {renderDownloadBtn()}
+          {renderShareBtn()}
+          <MaskStylePopup value={maskStyle} onChange={onMaskChange} />
+        </div>
+
+        <div ref={menuRef} className="flex items-center gap-1.5 md:hidden">
+          {renderDownloadBtn()}
+          {renderShareBtn()}
+          <button
+            ref={moreBtnRef}
+            type="button"
+            aria-expanded={menuOpen}
+            aria-controls={menuId}
+            aria-label={menuOpen ? "메뉴 닫기" : "더보기"}
+            title={menuOpen ? "닫기" : "더보기"}
+            onClick={() => setMenuOpen((v) => !v)}
+            className={cn(
+              toolBtn,
+              menuOpen
+                ? "bg-foreground text-background shadow-soft"
+                : "bg-card text-muted hover:bg-surface-2 hover:text-foreground",
+            )}
+          >
+            {menuOpen ? (
+              <X className="h-6 w-6" strokeWidth={1.75} />
+            ) : (
+              <MoreVertical className="h-6 w-6" strokeWidth={1.75} />
+            )}
+          </button>
+
+          {menuOpen ? (
+            <div
+              id={menuId}
+              role="menu"
+              aria-label="다시듣기 메뉴"
+              className="chat-more-drop absolute right-0 top-[calc(100%+0.4rem)] z-40 flex items-center gap-2 rounded-2xl border border-border bg-card p-1.5 shadow-float"
             >
-              <Download className="h-5 w-5" strokeWidth={1.75} />
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              aria-label="개인정보 가림"
-              title="개인정보 가림"
-              className={cn(
-                toolBtn,
-                "bg-surface text-foreground hover:bg-surface-2",
-              )}
-              onClick={() => {
-                setMenuOpen(false);
-                setMaskOpen(true);
-              }}
-            >
-              <MaterialSymbol
-                name={maskStyle === "off" ? "visibility" : "visibility_off"}
-                size={22}
-              />
-            </button>
-          </div>
+              <ReplayToggleBtn
+                pressed={followChat}
+                label="채팅 따라가기"
+                className="bg-surface"
+                onClick={() =>
+                  onReplaySettingsChange({ followChat: !followChat })
+                }
+              >
+                <AlignVerticalJustifyCenter
+                  className="h-5 w-5"
+                  strokeWidth={1.75}
+                />
+              </ReplayToggleBtn>
+              <ReplayToggleBtn
+                pressed={wordFocus}
+                label="단어 포커스"
+                className="bg-surface"
+                onClick={() =>
+                  onReplaySettingsChange({ wordFocus: !wordFocus })
+                }
+              >
+                <Highlighter className="h-5 w-5" strokeWidth={1.75} />
+              </ReplayToggleBtn>
+              <button
+                type="button"
+                role="menuitem"
+                aria-label="개인정보 가림"
+                title="개인정보 가림"
+                className={cn(
+                  toolBtn,
+                  "bg-surface text-foreground hover:bg-surface-2",
+                )}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setMaskOpen(true);
+                }}
+              >
+                <MaterialSymbol
+                  name={maskStyle === "off" ? "visibility" : "visibility_off"}
+                  size={22}
+                />
+              </button>
+            </div>
+          ) : null}
+
+          <MaskStylePopup
+            value={maskStyle}
+            onChange={onMaskChange}
+            open={maskOpen}
+            onOpenChange={setMaskOpen}
+            hideTrigger
+            anchorRef={moreBtnRef}
+          />
+        </div>
+
+        {shareHint ? (
+          <p
+            role="status"
+            className="absolute right-0 top-[calc(100%+0.35rem)] z-40 whitespace-nowrap rounded-xl bg-foreground px-3 py-1.5 text-sm font-medium text-background shadow-soft"
+          >
+            {shareHint}
+          </p>
         ) : null}
-
-        <MaskStylePopup
-          value={maskStyle}
-          onChange={onMaskChange}
-          open={maskOpen}
-          onOpenChange={setMaskOpen}
-          hideTrigger
-          anchorRef={moreBtnRef}
-        />
-      </div>
-
-      {/* 데스크톱: 가림 방식 (메모는 각 말풍선에 마우스를 올리면 아이콘으로 나옴) */}
-      <div className="hidden items-center justify-end md:flex">
-        <MaskStylePopup value={maskStyle} onChange={onMaskChange} />
       </div>
 
       <MeetingRecordsActionDialog
@@ -145,8 +314,8 @@ export function ChatReplayTools({
         meetings={[meeting]}
         busy={false}
         onCancel={() => setDownloadOpen(false)}
-        onConfirm={() => {
-          exportMeetingDownload({ meeting, transcript });
+        onConfirm={(format?: MeetingExportFormat) => {
+          void exportMeetingDownload({ meeting, transcript }, format ?? "txt");
           setDownloadOpen(false);
         }}
       />

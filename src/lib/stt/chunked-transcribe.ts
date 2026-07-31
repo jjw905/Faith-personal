@@ -518,7 +518,7 @@ async function transcribeChunkText(
   bytes: Buffer,
   filename: string,
   prompt: string | undefined,
-  options?: { wordTimestamps?: boolean },
+  options?: { wordTimestamps?: boolean; keywords?: string[] },
 ): Promise<{
   text: string;
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
@@ -553,6 +553,29 @@ async function transcribeChunkText(
     };
   }
 
+  if (model === "gpt-transcribe") {
+    const response = await client.audio.transcriptions.create({
+      model,
+      file,
+      languages: ["ko"],
+      ...(options?.keywords?.length
+        ? { keywords: options.keywords.slice(0, 100) }
+        : {}),
+      ...(prompt ? { prompt } : {}),
+    } as unknown as Parameters<
+      typeof client.audio.transcriptions.create
+    >[0]);
+    const res = response as unknown as { text?: string; usage?: unknown };
+    return {
+      text: (res.text || "").trim(),
+      usage: parseTranscriptionUsage(res),
+      timed: [],
+      words: [],
+      durationSec: 0,
+      logprobCount: 0,
+    };
+  }
+
   const res = await client.audio.transcriptions.create({
     model,
     file,
@@ -581,6 +604,7 @@ export async function transcribeMiniAudioOnce(params: {
     params.audioBytes,
     params.filename,
     firstPrompt(params.glossary),
+    { keywords: params.glossary },
   );
   return { text: result.text, meanLogprob: result.meanLogprob };
 }
@@ -604,6 +628,7 @@ export async function transcribeAudioOnce(params: {
     params.audioBytes,
     params.filename,
     firstPrompt(params.glossary),
+    { keywords: params.glossary },
   );
   return { text: result.text, meanLogprob: result.meanLogprob, usage: result.usage };
 }
@@ -802,6 +827,8 @@ function usageTotals(params: {
 export type ChunkedTranscribeResult = {
   text: string;
   parts: string[];
+  /** parts 각 항목이 담당하는 원본 오디오 핵심 범위. */
+  partRanges: Array<{ startSec: number; endSec: number }>;
   durationSec: number;
   chunkCount: number;
   usage: SttUsageTotals;
@@ -868,7 +895,10 @@ async function transcribeWholeFile(params: {
     bytes,
     name,
     firstPrompt(params.glossary),
-    { wordTimestamps: !needsTiming && params.wordTimestamps },
+    {
+      keywords: params.glossary,
+      wordTimestamps: !needsTiming && params.wordTimestamps,
+    },
   );
 
   const durationSec =
@@ -910,6 +940,7 @@ async function transcribeWholeFile(params: {
   return {
     text: guard.text,
     parts: [guard.text],
+    partRanges: [{ startSec: 0, endSec: durationSec }],
     durationSec,
     chunkCount: 1,
     timedSegments: timed,
@@ -1050,7 +1081,10 @@ export async function chunkedTranscribe(params: {
       bytes,
       `part_${i}.mp3`,
       prompt,
-      { wordTimestamps: !needsTiming && params.wordTimestamps },
+      {
+        keywords: params.glossary,
+        wordTimestamps: !needsTiming && params.wordTimestamps,
+      },
     );
 
     /**
@@ -1192,6 +1226,10 @@ export async function chunkedTranscribe(params: {
   return {
     text: parts.filter(Boolean).join("\n"),
     parts,
+    partRanges: chunks.map((chunk) => ({
+      startSec: chunk.coreStartSec,
+      endSec: chunk.coreEndSec,
+    })),
     durationSec,
     chunkCount: chunks.length,
     timedSegments,

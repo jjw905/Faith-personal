@@ -5,20 +5,22 @@ import type { TeamRole } from "@prisma/client";
 import { createNotification } from "@/lib/notifications-store";
 import { removeUserFromTeamRooms } from "@/lib/livekit-admin";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import {
   getTeamMember,
   hasTeamCapability,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ teamId: string; userId: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId, userId } = await context.params;
   const actor = await getTeamMember(teamId, session.user.id);
   const target = await getTeamMember(teamId, userId);
@@ -76,6 +78,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       type: "team",
       title: "팀 권한이 변경되었습니다",
       body: `${actor.team.name}에서 역할 또는 위임 권한이 변경되었습니다.`,
+      teamId,
       data: { teamId },
     }),
   ]);
@@ -83,10 +86,9 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId, userId } = await context.params;
   const actor = await getTeamMember(teamId, session.user.id);
   const target = await getTeamMember(teamId, userId);
@@ -106,7 +108,11 @@ export async function DELETE(request: Request, context: RouteContext) {
     }),
     prisma.teamMeetingAccess.updateMany({
       where: { userId, meeting: { teamId } },
-      data: { isParticipant: false },
+      data: {
+        isParticipant: false,
+        canReadMasked: false,
+        acknowledgedAt: null,
+      },
     }),
   ]);
   await removeUserFromTeamRooms(teamId, userId);

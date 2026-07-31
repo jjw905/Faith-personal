@@ -74,6 +74,9 @@ export function TeamVoiceRoom({
   const [deviceId, setDeviceId] = useState("");
   const [level, setLevel] = useState(0);
   const [recordingActive, setRecordingActive] = useState(false);
+  const [recordingAvailable, setRecordingAvailable] = useState(true);
+  const [recordingUnavailableMessage, setRecordingUnavailableMessage] =
+    useState("");
   const [phase, setPhase] = useState<MeetingPhase | undefined>(initialPhase);
   const [canReplaceParticipants, setCanReplaceParticipants] = useState(false);
   const [isOrganizer, setIsOrganizer] = useState(false);
@@ -83,11 +86,15 @@ export function TeamVoiceRoom({
   const [invitees, setInvitees] = useState<PrejoinInvitee[]>([]);
   const [inviteSaving, setInviteSaving] = useState(false);
   const [inviteNote, setInviteNote] = useState("");
+  const [ackRequired, setAckRequired] = useState(false);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const inviteSaveSeqRef = useRef(0);
   const participantIdsRef = useRef<string[]>([]);
-  participantIdsRef.current = participantIds;
+
+  useEffect(() => {
+    participantIdsRef.current = participantIds;
+  }, [participantIds]);
 
   useEffect(() => {
     let active = true;
@@ -120,6 +127,10 @@ export function TeamVoiceRoom({
           phase?: MeetingPhase;
           canReplaceParticipants?: boolean;
         };
+        liveStt?: {
+          available?: boolean;
+          unavailableMessage?: string;
+        };
         message?: string;
       };
       const settingsJson = (await settingsRes.json()) as {
@@ -141,6 +152,11 @@ export function TeamVoiceRoom({
       );
       setDeviceId(settingsJson.settings?.preferredInputDeviceId ?? "");
       setRecordingActive(Boolean(meeting.recordingActive));
+      setRecordingAvailable(Boolean(meetingJson.liveStt?.available));
+      setRecordingUnavailableMessage(
+        meetingJson.liveStt?.unavailableMessage ??
+          "실시간 받아쓰기를 사용할 수 없습니다.",
+      );
       if (meetingJson.derived?.phase) {
         setPhase(meetingJson.derived.phase);
       }
@@ -318,22 +334,58 @@ export function TeamVoiceRoom({
     });
     const data = (await response.json()) as TokenPayload & {
       ok?: boolean;
+      code?: string;
       message?: string;
       recordingActive?: boolean;
     };
     setJoining(false);
     if (!response.ok || !data.ok) {
+      setAckRequired(data.code === "MEETING_ACK_REQUIRED");
       setError(data.message ?? "음성 회의에 연결하지 못했습니다.");
       return;
     }
+    setAckRequired(false);
     setRecordingActive(Boolean(data.recordingActive));
     setConnection(data);
   }
 
+  async function acknowledgeAndJoin() {
+    setJoining(true);
+    setError("");
+    const response = await fetch("/api/notifications/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId: teamMeetingId }),
+    });
+    const data = (await response.json()) as {
+      ok?: boolean;
+      message?: string;
+    };
+    if (!response.ok || !data.ok) {
+      setJoining(false);
+      setError(data.message ?? "참석 확인을 저장하지 못했습니다.");
+      return;
+    }
+    setAckRequired(false);
+    await joinRoom();
+    setPrejoinReady(true);
+  }
+
   if (error && !connection && !prejoinReady) {
     return (
-      <div className="rounded-2xl bg-card p-6 text-base text-foreground shadow-soft">
-        {error}
+      <div className="space-y-3 rounded-2xl bg-card p-6 text-base text-foreground shadow-soft">
+        <p role="alert">{error}</p>
+        {ackRequired ? (
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-12 w-full rounded-full"
+            onClick={() => void acknowledgeAndJoin()}
+            disabled={joining}
+          >
+            참석 확인하고 입장
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -461,7 +513,24 @@ export function TeamVoiceRoom({
               />
             </div>
           </div>
-          {error ? <p className="text-base text-muted">{error}</p> : null}
+          {error ? (
+            <div className="space-y-2">
+              <p className="text-base text-muted" role="alert">
+                {error}
+              </p>
+              {ackRequired ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="min-h-12 w-full rounded-full"
+                  onClick={() => void acknowledgeAndJoin()}
+                  disabled={joining}
+                >
+                  참석 확인하고 입장
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           <Button
             className="min-h-12 w-full rounded-full"
             disabled={joining || inviteSaving || needsInviteBeforeJoin}
@@ -504,6 +573,8 @@ export function TeamVoiceRoom({
         title={title}
         isHost={connection.isHost}
         recordingActive={recordingActive}
+        recordingAvailable={recordingAvailable}
+        recordingUnavailableMessage={recordingUnavailableMessage}
         onRecordingChange={setRecordingActive}
       />
       <RoomAudioRenderer />
@@ -533,12 +604,16 @@ function VoiceRoomBody({
   title,
   isHost,
   recordingActive,
+  recordingAvailable,
+  recordingUnavailableMessage,
   onRecordingChange,
 }: {
   meetingId: string;
   title: string;
   isHost: boolean;
   recordingActive: boolean;
+  recordingAvailable: boolean;
+  recordingUnavailableMessage: string;
   onRecordingChange: (value: boolean) => void;
 }) {
   const room = useRoomContext();
@@ -711,6 +786,10 @@ function VoiceRoomBody({
 
   async function toggleRecording() {
     if (!isHost) return;
+    if (!recordingActive && !recordingAvailable) {
+      setRecordingNote(recordingUnavailableMessage);
+      return;
+    }
     setBusy(true);
     setRecordingNote(null);
     const action = recordingActive ? "stop" : "start";
@@ -819,6 +898,11 @@ function VoiceRoomBody({
           >
             {recordingActive ? "기록 중" : "기록 전"}
           </p>
+          {isHost && !recordingActive && !recordingAvailable ? (
+            <p className="mt-2 max-w-md text-base text-muted">
+              {recordingUnavailableMessage}
+            </p>
+          ) : null}
           {visibleRecordingNote ? (
             <p className="mt-2 max-w-md text-base text-muted">
               {visibleRecordingNote}
@@ -942,7 +1026,7 @@ function VoiceRoomBody({
             variant={recordingActive ? "default" : "secondary"}
             className="min-h-14 rounded-full px-5"
             onClick={() => void toggleRecording()}
-            disabled={busy}
+            disabled={busy || (!recordingActive && !recordingAvailable)}
             aria-label={recordingActive ? "기록 중지" : "기록 시작"}
           >
             {recordingActive ? "기록 중지" : "기록 시작"}

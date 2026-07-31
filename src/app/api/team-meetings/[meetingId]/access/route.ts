@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
 
+import { TEAM_FEATURE_ADMIN_ONLY } from "@/lib/feature-flags";
 import { createNotification } from "@/lib/notifications-store";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
+import {
+  meetingAckGroupKey,
+  NOTIFICATION_KINDS,
+} from "@/lib/team/notification-kinds";
 import {
   requireTeamCapability,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ meetingId: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { meetingId } = await context.params;
   const meeting = await prisma.teamMeeting.findUnique({ where: { id: meetingId } });
   if (!meeting) {
@@ -45,6 +52,22 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!member) {
     return NextResponse.json({ ok: false, message: "팀 멤버가 아닙니다." }, { status: 404 });
   }
+  if (TEAM_FEATURE_ADMIN_ONLY) {
+    const target = await prisma.user.findUnique({
+      where: { id: body.userId },
+      select: { role: true, disabled: true },
+    });
+    if (target?.disabled || target?.role !== "ADMIN") {
+      return NextResponse.json(
+        { ok: false, message: "현재는 관리자 계정만 회의 기록을 공유할 수 있습니다." },
+        { status: 403 },
+      );
+    }
+  }
+  const previousAccess = await prisma.teamMeetingAccess.findUnique({
+    where: { meetingId_userId: { meetingId, userId: body.userId } },
+    select: { canReadMasked: true },
+  });
   const access = await prisma.teamMeetingAccess.upsert({
     where: { meetingId_userId: { meetingId, userId: body.userId } },
     create: {
@@ -56,6 +79,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     update: {
       canReadMasked: body.canReadMasked,
       grantedById: session.user.id,
+      ...(body.canReadMasked && !previousAccess?.canReadMasked
+        ? { acknowledgedAt: null }
+        : {}),
     },
   });
   await Promise.all([
@@ -72,9 +98,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     createNotification({
       userId: body.userId,
       type: "meeting",
+      kind: body.canReadMasked ? NOTIFICATION_KINDS.MEETING_ACK : undefined,
       title: body.canReadMasked ? "회의 기록 열람이 허용되었습니다" : "회의 기록 열람이 해제되었습니다",
       body: meeting.title,
-      data: { teamId: meeting.teamId, meetingId },
+      teamId: meeting.teamId,
+      meetingId,
+      groupKey: body.canReadMasked ? meetingAckGroupKey(meetingId) : undefined,
+      visibleInWorkspace: body.canReadMasked,
+      data: {
+        teamId: meeting.teamId,
+        meetingId,
+        ack: body.canReadMasked,
+      },
     }),
   ]);
   return NextResponse.json({ ok: true, access });

@@ -2,6 +2,7 @@ import type { SttModel } from "@/lib/stt/models";
 
 /** STT 분당 추정 단가 (USD). 토큰 usage가 없을 때 사용. */
 export const STT_USD_PER_MINUTE: Record<SttModel, number> = {
+  "gpt-transcribe": 0.006,
   "gpt-4o-mini-transcribe": 0.003,
   "gpt-4o-transcribe": 0.006,
   "whisper-1": 0.006,
@@ -9,7 +10,7 @@ export const STT_USD_PER_MINUTE: Record<SttModel, number> = {
 
 /** 4o-transcribe 계열 토큰 단가 (USD / 1M tokens). */
 export const STT_TOKEN_USD_PER_1M: Record<
-  Exclude<SttModel, "whisper-1">,
+  Exclude<SttModel, "whisper-1" | "gpt-transcribe">,
   { input: number; output: number }
 > = {
   "gpt-4o-mini-transcribe": { input: 1.25, output: 5.0 },
@@ -38,7 +39,7 @@ export function estimateSttUsdFromTokens(
   inputTokens: number,
   outputTokens: number,
 ): number | null {
-  if (model === "whisper-1") return null;
+  if (model === "whisper-1" || model === "gpt-transcribe") return null;
   const rate = STT_TOKEN_USD_PER_1M[model];
   return (
     (Math.max(0, inputTokens) / 1_000_000) * rate.input +

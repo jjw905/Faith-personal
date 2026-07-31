@@ -32,6 +32,7 @@ import {
 import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { meetingCaptureLabel } from "@/lib/meeting-capture";
+import type { MeetingExportFormat } from "@/lib/meeting-export";
 import {
   formatRecentDaysLabel,
   formatSeoulListLeading,
@@ -649,7 +650,7 @@ export function RecentMeetingsTable({
     setActionConfirmOpen(true);
   }
 
-  async function confirmSelectionAction() {
+  async function confirmSelectionAction(format?: MeetingExportFormat) {
     if (busy || selectedMeetings.length === 0 || !selectMode) return;
     setActionConfirmOpen(false);
     setBusy(true);
@@ -660,7 +661,7 @@ export function RecentMeetingsTable({
         return;
       }
       if (selectMode === "download") {
-        exportMeetingsListDownload(selectedMeetings);
+        await exportMeetingsListDownload(selectedMeetings, format ?? "txt");
         exitMode();
         return;
       }
@@ -902,8 +903,8 @@ export function RecentMeetingsTable({
           }
           setActionConfirmOpen(false);
         }}
-        onConfirm={() => {
-          void confirmSelectionAction();
+        onConfirm={(format) => {
+          void confirmSelectionAction(format);
         }}
       />
 

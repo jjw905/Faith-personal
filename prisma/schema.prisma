@@ -63,6 +63,34 @@ enum RealtimeSttSessionStatus {
   FAILED
 }
 
+enum PersonalRealtimeMeetingState {
+  LOBBY
+  ACTIVE
+  ENDED
+  PROCESSING
+  READY
+  FAILED
+  CANCELED
+}
+
+enum PersonalRealtimeInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REMOVED
+}
+
+enum AnalysisMode {
+  STANDARD
+  PRECISION
+}
+
+enum AnalysisUsageStatus {
+  RESERVED
+  CHARGED
+  RELEASED
+}
+
 model User {
   id                        String                 @id @default(cuid())
   name                      String?
@@ -114,7 +142,11 @@ model User {
   moderationFlags           ModerationFlag[]
   personalSettings          UserPersonalSettings?
   realtimeSttSessions       RealtimeSttSession[]
+  ownedPersonalRealtimeMeetings PersonalRealtimeMeeting[] @relation("PersonalRealtimeOwner")
+  personalRealtimeAccess     PersonalRealtimeAccess[] @relation("PersonalRealtimeInvitee")
   surveyResponse            SurveyResponse?
+  analysisUsages            AnalysisUsage[]
+  minuteCreditLedger        MinuteCreditLedger[]
   /**
    * 오픈 준비 기간 임시 보관·통계 목적 이용 고지에 동의한 시각.
    * null이면 아직 고지를 보지 않은 상태. 가입 후 최초 업로드 진입 시 1회만 노출한다.
@@ -125,6 +157,43 @@ model User {
 
   @@index([role, disabled])
   @@map("users")
+}
+
+model AnalysisUsage {
+  id          String              @id @default(cuid())
+  meetingId   String              @unique @map("meeting_id")
+  userId      String              @map("user_id")
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  periodKey   String              @map("period_key")
+  mode        AnalysisMode
+  durationSec Int                 @map("duration_sec")
+  chargedSec  Int                 @map("charged_sec")
+  monthlySec  Int                 @default(0) @map("monthly_sec")
+  creditSec   Int                 @default(0) @map("credit_sec")
+  graceSec    Int                 @default(0) @map("grace_sec")
+  status      AnalysisUsageStatus @default(RESERVED)
+  expiresAt   DateTime            @map("expires_at")
+  finalizedAt DateTime?           @map("finalized_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId, periodKey, status])
+  @@index([status, expiresAt])
+  @@map("analysis_usage")
+}
+
+model MinuteCreditLedger {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deltaSec    Int      @map("delta_sec")
+  reason      String
+  reference   String?  @unique
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("minute_credit_ledger")
 }
 
 model Team {
@@ -341,6 +410,8 @@ model RealtimeSttSession {
   user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   teamMeetingId      String?                  @map("team_meeting_id")
   teamMeeting        TeamMeeting?             @relation(fields: [teamMeetingId], references: [id], onDelete: Cascade)
+  personalMeetingId  String?                  @map("personal_meeting_id")
+  personalMeeting    PersonalRealtimeMeeting? @relation(fields: [personalMeetingId], references: [id], onDelete: Cascade)
   title              String
   status             RealtimeSttSessionStatus @default(ACTIVE)
   startedAt          DateTime                 @default(now()) @map("started_at")
@@ -356,7 +427,48 @@ model RealtimeSttSession {
   @@index([meetingId])
   @@index([runId, status])
   @@index([teamMeetingId, status])
+  @@index([personalMeetingId, status])
   @@map("realtime_stt_sessions")
+}
+
+model PersonalRealtimeMeeting {
+  id                  String                       @id @default(cuid())
+  legacyMeetingId     String?                      @unique @map("legacy_meeting_id")
+  title               String
+  roomName            String                       @unique @map("room_name")
+  runId               String                       @unique @map("run_id")
+  ownerId             String                       @map("owner_id")
+  owner               User                         @relation("PersonalRealtimeOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  maxParticipants     Int                          @default(4) @map("max_participants")
+  state               PersonalRealtimeMeetingState @default(LOBBY)
+  recordingActive     Boolean                      @default(false) @map("recording_active")
+  startedAt           DateTime?                    @map("started_at")
+  endedAt             DateTime?                    @map("ended_at")
+  access              PersonalRealtimeAccess[]
+  realtimeSttSessions RealtimeSttSession[]
+  createdAt           DateTime                     @default(now()) @map("created_at")
+  updatedAt           DateTime                     @updatedAt @map("updated_at")
+
+  @@index([ownerId, createdAt])
+  @@index([state, createdAt])
+  @@map("personal_realtime_meetings")
+}
+
+model PersonalRealtimeAccess {
+  id          String                       @id @default(cuid())
+  meetingId   String                       @map("meeting_id")
+  userId      String                       @map("user_id")
+  status      PersonalRealtimeInviteStatus @default(PENDING)
+  respondedAt DateTime?                    @map("responded_at")
+  joinedAt    DateTime?                    @map("joined_at")
+  meeting     PersonalRealtimeMeeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user        User                         @relation("PersonalRealtimeInvitee", fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                     @default(now()) @map("created_at")
+  updatedAt   DateTime                     @updatedAt @map("updated_at")
+
+  @@unique([meetingId, userId])
+  @@index([userId, status, createdAt])
+  @@map("personal_realtime_access")
 }
 
 model RealtimeSttUtterance {

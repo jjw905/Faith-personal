@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import type { TopicBucket } from "@/lib/stt/semantic-structure";
+import type { AnalysisMode } from "@/lib/stt/analysis-mode";
 
 /**
  * 회의 처리 1건의 결과만 남기는 통계 전용 로그.
@@ -35,7 +36,9 @@ export type PipelineAttemptEvent = {
   meetingId: string;
   userId: string;
   model: string;
+  analysisMode?: AnalysisMode;
   durationSec?: number;
+  chargedSec?: number;
   speakerCount?: number;
   outcome: PipelineOutcome;
   failedStage?: PipelineFailedStage;
@@ -59,7 +62,9 @@ export function appendPipelineAttempt(
     meetingId: partial.meetingId,
     userId: partial.userId,
     model: partial.model,
+    analysisMode: partial.analysisMode,
     durationSec: partial.durationSec,
+    chargedSec: partial.chargedSec,
     speakerCount: partial.speakerCount,
     outcome: partial.outcome,
     failedStage: partial.failedStage,
@@ -194,6 +199,7 @@ export function sumUserDurationSecInRange(
   start: Date,
   end: Date,
   events?: PipelineAttemptEvent[],
+  excludedMeetingIds?: ReadonlySet<string>,
 ): number {
   const startMs = start.getTime();
   const endMs = end.getTime();
@@ -201,12 +207,16 @@ export function sumUserDurationSecInRange(
   let total = 0;
   for (const e of all) {
     if (e.userId !== userId) continue;
+    if (excludedMeetingIds?.has(e.meetingId)) continue;
     if (typeof e.durationSec !== "number" || !Number.isFinite(e.durationSec)) {
       continue;
     }
     const at = Date.parse(e.at);
     if (!Number.isFinite(at) || at < startMs || at >= endMs) continue;
-    total += e.durationSec;
+    total +=
+      typeof e.chargedSec === "number" && Number.isFinite(e.chargedSec)
+        ? e.chargedSec
+        : e.durationSec;
   }
   return total;
 }

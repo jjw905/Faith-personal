@@ -9,6 +9,7 @@ import {
   Loader2,
   Mic,
   Upload,
+  Users,
   X,
 } from "lucide-react";
 import {
@@ -33,6 +34,10 @@ import {
 } from "@/lib/stt/upload-limits";
 import { cn } from "@/lib/utils";
 import { UploadQuotaBanner } from "@/components/dashboard/upload-quota-banner";
+import {
+  PRECISION_USAGE_MULTIPLIER,
+  type AnalysisMode,
+} from "@/lib/stt/analysis-mode";
 import {
   UsageLimitDialog,
   type UsageLimitTimeStatus,
@@ -108,6 +113,8 @@ export const AudioUploadZone = forwardRef<
     null,
   );
   const [usageDialogOpen, setUsageDialogOpen] = useState(false);
+  const [analysisMode, setAnalysisMode] =
+    useState<AnalysisMode>("standard");
 
   function applyQuotaPayload(
     data: { ok?: boolean } & Partial<UsageLimitTimeStatus>,
@@ -124,6 +131,9 @@ export const AudioUploadZone = forwardRef<
       limitSec: data.limitSec,
       usedSec: data.usedSec,
       remainingSec: data.remainingSec,
+      monthlyLimitSec: data.monthlyLimitSec,
+      creditRemainingSec: data.creditRemainingSec,
+      graceRemainingSec: data.graceRemainingSec,
       surveyCompleted: Boolean(data.surveyCompleted),
       resetsAtLabel: data.resetsAtLabel ?? "다음 주기",
       enforced: data.enforced !== false,
@@ -133,6 +143,7 @@ export const AudioUploadZone = forwardRef<
   const {
     isDragging,
     selectedFile,
+    selectedDurationSec,
     uploadStatus,
     uploadError,
     storedId,
@@ -338,7 +349,16 @@ export const AudioUploadZone = forwardRef<
               audio.onerror = () => finish(null);
               audio.src = url;
             });
-            if (durationSec != null && durationSec > fresh.remainingSec) {
+            const chargedSec =
+              durationSec == null
+                ? null
+                : Math.ceil(
+                    durationSec *
+                      (analysisMode === "precision"
+                        ? PRECISION_USAGE_MULTIPLIER
+                        : 1),
+                  );
+            if (chargedSec != null && chargedSec > fresh.remainingSec) {
               setUsageDialogOpen(true);
               return;
             }
@@ -366,6 +386,7 @@ export const AudioUploadZone = forwardRef<
             ? stripFileExtension(selectedFile.name)
             : undefined,
           workspace: workspaceId,
+          analysisMode,
           ...(workspaceId === "team" && activeTeamId
             ? { teamId: activeTeamId }
             : {}),
@@ -433,6 +454,18 @@ export const AudioUploadZone = forwardRef<
     : demoActive
       ? formatBytes(DEMO_FILE_BYTES)
       : null;
+  const actualMinutes =
+    selectedDurationSec != null ? Math.max(1, Math.ceil(selectedDurationSec / 60)) : null;
+  const expectedChargedMinutes =
+    selectedDurationSec == null
+      ? null
+      : Math.ceil(
+          (selectedDurationSec *
+            (analysisMode === "precision"
+              ? PRECISION_USAGE_MULTIPLIER
+              : 1)) /
+            60,
+        );
 
   const startDisabled =
     showStarting ||
@@ -540,6 +573,69 @@ export const AudioUploadZone = forwardRef<
                   바꾸기
                 </Button>
               </div>
+
+              <div
+                className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                role="radiogroup"
+                aria-label="분석 방식"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={analysisMode === "standard"}
+                  disabled={showStarting}
+                  onClick={() => setAnalysisMode("standard")}
+                  className={cn(
+                    "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
+                    analysisMode === "standard"
+                      ? "bg-primary-soft ring-primary"
+                      : "bg-surface ring-border hover:bg-surface-2",
+                  )}
+                >
+                  <AudioLines className="mt-0.5 h-5 w-5 shrink-0" />
+                  <span>
+                    <span className="block text-base font-semibold">
+                      일반 분석
+                    </span>
+                    <span className="mt-0.5 block text-base text-muted">
+                      1분당 1차감분
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={analysisMode === "precision"}
+                  disabled={showStarting}
+                  onClick={() => setAnalysisMode("precision")}
+                  className={cn(
+                    "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
+                    analysisMode === "precision"
+                      ? "bg-primary-soft ring-primary"
+                      : "bg-surface ring-border hover:bg-surface-2",
+                  )}
+                >
+                  <Users className="mt-0.5 h-5 w-5 shrink-0" />
+                  <span>
+                    <span className="block text-base font-semibold">
+                      정밀 화자·대화추적
+                    </span>
+                    <span className="mt-0.5 block text-base text-muted">
+                      1분당 1.5차감분
+                    </span>
+                  </span>
+                </button>
+              </div>
+
+              {actualMinutes != null && expectedChargedMinutes != null ? (
+                <p className="text-base font-medium text-muted">
+                  실제 약 {actualMinutes}분, 예상 {expectedChargedMinutes}차감분
+                </p>
+              ) : (
+                <p className="text-base font-medium text-muted">
+                  정밀 분석은 화자 구분과 단어 위치를 더 정확하게 맞춥니다.
+                </p>
+              )}
 
               {resolvedDemo === "error" || startError ? (
                 <p className="text-base font-medium text-red-600" role="alert">

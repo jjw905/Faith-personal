@@ -15,6 +15,7 @@ import type { MeetingTranscript } from "@/types/transcript";
 import type { SemanticStructure } from "@/lib/stt/semantic-structure";
 import type { SttModel } from "@/lib/stt/models";
 import type { WorkspaceId } from "@/lib/workspaces";
+import type { AnalysisMode } from "@/lib/stt/analysis-mode";
 
 export type MeetingProcessPhase =
   | "transcribing"
@@ -29,6 +30,8 @@ export type UserMeetingRecord = {
   userId: string;
   vaultFileId?: string;
   model: SttModel;
+  /** 구 기록에는 없음. 없으면 일반 분석으로 본다. */
+  analysisMode?: AnalysisMode;
   phase: MeetingProcessPhase;
   /** 0–100. 파이프라인 실제 단계·청크 진행과 동기. */
   progressPercent?: number;

@@ -20,6 +20,7 @@ export type {
 } from "@/lib/stt/realtime/types";
 export {
   DEFAULT_REALTIME_STT_MODEL,
+  REALTIME_STT_LIVE,
   REALTIME_STT_MINI,
   REALTIME_STT_MODEL,
   REALTIME_STT_USD_PER_MINUTE,

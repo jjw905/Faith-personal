@@ -9,6 +9,9 @@ export type VaultFileSymbol =
   | "table_chart"
   | "slideshow"
   | "text_snippet"
+  | "data_object"
+  | "subtitles"
+  | "markdown"
   | "draft";
 
 function extensionOf(name: string): string {
@@ -61,6 +64,12 @@ export function guessVaultMime(name: string): string {
     case "txt":
     case "md":
       return "text/plain";
+    case "json":
+      return "application/json";
+    case "srt":
+      return "application/x-subrip";
+    case "vtt":
+      return "text/vtt";
     case "zip":
     case "7z":
       return "application/zip";
@@ -82,6 +91,14 @@ export function vaultFileSymbol(
   if (type.startsWith("video/")) return "video_file";
   if (type.startsWith("image/")) return "image";
   if (type === "application/pdf" || type.includes("pdf")) return "picture_as_pdf";
+  if (type === "application/json" || type.includes("json")) return "data_object";
+  if (
+    type === "text/vtt" ||
+    type.includes("subrip") ||
+    type.includes("subtitle")
+  ) {
+    return "subtitles";
+  }
   if (type.startsWith("text/")) return "text_snippet";
 
   if (
@@ -139,8 +156,14 @@ export function vaultFileSymbol(
     case "pptx":
       return "slideshow";
     case "txt":
-    case "md":
       return "text_snippet";
+    case "md":
+      return "markdown";
+    case "json":
+      return "data_object";
+    case "srt":
+    case "vtt":
+      return "subtitles";
     default:
       return "draft";
   }

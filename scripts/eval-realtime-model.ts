@@ -1,8 +1,8 @@
 /**
  * 실시간 STT 모델 비교 (고정 180초 클립).
- * gpt-realtime-whisper($0.017/분) vs gpt-4o-mini-transcribe + server_vad($0.003/분)
+ * gpt-live-transcribe, gpt-realtime-whisper, gpt-4o-mini-transcribe 비교
  *
- * MODEL=mini npx tsx --tsconfig tsconfig.json scripts/eval-realtime-model.ts
+ * MODEL=live npx tsx --tsconfig tsconfig.json scripts/eval-realtime-model.ts
  */
 import { config } from "dotenv";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -18,7 +18,11 @@ async function main() {
   const { realtimeTranscribeFile } = await import(
     "../src/lib/stt/realtime/transcribe-session"
   );
-  const { REALTIME_STT_MINI, REALTIME_STT_WHISPER } = await import(
+  const {
+    REALTIME_STT_LIVE,
+    REALTIME_STT_MINI,
+    REALTIME_STT_WHISPER,
+  } = await import(
     "../src/lib/stt/realtime/types"
   );
 
@@ -28,7 +32,12 @@ async function main() {
   const clip = join(FIXTURE_DIR, manifest.clip.file);
 
   const which = (process.env.MODEL ?? "mini").toLowerCase();
-  const model = which === "whisper" ? REALTIME_STT_WHISPER : REALTIME_STT_MINI;
+  const model =
+    which === "live"
+      ? REALTIME_STT_LIVE
+      : which === "whisper"
+        ? REALTIME_STT_WHISPER
+        : REALTIME_STT_MINI;
 
   mkdirSync(OUT, { recursive: true });
   console.log(`=== realtime ${model} ===`);

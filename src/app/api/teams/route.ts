@@ -2,13 +2,15 @@ import { randomBytes } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
-import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import {
   ensureUserIdentifiers,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 function slugBase(value: string) {
   return (
@@ -22,10 +24,9 @@ function slugBase(value: string) {
 }
 
 export async function GET() {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   await ensureUserIdentifiers(session.user.id);
   const memberships = await prisma.teamMember.findMany({
     where: { userId: session.user.id },
@@ -70,16 +71,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!TEAM_FEATURE_ENABLED) {
-    return NextResponse.json(
-      { ok: false, message: "팀 기능은 오픈 준비중이에요." },
-      { status: 403 },
-    );
-  }
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   let body: { name?: string };
   try {
     body = await request.json();

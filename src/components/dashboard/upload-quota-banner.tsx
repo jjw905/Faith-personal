@@ -41,7 +41,9 @@ export function UploadQuotaBanner() {
   if (!status) return null;
 
   const remainingMin = Math.floor(status.remainingSec / 60);
-  const limitMin = Math.round(status.limitSec / 60);
+  const limitMin = Math.round(
+    (status.monthlyLimitSec ?? status.limitSec) / 60,
+  );
   const low = status.remainingSec <= 0;
 
   return (
@@ -53,8 +55,8 @@ export function UploadQuotaBanner() {
         )}
       >
         <p className="text-base font-medium text-foreground">
-          이번 주기 분석 가능 시간 {remainingMin}분 남음{" "}
-          <span className="text-muted">(월 {limitMin}분)</span>
+          이번 주기 {remainingMin}차감분 남음{" "}
+          <span className="text-muted">(월 {limitMin}차감분)</span>
         </p>
         <div className="flex flex-wrap items-center justify-center gap-2">
           {!status.surveyCompleted ? (

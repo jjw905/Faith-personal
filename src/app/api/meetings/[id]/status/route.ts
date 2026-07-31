@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 
+import { canReadMeeting } from "@/lib/meeting-access";
 import { requireUser } from "@/lib/require-user";
 import { meetingDisplayTitle } from "@/lib/meeting-process";
 import {
   getUserMeeting,
   healStaleProcessingMeeting,
 } from "@/lib/user-meetings-store";
+import {
+  getTeamFeatureAccess,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -26,6 +31,17 @@ export async function GET(_request: Request, { params }: Params) {
       { ok: false, message: "회의 없음" },
       { status: 404 },
     );
+  }
+  if (row.workspace === "team") {
+    const teamFeature = await getTeamFeatureAccess(session.user.id);
+    if (!teamFeature.ok) return teamFeatureFailureResponse(teamFeature);
+    const access = await canReadMeeting(id, session.user.id);
+    if (!access.allowed) {
+      return NextResponse.json(
+        { ok: false, message: "팀 회의 접근 권한이 없습니다." },
+        { status: 403 },
+      );
+    }
   }
 
   return NextResponse.json({

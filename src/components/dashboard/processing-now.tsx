@@ -35,7 +35,7 @@ function clampPercent(n: unknown, phase?: string): number {
     return Math.max(0, Math.min(100, Math.round(n)));
   }
   if (phase === "structuring") return 72;
-  if (phase === "transcribing") return 4;
+  if (phase === "transcribing") return 0;
   return 0;
 }
 
@@ -167,21 +167,22 @@ export function ProcessingNowSection({
     const id = window.setInterval(() => {
       setItems((prev) =>
         prev.map((item, index) => {
-          const step = index % 2 === 0 ? 4 : 3;
+          // 짝/홀 속도만 다르게, 1→98까지 이어서 올린 뒤 리셋
+          const step = index % 2 === 0 ? 2.4 : 1.8;
           const next = item.progressPercent + step;
-          if (next >= 96) {
+          if (next >= 98) {
             const phase = flipPhase(item.phase);
             return {
               ...item,
               phase,
               status: phase,
-              progressPercent: phase === "structuring" ? 58 : 8,
+              progressPercent: phase === "structuring" ? 72 : 1,
             };
           }
-          return { ...item, progressPercent: next };
+          return { ...item, progressPercent: Math.round(next * 10) / 10 };
         }),
       );
-    }, 380);
+    }, 220);
     return () => window.clearInterval(id);
   }, [animateDemo, demoItems]);
 

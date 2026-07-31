@@ -9,6 +9,7 @@ import { TranscriptAttachmentCard } from "@/components/meetings/meeting-attachme
 import {
   MeetingChatReplayBar,
   readChatReplaySettings,
+  writeChatReplaySettings,
   type ChatReplaySettings,
 } from "@/components/meetings/meeting-chat-replay-bar";
 import { ChatReplayTools } from "@/components/meetings/chat-replay-tools";
@@ -101,6 +102,7 @@ function ReplayBubble({
   maskStyle,
   active,
   currentSec,
+  wordFocus = true,
   onSeek,
   onMemoChange,
   onApplyCorrection,
@@ -112,6 +114,7 @@ function ReplayBubble({
   active: boolean;
   /** 이 말풍선이 active일 때만 의미 있는 재생 시각(초). 단어 하이라이트용. */
   currentSec: number;
+  wordFocus?: boolean;
   onSeek?: (line: TranscriptLine) => void;
   onMemoChange: (lineId: string, next: string) => void;
   onApplyCorrection: (
@@ -123,7 +126,8 @@ function ReplayBubble({
   const text = line.text ?? "";
   const matches = text ? maskPii(text, { style: maskStyle }).matches : [];
   const corrections = line.corrections ?? [];
-  const activeWord = active ? activeWordAt(line.words, currentSec) : null;
+  const activeWord =
+    active && wordFocus ? activeWordAt(line.words, currentSec) : null;
   const activeWordRange = activeWord
     ? { startOffset: activeWord.startOffset, endOffset: activeWord.endOffset }
     : null;
@@ -132,9 +136,6 @@ function ReplayBubble({
   const [draft, setDraft] = useState(memo ?? "");
   const hasMemo = Boolean(memo?.trim());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const markKey = activeWordRange
-    ? `${activeWordRange.startOffset}:${activeWordRange.endOffset}`
-    : "";
 
   useEffect(() => {
     if (!editing) setDraft(memo ?? "");
@@ -149,14 +150,8 @@ function ReplayBubble({
     el.setSelectionRange(len, len);
   }, [editing]);
 
-  useEffect(() => {
-    if (!active || !markKey) return;
-    const mark = document.querySelector(
-      `#tx-line-${CSS.escape(line.id)} [data-word-play-mark]`,
-    );
-    if (!(mark instanceof HTMLElement)) return;
-    mark.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [active, markKey, line.id]);
+  // 단어 포커스마다 mark.scrollIntoView 하면 스크롤포트가 미세하게 흔들린다.
+  // 줄 단위 따라가기(MeetingChatReplay activeId effect)만 유지한다.
 
   function commitMemo() {
     onMemoChange(line.id, draft.trim());
@@ -439,6 +434,8 @@ export function MeetingChatReplay({
   const [settings, setSettings] = useState<ChatReplaySettings>(() =>
     readChatReplaySettings(),
   );
+  const followChat = settings.followChat !== false;
+  const wordFocus = settings.wordFocus !== false;
   const audioRef = useRef<HTMLAudioElement>(null);
   const meName = resolveMeName(meeting.participants, currentUser.name);
   const hasAudio = Boolean(audioSrc);
@@ -608,11 +605,41 @@ export function MeetingChatReplay({
   }, [hasAudio, lineStarts, settings.muted, settings.rate, settings.volume, transcript.lines]);
 
   useEffect(() => {
-    if (!activeId) return;
+    if (!followChat || !activeId) return;
     document
       .getElementById(`tx-line-${activeId}`)
-      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [activeId, playing]);
+      ?.scrollIntoView({
+        block: "nearest",
+        // 재생 중 smooth는 이전 스크롤과 겹쳐 버벅인다.
+        behavior: playing ? "auto" : "smooth",
+      });
+  }, [activeId, playing, followChat]);
+
+  const patchReplaySettings = useCallback(
+    (partial: Partial<ChatReplaySettings>) => {
+      setSettings((prev) => {
+        const next: ChatReplaySettings = {
+          ...prev,
+          ...partial,
+          followChat:
+            typeof partial.followChat === "boolean"
+              ? partial.followChat
+              : typeof prev.followChat === "boolean"
+                ? prev.followChat
+                : true,
+          wordFocus:
+            typeof partial.wordFocus === "boolean"
+              ? partial.wordFocus
+              : typeof prev.wordFocus === "boolean"
+                ? prev.wordFocus
+                : true,
+        };
+        writeChatReplaySettings(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   const displayDurationSec =
     durationSec > 0 ? durationSec : fallbackDurationSec;
@@ -721,12 +748,15 @@ export function MeetingChatReplay({
             size="header"
           />
         </div>
-        <div className="min-w-0 shrink-0 justify-self-end">
+        <div className="relative z-10 min-w-0 shrink-0 justify-self-end">
           <ChatReplayTools
             meeting={meeting}
             transcript={transcript}
             maskStyle={maskStyle}
             onMaskChange={setMaskStyle}
+            followChat={followChat}
+            wordFocus={wordFocus}
+            onReplaySettingsChange={patchReplaySettings}
           />
         </div>
       </div>
@@ -747,6 +777,7 @@ export function MeetingChatReplay({
                   maskStyle={maskStyle}
                   active={activeId === line.id}
                   currentSec={activeId === line.id ? currentSec : 0}
+                  wordFocus={wordFocus}
                   onSeek={hasAudio ? seekToLine : undefined}
                   onMemoChange={handleMemoChange}
                   onApplyCorrection={handleApplyCorrection}

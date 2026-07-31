@@ -2,23 +2,22 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { listWorkspaceMeetingAcks } from "@/lib/notifications-store";
-import { requireUser } from "@/lib/require-user";
 import { deriveMeetingState } from "@/lib/team/meeting-lifecycle";
 import { reconcileTeamMeeting } from "@/lib/team/reconcile-meeting";
 import { meetingCardStatus } from "@/lib/team/scheduling";
 import { resolveEntryMicrophoneOn } from "@/lib/team/settings-precedence";
 import { getTeamMember, hasTeamCapability } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ teamId: string }> };
 
 export async function GET(_: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json(
-      { ok: false, message: "로그인이 필요합니다." },
-      { status: 401 },
-    );
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const membership = await getTeamMember(teamId, session.user.id);
   if (!membership) {
@@ -34,6 +33,7 @@ export async function GET(_: Request, context: RouteContext) {
     recentRecords,
     announcements,
     acks,
+    pendingAccess,
     personal,
     members,
     auditCount,
@@ -106,6 +106,23 @@ export async function GET(_: Request, context: RouteContext) {
       take: 20,
     }),
     listWorkspaceMeetingAcks(session.user.id, teamId),
+    prisma.teamMeetingAccess.findMany({
+      where: {
+        userId: session.user.id,
+        acknowledgedAt: null,
+        OR: [{ isParticipant: true }, { canReadMasked: true }],
+        meeting: {
+          teamId,
+          state: { not: "CANCELED" },
+        },
+      },
+      select: {
+        meetingId: true,
+        meeting: { select: { title: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    }),
     prisma.userPersonalSettings.findUnique({
       where: { userId: session.user.id },
     }),
@@ -181,6 +198,36 @@ export async function GET(_: Request, context: RouteContext) {
   const hideAfterRead = Boolean(
     membership.team.policy?.announcementHideAfterRead,
   );
+  type UnconfirmedAlert = {
+    notificationId: string | null;
+    meetingId: string | null;
+    title: string;
+    body: string;
+    createdAt: Date;
+  };
+  const unconfirmedByMeeting = new Map<string | null, UnconfirmedAlert>(
+    acks.map((row) => [
+      row.meetingId,
+      {
+        notificationId: row.id,
+        meetingId: row.meetingId,
+        title: row.title,
+        body: row.body,
+        createdAt: row.createdAt,
+      },
+    ]),
+  );
+  for (const access of pendingAccess) {
+    if (unconfirmedByMeeting.has(access.meetingId)) continue;
+    unconfirmedByMeeting.set(access.meetingId, {
+      notificationId: null,
+      meetingId: access.meetingId,
+      title: "회의 확인이 필요합니다",
+      body: access.meeting.title,
+      createdAt: new Date(0),
+    });
+  }
+  const unconfirmedAlerts = [...unconfirmedByMeeting.values()];
   const visibleAnnouncements = announcements
     .filter((row) => {
       const read = row.reads[0];
@@ -226,13 +273,7 @@ export async function GET(_: Request, context: RouteContext) {
       canCreateMeeting: membership.canCreateMeeting,
       canManageRecordAccess: membership.canManageRecordAccess,
     },
-    unconfirmedAlerts: acks.map((row) => ({
-      notificationId: row.id,
-      meetingId: row.meetingId,
-      title: row.title,
-      body: row.body,
-      createdAt: row.createdAt,
-    })),
+    unconfirmedAlerts,
     nearest,
     upcoming,
     announcements: visibleAnnouncements,

@@ -66,7 +66,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0..1,-50..200&icon_names=audio_file,description,draft,edit_note,image,label,notifications,notifications_off,password,picture_as_pdf,slideshow,table_chart,text_snippet,video_file,visibility,visibility_off&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..500,0..1,-50..200&icon_names=audio_file,data_object,description,draft,edit_note,image,ink_highlighter,label,markdown,notifications,notifications_off,password,picture_as_pdf,slideshow,subtitles,table_chart,text_snippet,vertical_align_center,video_file,visibility,visibility_off&display=swap"
           rel="stylesheet"
         />
       </head>

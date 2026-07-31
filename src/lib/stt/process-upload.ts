@@ -15,8 +15,10 @@ import { buildGlossary } from "@/lib/stt/glossary";
 import { hasAudioTools } from "@/lib/stt/local-tools";
 import {
   attachSpeakersToText,
+  attachSpeakersToWordTimings,
   formatSpeakerBlocks,
 } from "@/lib/stt/speaker-attach";
+import { reconcileSpeakerTurns } from "@/lib/stt/speaker-turns";
 import { buildSemanticStructure } from "@/lib/stt/semantic-structure";
 import type { TopicBucket } from "@/lib/stt/semantic-structure";
 import {
@@ -33,10 +35,22 @@ import {
 } from "@/lib/stt/content-moderation";
 import { buildMeetingFromStt } from "@/lib/stt/to-meeting";
 import { formatDurationLabel } from "@/lib/diarize-meeting";
-import { alignDialogueToTimedSegments } from "@/lib/stt/timed-segments";
+import {
+  alignDialogueToTimedSegments,
+  alignDialogueToWordTimings,
+} from "@/lib/stt/timed-segments";
 import { runSelectiveSecondPass } from "@/lib/stt/second-pass-review";
+import {
+  forceAlignTranscript,
+  forcedAlignmentAvailable,
+} from "@/lib/stt/forced-alignment";
+import { reconcileTranscriptVariants } from "@/lib/stt/transcript-reconcile";
 import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
-import type { SttModel } from "@/lib/stt/models";
+import {
+  ANALYSIS_MODE_POLICY,
+  DEFAULT_ANALYSIS_MODE,
+  type AnalysisMode,
+} from "@/lib/stt/analysis-mode";
 import { assertUploadAudioDuration } from "@/lib/stt/upload-limits";
 import {
   assertUploadQuota,
@@ -53,6 +67,7 @@ import {
   workDirForMeeting,
 } from "@/lib/user-meetings-store";
 import { createNotification } from "@/lib/notifications-store";
+import { structureProgressPercent } from "@/lib/meeting-process-progress";
 import { prisma } from "@/lib/prisma";
 import {
   appendPipelineAttempt,
@@ -64,10 +79,10 @@ import {
  * STT(청크 API)가 대부분, 구조화·정렬·조립이 후반.
  */
 const PROGRESS = {
-  start: 1,
-  fileLoaded: 4,
+  start: 0,
+  fileLoaded: 3,
   /** STT fraction 0→1 을 이 구간에 매핑 */
-  sttStart: 4,
+  sttStart: 3,
   sttEnd: 72,
   structureStart: 72,
   structureDone: 90,
@@ -154,7 +169,7 @@ export async function processUploadedMeeting(params: {
   meetingId: string;
   userId: string;
   vaultFileId: string;
-  model: SttModel;
+  analysisMode?: AnalysisMode;
   title: string;
   /**
    * 개인정보보호법 제37조의2(자동화된 결정에 대한 정보주체의 권리) 대응.
@@ -164,10 +179,13 @@ export async function processUploadedMeeting(params: {
    * 되어야 하며, 회의 처리 자체는 여전히 자동(모델 파이프라인)으로 끝난다.
    */
   bypassModeration?: boolean;
-  /** 개인 설정 기본값. false면 화자분리 단계를 건너뛴다(비용·시간 절약). 기본 true. */
-  speakerSplit?: boolean;
 }) {
-  const speakerSplitEnabled = params.speakerSplit !== false;
+  const analysisMode = params.analysisMode ?? DEFAULT_ANALYSIS_MODE;
+  const policy = ANALYSIS_MODE_POLICY[analysisMode];
+  // 분석 모드가 모델·고비용 단계를 서버에서 고정한다. 저장된 model 값이나
+  // 재처리 요청이 어긋나더라도 차감 정책과 실제 실행 경로가 달라지지 않는다.
+  const model = policy.model;
+  const speakerSplitEnabled = policy.speakerSplit;
   const workDir = workDirForMeeting(params.meetingId);
   const progress = (
     percent: number,
@@ -188,14 +206,14 @@ export async function processUploadedMeeting(params: {
   try {
     progress(PROGRESS.start, {
       phase: "transcribing",
-      stageLabel: "파일 확인하는 중",
+      stageLabel: "파일을 살펴보는 중이에요",
     });
 
     const file = await readUserFileBytes(params.userId, params.vaultFileId);
     if (!file) {
       throw new Error("보관함 파일을 찾을 수 없습니다.");
     }
-    progress(PROGRESS.fileLoaded, { stageLabel: "오디오 불러오는 중" });
+    progress(PROGRESS.fileLoaded, { stageLabel: "소리를 불러오는 중이에요" });
 
     const audioPath = writeSourceAudio({
       audioBytes: file.body,
@@ -212,7 +230,9 @@ export async function processUploadedMeeting(params: {
       currentStage = "quota";
       quotaReservation = await assertUploadQuota({
         userId: params.userId,
+        meetingId: params.meetingId,
         newDurationSec: durationSec,
+        analysisMode,
       });
       currentStage = "stt";
       // 분석이 끝나기 전에도 실제 길이를 바로 보여준다("-" 표기 없이).
@@ -240,12 +260,12 @@ export async function processUploadedMeeting(params: {
       chunkedTranscribe({
         audioPath,
         workDir: join(workDir, "chunks"),
-        model: params.model,
+        model,
         glossary,
         wordTimestamps: true,
         onProgress: (p) => {
           progress(mapSttFraction(p.fraction), {
-            stageLabel: "받아쓰는 중",
+            stageLabel: "받아쓰는 중이에요",
           });
         },
       }),
@@ -255,19 +275,80 @@ export async function processUploadedMeeting(params: {
     if (!stt.text.trim()) {
       console.error("[stt] 전사 텍스트가 비어 있음", {
         meetingId: params.meetingId,
-        model: params.model,
+        model,
       });
       throw new Error("받아쓰기 결과가 비어 있습니다. 다른 파일로 다시 시도해 주세요.");
     }
     if (!stt.timedSegments.length) {
       console.error("[stt] 실측 시각(타이밍) 구간이 비어 있음", {
         meetingId: params.meetingId,
-        model: params.model,
+        model,
         textLength: stt.text.length,
       });
       throw new Error(
         "실측 시각(타이밍)이 비어 있습니다. 싱크를 맞출 수 없어 중단합니다.",
       );
+    }
+    let transcriptText = stt.text;
+    let transcriptParts = stt.parts;
+    let wordTimings = stt.wordTimings;
+
+    // 기존 mini 본문은 독립 타이밍 전사와 대조해 누락을 복원한다.
+    // gpt-transcribe는 KTV 검증에서 짧은 호명과 기자 자기소개를 이미 보존했고,
+    // 재작성 대조가 오히려 그 자기소개를 삭제했으므로 원문을 확정 본문으로 쓴다.
+    if (model !== "gpt-transcribe") {
+      try {
+        progress(PROGRESS.structureStart, {
+          phase: "structuring",
+          stageLabel: "빠진 말을 다시 확인하는 중이에요",
+        });
+        const reconciled = await reconcileTranscriptVariants({
+          parts: stt.parts,
+          partRanges: stt.partRanges,
+          timedSegments: stt.timedSegments,
+        });
+        transcriptText = reconciled.text;
+        transcriptParts = reconciled.parts;
+        if (reconciled.usage.inputTokens > 0) {
+          appendAiUsage({
+            meetingId: params.meetingId,
+            userId: params.userId,
+            title: params.title,
+            stage: "structure",
+            model: reconciled.usage.model,
+            durationSec: stt.durationSec,
+            inputTokens: reconciled.usage.inputTokens,
+            outputTokens: reconciled.usage.outputTokens,
+            totalTokens: reconciled.usage.totalTokens,
+            estimatedUsd: reconciled.usage.estimatedUsd,
+            billSource: "tokens",
+          });
+        }
+      } catch (err) {
+        console.warn("[stt] 독립 전사 대조 실패, 본전사를 유지합니다", err);
+      }
+    }
+
+    // Whisper 단어 시각은 긴 발화를 통째로 누락할 수 있다. 로컬 한국어
+    // 강제 정렬기가 준비된 서버에서는 확정 전사 전체를 오디오에 다시 맞춘다.
+    if (policy.forcedAlignment && forcedAlignmentAvailable()) {
+      try {
+        progress(PROGRESS.structureStart, {
+          phase: "structuring",
+          stageLabel: "말한 위치를 정밀하게 맞추는 중이에요",
+        });
+        const aligned = await forceAlignTranscript({
+          audioPath,
+          text: transcriptText,
+          parts: transcriptParts,
+          partRanges: stt.partRanges,
+          durationSec: stt.durationSec,
+          workDir: join(workDir, "alignment"),
+        });
+        wordTimings = aligned.words;
+      } catch (err) {
+        console.warn("[stt] 강제 정렬 실패, OpenAI 단어 시각을 유지합니다", err);
+      }
     }
 
     appendAiUsage({
@@ -275,7 +356,7 @@ export async function processUploadedMeeting(params: {
       userId: params.userId,
       title: params.title,
       stage: "stt",
-      model: params.model,
+      model,
       durationSec: stt.durationSec,
       chunkCount: stt.chunkCount,
       inputTokens: stt.usage.inputTokens,
@@ -292,7 +373,7 @@ export async function processUploadedMeeting(params: {
     // 검열로 명백한 위반(아동 성적 콘텐츠·불법행위 실행 안내 등)만 업로드
     // 단계에서 차단한다. 본문은 저장하지 않고 카테고리만 남긴다.
     try {
-      const moderation = await checkTranscriptModeration(stt.text);
+      const moderation = await checkTranscriptModeration(transcriptText);
       await logModerationFlag({
         userId: params.userId,
         meetingId: params.meetingId,
@@ -311,56 +392,117 @@ export async function processUploadedMeeting(params: {
     currentStage = "structure";
     progress(PROGRESS.structureStart, {
       phase: "structuring",
-      rawText: stt.text,
-      stageLabel: "분석하는 중",
+      rawText: transcriptText,
+      stageLabel: "이야기의 흐름을 잡는 중이에요",
     });
 
     // 화자를 붙여서 넘긴다. 구조화 모델이 대화기록을 나눌 때 누가 말했는지
     // 같이 판단해야 타임라인 화자와 화자별 발언이 채워진다.
-    const blocks = diarization
-      ? attachSpeakersToText({
-          text: stt.text,
+    let blocks = diarization
+      ? attachSpeakersToWordTimings({
+          text: transcriptText,
+          wordTimings,
           timedSegments: stt.timedSegments,
           diarization,
-          durationSec: stt.durationSec,
         })
       : [];
+    if (diarization && blocks.length === 0) {
+      blocks = attachSpeakersToText({
+        text: transcriptText,
+        timedSegments: stt.timedSegments,
+        diarization,
+        durationSec: stt.durationSec,
+        mergeAdjacent: false,
+      });
+    }
+    let speakerBlocks = blocks;
+    if (
+      blocks.length > 0 &&
+      process.env.STT_SPEAKER_TURN_RECONCILE === "1"
+    ) {
+      try {
+        progress(PROGRESS.structureStart, {
+          phase: "structuring",
+          stageLabel: "같은 목소리를 모으는 중이에요",
+        });
+        const reconciled = await reconcileSpeakerTurns(blocks);
+        speakerBlocks = reconciled.blocks;
+        statsSpeakerCount = new Set(
+          speakerBlocks.map((block) => block.speaker),
+        ).size;
+        if (reconciled.usage.inputTokens > 0) {
+          appendAiUsage({
+            meetingId: params.meetingId,
+            userId: params.userId,
+            title: params.title,
+            stage: "structure",
+            model: reconciled.usage.model,
+            durationSec: stt.durationSec,
+            inputTokens: reconciled.usage.inputTokens,
+            outputTokens: reconciled.usage.outputTokens,
+            totalTokens: reconciled.usage.totalTokens,
+            estimatedUsd: reconciled.usage.estimatedUsd,
+            billSource: "tokens",
+          });
+        }
+      } catch (err) {
+        // 음성 화자 라벨은 남아 있으므로 회의 전체를 실패시키지는 않는다.
+        console.warn("[stt] 화자 일관성 모델 검토 실패, 음성 라벨 유지", err);
+      }
+    }
     const structureInput =
-      blocks.length > 0 ? formatSpeakerBlocks(blocks) : stt.text;
+      speakerBlocks.length > 0
+        ? formatSpeakerBlocks(speakerBlocks)
+        : transcriptText;
 
     const { structure, usage: structureUsage } = await buildSemanticStructure(
       structureInput,
       stt.durationSec,
       {
-        onProgress: ({ partIndex, partCount, attempt, depth }) => {
-          const pct = Math.min(
-            PROGRESS.structureDone - 1,
-            PROGRESS.structureStart + Math.min(16, Math.max(0, attempt - 1) * 3),
-          );
-          let stageLabel = "분석하는 중";
+        onProgress: ({ partIndex, partCount, attempt, depth, waitedMs }) => {
+          const pct = structureProgressPercent({
+            partIndex,
+            partCount,
+            attempt,
+            depth,
+            waitedMs,
+            structureStart: PROGRESS.structureStart,
+            structureDone: PROGRESS.structureDone,
+          });
+          let stageLabel = "이야기의 흐름을 잡는 중이에요";
           if (depth > 0) {
-            stageLabel = `분석하는 중 (보완 ${attempt})`;
+            stageLabel = "추가 보완중이예요";
           } else if (partCount > 1) {
-            stageLabel = `분석하는 중 (${partIndex + 1}/${partCount})`;
+            stageLabel =
+              partIndex === 0
+                ? "긴 회의라 나눠서 정리중이에요"
+                : "이어서 정리중이예요";
           } else if (attempt > 1) {
-            stageLabel = `분석하는 중 (${attempt})`;
+            stageLabel = "한 번 더 살펴보는 중이에요";
           }
           progress(pct, { phase: "structuring", stageLabel });
         },
       },
     );
-    progress(PROGRESS.structureDone, { stageLabel: "타임라인 작성하는 중" });
+    progress(PROGRESS.structureDone, { stageLabel: "타임라인을 그리는 중이에요" });
     statsTopicBucket = structure.topicBucket;
     if (statsSpeakerCount === undefined && structure.speakers.length > 0) {
       statsSpeakerCount = structure.speakers.length;
     }
 
-    structure.dialogue = alignDialogueToTimedSegments(
-      structure.dialogue,
-      stt.timedSegments,
-      stt.durationSec,
-    );
-    progress(PROGRESS.aligned, { stageLabel: "화자 확인하는 중" });
+    structure.dialogue =
+      wordTimings.length > 0
+        ? alignDialogueToWordTimings(
+            structure.dialogue,
+            wordTimings,
+            stt.durationSec,
+          )
+        : alignDialogueToTimedSegments(
+            structure.dialogue,
+            stt.timedSegments,
+            stt.durationSec,
+          );
+    progress(PROGRESS.aligned, { stageLabel: "누가 말했는지 맞추는 중이에요" });
 
     if (structure.dialogue.length === 0) {
       throw new Error("대화기록 생성에 실패했습니다.");
@@ -369,7 +511,13 @@ export async function processUploadedMeeting(params: {
     // 화자 실명 추정. 근거가 약하면 화자 A 라벨을 그대로 둔다.
     const confirmedNames: string[] = [];
     try {
-      const named = await identifySpeakerNames({ dialogue: structure.dialogue });
+      const named = await identifySpeakerNames({
+        dialogue: structure.dialogue,
+        candidates:
+          getUserMeeting(params.meetingId)?.meeting.participants.map(
+            (participant) => participant.name,
+          ) ?? [],
+      });
       applySpeakerNames(structure, named.guesses);
       confirmedNames.push(...named.guesses.map((g) => g.name));
       if (named.usage.inputTokens > 0) {
@@ -415,15 +563,15 @@ export async function processUploadedMeeting(params: {
       meetingId: params.meetingId,
       title: params.title,
       durationSec: stt.durationSec,
-      rawText: stt.text,
+      rawText: transcriptText,
       semantic: structure,
       timedSegments: stt.timedSegments,
-      wordTimings: stt.wordTimings,
+      wordTimings,
       date: meetingDate,
       workspace: existing?.workspace,
       capture: existing?.meeting.capture ?? "upload",
     });
-    progress(PROGRESS.built, { stageLabel: "표현 다듬는 중" });
+    progress(PROGRESS.built, { stageLabel: "표현을 다듬는 중이에요" });
 
     // 오인식 보정 추천. 표시만 하고 본문은 그대로 둔다. 실패해도 회의는 완료.
     try {
@@ -502,13 +650,17 @@ export async function processUploadedMeeting(params: {
       }
     }
 
+    const finalizedChargedSec = quotaReservation?.chargedSec;
+    await quotaReservation?.finalize();
+    quotaReservation = null;
+
     updateUserMeeting(params.meetingId, {
       phase: "done",
       progressPercent: PROGRESS.done,
       meeting: built.meeting,
       transcript: built.transcript,
       timeline: built.timeline,
-      rawText: stt.text,
+      rawText: transcriptText,
       semantic: structure,
       errorMessage: undefined,
     });
@@ -526,7 +678,9 @@ export async function processUploadedMeeting(params: {
       appendPipelineAttempt({
         meetingId: params.meetingId,
         userId: params.userId,
-        model: params.model,
+        model,
+        analysisMode,
+        chargedSec: finalizedChargedSec,
         durationSec: statsDurationSec,
         speakerCount: statsSpeakerCount,
         outcome: "done",
@@ -543,7 +697,8 @@ export async function processUploadedMeeting(params: {
       appendPipelineAttempt({
         meetingId: params.meetingId,
         userId: params.userId,
-        model: params.model,
+        model,
+        analysisMode,
         durationSec: statsDurationSec,
         speakerCount: statsSpeakerCount,
         outcome: quotaBlocked

@@ -8,10 +8,12 @@ import {
   MEETING_PROCESS_LABEL,
   type MeetingProcessPhase,
 } from "@/lib/meeting-process";
+import { nextDisplayPercent } from "@/lib/meeting-process-progress";
 import { cn } from "@/lib/utils";
 
 export type { MeetingProcessPhase };
 export { MEETING_PROCESS_LABEL };
+export { displayCreepCeiling } from "@/lib/meeting-process-progress";
 
 function isQuotaBlockedMessage(message: string | null | undefined) {
   if (!message) return false;
@@ -30,23 +32,42 @@ const ETA_MAX_REMAINING_SEC = 60 * 60;
 const ETA_RATE_SMOOTH = 0.3;
 /** 남은 시간이 갑자기 늘지 않게 상한 배율 */
 const ETA_UPWARD_CAP = 1.25;
-/** 실제 갱신 사이에도 멈춰 보이지 않도록 두는 자체 진행 여유분. */
-const CREEP_CEILING_GAP = 5;
-const CREEP_CEILING_MAX = 97;
 
 function clampPercent(n: unknown, phase: MeetingProcessPhase): number {
   if (typeof n === "number" && Number.isFinite(n)) {
     return Math.max(0, Math.min(100, Math.round(n)));
   }
   if (phase === "structuring") return 72;
-  if (phase === "transcribing") return 4;
+  if (phase === "transcribing") return 0;
   if (phase === "done") return 100;
   return 0;
 }
 
 /** "받아쓰는 중 (2/5)" → 애니메이션 키는 괄호 앞부분만 본다. 카운트만 바뀌어도 다시 튀지 않게. */
 function stageAnimationKey(label: string) {
-  return label.replace(/\s*\(\d+\/\d+\)\s*$/, "");
+  return label.replace(/\s*\([^)]*\)\s*$/, "");
+}
+
+/** 진행 중 문구를 사용자용으로 부드럽게. 예전 딱딱한 표기도 흡수한다. */
+export function friendlyProcessStageLabel(raw: string): string {
+  const t = raw.trim();
+  if (!t) return t;
+  if (/보완/.test(t)) return "추가 보완중이예요";
+  const stripped = t
+    .replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/, "")
+    .replace(/\s*\(\d+\)\s*$/, "")
+    .trim();
+  if (stripped === "분석하는 중" || stripped.startsWith("분석하는 중")) {
+    return "이야기의 흐름을 잡는 중이에요";
+  }
+  if (stripped === "받아쓰는 중") return "받아쓰는 중이에요";
+  if (stripped === "정리하는 중") return "정리하는 중이에요";
+  if (stripped === "파일 확인하는 중") return "파일을 살펴보는 중이에요";
+  if (stripped === "오디오 불러오는 중") return "소리를 불러오는 중이에요";
+  if (stripped === "타임라인 작성하는 중") return "타임라인을 그리는 중이에요";
+  if (stripped === "화자 확인하는 중") return "누가 말했는지 맞추는 중이에요";
+  if (stripped === "표현 다듬는 중") return "표현을 다듬는 중이에요";
+  return stripped;
 }
 
 /**
@@ -134,7 +155,7 @@ function ProcessProgressRing({
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={offset}
-          className="text-primary transition-[stroke-dashoffset] duration-300 ease-linear"
+          className="text-primary transition-[stroke-dashoffset] duration-75 ease-out motion-reduce:transition-none"
         />
       </svg>
       <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -166,11 +187,14 @@ export function MeetingProcessLoader({
   className?: string;
 }) {
   const active = phase === "transcribing" || phase === "structuring";
-  const percent = clampPercent(progressPercent, phase);
+  const percentRaw =
+    typeof progressPercent === "number" && Number.isFinite(progressPercent)
+      ? Math.max(0, Math.min(100, progressPercent))
+      : clampPercent(progressPercent, phase);
+  const percentLabel = Math.round(percentRaw);
   const rawLabel =
     (active && stageLabel?.trim()) || MEETING_PROCESS_LABEL[phase];
-  // 사용자에게는 청크 번호(2/3) 같은 내부 진행은 숨기고 단계 문구만 보인다.
-  const label = rawLabel.replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/, "").trim();
+  const label = friendlyProcessStageLabel(rawLabel);
 
   return (
     <div
@@ -180,9 +204,9 @@ export function MeetingProcessLoader({
       )}
       aria-live="polite"
       aria-busy={active}
-      aria-label={active ? `${label}, ${Math.round(percent)}퍼센트` : label}
+      aria-label={active ? `${label}, ${percentLabel}퍼센트` : label}
     >
-      {active ? <ProcessProgressRing percent={percent} /> : null}
+      {active ? <ProcessProgressRing percent={percentRaw} /> : null}
 
       <div className="relative h-6 overflow-hidden md:h-5">
         <p
@@ -246,29 +270,44 @@ export function MeetingProcessBanner({
   const initialPercent = clampPercent(initialProgressPercent, initialPhase);
   const [displayPercent, setDisplayPercent] = useState(initialPercent);
   const targetPercentRef = useRef(initialPercent);
+  const targetRaisedAtRef = useRef(
+    typeof performance !== "undefined" ? performance.now() : Date.now(),
+  );
+  const lastFrameAtRef = useRef(0);
   const etaRef = useRef<{
     lastSample: { time: number; percent: number } | null;
     rate: number | null;
     remainingSec: number | null;
   }>({ lastSample: null, rate: null, remainingSec: null });
 
-  // 실제 값은 1초마다 서버에서 받아오되, 화면은 매 프레임 그 값을 향해
-  // 부드럽게 움직인다. 다음 갱신 전에도 살짝 자체 전진해 멈춰 보이지 않게 한다.
+  // 서버 값은 1초 폴링. 화면은 프레임마다 따라가며, target이 멈춰도
+  // 단계 밴드 안에서는 천천히 더 올라간다 (옛 77% 영구 정지 방지).
   useEffect(() => {
     if (!active) return;
     let raf = 0;
-    const step = () => {
+    lastFrameAtRef.current = 0;
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const step = (now: number) => {
+      const prevAt = lastFrameAtRef.current || now;
+      lastFrameAtRef.current = now;
+      const dtMs = now - prevAt;
+      const stalledMs = Math.max(0, now - targetRaisedAtRef.current);
+
       setDisplayPercent((cur) => {
         const target = targetPercentRef.current;
-        if (cur < target) {
-          const delta = Math.max(0.12, (target - cur) * 0.14);
-          return Math.min(target, cur + delta);
+        if (reduceMotion) {
+          return Math.max(cur, Math.min(100, target));
         }
-        const ceiling = Math.min(CREEP_CEILING_MAX, target + CREEP_CEILING_GAP);
-        if (cur < ceiling) {
-          return Math.min(ceiling, cur + 0.035);
-        }
-        return cur;
+        return nextDisplayPercent({
+          current: cur,
+          target,
+          stalledMs,
+          nowMs: now,
+          dtMs,
+        });
       });
       raf = window.requestAnimationFrame(step);
     };
@@ -311,7 +350,14 @@ export function MeetingProcessBanner({
         const nextPercent = clampPercent(data.progressPercent, data.phase);
         setPhase(data.phase);
         setStageLabel(data.stageLabel ?? null);
-        targetPercentRef.current = nextPercent;
+        if (nextPercent > targetPercentRef.current + 0.05) {
+          targetRaisedAtRef.current =
+            typeof performance !== "undefined" ? performance.now() : Date.now();
+        }
+        targetPercentRef.current = Math.max(
+          targetPercentRef.current,
+          nextPercent,
+        );
 
         if (data.phase === "error" || data.phase === "empty") {
           const nextError =

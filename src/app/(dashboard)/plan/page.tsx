@@ -62,6 +62,9 @@ type QuotaStatus = {
   usedSec: number;
   limitSec: number;
   remainingSec: number;
+  monthlyLimitSec?: number;
+  creditRemainingSec?: number;
+  graceRemainingSec?: number;
   surveyCompleted: boolean;
   resetsAtLabel?: string;
   enforced?: boolean;
@@ -103,7 +106,7 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
       <CardContent className="px-6 py-6">
         <div className="flex items-center justify-between gap-3">
           <p className="text-base font-semibold text-muted">
-            이번 주기 분석 사용량
+            사용량
           </p>
           <span
             className={cn(
@@ -133,10 +136,10 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
           <>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-4xl font-bold tracking-tight text-foreground tabular-nums">
-                {Math.floor(status.usedSec / 60)}분
+                {Math.floor(status.usedSec / 60)}차감분
               </span>
               <span className="text-lg font-medium text-muted">
-                / {Math.round(status.limitSec / 60)}분
+                / {Math.round((status.monthlyLimitSec ?? status.limitSec) / 60)}차감분
               </span>
             </div>
 
@@ -192,10 +195,10 @@ function TopupPacksCard() {
     <Card className={CARD_SHADOW}>
       <CardHeader className="space-y-0 px-6 pb-0 pt-6">
         <CardTitle className="text-xl font-bold tracking-tight">
-          추가 분 구매
+          추가 차감분 구매
         </CardTitle>
         <p className="mt-1.5 text-base font-medium text-muted">
-          선불 충전, 유효기간 12개월
+          선불 차감분, 유효기간 12개월
         </p>
       </CardHeader>
       <CardContent className="px-6 pb-6 pt-4">
@@ -208,7 +211,7 @@ function TopupPacksCard() {
                 </span>
               ) : null}
               <p className="text-base font-bold tabular-nums text-foreground">
-                {pack.minutes}분
+                {pack.minutes}차감분
               </p>
               <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">
                 {formatPlanWon(pack.priceWon)}
@@ -268,7 +271,7 @@ export default function PlanPage() {
             플랜
           </h1>
           <p className="mt-2 text-base font-medium text-muted">
-            이번 주기 사용량과 포함 기능을 확인합니다.
+            현재 플랜과 사용량을 확인하세요.
           </p>
         </header>
 

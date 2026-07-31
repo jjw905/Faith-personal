@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import { TEAM_FEATURE_ADMIN_ONLY } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import {
   notifyMeetingScheduled,
   notifyPrivateConflict,
@@ -17,15 +17,19 @@ import {
   validateScheduleInput,
 } from "@/lib/team/scheduling";
 import {
+  hasTeamCapability,
   requireTeamCapability,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 export async function GET(request: Request) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const url = new URL(request.url);
   const teamId = url.searchParams.get("teamId")?.trim();
   if (!teamId) {
@@ -73,10 +77,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   let body: {
     teamId?: string;
     title?: string;
@@ -109,13 +112,23 @@ export async function POST(request: Request) {
   }
 
   const startNow = Boolean(body.startNow);
+  const requestedOrganizerId = body.organizerId?.trim() || session.user.id;
+  if (
+    requestedOrganizerId !== session.user.id &&
+    !hasTeamCapability(actor, "manageTeam")
+  ) {
+    return NextResponse.json(
+      { ok: false, message: "다른 멤버를 주최자로 지정할 권한이 없습니다." },
+      { status: 403 },
+    );
+  }
   const schedule = validateScheduleInput({
     title: body.title,
     scheduledStartAt:
       body.scheduledStartAt ??
       (startNow ? new Date().toISOString() : undefined),
     durationMinutes: body.durationMinutes ?? (startNow ? 60 : undefined),
-    organizerId: body.organizerId ?? session.user.id,
+    organizerId: requestedOrganizerId,
     participantIds: body.participantIds ?? [],
     backupHostId: body.backupHostId,
   });
@@ -129,7 +142,14 @@ export async function POST(request: Request) {
     actor.team.seatLimit,
   );
   const validMembers = await prisma.teamMember.findMany({
-    where: { teamId, userId: { in: requested }, user: { disabled: false } },
+    where: {
+      teamId,
+      userId: { in: requested },
+      user: {
+        disabled: false,
+        ...(TEAM_FEATURE_ADMIN_ONLY ? { role: "ADMIN" } : {}),
+      },
+    },
     select: { userId: true },
   });
   const validIds = clampParticipantsToSeatLimit(

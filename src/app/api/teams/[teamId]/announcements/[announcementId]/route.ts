@@ -1,22 +1,24 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import {
   isTeamManager,
   requireTeamCapability,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = {
   params: Promise<{ teamId: string; announcementId: string }>;
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId, announcementId } = await context.params;
   let body: { pinned?: boolean; title?: string; body?: string; archive?: boolean; confirmRead?: boolean };
   try {

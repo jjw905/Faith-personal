@@ -25,7 +25,6 @@ export async function getTeamMember(teamId: string, userId: string) {
           email: true,
           image: true,
           handle: true,
-          inviteCode: true,
           disabled: true,
         },
       },

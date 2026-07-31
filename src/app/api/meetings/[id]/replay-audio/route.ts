@@ -47,6 +47,12 @@ export async function GET(request: Request, { params }: Params) {
       { status: 404 },
     );
   }
+  if (access.teamMeeting && access.maskedOnly) {
+    return NextResponse.json(
+      { ok: false, message: "음성 원본은 팀장 정책에 따라 열람할 수 없습니다." },
+      { status: 403 },
+    );
+  }
 
   const file = resolveReplayAudioFile(id);
   if (!file) {

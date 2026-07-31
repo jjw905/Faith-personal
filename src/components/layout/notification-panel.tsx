@@ -109,6 +109,7 @@ type NotificationGroupProps = {
     inviteId: string,
     action: "accept" | "decline",
     reason?: string,
+    inviteType?: string,
   ) => void;
   onConfirmMeeting?: (
     notificationId: string,
@@ -172,6 +173,7 @@ export function NotificationPanel({
   const [recent, setRecent] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<PanelTab>("unread");
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const softActions = !isLive || Boolean(contained);
 
   const applyPreview = useCallback(() => {
@@ -230,12 +232,6 @@ export function NotificationPanel({
     if (!open) return;
     queueMicrotask(() => void load());
   }, [open, load]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (!isPageUxNotificationScenario(scenarioId)) return;
-    applyPreview();
-  }, [open, scenarioId, applyPreview]);
 
   async function markAllRead() {
     if (softActions || status !== "authenticated") {
@@ -309,20 +305,30 @@ export function NotificationPanel({
     inviteId: string,
     action: "accept" | "decline",
     reason?: string,
+    inviteType?: string,
   ) {
     if (softActions) {
       await markRead(notificationId);
       return;
     }
-    const res = await fetch(`/api/team-invites/${inviteId}/respond`, {
+    const endpoint =
+      inviteType === "personal_realtime"
+        ? `/api/personal-realtime/invites/${inviteId}/respond`
+        : `/api/team-invites/${inviteId}/respond`;
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, reason }),
+      body: JSON.stringify({ action, reason, notificationId }),
     });
-    const data = (await res.json()) as { ok?: boolean };
+    const data = (await res.json()) as { ok?: boolean; message?: string };
     if (res.ok && data.ok) {
+      setActionMessage(null);
       await markRead(notificationId);
       await load();
+    } else {
+      setActionMessage(
+        data.message ?? "팀 초대에 응답하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     }
   }
 
@@ -342,9 +348,15 @@ export function NotificationPanel({
         meetingId: meetingId ?? undefined,
       }),
     });
-    if (res.ok) {
+    const data = (await res.json()) as { ok?: boolean; message?: string };
+    if (res.ok && data.ok) {
+      setActionMessage(null);
       emitNotificationsChanged(Math.max(0, unread.length - 1));
       await load();
+    } else {
+      setActionMessage(
+        data.message ?? "회의 확인을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     }
   }
 
@@ -453,6 +465,15 @@ export function NotificationPanel({
           </div>
         </div>
 
+        {actionMessage ? (
+          <p
+            role="alert"
+            className="border-b border-border/60 bg-primary-soft px-4 py-3 text-base text-foreground sm:px-5"
+          >
+            {actionMessage}
+          </p>
+        ) : null}
+
         {!empty && !loading ? (
           <div className="flex shrink-0 gap-1 border-b border-border/60 px-3 py-2 sm:px-4">
             {(
@@ -533,8 +554,20 @@ export function NotificationPanel({
                   onClose={onClose}
                   onMarkRead={(id) => void markRead(id)}
                   onMarkReadInPlace={(id) => void markReadInPlace(id)}
-                  onInviteAction={(notificationId, inviteId, action, reason) =>
-                    void respondInvite(notificationId, inviteId, action, reason)
+                  onInviteAction={(
+                    notificationId,
+                    inviteId,
+                    action,
+                    reason,
+                    inviteType,
+                  ) =>
+                    void respondInvite(
+                      notificationId,
+                      inviteId,
+                      action,
+                      reason,
+                      inviteType,
+                    )
                   }
                   onConfirmMeeting={(notificationId, meetingId) =>
                     void confirmMeeting(notificationId, meetingId)
@@ -554,12 +587,14 @@ export function NotificationPanel({
                         inviteId,
                         action,
                         reason,
+                        inviteType,
                       ) =>
                         void respondInvite(
                           notificationId,
                           inviteId,
                           action,
                           reason,
+                          inviteType,
                         )
                       }
                       onConfirmMeeting={(notificationId, meetingId) =>
@@ -735,6 +770,9 @@ function NotificationGroup({
                                     String(n.data?.inviteId),
                                     "decline",
                                     reason,
+                                  typeof n.data?.inviteType === "string"
+                                    ? n.data.inviteType
+                                    : undefined,
                                   )
                                 }
                               >
@@ -760,6 +798,10 @@ function NotificationGroup({
                                   n.id,
                                   String(n.data?.inviteId),
                                   "accept",
+                                  undefined,
+                                  typeof n.data?.inviteType === "string"
+                                    ? n.data.inviteType
+                                    : undefined,
                                 )
                               }
                             >

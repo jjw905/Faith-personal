@@ -4,7 +4,9 @@ import {
 } from "@/lib/stt/diarization";
 import {
   alignDialogueToTimedSegments,
+  alignTextToWordTimings,
   type TimedSegment,
+  type WordTiming,
 } from "@/lib/stt/timed-segments";
 
 /**
@@ -20,10 +22,23 @@ import {
 
 /** 한국어 문장 끝. 종결어미 뒤 마침표가 없는 경우가 많아 줄바꿈도 경계로 본다. */
 function splitSentences(text: string): string[] {
-  return text
+  const rough = text
     .split(/\n+|(?<=[.!?。])\s+/)
     .map((s) => s.trim())
     .filter(Boolean);
+  // "네, 안녕하세요"처럼 직전 화자 긍정 + 다음 인사 가 한 문장으로 붙으면
+  // 화자 경계가 무너진다. 짧은 긍정만 앞에 떼어 앞 문장에 붙일 수 있게 한다.
+  const out: string[] = [];
+  for (const s of rough) {
+    const m = s.match(/^(네|예)([,.…]*)\s+(안녕하.+)$/);
+    if (m) {
+      out.push(`${m[1]}${m[2] || ""}`.trim());
+      out.push(m[3]!.trim());
+      continue;
+    }
+    out.push(s);
+  }
+  return out;
 }
 
 /** 너무 짧은 조각은 앞 문장에 붙인다. 한두 글자로는 화자를 가릴 수 없다. */
@@ -54,6 +69,102 @@ export type SpeakerBlock = {
   speaker: string;
   text: string;
 };
+
+/**
+ * 고품질 본전사 단어를 Whisper 실측 단어 시각에 붙인 뒤, Whisper 세그먼트와
+ * 음성 화자 경계마다 증거 블록을 만든다.
+ *
+ * 최종 대화 줄을 휴리스틱으로 나누는 함수가 아니다. 모델이 화자를 다시
+ * 검토할 수 있도록 원문을 손실 없이 작은 시간 블록으로 제공한다.
+ */
+export function attachSpeakersToWordTimings(params: {
+  text: string;
+  wordTimings: WordTiming[];
+  timedSegments: TimedSegment[];
+  diarization: DiarizationResult;
+}): SpeakerBlock[] {
+  if (
+    !params.text.trim() ||
+    params.wordTimings.length === 0 ||
+    params.timedSegments.length === 0
+  ) {
+    return [];
+  }
+  const aligned = alignTextToWordTimings(params.text, params.wordTimings);
+  const denseLength = params.text.replace(/[^\p{L}\p{N}]/gu, "").length;
+  const matchedLength = aligned.reduce(
+    (sum, word) => sum + word.text.replace(/[^\p{L}\p{N}]/gu, "").length,
+    0,
+  );
+  // 매칭이 너무 적으면 잘못된 시간 블록보다 기존 문장 정렬 fallback이 안전하다.
+  if (aligned.length < 3 || matchedLength / Math.max(1, denseLength) < 0.25) {
+    return [];
+  }
+
+  const labeledWords = assignSpeakersToTimedSegments({
+    timed: aligned.map((word) => ({
+      ...word,
+      text: word.text,
+    })),
+    diarization: params.diarization,
+    anchor: "start",
+  });
+  if (labeledWords.length === 0) return [];
+
+  // 화자 경계가 한 단어 끝을 몇백 ms 침범해도 문장 마지막 한두 음절이 다음
+  // 사람에게 넘어가지 않도록, 문장을 먼저 잡고 그 안의 정렬 단어 다수결로
+  // 음성 화자를 고른다. "진행자 호명. 기자 자기소개."는 문장 끝에서 분리된다.
+  const ranges: Array<{ start: number; end: number }> = [];
+  let rangeStart = 0;
+  for (const match of params.text.matchAll(/[.!?。](?:\s+|$)|\n+/gu)) {
+    const end = (match.index ?? 0) + match[0].length;
+    if (end > rangeStart) ranges.push({ start: rangeStart, end });
+    rangeStart = end;
+  }
+  if (rangeStart < params.text.length) {
+    ranges.push({ start: rangeStart, end: params.text.length });
+  }
+
+  return ranges.flatMap(({ start, end }) => {
+    const text = params.text.slice(start, end).trim();
+    if (!text) return [];
+    const words = labeledWords.filter(
+      (word) => word.startOffset < end && word.endOffset > start,
+    );
+    const nearest =
+      words[0] ??
+      labeledWords.reduce((best, word) =>
+        Math.abs(word.startOffset - start) <
+        Math.abs(best.startOffset - start)
+          ? word
+          : best,
+      );
+    const votes = new Map<string, number>();
+    for (const word of words) {
+      const weight = Math.max(
+        1,
+        word.text.replace(/[^\p{L}\p{N}]/gu, "").length,
+      );
+      votes.set(word.speaker, (votes.get(word.speaker) ?? 0) + weight);
+    }
+    let speaker = nearest.speaker;
+    let bestVote = -1;
+    for (const [candidate, vote] of votes) {
+      if (vote > bestVote) {
+        speaker = candidate;
+        bestVote = vote;
+      }
+    }
+    return [
+      {
+        startSec: words[0]?.startSec ?? nearest.startSec,
+        endSec: words[words.length - 1]?.endSec ?? nearest.endSec,
+        speaker,
+        text,
+      },
+    ];
+  });
+}
 
 /**
  * 문장 끝을 "다음 문장 시작"이 아니라 실측 구간이 실제로 이어지는 데까지로
@@ -139,6 +250,8 @@ export function attachSpeakersToText(params: {
   timedSegments: TimedSegment[];
   diarization: DiarizationResult;
   durationSec: number;
+  /** 화자 일관성 모델에 넘길 때는 문장 단위를 보존한다. 기본은 기존처럼 병합. */
+  mergeAdjacent?: boolean;
 }): SpeakerBlock[] {
   const sentences = mergeShort(splitSentences(params.text));
   if (sentences.length === 0 || params.timedSegments.length === 0) return [];
@@ -172,6 +285,7 @@ export function attachSpeakersToText(params: {
   for (const row of labeled) {
     const last = blocks[blocks.length - 1];
     if (
+      params.mergeAdjacent !== false &&
       last &&
       last.speaker === row.speaker &&
       last.text.length + row.text.length <= MAX_BLOCK_CHARS

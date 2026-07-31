@@ -31,7 +31,7 @@ export default async function AuditPage() {
 
       <TeamAuditPanel />
 
-      <Card className="rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
+      <Card>
         <CardHeader className="space-y-0 px-6 pb-0 pt-6">
           <CardTitle className="text-xl font-bold tracking-tight">
             보안 추이

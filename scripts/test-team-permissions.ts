@@ -44,6 +44,11 @@ import {
   isPastDataRetention,
   isWithinRetentionDays,
 } from "../src/lib/data-retention";
+import {
+  TEAM_FEATURE_ADMIN_ONLY,
+  TEAM_FEATURE_ENABLED,
+  isTeamFeatureEnabledForRole,
+} from "../src/lib/feature-flags";
 
 const owner: TeamPermissionSubject = {
   role: "OWNER",
@@ -78,6 +83,16 @@ assert.equal(hasTeamCapability(delegate, "invite"), true);
 assert.equal(hasTeamCapability(delegate, "createMeeting"), true);
 assert.equal(hasTeamCapability(delegate, "manageRecordAccess"), true);
 assert.equal(hasTeamCapability(delegate, "manageTeam"), false);
+
+// Platform team gate: changing the launch switch must not require test edits.
+assert.equal(TEAM_FEATURE_ENABLED, true);
+assert.equal(isTeamFeatureEnabledForRole("ADMIN"), true);
+assert.equal(
+  isTeamFeatureEnabledForRole("USER"),
+  !TEAM_FEATURE_ADMIN_ONLY,
+);
+assert.equal(isTeamFeatureEnabledForRole("MEMBER"), false);
+assert.equal(isTeamFeatureEnabledForRole(null), false);
 
 const now = new Date("2026-07-24T06:00:00.000Z");
 assert.equal(
@@ -248,10 +263,25 @@ assert.equal(assertOnlineOnly("OFFLINE").ok, false);
 assert.equal(assertOnlineOnly("ONLINE").ok, true);
 assert.equal(assertOnlineOnly(undefined).ok, true);
 
-// Live team STT is not wired; start path must stay unavailable.
-assert.equal(isLiveTeamSttRuntimeAvailable(), false);
+// Live team STT stays behind the launch switch and requires an API key.
+assert.equal(
+  isLiveTeamSttRuntimeAvailable({ OPENAI_API_KEY: "test-key" }, false),
+  false,
+);
+assert.equal(
+  isLiveTeamSttRuntimeAvailable(
+    { OPENAI_API_KEY: "your_openai_api_key_here" },
+    true,
+  ),
+  false,
+);
+assert.equal(
+  isLiveTeamSttRuntimeAvailable({ OPENAI_API_KEY: "test-key" }, true),
+  true,
+);
 assert.ok(LIVE_TEAM_STT_INTEGRATION.toLowerCase().includes("livekit"));
-assert.ok(liveTeamSttUnavailableMessage().includes("STT"));
+assert.ok(liveTeamSttUnavailableMessage(false).includes("중지"));
+assert.ok(liveTeamSttUnavailableMessage(true).includes("설정"));
 
 // Retention: audit 1y is enforceable; trash 7d lifecycle is not modeled.
 assert.equal(TEAM_AUDIT_RETENTION_DAYS, 365);
@@ -284,9 +314,9 @@ assert.equal(
 
 console.log("Team policies: OK");
 console.log(
-  "LIVE_STT_GAP:",
+  "LIVE_STT_SWITCH_READY:",
   LIVE_TEAM_STT_INTEGRATION,
-  "| recording start returns 503 LIVE_STT_UNAVAILABLE; quota unchanged",
+  "| disabled by default; launch requires the public switch, OpenAI, and LiveKit",
 );
 console.log(
   "TRASH_RETENTION_GAP: soft-delete/deletedAt not modeled; 7-day trash purge not active",

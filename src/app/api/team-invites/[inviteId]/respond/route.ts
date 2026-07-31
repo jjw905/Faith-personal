@@ -2,17 +2,19 @@ import { NextResponse } from "next/server";
 
 import { createNotification } from "@/lib/notifications-store";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
 import { writeTeamAudit } from "@/lib/team-permissions";
 import { isTeamInviteExpired } from "@/lib/team-permission-matrix";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ inviteId: string }> };
 
 export async function POST(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { inviteId } = await context.params;
   let body: { action?: "accept" | "decline"; reason?: string };
   try {
@@ -58,6 +60,7 @@ export async function POST(request: Request, context: RouteContext) {
         body: body.reason?.trim()
           ? `${session.user.name || "사용자"}: ${body.reason.trim().slice(0, 160)}`
           : `${session.user.name || "사용자"}님이 초대를 거절했습니다.`,
+        teamId: invite.teamId,
         data: { inviteId, teamId: invite.teamId },
       }),
       writeTeamAudit({
@@ -107,6 +110,7 @@ export async function POST(request: Request, context: RouteContext) {
       type: "invite",
       title: "팀 초대를 수락했습니다",
       body: `${session.user.name || "사용자"}님이 ${invite.team.name} 팀에 참여했습니다.`,
+      teamId: invite.teamId,
       data: { inviteId, teamId: invite.teamId },
     }),
     writeTeamAudit({

@@ -35,16 +35,20 @@ export type RealtimeTranscribeResult = {
 export const REALTIME_SESSION_MODEL = "gpt-realtime-2.1" as const;
 /** 스트리밍 전용 모델. 지연은 낮지만 단가가 높다. */
 export const REALTIME_STT_WHISPER = "gpt-realtime-whisper" as const;
+/** 최신 연속 스트리밍 전사 모델. */
+export const REALTIME_STT_LIVE = "gpt-live-transcribe" as const;
 /** server_vad 턴 감지로 쓰는 저비용 모델. */
 export const REALTIME_STT_MINI = "gpt-4o-mini-transcribe" as const;
 
 export type RealtimeSttModel =
   | typeof REALTIME_STT_WHISPER
+  | typeof REALTIME_STT_LIVE
   | typeof REALTIME_STT_MINI;
 
 /** 추정 단가 USD/분. */
 export const REALTIME_STT_USD_PER_MINUTE: Record<RealtimeSttModel, number> = {
   [REALTIME_STT_WHISPER]: 0.017,
+  [REALTIME_STT_LIVE]: 0.017,
   [REALTIME_STT_MINI]: 0.003,
 };
 

@@ -259,7 +259,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
               <div className="flex items-center gap-4 py-5">
                 <Avatar className="h-16 w-16 shrink-0 ring-1 ring-border">
                   {image ? <AvatarImage src={image} alt="" /> : null}
-                  <AvatarFallback className="bg-white text-lg font-semibold text-foreground">
+                  <AvatarFallback className="bg-foreground text-lg font-semibold text-background">
                     {currentUser.avatarInitials}
                   </AvatarFallback>
                 </Avatar>

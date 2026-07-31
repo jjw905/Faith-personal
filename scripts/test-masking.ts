@@ -5,6 +5,11 @@
 import assert from "node:assert/strict";
 
 import { maskPii } from "../src/lib/masking/mask";
+import {
+  maskTeamMeeting,
+  maskTeamTimeline,
+  maskTeamTranscript,
+} from "../src/lib/team/masked-meeting-content";
 import sampleData from "../src/mocks/sample-transcripts.json";
 
 function run() {
@@ -92,6 +97,93 @@ function run() {
 
   const rrnOnly = maskPii("9001011234567");
   assert.equal(rrnOnly.stats.account, 0, "rrn must not be account");
+
+  const maskedMeeting = maskTeamMeeting(
+    {
+      id: "team-1",
+      title: "홍길동 회의",
+      tags: ["홍길동"],
+      summaryTags: [],
+      date: "2026-07-24T00:00:00.000Z",
+      duration: "10분",
+      participants: [
+        {
+          id: "person-1",
+          name: "홍길동",
+          initials: "HG",
+          color: "blue",
+          recognitionNote: "홍길동 담당",
+          summary: "홍길동이 발표",
+          tags: ["홍길동"],
+        },
+      ],
+      status: "completed",
+      security: "protected",
+      workspace: "team",
+    },
+    ["홍길동"],
+  );
+  assert.equal(maskedMeeting.title.includes("홍길동"), false);
+  assert.equal(maskedMeeting.participants[0]?.name.includes("홍길동"), false);
+  assert.equal(
+    maskedMeeting.participants[0]?.recognitionNote?.includes("홍길동"),
+    false,
+  );
+
+  const maskedTranscript = maskTeamTranscript(
+    {
+      meetingId: "team-1",
+      lines: [
+        {
+          id: "line-1",
+          time: "00:00",
+          speaker: "홍길동",
+          text: "홍길동의 발언",
+          words: [
+            {
+              text: "홍길동",
+              startSec: 0,
+              endSec: 1,
+              startOffset: 0,
+              endOffset: 3,
+            },
+          ],
+        },
+      ],
+    },
+    ["홍길동"],
+  );
+  assert.equal(maskedTranscript.lines[0]?.speaker.includes("홍길동"), false);
+  assert.equal(maskedTranscript.lines[0]?.words, undefined);
+
+  const maskedTimeline = maskTeamTimeline(
+    {
+      meetingId: "team-1",
+      durationLabel: "10분",
+      overallSummary: "홍길동의 요약",
+      segments: [
+        {
+          id: "segment-1",
+          start: "00:00",
+          end: "00:10",
+          title: "홍길동 안건",
+          summary: "홍길동 논의",
+          kind: "discussion",
+          speakers: ["홍길동"],
+          speakerNotes: [{ name: "홍길동", said: "홍길동 발언" }],
+        },
+      ],
+    },
+    ["홍길동"],
+  );
+  assert.equal(
+    maskedTimeline.segments[0]?.speakers?.[0]?.includes("홍길동"),
+    false,
+  );
+  assert.equal(
+    maskedTimeline.segments[0]?.speakerNotes?.[0]?.name.includes("홍길동"),
+    false,
+  );
 
   console.log("masking self-test passed");
   console.log(

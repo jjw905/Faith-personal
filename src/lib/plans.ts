@@ -47,11 +47,12 @@ export const PLAN_CATALOG: Record<CatalogPlanId, PlanCatalogEntry> = {
     yearlyMonthlyPrice: 0,
     yearlyTotal: 0,
     includedMinutes: 60,
-    overage: { upload: null, realtime: null },
+    overage: { upload: 20, realtime: 30 },
     storageLabel: "500MB",
     features: [
       "보관함 500MB",
       "음성 텍스트 추출",
+      "정밀 화자·대화추적 선택(1.5배 차감)",
       "개인정보 자동 마스킹",
     ],
   },
@@ -64,12 +65,13 @@ export const PLAN_CATALOG: Record<CatalogPlanId, PlanCatalogEntry> = {
     yearlyTotal: 190_000,
     badges: ["연 결제 시 2개월 무료", "추천"],
     includedMinutes: 1_000,
-    overage: { upload: 22, realtime: 30 },
+    overage: { upload: 20, realtime: 30 },
     storageLabel: "20GB",
     features: [
       "보관함 20GB",
       "고급 요약, 타임라인",
       "단어 단위 재생 하이라이트",
+      "정밀 화자·대화추적 선택(1.5배 차감)",
       "개인 워크스페이스",
     ],
     featured: true,
@@ -83,13 +85,14 @@ export const PLAN_CATALOG: Record<CatalogPlanId, PlanCatalogEntry> = {
     priceUnit: "/ 인 / 월",
     badges: ["Pro 월간 대비 20% 할인"],
     includedMinutes: 300,
-    overage: { upload: 22, realtime: 30 },
+    overage: { upload: 20, realtime: 30 },
     storageLabel: "좌석당 20GB",
     features: [
       "보관함 좌석당 20GB",
       "팀 워크스페이스, 초대",
       "역할, 기록 열람 권한",
       "온라인 팀 회의",
+      "정밀 화자·대화추적 선택(1.5배 차감)",
       "팀 분은 좌석 합산 풀에서 차감",
       "예정 회의, 알림, 팀 공지",
       "감사 로그, 팀 보안 정책",
@@ -106,9 +109,9 @@ export type TopupPack = {
 };
 
 export const TOPUP_PACKS: TopupPack[] = [
-  { id: "pack-30", minutes: 30, priceWon: 900 },
-  { id: "pack-120", minutes: 120, priceWon: 2_900, badge: "가장 많이 선택" },
-  { id: "pack-360", minutes: 360, priceWon: 7_900, badge: "가장 알차게" },
+  { id: "pack-30", minutes: 30, priceWon: 600 },
+  { id: "pack-120", minutes: 120, priceWon: 2_400, badge: "가장 많이 선택" },
+  { id: "pack-360", minutes: 360, priceWon: 7_200, badge: "가장 알차게" },
 ];
 
 export function formatPlanWon(n: number) {
@@ -117,8 +120,8 @@ export function formatPlanWon(n: number) {
 
 export function formatPlanMinutes(entry: PlanCatalogEntry) {
   const minutes = entry.includedMinutes.toLocaleString("ko-KR");
-  if (entry.id === "TEAM") return `좌석당 ${minutes}분 합산`;
-  return `월 ${minutes}분`;
+  if (entry.id === "TEAM") return `좌석당 ${minutes}차감분 합산`;
+  return `월 ${minutes}차감분`;
 }
 
 export function planMonthlyFeeLabel(entry: PlanCatalogEntry) {
@@ -132,4 +135,4 @@ export function planMonthlyFeeLabel(entry: PlanCatalogEntry) {
 
 /** 포함 분을 다 썼을 때 안내하는 공통 문구. 분당 단가는 노출하지 않는다. */
 export const PLAN_OVERAGE_NOTE =
-  "포함 분을 다 쓰면 업그레이드 또는 추가 분 팩으로 이어갑니다";
+  "일반 분석 1분은 1차감분, 정밀 분석 1분은 1.5차감분입니다";

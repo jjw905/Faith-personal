@@ -2,12 +2,15 @@ import { randomUUID } from "crypto";
 import { after, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/require-user";
-import { parseAccountDisplayPrefs } from "@/lib/account-settings";
-import { DEFAULT_STT_MODEL } from "@/lib/stt/models";
+import {
+  ANALYSIS_MODE_POLICY,
+  parseAnalysisMode,
+} from "@/lib/stt/analysis-mode";
 import { processUploadedMeeting } from "@/lib/stt/process-upload";
 import { placeholderMeeting } from "@/lib/stt/to-meeting";
 import { stripFileExtension } from "@/lib/meeting-process";
 import { prisma } from "@/lib/prisma";
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import {
   getUploadQuotaStatus,
   UploadQuotaExceededError,
@@ -18,6 +21,10 @@ import {
 } from "@/lib/user-meetings-store";
 import type { WorkspaceId } from "@/lib/workspaces";
 import { requireTeamCapability, writeTeamAudit } from "@/lib/team-permissions";
+import {
+  getTeamFeatureAccess,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 export async function POST(request: Request) {
   const session = await requireUser();
@@ -27,6 +34,12 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   }
+  const startLimit = rateLimit({
+    key: `upload-analysis:${session.user.id}:${clientIp(request)}`,
+    limit: 20,
+    windowMs: 60 * 60_000,
+  });
+  if (!startLimit.ok) return rateLimitResponse(startLimit.retryAfterSec);
 
   let body: {
     vaultFileId?: string;
@@ -34,6 +47,7 @@ export async function POST(request: Request) {
     workspace?: string;
     teamId?: string;
     mode?: "ONLINE" | "OFFLINE";
+    analysisMode?: string;
   };
   try {
     body = await request.json();
@@ -52,8 +66,11 @@ export async function POST(request: Request) {
     );
   }
 
-  // 업로드 회의 STT는 mini로 고정. 클라이언트 model은 무시.
-  const model = DEFAULT_STT_MODEL;
+  // 클라이언트는 공개된 분석 모드만 고른다. 실제 모델과 비용 경로는 서버가
+  // 고정해 임의의 비싼 모델명 주입이나 차감 우회를 막는다.
+  const analysisMode = parseAnalysisMode(body.analysisMode);
+  const policy = ANALYSIS_MODE_POLICY[analysisMode];
+  const model = policy.model;
 
   const file = await prisma.vaultFile.findFirst({
     where: { id: vaultFileId, userId: session.user.id },
@@ -95,6 +112,10 @@ export async function POST(request: Request) {
   const workspace: WorkspaceId =
     body.workspace === "team" ? "team" : "personal";
   const teamId = body.teamId?.trim();
+  if (workspace === "team") {
+    const teamFeature = await getTeamFeatureAccess(session.user.id);
+    if (!teamFeature.ok) return teamFeatureFailureResponse(teamFeature);
+  }
   const teamMember =
     workspace === "team" && teamId
       ? await requireTeamCapability(
@@ -124,6 +145,7 @@ export async function POST(request: Request) {
     userId: session.user.id,
     vaultFileId,
     model,
+    analysisMode,
     phase: "transcribing",
     progressPercent: 0,
     createdAt: now,
@@ -168,22 +190,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const personalSettings = await prisma.userPersonalSettings.findUnique({
-    where: { userId: session.user.id },
-    select: { displayPrefs: true },
-  });
-  const { speakerSplit } = parseAccountDisplayPrefs(
-    personalSettings?.displayPrefs,
-  );
-
   after(() =>
     processUploadedMeeting({
       meetingId,
       userId: session.user.id,
       vaultFileId,
-      model,
+      analysisMode,
       title,
-      speakerSplit,
     }),
   );
 

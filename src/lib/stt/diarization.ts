@@ -158,6 +158,16 @@ export async function diarizeAudio(params: {
     if (!Array.isArray(result.segments)) {
       throw new Error("화자분리 결과 형식이 올바르지 않습니다.");
     }
+    // Community-1의 exclusive diarization은 전사 시각 결합을 위해 이미
+    // 겹침 없는 화자 경계를 만든다. Sherpa 경계 잡음 보정을 다시 적용하면
+    // KTV의 실제 8번째 질문자를 유령 화자로 오인해 7명으로 합쳤다.
+    if (result.model.includes("speaker-diarization-community-1")) {
+      return {
+        ...result,
+        speakerCount: new Set(result.segments.map((segment) => segment.speaker))
+          .size,
+      };
+    }
     return glueBoundaryFragmentSpeakers(prunePhantomSpeakers(result));
   } catch (error) {
     const detail =
@@ -333,7 +343,11 @@ export function glueBoundaryFragmentSpeakers(
     return target ? { ...s, speaker: target.speaker } : s;
   });
 
-  return { ...result, segments: glued };
+  return {
+    ...result,
+    segments: glued,
+    speakerCount: new Set(glued.map((segment) => segment.speaker)).size,
+  };
 }
 
 function speakerLabels(segments: DiarizationSegment[]): Map<string, string> {
@@ -423,8 +437,10 @@ type TimedLike = { startSec: number; endSec: number; text: string };
 export function assignSpeakersToTimedSegments<T extends TimedLike>(params: {
   timed: T[];
   diarization: DiarizationResult;
+  /** 단어는 끝 시각이 다음 화자 구간으로 늘어날 수 있어 시작점을 우선한다. */
+  anchor?: "overlap" | "start";
 }): Array<T & { speaker: string }> {
-  const { timed, diarization } = params;
+  const { timed, diarization, anchor = "overlap" } = params;
   const labels = speakerLabels(diarization.segments);
 
   return timed.map((seg) => {
@@ -432,7 +448,23 @@ export function assignSpeakersToTimedSegments<T extends TimedLike>(params: {
     const endSec = Math.max(startSec + 0.01, seg.endSec);
 
     const bySpeaker = new Map<string, number>();
+    let anchored = false;
+    if (anchor === "start") {
+      const point = startSec + Math.min(0.05, (endSec - startSec) * 0.2);
+      const active = diarization.segments.filter(
+        (candidate) =>
+          candidate.startSec <= point && point < candidate.endSec,
+      );
+      if (active.length > 0) {
+        const picked = active.reduce((best, candidate) =>
+          candidate.endSec - point > best.endSec - point ? candidate : best,
+        );
+        bySpeaker.set(picked.speaker, 1);
+        anchored = true;
+      }
+    }
     for (const d of diarization.segments) {
+      if (anchored) break;
       const amount = overlap(startSec, endSec, d.startSec, d.endSec);
       if (amount <= 0) continue;
       bySpeaker.set(d.speaker, (bySpeaker.get(d.speaker) ?? 0) + amount);

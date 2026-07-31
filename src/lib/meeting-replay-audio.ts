@@ -8,7 +8,11 @@ import { getUserMeeting } from "@/lib/user-meetings-store";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTranscript } from "@/types/transcript";
 
-const BENCH_ROOT = join(process.cwd(), ".data", "stt-bench");
+const BENCH_ROOT = join(
+  /*turbopackIgnore: true*/ process.cwd(),
+  ".data",
+  "stt-bench",
+);
 
 function mimeForAudioPath(path: string): string {
   const lower = path.toLowerCase();
@@ -31,7 +35,7 @@ export function resolveReplayAudioFile(meetingId: string): {
   const raw = meeting?.replayAudio?.trim();
   if (!raw || raw.startsWith("/")) return null;
 
-  const absolutePath = resolve(BENCH_ROOT, raw);
+  const absolutePath = resolve(/*turbopackIgnore: true*/ BENCH_ROOT, raw);
   if (
     absolutePath !== BENCH_ROOT &&
     !absolutePath.startsWith(`${BENCH_ROOT}/`) &&
@@ -39,7 +43,7 @@ export function resolveReplayAudioFile(meetingId: string): {
   ) {
     return null;
   }
-  if (!existsSync(absolutePath)) return null;
+  if (!existsSync(/*turbopackIgnore: true*/ absolutePath)) return null;
   return {
     absolutePath,
     label: meeting?.title ? `${meeting.title} 다시듣기` : "다시듣기",

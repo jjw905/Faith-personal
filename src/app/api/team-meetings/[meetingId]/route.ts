@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
+import { TEAM_FEATURE_ADMIN_ONLY } from "@/lib/feature-flags";
 import { closeLiveKitRoom } from "@/lib/livekit-admin";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
+import {
+  isLiveTeamSttRuntimeAvailable,
+  liveTeamSttUnavailableMessage,
+} from "@/lib/team/live-stt";
 import { deriveMeetingState } from "@/lib/team/meeting-lifecycle";
 import {
   notifyMeetingCanceled,
@@ -18,20 +22,22 @@ import {
   validateScheduleInput,
 } from "@/lib/team/scheduling";
 import {
+  getTeamMember,
   hasTeamCapability,
-  requireTeamCapability,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ meetingId: string }> };
 
 export async function GET(_: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { meetingId } = await context.params;
-  await reconcileTeamMeeting(meetingId);
   const meeting = await prisma.teamMeeting.findUnique({
     where: { id: meetingId },
     include: {
@@ -65,20 +71,46 @@ export async function GET(_: Request, context: RouteContext) {
   if (!allowed) {
     return NextResponse.json({ ok: false, message: "권한이 없습니다." }, { status: 403 });
   }
-  const derived = deriveMeetingState(meeting);
+  const canViewWithoutAcknowledgement =
+    meeting.organizerId === session.user.id ||
+    membership.role === "OWNER" ||
+    hasTeamCapability(membership, "manageRecordAccess");
+  if (
+    !canViewWithoutAcknowledgement &&
+    access &&
+    (access.isParticipant || access.canReadMasked) &&
+    !access.acknowledgedAt
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "MEETING_ACK_REQUIRED",
+        message: "참석 확인 후 회의 정보를 확인할 수 있습니다.",
+      },
+      { status: 409 },
+    );
+  }
+  const reconciled = await reconcileTeamMeeting(meetingId);
+  const currentMeeting = reconciled?.meeting
+    ? { ...meeting, ...reconciled.meeting }
+    : meeting;
+  const derived = deriveMeetingState(currentMeeting);
   return NextResponse.json({
     ok: true,
-    meeting,
+    meeting: currentMeeting,
     derived,
+    liveStt: {
+      available: isLiveTeamSttRuntimeAvailable(),
+      unavailableMessage: liveTeamSttUnavailableMessage(),
+    },
     serverNow: new Date().toISOString(),
   });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { meetingId } = await context.params;
   const meeting = await prisma.teamMeeting.findUnique({
     where: { id: meetingId },
@@ -87,12 +119,12 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!meeting) {
     return NextResponse.json({ ok: false, message: "회의를 찾을 수 없습니다." }, { status: 404 });
   }
-  const actor = await requireTeamCapability(
-    meeting.teamId,
-    session.user.id,
-    "createMeeting",
-  );
-  if (!actor && meeting.organizerId !== session.user.id) {
+  const actor = await getTeamMember(meeting.teamId, session.user.id);
+  if (
+    !actor ||
+    (meeting.organizerId !== session.user.id &&
+      !hasTeamCapability(actor, "manageTeam"))
+  ) {
     return NextResponse.json({ ok: false, message: "권한이 없습니다." }, { status: 403 });
   }
 
@@ -220,7 +252,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       where: {
         teamId: meeting.teamId,
         userId: { in: schedule.value.participantIds },
-        user: { disabled: false },
+        user: {
+          disabled: false,
+          ...(TEAM_FEATURE_ADMIN_ONLY ? { role: "ADMIN" } : {}),
+        },
       },
       select: { userId: true },
     });
@@ -282,9 +317,12 @@ export async function PATCH(request: Request, context: RouteContext) {
         const keep = new Set(nextParticipantIds);
         await tx.teamMeetingAccess.updateMany({
           where: { meetingId, userId: { notIn: Array.from(keep) } },
-          data: { isParticipant: false },
+          data: { isParticipant: false, acknowledgedAt: null },
         });
         for (const userId of keep) {
+          const previousAccess = meeting.access.find(
+            (row) => row.userId === userId,
+          );
           await tx.teamMeetingAccess.upsert({
             where: { meetingId_userId: { meetingId, userId } },
             create: {
@@ -294,7 +332,12 @@ export async function PATCH(request: Request, context: RouteContext) {
               canReadMasked: true,
               grantedById: session.user.id,
             },
-            update: { isParticipant: true },
+            update: {
+              isParticipant: true,
+              ...(previousAccess?.isParticipant
+                ? {}
+                : { acknowledgedAt: null }),
+            },
           });
         }
       }

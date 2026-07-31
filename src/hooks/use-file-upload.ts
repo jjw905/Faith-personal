@@ -40,6 +40,9 @@ export function useFileUpload(options?: { persist?: boolean }) {
   const persist = options?.persist !== false;
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedDurationSec, setSelectedDurationSec] = useState<number | null>(
+    null,
+  );
   const [uploadStatus, setUploadStatus] = useState<
     "idle" | "uploading" | "done" | "error"
   >("idle");
@@ -94,10 +97,12 @@ export function useFileUpload(options?: { persist?: boolean }) {
     async (file: File) => {
       setUploadError(null);
       setStoredId(null);
+      setSelectedDurationSec(null);
       try {
         assertUploadAudioBytes(file.size);
         const durationSec = await probeBrowserAudioDurationSec(file);
         if (durationSec != null) assertUploadAudioDuration(durationSec);
+        setSelectedDurationSec(durationSec);
       } catch (err) {
         setSelectedFile(file);
         setUploadStatus("error");
@@ -140,6 +145,7 @@ export function useFileUpload(options?: { persist?: boolean }) {
     setPendingFile(null);
     setDuplicateNextName(null);
     setSelectedFile(null);
+    setSelectedDurationSec(null);
     setUploadStatus("idle");
     setUploadError(null);
     setStoredId(null);
@@ -157,6 +163,7 @@ export function useFileUpload(options?: { persist?: boolean }) {
       try {
         const durationSec = await probeBrowserAudioDurationSec(file);
         if (durationSec != null) assertUploadAudioDuration(durationSec);
+        setSelectedDurationSec(durationSec);
         setStoredId(id);
         setUploadStatus("done");
       } catch (err) {
@@ -190,6 +197,7 @@ export function useFileUpload(options?: { persist?: boolean }) {
 
   const clearFile = useCallback(() => {
     setSelectedFile(null);
+    setSelectedDurationSec(null);
     setUploadStatus("idle");
     setUploadError(null);
     setStoredId(null);
@@ -200,6 +208,7 @@ export function useFileUpload(options?: { persist?: boolean }) {
   return {
     isDragging,
     selectedFile,
+    selectedDurationSec,
     uploadStatus,
     uploadError,
     storedId,

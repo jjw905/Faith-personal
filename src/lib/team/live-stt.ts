@@ -1,3 +1,5 @@
+import { REALTIME_FEATURE_ENABLED } from "@/lib/feature-flags";
+
 /**
  * Live online-meeting STT bridge.
  *
@@ -11,11 +13,23 @@
 export const LIVE_TEAM_STT_INTEGRATION =
   "LiveKit local track → OpenAI WebRTC mini transcription";
 
-export function isLiveTeamSttRuntimeAvailable() {
-  const key = process.env.OPENAI_API_KEY?.trim();
-  return Boolean(key && key !== "your_openai_api_key_here");
+export function isLiveTeamSttRuntimeAvailable(
+  env: { OPENAI_API_KEY?: string } = process.env as {
+    OPENAI_API_KEY?: string;
+  },
+  featureEnabled = REALTIME_FEATURE_ENABLED,
+) {
+  const key = env.OPENAI_API_KEY?.trim();
+  return (
+    featureEnabled &&
+    Boolean(key && key !== "your_openai_api_key_here")
+  );
 }
 
-export function liveTeamSttUnavailableMessage() {
-  return "실시간 기록 설정을 확인해 주세요. 음성 통화는 계속 사용할 수 있습니다.";
+export function liveTeamSttUnavailableMessage(
+  featureEnabled = REALTIME_FEATURE_ENABLED,
+) {
+  return featureEnabled
+    ? "실시간 STT 설정을 확인해 주세요. 음성 통화는 계속 사용할 수 있습니다."
+    : "실시간 STT(받아쓰기)는 검증 기간 동안 중지되어 있습니다. 음성 통화는 계속 사용할 수 있습니다.";
 }

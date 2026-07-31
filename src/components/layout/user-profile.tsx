@@ -309,7 +309,7 @@ export function UserProfile({
           {avatarSrc ? (
             <AvatarImage src={avatarSrc} alt="" className="object-cover" />
           ) : null}
-          <AvatarFallback className="bg-white text-sm font-semibold text-foreground">
+          <AvatarFallback className="bg-foreground text-sm font-semibold text-background">
             {currentUser.avatarInitials}
           </AvatarFallback>
         </Avatar>

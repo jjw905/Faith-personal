@@ -30,6 +30,7 @@ export type TeamMeetingComposerValues = {
 export function TeamMeetingComposer({
   members,
   initialIntent = "start",
+  fixedIntent,
   showTeamSelect,
   teams,
   teamId,
@@ -43,6 +44,8 @@ export function TeamMeetingComposer({
 }: {
   members: ParticipantOption[];
   initialIntent?: MeetingIntent;
+  /** 실시간/일정 전용 화면에서는 방식 선택을 숨기고 경로의 의도를 고정한다. */
+  fixedIntent?: MeetingIntent;
   showTeamSelect?: boolean;
   teams?: Array<{ id: string; name: string }>;
   teamId?: string | null;
@@ -63,6 +66,7 @@ export function TeamMeetingComposer({
   const [backupHostId, setBackupHostId] = useState("");
   const [backupOpen, setBackupOpen] = useState(false);
   const [localMessage, setLocalMessage] = useState("");
+  const resolvedIntent = fixedIntent ?? intent;
 
   const presetActive = useMemo(
     () =>
@@ -77,7 +81,7 @@ export function TeamMeetingComposer({
     title.trim().length > 0 &&
     participantIds.length > 0 &&
     members.length > 0 &&
-    (intent === "start" || Boolean(start));
+    (resolvedIntent === "start" || Boolean(start));
 
   function submit() {
     if (members.length === 0) {
@@ -92,13 +96,13 @@ export function TeamMeetingComposer({
       setLocalMessage("제목을 확인해 주세요.");
       return;
     }
-    if (intent === "schedule" && !start) {
+    if (resolvedIntent === "schedule" && !start) {
       setLocalMessage("시작 시각을 확인해 주세요.");
       return;
     }
     setLocalMessage("");
     void onSubmit({
-      intent,
+      intent: resolvedIntent,
       title,
       start,
       durationMinutes,
@@ -111,50 +115,41 @@ export function TeamMeetingComposer({
 
   return (
     <div className={cn("space-y-5", className)}>
-      <div>
-        <p className="sr-only">진행 방식</p>
-        <div className="grid grid-cols-2 gap-3">
-          {(
-            [
-              ["start", "바로 시작", Headphones],
-              ["schedule", "일정", CalendarClock],
-            ] as const
-          ).map(([value, label, Icon]) => {
-            const selected = intent === value;
-            return (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => {
-                  setIntent(value);
-                  setLocalMessage("");
-                }}
-                className={cn(
-                  "group flex min-h-24 items-center gap-3 rounded-2xl px-4 text-left shadow-soft transition-colors duration-150",
-                  selected
-                    ? "bg-primary text-primary-foreground hover:bg-primary-hover"
-                    : "bg-surface text-foreground hover:bg-surface-2",
-                )}
-              >
-                <span
+      {!fixedIntent ? (
+        <div>
+          <p className="sr-only">진행 방식</p>
+          <div className="grid grid-cols-2 gap-3">
+            {(
+              [
+                ["start", "바로 시작", Headphones],
+                ["schedule", "일정", CalendarClock],
+              ] as const
+            ).map(([value, label, Icon]) => {
+              const selected = resolvedIntent === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setIntent(value);
+                    setLocalMessage("");
+                  }}
                   className={cn(
-                    "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl",
+                    "flex min-h-14 items-center gap-3 rounded-xl px-4 text-left ring-1 ring-border transition-colors duration-150",
                     selected
-                      ? "bg-white text-primary"
-                      : "bg-primary text-primary-foreground",
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-card text-foreground hover:bg-surface",
                   )}
                 >
-                  <Icon className="h-5 w-5" strokeWidth={1.75} />
-                </span>
-                <span className="text-lg font-semibold tracking-tight">
-                  {label}
-                </span>
-              </button>
-            );
-          })}
+                  <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                  <span className="text-base font-semibold">{label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {showTeamSelect ? (
         <label className="block text-base font-medium">
@@ -200,12 +195,12 @@ export function TeamMeetingComposer({
       <div
         className={cn(
           "grid overflow-hidden transition-[grid-template-rows,opacity] duration-[180ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-          intent === "schedule"
+          resolvedIntent === "schedule"
             ? "grid-rows-[1fr] opacity-100"
             : "pointer-events-none grid-rows-[0fr] opacity-0",
         )}
-        aria-hidden={intent !== "schedule"}
-        inert={intent !== "schedule" ? true : undefined}
+        aria-hidden={resolvedIntent !== "schedule"}
+        inert={resolvedIntent !== "schedule" ? true : undefined}
       >
         <div className="min-h-0 overflow-hidden">
           <label className="block text-base font-medium">
@@ -215,7 +210,7 @@ export function TeamMeetingComposer({
               value={start}
               onChange={(event) => setStart(event.target.value)}
               className="mt-2 min-h-12 text-base"
-              tabIndex={intent === "schedule" ? 0 : -1}
+              tabIndex={resolvedIntent === "schedule" ? 0 : -1}
             />
           </label>
         </div>
@@ -332,7 +327,7 @@ export function TeamMeetingComposer({
       >
         {saving
           ? "처리 중"
-          : intent === "start"
+          : resolvedIntent === "start"
             ? participantIds.length > 0
               ? "초대 후 시작"
               : "팀원 선택 후 시작"

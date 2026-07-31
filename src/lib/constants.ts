@@ -1,6 +1,8 @@
 import {
   Activity,
   Archive,
+  AudioLines,
+  CalendarClock,
   CircleHelp,
   ClipboardList,
   EyeOff,
@@ -51,58 +53,77 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+export type TeamNavCapability =
+  | "owner"
+  | "manageTeam"
+  | "invite"
+  | "createMeeting"
+  | "manageRecordAccess"
+  | "viewAudit";
+
 export type TeamNavItem = NavItem & {
-  roles: Array<"OWNER" | "ADMIN">;
+  capability: TeamNavCapability;
 };
 
-/** 역할별 팀 관리 메뉴. 팀 대시보드는 팀 이름 링크가 담당한다. */
+/** 팀 기능 메뉴. 실제 노출은 멤버 역할과 세부 권한을 함께 판정한다. */
 export const TEAM_NAV_ITEMS: TeamNavItem[] = [
+  {
+    title: "실시간 회의",
+    href: "/team/live",
+    icon: AudioLines,
+    capability: "createMeeting",
+  },
+  {
+    title: "일정 만들기",
+    href: "/team/schedule",
+    icon: CalendarClock,
+    capability: "createMeeting",
+  },
+  {
+    title: "공지 관리",
+    href: "/team?manage=announcements",
+    icon: UserCog,
+    capability: "manageTeam",
+  },
+  {
+    title: "멤버 초대",
+    href: "/team?manage=invite",
+    icon: UserRoundPlus,
+    capability: "invite",
+  },
   {
     title: "구성원과 권한",
     href: "/team?manage=members",
     icon: UsersRound,
-    roles: ["OWNER"],
+    capability: "owner",
   },
   {
-    title: "팀 보안 정책",
+    title: "보안 정책",
     href: "/team?manage=security",
     icon: ShieldCheck,
-    roles: ["OWNER"],
+    capability: "owner",
   },
   {
-    title: "기록 접근 정책",
+    title: "기록 열람",
     href: "/team?manage=records",
     icon: KeyRound,
-    roles: ["OWNER"],
+    capability: "manageRecordAccess",
   },
   {
     title: "감사 로그",
     href: "/audit",
     icon: ScrollText,
-    roles: ["OWNER"],
-  },
-  {
-    title: "팀원 초대",
-    href: "/team?manage=invite",
-    icon: UserRoundPlus,
-    roles: ["ADMIN"],
-  },
-  {
-    title: "팀 관리",
-    href: "/team?manage=announcements",
-    icon: UserCog,
-    roles: ["ADMIN"],
-  },
-  {
-    title: "기록 열람 관리",
-    href: "/team?manage=records",
-    icon: KeyRound,
-    roles: ["ADMIN"],
+    capability: "viewAudit",
   },
 ];
 
 /** 관리자만 사이드바 운영 메뉴에 노출. 계정·사용량 등. */
 export const OPS_NAV_ITEMS: NavItem[] = [
+  {
+    title: "운영 상태",
+    href: "/operations",
+    icon: ShieldCheck,
+  },
   {
     title: "사용자 관리",
     href: "/users",
@@ -193,6 +214,10 @@ export const PAGE_TITLES: Record<
   "/users": {
     title: "사용자 관리",
     description: "서비스를 이용하는 계정, 역할, 활성 상태를 관리합니다.",
+  },
+  "/operations": {
+    title: "운영 상태",
+    description: "서비스 연결, 정책, 보존 작업 상태를 확인합니다.",
   },
   "/settings": {
     title: "시스템 설정",

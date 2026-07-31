@@ -27,6 +27,7 @@ export type BrowserRealtimeUtterance = {
 type StartOptions = {
   title: string;
   teamMeetingId?: string;
+  personalMeetingId?: string;
   mediaStreamTrack?: MediaStreamTrack;
   /**
    * 외부(LiveKit 등) 트랙은 true(기본)로 clone해 통화 트랙을 건드리지 않는다.
@@ -93,6 +94,7 @@ export function useRealtimeTranscription() {
   const connectPeerRef = useRef<
     ((clientSecret: string, track: MediaStreamTrack) => Promise<void>) | null
   >(null);
+  const quotaStopRef = useRef<(() => void) | null>(null);
 
   const setLiveStatus = useCallback((next: LiveStatus) => {
     statusRef.current = next;
@@ -140,10 +142,14 @@ export function useRealtimeTranscription() {
         .then(async (response) => {
           const body = (await response.json()) as {
             ok?: boolean;
+            code?: string;
             corrections?: TranscriptCorrection[];
             message?: string;
           };
           if (!response.ok || !body.ok) {
+            if (body.code === "ANALYSIS_GRACE_EXHAUSTED") {
+              quotaStopRef.current?.();
+            }
             throw new Error(body.message ?? "실시간 발화를 저장하지 못했습니다.");
           }
           if (body.corrections?.length) {
@@ -386,6 +392,7 @@ export function useRealtimeTranscription() {
           body: JSON.stringify({
             title: options.title,
             teamMeetingId: options.teamMeetingId,
+            personalMeetingId: options.personalMeetingId,
           }),
         });
         const tokenBody = (await tokenResponse.json()) as {
@@ -456,7 +463,10 @@ export function useRealtimeTranscription() {
   );
 
   const stop = useCallback(
-    async (options?: { finalizeTeam?: boolean }): Promise<CompleteResult> => {
+    async (options?: {
+      finalizeTeam?: boolean;
+      finalizePersonal?: boolean;
+    }): Promise<CompleteResult> => {
       const sessionId = sessionIdRef.current;
       if (!sessionId) return {};
       if (
@@ -489,6 +499,7 @@ export function useRealtimeTranscription() {
             body: JSON.stringify({
               durationSec,
               finalizeTeam: options?.finalizeTeam === true,
+              finalizePersonal: options?.finalizePersonal === true,
             }),
           },
         );
@@ -515,6 +526,15 @@ export function useRealtimeTranscription() {
     },
     [closeMedia, setLiveStatus],
   );
+
+  useEffect(() => {
+    quotaStopRef.current = () => {
+      void stop();
+    };
+    return () => {
+      quotaStopRef.current = null;
+    };
+  }, [stop]);
 
   const reset = useCallback(() => {
     closeMedia();

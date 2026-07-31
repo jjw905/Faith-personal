@@ -1,9 +1,13 @@
 import OpenAI from "openai";
 
-export function getOpenAIClient() {
+type ClientOptions = NonNullable<ConstructorParameters<typeof OpenAI>[0]>;
+
+export function getOpenAIClient(
+  options: Omit<ClientOptions, "apiKey"> = {},
+) {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key || key === "your_openai_api_key_here") {
     throw new Error("OPENAI_API_KEY가 필요합니다.");
   }
-  return new OpenAI({ apiKey: key });
+  return new OpenAI({ ...options, apiKey: key });
 }

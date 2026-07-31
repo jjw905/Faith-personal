@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { MeetingAccessNotice } from "@/components/meetings/meeting-access-notice";
 import { TeamVoiceRoom } from "@/components/meetings/team-voice-room";
 import { Button } from "@/components/ui/button";
 import { canReadMeeting } from "@/lib/meeting-access";
@@ -19,11 +20,20 @@ export default async function TeamMeetingPage({
   const session = await requireUser();
   if (!session) notFound();
   const { meetingId } = await params;
-  await reconcileTeamMeeting(meetingId);
   const access = await canReadMeeting(meetingId, session.user.id);
+  if (!access.allowed && access.acknowledgementRequired) {
+    return (
+      <PageContainer white>
+        <MeetingAccessNotice />
+      </PageContainer>
+    );
+  }
   if (!access.allowed) notFound();
+  const reconciled = await reconcileTeamMeeting(meetingId);
   const meeting =
-    access.teamMeeting ??
+    (reconciled?.meeting && access.teamMeeting
+      ? { ...access.teamMeeting, ...reconciled.meeting }
+      : access.teamMeeting) ??
     (await prisma.teamMeeting.findUnique({ where: { id: meetingId } }));
   if (!meeting) notFound();
 

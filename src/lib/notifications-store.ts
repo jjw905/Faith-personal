@@ -8,6 +8,7 @@ import {
   parseDataRetentionDays,
   type DataRetentionDays,
 } from "@/lib/data-retention";
+import { isTeamFeatureEnabledForRole } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
 import type { AppNotification, NotificationType } from "@/types/notification";
 
@@ -101,8 +102,9 @@ export async function listVisibleNotifications(
 ) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { notificationRetentionDays: true },
+    select: { notificationRetentionDays: true, role: true },
   });
+  const canUseTeamFeature = isTeamFeatureEnabledForRole(user?.role);
   const retentionDays = parseDataRetentionDays(
     requestedRetention ??
       user?.notificationRetentionDays ??
@@ -135,7 +137,19 @@ export async function listVisibleNotifications(
     orderBy: { createdAt: "desc" },
     take: 100,
   });
-  const items = rows.map(toAppNotification);
+  const visibleRows = canUseTeamFeature
+    ? rows
+    : rows.filter((row) => {
+        if (row.teamId) return false;
+        const data =
+          row.data &&
+          typeof row.data === "object" &&
+          !Array.isArray(row.data)
+            ? (row.data as Record<string, unknown>)
+            : null;
+        return typeof data?.teamId !== "string";
+      });
+  const items = visibleRows.map(toAppNotification);
   const unread = items.filter((item) => item.unread);
   return {
     unread,

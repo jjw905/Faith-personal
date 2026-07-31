@@ -89,12 +89,14 @@ export type SemanticStructureResult = {
   dialogueCoverage: number;
 };
 
-/** 구조화 진행 heartbeat. 재시도·구간마다 호출된다. */
+/** 구조화 진행 heartbeat. 재시도·구간·대기 중 주기 호출. */
 export type StructureProgressFn = (info: {
   partIndex: number;
   partCount: number;
   attempt: number;
   depth: number;
+  /** 해당 파트 모델 호출 대기 ms. 있으면 파트 구간 안 점근 진행. */
+  waitedMs?: number;
 }) => void;
 
 const STRUCTURE_SYSTEM = `너는 회의록 상품 파이프라인의 정리 모델이다.
@@ -170,7 +172,10 @@ const STRUCTURE_SYSTEM = `너는 회의록 상품 파이프라인의 정리 모�
 - dialogue.startSec는 0부터 durationSec까지 흐름에 맞게 증가(초). 대략값이어도 된다. 서버가 받아쓰기 실측 시각으로 반드시 덮어쓴다. 실측이 없으면 파이프라인이 실패한다.
 - 입력이 [12.34s][화자 A] 본문 형식이면 그 라벨이 화자분리 결과다. name·speakers·dialogue.speaker를 "화자 A" 형식으로 그대로 옮긴다.
   라벨을 새로 만들거나 합치지 마라. 대괄호 표시는 dialogue.text에 넣지 않는다.
+  실명·직함·언론사·본문에 나온 제3자 이름을 dialogue.speaker나 speakers.name에 쓰지 마라. 실명은 이후 단계에서만 붙인다.
 - 한 줄 안에서 화자가 바뀌지 않는다. dialogue를 나눌 때 입력 줄의 화자 경계를 지킨다.
+  입력 한 블록([화자 A] …)을 여러 dialogue 줄로 쪼개도, 그 줄들의 speaker는 모두 같은 "화자 A"여야 한다. 본문에 인명이 나와도 화자를 바꾸지 마라.
+- 직전 발화가 끝난 뒤 '네'/'예'가 바로 '안녕하세요' 앞에 있으면, '네'/'예'는 직전 화자 줄로 두고 인사·자기소개는 다음 화자 줄로 나눈다.
 - 화자 분리가 없으면 speakers는 [{ "name": "발화", "summary": "...", "tags": [...] }], timeline speakers는 ["발화"], dialogue.speaker는 넣지 않는다.
 - topicBucket: 회의 성격을 다음 중 하나로만 고른다(운영 통계용, 반드시 이 목록의 영문 값 그대로): education(교육·강의·학습), medical(의료·진료·보건), government_policy(정부·행정·정책·공공), business(경영·영업·회사 업무), hr_org(인사·조직·채용·평가), tech_dev(기술·개발·제품), academic(학술·연구·논문), event(행사·의전·소개), other(그 외/애매함). 애매하면 other.`;
 
@@ -415,6 +420,135 @@ function denseChars(text: string): number {
   return text.replace(/\s+/g, "").length;
 }
 
+const LABELED_BLOCK_LINE =
+  /^\[(\d+(?:\.\d+)?)s\]\[([^\]]+)\]\s*(.*)$/;
+
+type LabeledSpeakerBlock = {
+  startSec: number;
+  speaker: string;
+  text: string;
+};
+
+/** 구조화 입력의 `[12.34s][화자 A] 본문` 줄을 파싱한다. */
+export function parseLabeledSpeakerBlocks(
+  input: string,
+): LabeledSpeakerBlock[] {
+  const blocks: LabeledSpeakerBlock[] = [];
+  for (const raw of input.split(/\n+/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(LABELED_BLOCK_LINE);
+    if (!m) continue;
+    const speaker = normalizeSpeakerName(m[2] || "");
+    const text = (m[3] || "").trim();
+    if (!speaker || !text) continue;
+    blocks.push({
+      startSec: Number(m[1]),
+      speaker,
+      text,
+    });
+  }
+  return blocks;
+}
+
+/**
+ * 구조화 모델이 긴 발화를 자를 때 speaker를 본문 인명으로 다시 쓰면
+ * 입력 화자 라벨 경계를 덮어쓴다. 라벨 입력이 있을 때 dialogue·speakers·
+ * timeline 화자를 입력 블록 커버리지로 되돌린다 (실명 필터 후처리 아님).
+ */
+export function inheritDialogueSpeakersFromLabeledInput(
+  structure: SemanticStructure,
+  labeledInput: string,
+): SemanticStructure {
+  const blocks = parseLabeledSpeakerBlocks(labeledInput);
+  if (blocks.length === 0) return structure;
+
+  const owners: string[] = [];
+  const parts: string[] = [];
+  for (const b of blocks) {
+    const compact = b.text.replace(/\s+/g, "");
+    parts.push(compact);
+    for (let i = 0; i < compact.length; i++) owners.push(b.speaker);
+  }
+  const haystack = parts.join("");
+  if (!haystack || owners.length !== haystack.length) return structure;
+
+  const labelSet = new Set(blocks.map((b) => b.speaker));
+  let cursor = 0;
+  for (const line of structure.dialogue) {
+    const needle = line.text.replace(/\s+/g, "");
+    if (!needle) continue;
+    const prefix = needle.slice(0, Math.min(24, needle.length));
+    let at = haystack.indexOf(needle, cursor);
+    if (at < 0 && prefix) at = haystack.indexOf(prefix, cursor);
+    if (at < 0) at = haystack.indexOf(needle);
+    if (at < 0 && prefix) at = haystack.indexOf(prefix);
+    if (at < 0) continue;
+
+    const end = Math.min(owners.length, at + Math.max(1, needle.length));
+    const counts = new Map<string, number>();
+    for (let i = at; i < end; i++) {
+      const sp = owners[i]!;
+      counts.set(sp, (counts.get(sp) ?? 0) + 1);
+    }
+    let best = "";
+    let bestN = -1;
+    for (const [sp, n] of counts) {
+      if (n > bestN) {
+        best = sp;
+        bestN = n;
+      }
+    }
+    if (best) line.speaker = best;
+    cursor = at + Math.max(1, Math.floor(needle.length * 0.5));
+  }
+
+  const prevByName = new Map(
+    structure.speakers.map((s) => [s.name, s] as const),
+  );
+  const ordered: string[] = [];
+  for (const d of structure.dialogue) {
+    const sp = (d.speaker || "").trim();
+    if (!sp || ordered.includes(sp)) continue;
+    ordered.push(sp);
+  }
+  if (ordered.length > 0) {
+    structure.speakers = ordered.map((name) => {
+      const prev = prevByName.get(name);
+      if (prev) return { ...prev, name };
+      return { name, summary: "", tags: [] };
+    });
+  }
+
+  const allowed = new Set(ordered.length > 0 ? ordered : [...labelSet]);
+  const keepLabel = (name: string) => {
+    const n = normalizeSpeakerName(name);
+    return allowed.has(n) ? n : "";
+  };
+
+  for (const t of structure.timeline) {
+    t.speakers = t.speakers.map(keepLabel).filter(Boolean);
+    if (t.speakers.length === 0 && allowed.size > 0) {
+      t.speakers = [...allowed].slice(0, 3);
+    }
+    if (t.speakerNotes) {
+      t.speakerNotes = t.speakerNotes
+        .map((note) => {
+          const name = keepLabel(note.name);
+          return name ? { ...note, name } : null;
+        })
+        .filter((x): x is SemanticSpeakerNote => x !== null);
+    }
+  }
+
+  for (const a of structure.actions) {
+    const owner = keepLabel(a.owner);
+    a.owner = owner || [...allowed][0] || a.owner;
+  }
+
+  return structure;
+}
+
 export function dialogueCoverageOf(
   parsed: { dialogue?: Array<{ text?: string } | null> | null },
   sourceText: string,
@@ -444,13 +578,26 @@ async function callStructureCovered(params: {
   const depth = params.depth ?? 0;
   const attemptRef = params.attemptRef ?? { n: 0 };
   attemptRef.n += 1;
-  params.onProgress?.({
+  const progressInfo = {
     partIndex: params.partIndex,
     partCount: params.partCount,
     attempt: attemptRef.n,
     depth,
-  });
-  const call = await callStructureModel(params);
+  };
+  params.onProgress?.(progressInfo);
+  const startedAt = Date.now();
+  const heartbeat = setInterval(() => {
+    params.onProgress?.({
+      ...progressInfo,
+      waitedMs: Date.now() - startedAt,
+    });
+  }, 2000);
+  let call: StructureCall;
+  try {
+    call = await callStructureModel(params);
+  } finally {
+    clearInterval(heartbeat);
+  }
   const coverage = dialogueCoverageOf(call.parsed, params.sttText);
   if (!shouldRetryStructureCoverage(coverage, depth)) {
     if (coverage < DIALOGUE_WARN_BELOW) {
@@ -697,6 +844,8 @@ export async function buildSemanticStructure(
     ...structure,
     keywords: parsedKeywords,
   });
+
+  inheritDialogueSpeakersFromLabeledInput(structure, sttText);
 
   const dialogueCoverage = Math.min(
     1,

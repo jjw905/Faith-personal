@@ -2,6 +2,7 @@ import type { SemanticDialogueLine } from "@/lib/stt/semantic-structure";
 import type { TimelineSegment, TimelineSegmentKind } from "@/types/timeline";
 import type { TranscriptLine, TranscriptWordTiming } from "@/types/transcript";
 import { formatClock } from "@/lib/diarize-meeting";
+import { lineStartSec } from "@/lib/transcript-time";
 
 export type TimedSegment = {
   startSec: number;
@@ -394,32 +395,6 @@ export function alignDialogueToTimedSegments(
   });
 }
 
-/**
- * 실측 단어 시각을 각 대화 줄에 배정한다.
- *
- * 구조화 모델이 문장부호, 띄어쓰기를 다듬어 STT 원문과 줄 텍스트가 완전히
- * 같지 않을 수 있다. 그래서 위치를 그대로 믿지 않고, 줄 시간대에 걸리는
- * 단어부터 순서대로 줄 텍스트에서 다시 찾는다 — 못 찾으면 그 단어는 건너뛴다
- * (하이라이트가 한 박자 밀리는 대신 엉뚱한 자리를 가리키지 않는다).
- */
-function findWordInLine(
-  text: string,
-  needle: string,
-  from: number,
-): { start: number; end: number } | null {
-  if (!needle) return null;
-  const exact = text.indexOf(needle, from);
-  if (exact >= 0) {
-    return { start: exact, end: exact + needle.length };
-  }
-  // 문장부호만 다른 경우(예: "한국," vs "한국")를 한 번 더 시도한다.
-  const stripped = needle.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
-  if (!stripped || stripped === needle) return null;
-  const at = text.indexOf(stripped, from);
-  if (at < 0) return null;
-  return { start: at, end: at + stripped.length };
-}
-
 /** 배정 전에 start==end, 역전, 겹침을 정리한다. */
 function sanitizeAssignedSourceWords(words: WordTiming[]): WordTiming[] {
   const sorted = [...words]
@@ -451,14 +426,274 @@ function sanitizeAssignedSourceWords(words: WordTiming[]): WordTiming[] {
 }
 
 /**
- * 줄 시작 추정(앵커 실패 → 글자 수 보간)이 다음 줄 시작 바로 앞으로 밀리면
- * 이 줄의 창이 실제 발화 길이보다 훨씬 좁아져 단어가 하나도 안 걸린다
- * ("이상입니다. 네. OO 기자님." 같은 짧은 인계 문장에서 반복 확인됨).
- * 그 결과 재생 중 포커싱이 그 줄에서 멈췄다가 다음 줄에서 갑자기 시작된
- * 것처럼 보인다. 앞줄이 실제로 다 쓴 시각 이후, 아직 아무도 안 쓴 빈
- * 시간대까지만 되돌아가 다시 찾는다 — 앞줄 몫을 빼앗지 않는다.
+ * 화면 대화와 Whisper 단어열을 회의 전체에서 한 번만 순차 매칭한다.
+ *
+ * 줄마다 추정 시간창을 먼저 만들면 한 줄이 10초 일찍 잡힌 순간 그 다음
+ * 줄까지 연쇄적으로 밀린다. 여기서는 시간창을 전혀 쓰지 않고 텍스트 순서로
+ * 단어열을 먼저 연결한 뒤, 실제 단어 시각으로 줄 시작을 확정한다.
  */
-const WORD_WINDOW_WIDEN_SEC = 6;
+type LexicalToken = {
+  norm: string;
+  startOffset: number;
+  endOffset: number;
+};
+
+type TimedLexicalToken = LexicalToken & {
+  sourceIndex: number;
+  startSec: number;
+  endSec: number;
+};
+
+type TargetLexicalToken = LexicalToken & {
+  lineIndex: number;
+};
+
+function lexicalTokens(text: string): LexicalToken[] {
+  return [...text.matchAll(/[\p{L}\p{N}]+/gu)].map((match) => ({
+    norm: normChars(match[0]),
+    startOffset: match.index ?? 0,
+    endOffset: (match.index ?? 0) + match[0].length,
+  }));
+}
+
+function wordMatchScore(target: string, source: string): number {
+  if (!target || !source) return 0;
+  if (target === source) return 1;
+  // 한두 글자는 우연히 겹치기 쉬우므로 완전 일치만 허용한다.
+  if (target.length <= 2 || source.length <= 2) return 0;
+  if (target.includes(source) || source.includes(target)) return 0.88;
+  return gramSim(prepare(target), prepare(source));
+}
+
+/**
+ * 두 모델의 전체 단어열을 banded sequence alignment로 맞춘다.
+ *
+ * 앞에서 가장 가까운 같은 단어를 고르는 방식은 한 단어를 놓친 뒤 뒤쪽의
+ * 반복어로 수십 초 점프할 수 있다. 전역 문맥에서 삽입·삭제 비용을 함께
+ * 계산하면 "네", "정부" 같은 반복어도 앞뒤 문장에 맞는 위치에 남는다.
+ */
+function alignTokenSequences(
+  target: TargetLexicalToken[],
+  source: TimedLexicalToken[],
+): Array<[number, number]> {
+  const n = target.length;
+  const m = source.length;
+  if (n === 0 || m === 0) return [];
+
+  const band = Math.max(128, Math.abs(n - m) + 96);
+  const rowStarts = new Int32Array(n + 1);
+  const pointers: Uint8Array[] = new Array(n + 1);
+  let previous = new Float64Array(0);
+  let previousStart = 0;
+  const negative = -1e15;
+  const get = (scores: Float64Array, start: number, column: number) =>
+    column < start || column >= start + scores.length
+      ? negative
+      : scores[column - start]!;
+
+  for (let row = 0; row <= n; row += 1) {
+    const center = Math.round((row * m) / n);
+    const start = row === 0 ? 0 : Math.max(0, center - band);
+    const end = row === n ? m : Math.min(m, center + band);
+    const scores = new Float64Array(end - start + 1);
+    scores.fill(negative);
+    const dirs = new Uint8Array(scores.length);
+    rowStarts[row] = start;
+    pointers[row] = dirs;
+
+    for (let column = start; column <= end; column += 1) {
+      const offset = column - start;
+      if (row === 0) {
+        scores[offset] = -0.55 * column;
+        dirs[offset] = column > 0 ? 3 : 0;
+        continue;
+      }
+      if (column === 0) {
+        scores[offset] = -0.9 * row;
+        dirs[offset] = 2;
+        continue;
+      }
+
+      const similarity = wordMatchScore(
+        target[row - 1]!.norm,
+        source[column - 1]!.norm,
+      );
+      const diagonal =
+        get(previous, previousStart, column - 1) +
+        (similarity >= 0.5 ? 2 + similarity * 2 : -1.6);
+      const skipTarget = get(previous, previousStart, column) - 0.9;
+      const skipSource = get(scores, start, column - 1) - 0.55;
+      if (diagonal >= skipTarget && diagonal >= skipSource) {
+        scores[offset] = diagonal;
+        dirs[offset] = 1;
+      } else if (skipTarget >= skipSource) {
+        scores[offset] = skipTarget;
+        dirs[offset] = 2;
+      } else {
+        scores[offset] = skipSource;
+        dirs[offset] = 3;
+      }
+    }
+    previous = scores;
+    previousStart = start;
+  }
+
+  const matches: Array<[number, number]> = [];
+  let row = n;
+  let column = m;
+  while (row > 0 || column > 0) {
+    const start = rowStarts[row]!;
+    const dirs = pointers[row]!;
+    const direction =
+      column >= start && column < start + dirs.length
+        ? dirs[column - start]
+        : row > 0
+          ? 2
+          : 3;
+    if (direction === 1 && row > 0 && column > 0) {
+      if (
+        wordMatchScore(
+          target[row - 1]!.norm,
+          source[column - 1]!.norm,
+        ) >= 0.5
+      ) {
+        matches.push([row - 1, column - 1]);
+      }
+      row -= 1;
+      column -= 1;
+    } else if (direction === 2 && row > 0) {
+      row -= 1;
+    } else if (column > 0) {
+      column -= 1;
+    } else {
+      row -= 1;
+    }
+  }
+  return matches.reverse();
+}
+
+function matchWordTimingsToTexts(
+  texts: string[],
+  words: WordTiming[],
+): TranscriptWordTiming[][] {
+  const cleanWords = sanitizeAssignedSourceWords(words);
+  const source: TimedLexicalToken[] = [];
+  cleanWords.forEach((word, sourceIndex) => {
+    for (const token of lexicalTokens(word.text)) {
+      source.push({
+        ...token,
+        sourceIndex,
+        startSec: word.startSec,
+        endSec: word.endSec,
+      });
+    }
+  });
+
+  const assigned = texts.map(() => [] as TranscriptWordTiming[]);
+  const target = texts.flatMap((text, lineIndex) =>
+    lexicalTokens(text).map((token) => ({ ...token, lineIndex })),
+  );
+  const usedByLine = texts.map(() => new Set<number>());
+  for (const [targetIndex, sourceIndex] of alignTokenSequences(target, source)) {
+    const token = target[targetIndex]!;
+    const hit = source[sourceIndex]!;
+    if (usedByLine[token.lineIndex]!.has(hit.sourceIndex)) continue;
+    usedByLine[token.lineIndex]!.add(hit.sourceIndex);
+    assigned[token.lineIndex]!.push({
+      text: texts[token.lineIndex]!.slice(
+        token.startOffset,
+        token.endOffset,
+      ),
+      startSec: hit.startSec,
+      endSec: hit.endSec,
+      startOffset: token.startOffset,
+      endOffset: token.endOffset,
+    });
+  }
+  assigned.forEach((line) => {
+    line.sort((left, right) => left.startOffset - right.startOffset);
+  });
+  return assigned;
+}
+
+/** 고품질 본문 한 덩어리를 Whisper 실측 단어열에 전역 순서로 맞춘다. */
+export function alignTextToWordTimings(
+  text: string,
+  words: WordTiming[],
+): TranscriptWordTiming[] {
+  return matchWordTimingsToTexts([text], words)[0] ?? [];
+}
+
+function lineWeights(texts: string[]): number[] {
+  return texts.map((text) => Math.max(1, normChars(text).length));
+}
+
+/**
+ * 모델이 나눈 대화 줄의 시작 시각을 Whisper 단어 시각으로 확정한다.
+ * 매칭되지 않은 줄만 앞뒤 실측 앵커 사이에서 글자량 비율로 보간한다.
+ */
+export function alignDialogueToWordTimings(
+  dialogue: SemanticDialogueLine[],
+  words: WordTiming[],
+  durationSec: number,
+): SemanticDialogueLine[] {
+  if (dialogue.length === 0 || words.length === 0) return dialogue;
+  const dur = Math.max(1, durationSec);
+  const texts = dialogue.map((line) => line.text);
+  const matched = matchWordTimingsToTexts(texts, words);
+  const weights = lineWeights(texts);
+  const starts = matched.map((lineWords) => lineWords[0]?.startSec ?? null);
+  const ends = matched.map(
+    (lineWords) => lineWords[lineWords.length - 1]?.endSec ?? null,
+  );
+  const out = new Array<number>(dialogue.length).fill(0);
+
+  let index = 0;
+  let previousSec = 0;
+  let previousEnd = 0;
+  while (index < dialogue.length) {
+    if (starts[index] != null) {
+      // 첫 말풍선은 오디오 시작부터 열어 두되 이후 줄은 실제 첫 단어에 맞춘다.
+      out[index] =
+        index === 0 && starts[index]! <= 1.5
+          ? 0
+          : Math.max(previousSec + MIN_LINE_GAP, starts[index]!);
+      previousSec = out[index]!;
+      previousEnd = Math.max(previousEnd, ends[index] ?? previousSec);
+      index += 1;
+      continue;
+    }
+
+    let next = index;
+    while (next < dialogue.length && starts[next] == null) next += 1;
+    const toSec = next < dialogue.length ? starts[next]! : dur;
+    const fromSec = Math.min(toSec, Math.max(previousEnd, previousSec));
+    const runWeight = weights
+      .slice(index, next)
+      .reduce((sum, weight) => sum + weight, 0);
+    let usedWeight = 0;
+    for (let row = index; row < next; row += 1) {
+      const ratio = runWeight > 0 ? usedWeight / runWeight : 0;
+      out[row] = Math.max(
+        previousSec + MIN_LINE_GAP,
+        fromSec + Math.max(0, toSec - fromSec) * ratio,
+      );
+      previousSec = out[row]!;
+      usedWeight += weights[row]!;
+    }
+    index = next;
+  }
+
+  let monotonic = -MIN_LINE_GAP;
+  return dialogue.map((line, lineIndex) => {
+    const startSec = Math.min(
+      dur,
+      Math.max(monotonic + MIN_LINE_GAP, out[lineIndex]!),
+    );
+    monotonic = startSec;
+    return { ...line, startSec };
+  });
+}
 
 export function assignWordTimingsToLines(
   lines: TranscriptLine[],
@@ -466,67 +701,27 @@ export function assignWordTimingsToLines(
   durationSec: number,
 ): TranscriptLine[] {
   if (words.length === 0 || lines.length === 0) return lines;
-  const sorted = sanitizeAssignedSourceWords(words);
-  const starts = lines.map((line) =>
-    typeof line.startSec === "number" ? line.startSec : 0,
+  const texts = lines.map((line) => line.text ?? "");
+  const matched = matchWordTimingsToTexts(texts, words);
+  const aligned = alignDialogueToWordTimings(
+    lines.map((line) => ({
+      startSec: lineStartSec(line),
+      speaker: line.speaker,
+      text: line.text ?? "",
+    })),
+    words,
+    durationSec,
   );
 
-  const collect = (
-    text: string,
-    windowFrom: number,
-    windowTo: number,
-  ): TranscriptWordTiming[] => {
-    const assigned: TranscriptWordTiming[] = [];
-    let textCursor = 0;
-    for (const w of sorted) {
-      if (w.startSec < windowFrom) continue;
-      if (w.startSec >= windowTo) break;
-      const needle = w.text.trim();
-      if (!needle) continue;
-      const hit = findWordInLine(text, needle, textCursor);
-      if (!hit) continue;
-      assigned.push({
-        text: text.slice(hit.start, hit.end),
-        startSec: w.startSec,
-        endSec: w.endSec,
-        startOffset: hit.start,
-        endOffset: hit.end,
-      });
-      textCursor = hit.end;
-    }
-    return assigned;
-  };
-
-  let prevLineWordsEnd = 0;
-  return lines.map((line, i) => {
-    const from = starts[i]!;
-    const to = i + 1 < lines.length ? starts[i + 1]! : Math.max(from, durationSec);
-    const text = line.text ?? "";
-    if (!text) {
-      prevLineWordsEnd = Math.max(prevLineWordsEnd, from);
-      return line;
-    }
-
-    let assigned = collect(text, from, to);
-    if (assigned.length === 0) {
-      const widenedFrom = Math.max(
-        prevLineWordsEnd,
-        from - WORD_WINDOW_WIDEN_SEC,
-      );
-      if (widenedFrom < from) {
-        assigned = collect(text, widenedFrom, to);
-      }
-    }
-
-    if (assigned.length === 0) {
-      prevLineWordsEnd = Math.max(prevLineWordsEnd, from);
-      return line;
-    }
-    prevLineWordsEnd = Math.max(
-      prevLineWordsEnd,
-      assigned[assigned.length - 1]!.endSec,
-    );
-    return { ...line, words: assigned };
+  return lines.map((line, index) => {
+    const startSec = aligned[index]?.startSec ?? lineStartSec(line);
+    const lineWords = matched[index]!;
+    return {
+      ...line,
+      startSec: Math.round(startSec * 100) / 100,
+      time: formatClock(startSec),
+      ...(lineWords.length > 0 ? { words: lineWords } : { words: undefined }),
+    };
   });
 }
 

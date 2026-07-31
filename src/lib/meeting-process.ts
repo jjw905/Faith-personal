@@ -3,8 +3,8 @@ import type { MeetingProcessPhase } from "@/lib/user-meetings-store";
 export type { MeetingProcessPhase };
 
 export const MEETING_PROCESS_LABEL: Record<MeetingProcessPhase, string> = {
-  transcribing: "받아쓰는 중",
-  structuring: "정리하는 중",
+  transcribing: "받아쓰는 중이에요",
+  structuring: "정리하는 중이에요",
   done: "완료",
   error: "실패",
   empty: "저장되지 않음",

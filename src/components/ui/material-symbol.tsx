@@ -13,6 +13,7 @@ type MaterialSymbolProps = {
 /**
  * Google Material Symbols Outlined (M3).
  * Lucide와 다른 시리즈 — 알림 등 포인트 아이콘에 사용.
+ * 리가처가 없으면 글자열이 가로로 넘친다. width/height·overflow로 막는다.
  */
 export function MaterialSymbol({
   name,
@@ -24,9 +25,15 @@ export function MaterialSymbol({
 }: MaterialSymbolProps) {
   return (
     <span
-      className={cn("material-symbols-outlined", className)}
+      className={cn(
+        "material-symbols-outlined inline-flex shrink-0 items-center justify-center overflow-hidden",
+        className,
+      )}
       style={{
+        width: size,
+        height: size,
         fontSize: size,
+        lineHeight: 1,
         fontVariationSettings: `'FILL' ${filled ? 1 : 0}, 'wght' ${weight}, 'GRAD' 0, 'opsz' ${Math.min(48, Math.max(20, size))}`,
       }}
       aria-hidden={ariaHidden}

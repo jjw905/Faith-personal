@@ -232,7 +232,7 @@ function TierCard({
   );
 }
 
-/** 포함 분을 다 썼을 때 고르는 추가 분 팩. 결제 연동 전이라 안내만 한다. */
+/** 포함 차감분을 다 썼을 때 고르는 팩. 결제 연동 전이라 안내만 한다. */
 function TopupPacks() {
   const locked = !PAID_PLANS_ENABLED;
 
@@ -241,7 +241,7 @@ function TopupPacks() {
       <div className="rounded-3xl bg-card p-6 shadow-soft ring-1 ring-border/50 sm:p-7">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl font-bold tracking-tight text-foreground">
-            추가 분 팩
+            추가 차감분 팩
           </h2>
         </div>
 
@@ -254,7 +254,7 @@ function TopupPacks() {
                 </span>
               ) : null}
               <p className="text-lg font-bold tabular-nums text-foreground">
-                {pack.minutes}분
+                {pack.minutes}차감분
               </p>
               <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
                 {formatPlanWon(pack.priceWon)}

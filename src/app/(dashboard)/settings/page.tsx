@@ -27,7 +27,10 @@ import {
   writeDataRetentionDaysToStorage,
   type DataRetentionDays,
 } from "@/lib/data-retention";
-import { TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
+import {
+  TEAM_FEATURE_ADMIN_ONLY,
+  TEAM_FEATURE_ENABLED,
+} from "@/lib/feature-flags";
 import { buildSupportMailto } from "@/lib/support-email";
 import {
   resolveTeamSettingsGate,
@@ -256,8 +259,12 @@ function RetentionConfirmDialog({
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { autoOpenTimelineOnStart, setAutoOpenTimelineOnStart, setWorkspaceId } =
-    useAppContext();
+  const {
+    autoOpenTimelineOnStart,
+    currentUser,
+    setAutoOpenTimelineOnStart,
+    setWorkspaceId,
+  } = useAppContext();
   const { scenarioId } = usePageUxPreview();
 
   const [prefs, setPrefs] = useState<AccountDisplayPrefs>(
@@ -292,12 +299,15 @@ export default function SettingsPage() {
       : scenarioId === "popup-team-settings-off"
         ? ("feature-off" as const)
         : null;
+  const teamFeatureForUser =
+    TEAM_FEATURE_ENABLED &&
+    (!TEAM_FEATURE_ADMIN_ONLY || currentUser.tier === "ADMIN");
   const teamRow = previewRowKind
     ? previewRowKind === "needs-team"
       ? ({ kind: "needs-team" } as const)
       : ({ kind: "feature-off" } as const)
     : resolveTeamSettingsRowState({
-        featureEnabled: TEAM_FEATURE_ENABLED,
+        featureEnabled: teamFeatureForUser,
         teamCount,
         hrefWhenReady: "/team",
       });
@@ -309,6 +319,10 @@ export default function SettingsPage() {
       : null;
 
   useEffect(() => {
+    if (!teamFeatureForUser) {
+      setTeamCount(0);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -329,7 +343,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [teamFeatureForUser]);
 
   async function openTeamSettings() {
     if (previewTeamDialog) return;
@@ -380,6 +394,8 @@ export default function SettingsPage() {
             autoMask: Boolean(data.autoMask),
             speakerSplit: Boolean(data.speakerSplit),
             summaryLang: data.summaryLang === "en" ? "en" : "ko",
+            realtimeInvitePolicy:
+              data.realtimeInvitePolicy === "reject" ? "reject" : "allow",
           });
         }
       } catch {
@@ -450,15 +466,6 @@ export default function SettingsPage() {
     });
   }
 
-  function updateSpeakerSplit(next: boolean) {
-    setPrefs((prev) => {
-      const previous = prev;
-      const updated = { ...prev, speakerSplit: next };
-      savePrefs({ speakerSplit: next }, previous);
-      return updated;
-    });
-  }
-
   function updateSummaryLang(next: string) {
     if (next !== SUMMARY_LANGUAGE_ACTIVE) return;
     const lang = next as SummaryLanguage;
@@ -466,6 +473,19 @@ export default function SettingsPage() {
       const previous = prev;
       const updated = { ...prev, summaryLang: lang };
       savePrefs({ summaryLang: lang }, previous);
+      return updated;
+    });
+  }
+
+  function updateRealtimeInvitePolicy(next: string) {
+    if (next !== "allow" && next !== "reject") return;
+    setPrefs((prev) => {
+      const previous = prev;
+      const updated = {
+        ...prev,
+        realtimeInvitePolicy: next as AccountDisplayPrefs["realtimeInvitePolicy"],
+      };
+      savePrefs({ realtimeInvitePolicy: updated.realtimeInvitePolicy }, previous);
       return updated;
     });
   }
@@ -552,17 +572,6 @@ export default function SettingsPage() {
             />
           </SettingRow>
           <SettingRow
-            label="화자 분리"
-            description="업로드 분석 시 화자를 구분해 기록합니다. 끄면 분석이 더 빨리 끝납니다."
-          >
-            <Toggle
-              label="화자 분리"
-              on={prefs.speakerSplit}
-              onChange={updateSpeakerSplit}
-              disabled={!prefsLoaded}
-            />
-          </SettingRow>
-          <SettingRow
             label="회의 시작 시 타임라인 열기"
             description="녹음(인식)을 시작하면 타임라인 패널을 열린 상태로 시작합니다."
           >
@@ -584,6 +593,21 @@ export default function SettingsPage() {
               options={[
                 { value: "ko", label: "한국어" },
                 { value: "en", label: "English", disabled: true, badge: "준비중" },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow
+            label="개인 실시간 초대"
+            description="다른 회원이 개인 공동 실시간 회의에 초대할 수 있는지 정합니다. 거부하면 새 초대가 자동으로 막힙니다."
+          >
+            <Segmented
+              ariaLabel="개인 실시간 초대"
+              value={prefs.realtimeInvitePolicy}
+              onChange={updateRealtimeInvitePolicy}
+              disabled={!prefsLoaded}
+              options={[
+                { value: "allow", label: "허용" },
+                { value: "reject", label: "거부" },
               ]}
             />
           </SettingRow>
@@ -617,7 +641,18 @@ export default function SettingsPage() {
         </SettingsSection>
 
         {teamRow.kind === "feature-off" ? (
-          <SettingsSection title="팀 설정은 오픈 준비중이에요" />
+          <SettingsSection
+            title={
+              TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
+                ? "팀 기능은 관리자에게만 제공됩니다"
+                : "팀 설정은 오픈 준비중이에요"
+            }
+            description={
+              TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
+                ? "안정화 기간에는 관리자 계정만 팀 공간과 팀 운영 정책을 사용할 수 있습니다."
+                : undefined
+            }
+          />
         ) : (
           <SettingsSection
             title="팀 운영 정책"

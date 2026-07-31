@@ -412,6 +412,7 @@ export async function completeRealtimeSession(params: {
   userId: string;
   durationSec: number;
   finalizeTeam?: boolean;
+  finalizePersonal?: boolean;
 }) {
   const owned = await prisma.realtimeSttSession.findFirst({
     where: { id: params.sessionId, userId: params.userId },
@@ -422,6 +423,9 @@ export async function completeRealtimeSession(params: {
           legacyMeetingId: true,
           teamId: true,
         },
+      },
+      personalMeeting: {
+        select: { id: true, ownerId: true },
       },
     },
   });
@@ -439,6 +443,26 @@ export async function completeRealtimeSession(params: {
       estimatedUsd,
     },
   });
+
+  if (owned.personalMeetingId && !params.finalizePersonal) {
+    return {
+      meetingId: owned.meetingId,
+      href: `/meetings/${owned.meetingId}`,
+      finalized: false,
+    };
+  }
+  if (owned.personalMeetingId) {
+    await waitForTeamSessions(owned.runId);
+    return finalizeRealtimeRun({
+      runId: owned.runId,
+      meetingId: owned.meetingId,
+      title: owned.title,
+      workspace: "personal",
+      ownerUserId: owned.personalMeeting?.ownerId ?? owned.userId,
+      personalMeetingId:
+        owned.personalMeeting?.id ?? owned.personalMeetingId,
+    });
+  }
 
   if (owned.teamMeetingId && !params.finalizeTeam) {
     return {
@@ -549,6 +573,7 @@ async function finalizeRealtimeRun(params: {
   workspace: WorkspaceId;
   ownerUserId: string;
   teamMeetingId?: string;
+  personalMeetingId?: string;
 }) {
   const existing = getUserMeeting(params.meetingId);
   if (existing?.phase === "done") {
@@ -769,6 +794,16 @@ async function finalizeRealtimeRun(params: {
         },
       });
     }
+    if (params.personalMeetingId) {
+      await prisma.personalRealtimeMeeting.update({
+        where: { id: params.personalMeetingId },
+        data: {
+          state: "READY",
+          recordingActive: false,
+          endedAt: new Date(),
+        },
+      });
+    }
 
     return {
       meetingId: params.meetingId,
@@ -786,6 +821,16 @@ async function finalizeRealtimeRun(params: {
       await prisma.teamMeeting.update({
         where: { id: params.teamMeetingId },
         data: { state: "FAILED" },
+      });
+    }
+    if (params.personalMeetingId) {
+      await prisma.personalRealtimeMeeting.update({
+        where: { id: params.personalMeetingId },
+        data: {
+          state: "FAILED",
+          recordingActive: false,
+          endedAt: new Date(),
+        },
       });
     }
     throw error;

@@ -140,6 +140,8 @@ const TEAM_RECORDS_SCENARIOS: PageUxScenario[] = [
 const TEAM_SECURITY_SCENARIOS: PageUxScenario[] = [
   LIVE,
   LOADING,
+  { id: "security-key-ready", label: "보안 키 연결됨" },
+  { id: "security-key-attention", label: "보안 키 설정 필요" },
   ...CHROME_POPUPS,
 ];
 
@@ -148,6 +150,13 @@ const TEAM_INVITE_SCENARIOS: PageUxScenario[] = [
   LOADING,
   POPUP.invite,
   POPUP.inviteSearch,
+  ...CHROME_POPUPS,
+];
+
+const TEAM_MEETING_SETUP_SCENARIOS: PageUxScenario[] = [
+  LIVE,
+  EMPTY,
+  LOADING,
   ...CHROME_POPUPS,
 ];
 
@@ -234,6 +243,18 @@ const SURFACE_RULES: SurfaceRule[] = [
     scenarios: DESIGN_AUTH_SCENARIOS,
     match: (pathname, _manage, cat) =>
       pathname === "/design" && cat === "auth",
+  },
+  {
+    id: "team.live",
+    label: "팀 실시간 회의",
+    scenarios: TEAM_MEETING_SETUP_SCENARIOS,
+    match: (pathname) => pathname === "/team/live",
+  },
+  {
+    id: "team.schedule",
+    label: "팀 일정 만들기",
+    scenarios: TEAM_MEETING_SETUP_SCENARIOS,
+    match: (pathname) => pathname === "/team/schedule",
   },
   {
     id: "team.members",

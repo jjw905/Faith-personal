@@ -68,7 +68,7 @@ const TEAM_SECTION_LAYOUT_KEYS = {
 } as const;
 
 const CARD_SHADOW =
-  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+  "panel-surface rounded-2xl";
 
 function readSectionLayout(key: string): SectionLayout {
   if (typeof window === "undefined") return "list";
@@ -100,7 +100,7 @@ function SectionLayoutToggle({
   // M3/세그먼트 관행: 세그먼트 간 공백 없이 연결, 활성은 트랙 대비가 분명한 fill
   return (
     <div
-      className="flex shrink-0 overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
+      className="hidden shrink-0 overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border md:flex"
       role="group"
       aria-label={`${label} 레이아웃`}
     >
@@ -174,7 +174,7 @@ type WorkspacePayload = {
     canCreateMeeting: boolean;
   };
   unconfirmedAlerts: Array<{
-    notificationId: string;
+    notificationId: string | null;
     meetingId: string | null;
     title: string;
     body: string;
@@ -223,7 +223,7 @@ type UpcomingCard = {
 const PREVIEW_LABEL = TEAM_PREVIEW_ROLE_LABEL;
 
 const CTA_CLASS =
-  "group flex h-24 w-full cursor-pointer items-center gap-4 rounded-2xl px-6 text-left shadow-soft transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50";
+  "group flex min-h-16 w-full cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 text-left transition-colors duration-150 hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50";
 
 function todayDateLabel() {
   const now = new Date();
@@ -342,7 +342,7 @@ function SectionEmpty({
         <Button
           type="button"
           variant="secondary"
-          className="mt-4 min-h-11 rounded-xl"
+          className="mt-4 min-h-12 rounded-xl"
           onClick={onAction}
         >
           {actionLabel}
@@ -635,17 +635,24 @@ export function TeamWorkspacePanel() {
       return {
         showLeader: false,
         showOwner: false,
+        showCreator: false,
         canActLeader: false,
         canActOwner: false,
+        canActCreator: false,
       };
     }
     return {
       showLeader: viewRole === "ADMIN" || viewRole === "OWNER",
       showOwner: viewRole === "OWNER",
+      showCreator:
+        viewRole === "ADMIN" ||
+        viewRole === "OWNER" ||
+        (!isPreviewing && real.createMeeting),
       canActLeader: real.isLeader,
       canActOwner: real.isOwner,
+      canActCreator: real.createMeeting,
     };
-  }, [data?.capabilities, viewRole]);
+  }, [data?.capabilities, isPreviewing, viewRole]);
 
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase("ko-KR");
   const displayData = useMemo(() => {
@@ -888,7 +895,7 @@ export function TeamWorkspacePanel() {
   }
 
   async function confirmAlert(
-    notificationId: string,
+    notificationId: string | null,
     meetingId: string | null,
   ) {
     setSaving(true);
@@ -901,7 +908,7 @@ export function TeamWorkspacePanel() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        notificationId,
+        ...(notificationId ? { notificationId } : {}),
         meetingId: meetingId ?? undefined,
       }),
     });
@@ -942,7 +949,7 @@ export function TeamWorkspacePanel() {
   }
 
   async function createAnnouncement() {
-    if (!data || !caps.canActLeader) return;
+    if (!data || !caps.canActCreator) return;
     setSaving(true);
     if (!isLive) {
       await softSavePause();
@@ -1224,7 +1231,7 @@ export function TeamWorkspacePanel() {
               {caps.showOwner && caps.canActOwner ? (
                 <button
                   type="button"
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-foreground"
+                  className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-foreground md:h-10 md:w-10"
                   onClick={() => setRenaming(true)}
                   aria-label="팀 이름 바꾸기"
                 >
@@ -1234,7 +1241,7 @@ export function TeamWorkspacePanel() {
               {caps.showOwner ? (
                 <Button
                   variant="ghost"
-                  className="ml-0.5 h-10 shrink-0 gap-1.5 px-2.5 text-base"
+                  className="ml-0.5 min-h-12 shrink-0 gap-1.5 px-2.5 text-base md:min-h-10"
                   disabled={!caps.canActOwner}
                   onClick={() => setSettingsOpen(true)}
                 >
@@ -1255,7 +1262,7 @@ export function TeamWorkspacePanel() {
               <select
                 value={activeTeamId}
                 onChange={(event) => setActiveTeamId(event.target.value)}
-                className="min-h-11 w-full rounded-xl border border-border bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring"
+                className="min-h-12 w-full rounded-xl border border-border bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring"
               >
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
@@ -1276,73 +1283,63 @@ export function TeamWorkspacePanel() {
         </div>
       </div>
 
-      {caps.showLeader ? (
+      {caps.showCreator || caps.showLeader ? (
         <section className="max-md:hidden space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="min-w-0 p-0.5">
-              <button
-                type="button"
-                disabled={!caps.canActLeader}
-                onClick={() => {
-                  setComposerIntent("start");
-                  setComposerMessage("");
-                  setComposerMembers([]);
-                  setComposerOpen(true);
-                }}
-                className={cn(
-                  CTA_CLASS,
-                  "bg-primary text-primary-foreground hover:bg-primary-hover",
-                )}
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-primary">
-                  <Mic className="h-5 w-5" strokeWidth={1.75} />
-                </span>
-                <span className="text-lg font-semibold tracking-tight">
-                  회의 시작
-                </span>
-              </button>
-            </div>
-            <div className="min-w-0 p-0.5">
-              <button
-                type="button"
-                disabled={!caps.canActLeader}
-                onClick={() => {
-                  setComposerIntent("schedule");
-                  setComposerMessage("");
-                  setComposerMembers([]);
-                  setComposerOpen(true);
-                }}
-                className={cn(
-                  CTA_CLASS,
-                  "bg-card text-foreground ring-1 ring-border hover:bg-surface",
-                )}
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                  <CalendarDays className="h-5 w-5" strokeWidth={1.75} />
-                </span>
-                <span className="text-lg font-semibold tracking-tight">
-                  일정 잡기
-                </span>
-              </button>
-            </div>
-            <div className="min-w-0 p-0.5">
-              <button
-                type="button"
-                disabled={!caps.canActLeader}
-                onClick={openAnnouncementSheet}
-                className={cn(
-                  CTA_CLASS,
-                  "bg-card text-foreground ring-1 ring-border hover:bg-surface",
-                )}
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                  <Megaphone className="h-5 w-5" strokeWidth={1.75} />
-                </span>
-                <span className="text-lg font-semibold tracking-tight">
-                  공지 생성
-                </span>
-              </button>
-            </div>
+            {caps.showCreator ? (
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  disabled={!caps.canActCreator}
+                  onClick={() => router.push("/team/live")}
+                  className={CTA_CLASS}
+                >
+                  <Mic
+                    className="h-5 w-5 shrink-0 text-primary"
+                    strokeWidth={1.75}
+                  />
+                  <span className="text-lg font-semibold tracking-tight text-foreground">
+                    실시간 회의
+                  </span>
+                </button>
+              </div>
+            ) : null}
+            {caps.showCreator ? (
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  disabled={!caps.canActCreator}
+                  onClick={() => router.push("/team/schedule")}
+                  className={CTA_CLASS}
+                >
+                  <CalendarDays
+                    className="h-5 w-5 shrink-0 text-muted"
+                    strokeWidth={1.75}
+                  />
+                  <span className="text-lg font-semibold tracking-tight text-foreground">
+                    일정 만들기
+                  </span>
+                </button>
+              </div>
+            ) : null}
+            {caps.showLeader ? (
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  disabled={!caps.canActLeader}
+                  onClick={openAnnouncementSheet}
+                  className={CTA_CLASS}
+                >
+                  <Megaphone
+                    className="h-5 w-5 shrink-0 text-muted"
+                    strokeWidth={1.75}
+                  />
+                  <span className="text-lg font-semibold tracking-tight text-foreground">
+                    공지 작성
+                  </span>
+                </button>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -1351,7 +1348,7 @@ export function TeamWorkspacePanel() {
         <section className="space-y-2">
           {displayData!.unconfirmedAlerts.map((alert) => (
             <div
-              key={alert.notificationId}
+              key={alert.notificationId ?? alert.meetingId}
               className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-primary-soft/80 px-4 py-3.5"
             >
               <div className="min-w-0">
@@ -1361,7 +1358,7 @@ export function TeamWorkspacePanel() {
                 <p className="mt-0.5 text-base text-muted">{alert.body}</p>
               </div>
               <Button
-                className="min-h-11 rounded-xl"
+                className="min-h-12 rounded-xl"
                 disabled={saving}
                 onClick={() =>
                   void confirmAlert(alert.notificationId, alert.meetingId)
@@ -1384,19 +1381,14 @@ export function TeamWorkspacePanel() {
           title="예정 회의"
           count={filteredUpcoming.length}
           action={
-            caps.showLeader && caps.canActLeader ? (
+            caps.showCreator && caps.canActCreator ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
-                aria-label="일정 잡기"
-                onClick={() => {
-                  setComposerIntent("schedule");
-                  setComposerMessage("");
-                  setComposerMembers([]);
-                  setComposerOpen(true);
-                }}
+                className="h-12 w-12 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground md:h-8 md:w-8"
+                aria-label="일정 만들기"
+                onClick={() => router.push("/team/schedule")}
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} />
               </Button>
@@ -1420,18 +1412,13 @@ export function TeamWorkspacePanel() {
                     : "예정된 회의가 없습니다."
                 }
                 actionLabel={
-                  !normalizedSearch && caps.showLeader && caps.canActLeader
-                    ? "일정 잡기"
+                  !normalizedSearch && caps.showCreator && caps.canActCreator
+                    ? "일정 만들기"
                     : undefined
                 }
                 onAction={
-                  !normalizedSearch && caps.showLeader && caps.canActLeader
-                    ? () => {
-                        setComposerIntent("schedule");
-                        setComposerMessage("");
-                        setComposerMembers([]);
-                        setComposerOpen(true);
-                      }
+                  !normalizedSearch && caps.showCreator && caps.canActCreator
+                    ? () => router.push("/team/schedule")
                     : undefined
                 }
               />
@@ -1452,7 +1439,7 @@ export function TeamWorkspacePanel() {
                           caps.showLeader && caps.canActLeader ? (
                             <Button
                               variant="ghost"
-                              className="min-h-11 rounded-xl text-muted hover:text-foreground"
+                            className="min-h-12 rounded-xl text-muted hover:text-foreground"
                               onClick={() =>
                                 void cancelUpcomingMeeting(meeting.id)
                               }
@@ -1481,7 +1468,7 @@ export function TeamWorkspacePanel() {
                           caps.showLeader && caps.canActLeader ? (
                             <Button
                               variant="ghost"
-                              className="min-h-11 rounded-xl text-muted hover:text-foreground"
+                            className="min-h-12 rounded-xl text-muted hover:text-foreground"
                               onClick={() =>
                                 void cancelUpcomingMeeting(meeting.id)
                               }
@@ -1513,7 +1500,7 @@ export function TeamWorkspacePanel() {
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground"
+                className="h-12 w-12 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground md:h-8 md:w-8"
                 aria-label="공지 생성"
                 onClick={openAnnouncementSheet}
               >
@@ -1573,7 +1560,7 @@ export function TeamWorkspacePanel() {
                     {!item.read ? (
                       <Button
                         variant="ghost"
-                        className="min-h-11 w-full shrink-0 rounded-xl sm:w-auto"
+                        className="min-h-12 w-full shrink-0 rounded-xl sm:w-auto"
                         onClick={() => void markAnnouncementRead(item.id)}
                       >
                         확인
@@ -1613,7 +1600,7 @@ export function TeamWorkspacePanel() {
                       {!item.read ? (
                         <Button
                           variant="secondary"
-                          className="mt-4 min-h-11 w-full rounded-xl"
+                          className="mt-4 min-h-12 w-full rounded-xl"
                           onClick={() => void markAnnouncementRead(item.id)}
                         >
                           확인
@@ -1711,28 +1698,18 @@ export function TeamWorkspacePanel() {
       <MeetingsMobileActionBar
         pane={mobilePane}
         onPaneChange={setMobilePane}
-        startLabel="회의 시작"
-        onStart={
-          caps.showLeader && caps.canActLeader
-            ? () => {
-                setComposerIntent("start");
-                setComposerMessage("");
-                setComposerMembers([]);
-                setComposerOpen(true);
-              }
+        startLabel="실시간 회의"
+        startHref={
+          caps.showCreator && caps.canActCreator
+            ? "/team/live"
             : undefined
         }
-        uploadLabel="일정 잡기"
+        uploadLabel="일정 만들기"
         uploadIcon="calendar"
         createLabel="회의 추가"
         onUpload={
-          caps.showLeader && caps.canActLeader
-            ? () => {
-                setComposerIntent("schedule");
-                setComposerMessage("");
-                setComposerMembers([]);
-                setComposerOpen(true);
-              }
+          caps.showCreator && caps.canActCreator
+            ? () => router.push("/team/schedule")
             : undefined
         }
       />
@@ -1876,7 +1853,12 @@ export function TeamWorkspacePanel() {
               <input
                 type="checkbox"
                 className="h-5 w-5 accent-primary"
-                disabled={!caps.canActOwner || saving}
+                disabled={
+                  !caps.canActOwner ||
+                  saving ||
+                  (key === "allowExternalSharing" &&
+                    !Boolean(data.team.policy?.allowExternalSharing))
+                }
                 checked={Boolean(data.team.policy?.[key])}
                 onChange={(event) =>
                   void updatePolicy({ [key]: event.target.checked })
@@ -1886,6 +1868,9 @@ export function TeamWorkspacePanel() {
           ))}
         </div>
         <p className="mt-3 text-base text-muted">
+          외부 공유는 공개 열람 링크 준비 후 제공됩니다.
+        </p>
+        <p className="mt-2 text-base text-muted">
           좌석 {data.team.seatLimit}명
           {caps.canActOwner && data.capabilities.viewAudit
             ? `, 감사 ${data.auditCount}`

@@ -12,6 +12,9 @@ export type UsageLimitTimeStatus = {
   limitSec: number;
   usedSec: number;
   remainingSec: number;
+  monthlyLimitSec?: number;
+  creditRemainingSec?: number;
+  graceRemainingSec?: number;
   surveyCompleted: boolean;
   resetsAtLabel: string;
   /** false면 한도 팝업을 띄우지 않는다(오픈 준비 캠페인 off). */
@@ -72,8 +75,8 @@ export function UsageLimitDialog({
   const description = isTime
     ? timeStatus
       ? surveyDoneNoPlan
-        ? `이번 주기 ${Math.round(timeStatus.limitSec / 60)}분을 모두 사용했습니다. ${timeStatus.resetsAtLabel}에 초기화됩니다. 지금은 오픈 준비중이라 추가 시간은 초기화 후 다시 쓸 수 있습니다.`
-        : `이번 주기 ${Math.round(timeStatus.limitSec / 60)}분을 모두 사용했습니다. ${timeStatus.resetsAtLabel}에 초기화됩니다.`
+        ? `이번 주기 ${Math.round((timeStatus.monthlyLimitSec ?? timeStatus.limitSec) / 60)}차감분과 5분 유예를 모두 사용했습니다. ${timeStatus.resetsAtLabel}에 초기화됩니다. 지금은 분 팩 결제를 준비하고 있습니다.`
+        : `이번 주기 ${Math.round((timeStatus.monthlyLimitSec ?? timeStatus.limitSec) / 60)}차감분과 5분 유예를 모두 사용했습니다. 분 팩을 구매하면 계속할 수 있습니다.`
       : "이번 주기 분석 가능 시간을 모두 사용했습니다."
     : storageStatus
       ? `사용 ${formatBytes(storageStatus.used)} / 한도 ${formatBytes(storageStatus.quota)}. 파일을 정리하면 바로 다시 올릴 수 있습니다.`

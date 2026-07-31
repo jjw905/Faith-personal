@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Pencil, Trash2 } from "lucide-react";
+import { Download, Pencil, Share2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,92 +9,22 @@ import { Button } from "@/components/ui/button";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MonthDayCalendar } from "@/components/meetings/month-day-calendar";
 import {
+  exportMeetingDownload,
+  exportMeetingsListDownload,
+  type MeetingExportFormat,
+} from "@/lib/meeting-export";
+import {
   formatSeoulDateParts,
   seoulDateKey,
   toSeoulDateTimeLocal,
 } from "@/lib/meeting-date";
+import { shareMeetingLink } from "@/lib/meeting-share";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline } from "@/types/timeline";
 import type { MeetingTranscript } from "@/types/transcript";
 import { cn } from "@/lib/utils";
 
-function downloadBlob(filename: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function safeFileName(title: string) {
-  return title.replace(/[^\w가-힣.\-]+/g, "_").slice(0, 80) || "meeting";
-}
-
-export function exportMeetingDownload(payload: {
-  meeting: Meeting;
-  timeline?: MeetingTimeline;
-  transcript?: MeetingTranscript;
-  summary?: string;
-}) {
-  const { meeting, timeline, transcript, summary } = payload;
-  const lines: string[] = [
-    meeting.title,
-    `${meeting.date}, ${meeting.duration}`,
-    "",
-  ];
-  const sum = summary || timeline?.overallSummary;
-  if (sum) {
-    lines.push("개요", sum, "");
-  }
-  if (timeline?.decisions?.length) {
-    lines.push("결정");
-    for (const d of timeline.decisions) lines.push(`- ${d}`);
-    lines.push("");
-  }
-  if (timeline?.actions?.length) {
-    lines.push("후속");
-    for (const a of timeline.actions) {
-      const owner = a.owner?.trim();
-      lines.push(`- ${owner ? `${owner}: ${a.task}` : a.task}`);
-    }
-    lines.push("");
-  }
-  if (timeline?.segments?.length) {
-    lines.push("타임라인");
-    for (const s of timeline.segments) {
-      lines.push(`[${s.start}-${s.end}] ${s.title}`);
-      if (s.summary) lines.push(s.summary);
-    }
-    lines.push("");
-  }
-  if (transcript?.lines?.length) {
-    lines.push("대화기록");
-    for (const l of transcript.lines) {
-      lines.push(`${l.time} ${l.speaker}: ${l.text ?? ""}`);
-    }
-  }
-  downloadBlob(
-    `${safeFileName(meeting.title)}.txt`,
-    lines.join("\n"),
-    "text/plain;charset=utf-8",
-  );
-}
-
-export function exportMeetingsListDownload(meetings: Meeting[]) {
-  const body = meetings
-    .map(
-      (m) =>
-        `${m.title}\n${m.date}, ${m.duration}\n${[...m.summaryTags, ...m.tags].join(", ")}\n`,
-    )
-    .join("\n---\n\n");
-  downloadBlob(
-    `meetings-${meetings.length}.txt`,
-    body,
-    "text/plain;charset=utf-8",
-  );
-}
+export { exportMeetingDownload, exportMeetingsListDownload };
 
 function isUserMeeting(meetingId: string, tags: string[]) {
   return meetingId.startsWith("mtg-up-") || tags.includes("업로드");
@@ -655,20 +585,30 @@ export function MeetingRecordActions({
   const [actionMode, setActionMode] = useState<"delete" | "download" | null>(
     null,
   );
+  const [shareHint, setShareHint] = useState<string | null>(null);
   const disabled = busy || processing;
 
-  async function confirmAction() {
+  useEffect(() => {
+    if (!shareHint) return;
+    const t = window.setTimeout(() => setShareHint(null), 1800);
+    return () => window.clearTimeout(t);
+  }, [shareHint]);
+
+  async function confirmAction(format?: MeetingExportFormat) {
     if (busy || !actionMode) return;
     const mode = actionMode;
     setActionMode(null);
 
     if (mode === "download") {
-      exportMeetingDownload({
-        meeting,
-        timeline,
-        transcript,
-        summary,
-      });
+      await exportMeetingDownload(
+        {
+          meeting,
+          timeline,
+          transcript,
+          summary,
+        },
+        format ?? "txt",
+      );
       return;
     }
 
@@ -694,7 +634,7 @@ export function MeetingRecordActions({
 
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center gap-2 md:h-9 md:gap-1">
+      <div className="relative flex h-12 shrink-0 items-center gap-2 md:h-9 md:gap-1">
         <Button
           type="button"
           variant="ghost"
@@ -711,6 +651,44 @@ export function MeetingRecordActions({
           type="button"
           variant="ghost"
           size="icon"
+          className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
+          aria-label="공유"
+          title={processing ? "분석이 끝나면 공유할 수 있어요" : "공유"}
+          disabled={disabled}
+          onClick={() => {
+            void (async () => {
+              if (meeting.workspace === "team") {
+                try {
+                  const res = await fetch(
+                    `/api/team-meetings/${encodeURIComponent(meetingId)}/share`,
+                    { method: "POST" },
+                  );
+                  const data = (await res.json()) as {
+                    message?: string;
+                  };
+                  if (!res.ok) {
+                    setShareHint(
+                      data.message ?? "팀 기록은 외부 공유할 수 없습니다",
+                    );
+                    return;
+                  }
+                } catch {
+                  setShareHint("팀 기록 공유를 확인하지 못했습니다");
+                  return;
+                }
+              }
+              const result = await shareMeetingLink({ title: meeting.title });
+              if (result === "copied") setShareHint("링크를 복사했습니다");
+              else if (result === "failed") setShareHint("공유에 실패했습니다");
+            })();
+          }}
+        >
+          <Share2 strokeWidth={1.75} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           className="h-12 w-12 text-masked hover:bg-masked-soft hover:text-masked md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
           aria-label="기록 삭제"
           title={processing ? "분석이 끝나면 삭제할 수 있어요" : "기록 삭제"}
@@ -719,6 +697,14 @@ export function MeetingRecordActions({
         >
           <Trash2 strokeWidth={1.75} />
         </Button>
+        {shareHint ? (
+          <p
+            role="status"
+            className="absolute right-0 top-[calc(100%+0.35rem)] z-40 whitespace-nowrap rounded-xl bg-foreground px-3 py-1.5 text-sm font-medium text-background shadow-soft"
+          >
+            {shareHint}
+          </p>
+        ) : null}
       </div>
 
       <MeetingRecordsActionDialog
@@ -727,7 +713,7 @@ export function MeetingRecordActions({
         meetings={[meeting]}
         busy={busy}
         onCancel={() => setActionMode(null)}
-        onConfirm={() => void confirmAction()}
+        onConfirm={(format) => void confirmAction(format)}
       />
     </>
   );

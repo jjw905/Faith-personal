@@ -1,10 +1,15 @@
 "use client";
 
 import { Download, Trash2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { MeetingCaptureOverline } from "@/components/meetings/meeting-capture-label";
+import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
+import {
+  MEETING_EXPORT_FORMATS,
+  type MeetingExportFormat,
+} from "@/lib/meeting-export";
 import { formatSeoulListLeading } from "@/lib/meeting-date";
 import type { Meeting } from "@/types/meeting";
 import { cn } from "@/lib/utils";
@@ -28,10 +33,15 @@ export function MeetingRecordsActionDialog({
   /** 디자인 랩: 프리뷰 영역 안에만 표시 */
   contained?: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (format?: MeetingExportFormat) => void;
 }) {
   const { isLive } = usePageUxPreview();
   const blockDismiss = busy && isLive;
+  const [format, setFormat] = useState<MeetingExportFormat>("txt");
+
+  useEffect(() => {
+    if (open && mode === "download") setFormat("txt");
+  }, [open, mode]);
 
   useEffect(() => {
     if (!open || contained) return;
@@ -51,6 +61,7 @@ export function MeetingRecordsActionDialog({
   const count = meetings.length;
   const single = count === 1;
   const isDelete = mode === "delete";
+  const selectedMeta = MEETING_EXPORT_FORMATS.find((f) => f.id === format);
 
   const title = isDelete
     ? single
@@ -62,7 +73,9 @@ export function MeetingRecordsActionDialog({
 
   const desc = isDelete
     ? "삭제 후 복구할 수 없습니다."
-    : "텍스트 파일로 저장합니다.";
+    : selectedMeta
+      ? `${selectedMeta.blurb}로 저장합니다.`
+      : "선택한 형식으로 저장합니다.";
 
   const confirmLabel = isDelete
     ? single
@@ -104,6 +117,51 @@ export function MeetingRecordsActionDialog({
           {desc}
         </p>
 
+        {!isDelete ? (
+          <div
+            className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2"
+            role="radiogroup"
+            aria-label="저장 형식"
+          >
+            {MEETING_EXPORT_FORMATS.map((item) => {
+              const selected = format === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={busy}
+                  onClick={() => setFormat(item.id)}
+                  className={cn(
+                    "flex min-h-12 items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors",
+                    selected
+                      ? "border-primary bg-surface"
+                      : "border-transparent bg-surface-2/80 hover:bg-surface-2",
+                    busy && "opacity-50",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                      item.toneClass,
+                    )}
+                    aria-hidden
+                  >
+                    <MaterialSymbol name={item.symbol} size={22} weight={500} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-base font-semibold text-foreground">
+                      {item.label}
+                    </span>
+                    <span className="block text-base text-muted">{item.blurb}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div className="mt-5 rounded-2xl bg-surface px-3 py-3.5">
           <div className="mb-3 flex items-center justify-between gap-2 px-1">
             <p className="text-base font-semibold text-muted">선택 목록</p>
@@ -129,7 +187,7 @@ export function MeetingRecordsActionDialog({
           </button>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={() => onConfirm(isDelete ? undefined : format)}
             disabled={busy}
             className={
               isDelete

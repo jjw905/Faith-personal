@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import Image, { getImageProps } from "next/image";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -33,7 +32,6 @@ import {
   searchHelpArticles,
   type HelpArticle,
   type HelpBlock,
-  type HelpFigure,
 } from "@/lib/help";
 import { scrollElementToCenter } from "@/lib/scroll-in-container";
 import {
@@ -42,75 +40,11 @@ import {
 } from "@/lib/docs-section-spy";
 import { cn } from "@/lib/utils";
 
-/** Faith md(768px)와 맞춤. 좁은 창은 모바일 샷, 넓은 창은 PC 샷. */
-const HELP_DESKTOP_MQ = "(min-width: 768px)";
-const HELP_FIGURE_SIZES = "(min-width: 768px) 640px, min(100vw, 24rem)";
-
-function HelpFigureBlock({ figure }: { figure: HelpFigure }) {
-  const caption = figure.caption ? (
-    <figcaption className="border-t border-border px-3 py-2.5 text-base leading-relaxed text-muted">
-      {figure.caption}
-    </figcaption>
-  ) : null;
-
-  if (!figure.desktop) {
-    return (
-      <figure className="overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
-        <Image
-          src={figure.mobile}
-          alt={figure.alt}
-          width={1134}
-          height={1920}
-          className="mx-auto h-auto w-full max-w-sm bg-surface"
-          sizes={HELP_FIGURE_SIZES}
-        />
-        {caption}
-      </figure>
-    );
-  }
-
-  // next/Image 단독 srcset은 art direction을 지원하지 않음 → getImageProps + picture
-  const common = { alt: figure.alt, sizes: HELP_FIGURE_SIZES };
-  const {
-    props: { srcSet: desktopSrcSet },
-  } = getImageProps({
-    ...common,
-    width: 1680,
-    height: 980,
-    src: figure.desktop,
-  });
-  const { props: mobileProps } = getImageProps({
-    ...common,
-    width: 1134,
-    height: 1920,
-    src: figure.mobile,
-  });
-  const { srcSet: _mobileSrcSet, ...mobileRest } = mobileProps;
-
-  return (
-    <figure className="overflow-hidden rounded-2xl border border-border bg-surface shadow-soft">
-      <picture>
-        <source media={HELP_DESKTOP_MQ} srcSet={desktopSrcSet} />
-        <img
-          {...mobileRest}
-          alt={figure.alt}
-          className="mx-auto h-auto w-full max-w-sm bg-surface md:max-w-none"
-          style={{ width: "100%", height: "auto" }}
-        />
-      </picture>
-      {caption}
-    </figure>
-  );
-}
-
 function HelpBlockView({ block }: { block: HelpBlock }) {
   if (block.type === "p") {
     return (
       <p className="text-base leading-relaxed text-foreground/85">{block.text}</p>
     );
-  }
-  if (block.type === "figure") {
-    return <HelpFigureBlock figure={block.figure} />;
   }
   const ListTag = block.type === "ol" ? "ol" : "ul";
   return (

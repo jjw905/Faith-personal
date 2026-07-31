@@ -1,22 +1,22 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/require-user";
+import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import {
   getTeamMember,
   hasTeamCapability,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ teamId: string }> };
 
 export async function GET(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json(
-      { ok: false, message: "로그인이 필요합니다." },
-      { status: 401 },
-    );
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const member = await getTeamMember(teamId, session.user.id);
   if (!member) {
@@ -31,6 +31,12 @@ export async function GET(request: Request, context: RouteContext) {
       { status: 403 },
     );
   }
+  const limit = rateLimit({
+    key: `team-people:${teamId}:${session.user.id}:${clientIp(request)}`,
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!limit.ok) return rateLimitResponse(limit.retryAfterSec);
   const query = new URL(request.url).searchParams.get("query")?.trim() ?? "";
   if (query.length < 3 || query.length > 50) {
     return NextResponse.json({ ok: true, person: null });
@@ -42,7 +48,7 @@ export async function GET(request: Request, context: RouteContext) {
       disabled: false,
       OR: [{ handle }, { inviteCode: code }],
     },
-    select: { id: true, name: true, image: true, handle: true },
+    select: { id: true, name: true, image: true, handle: true, role: true },
   });
   if (!user) return NextResponse.json({ ok: true, person: null });
   const [membership, pending] = await Promise.all([

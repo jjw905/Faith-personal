@@ -19,6 +19,25 @@ import {
 import { MeetingCaptureChip } from "@/components/meetings/meeting-capture-label";
 import { Button } from "@/components/ui/button";
 
+/** 구간별 ease로 1→100 느낌을 다양하게. */
+function segmentEase(t: number) {
+  const x = Math.min(1, Math.max(0, t));
+  if (x < 0.22) {
+    const u = x / 0.22;
+    return 0.18 * (u * u);
+  }
+  if (x < 0.55) {
+    const u = (x - 0.22) / 0.33;
+    return 0.18 + 0.4 * (1 - (1 - u) * (1 - u));
+  }
+  if (x < 0.82) {
+    const u = (x - 0.55) / 0.27;
+    return 0.58 + 0.28 * u;
+  }
+  const u = (x - 0.82) / 0.18;
+  return 0.86 + 0.14 * (1 - (1 - u) ** 2.4);
+}
+
 function useRisingPercent(
   play: number,
   from: number,
@@ -33,8 +52,7 @@ function useRisingPercent(
     let raf = 0;
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / durationMs);
-      const eased = 1 - (1 - t) * (1 - t);
-      setPercent(Math.round(from + (to - from) * eased));
+      setPercent(from + (to - from) * segmentEase(t));
       if (t < 1) raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
@@ -190,10 +208,10 @@ export function SceneMeetingTranscribing() {
   return (
     <AnimatedDetailScene
       phase="transcribing"
-      from={4}
-      to={58}
+      from={1}
+      to={71}
       hint="회의 상세 전체 화면, 받아쓰기 진행률."
-      durationMs={4500}
+      durationMs={5200}
     />
   );
 }
@@ -202,10 +220,10 @@ export function SceneMeetingStructuring() {
   return (
     <AnimatedDetailScene
       phase="structuring"
-      from={58}
-      to={96}
+      from={72}
+      to={98}
       hint="회의 상세 전체 화면, 정리 진행률."
-      durationMs={4200}
+      durationMs={5600}
     />
   );
 }

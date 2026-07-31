@@ -5,7 +5,6 @@ import {
   LoaderCircle,
   Search,
   UserRoundPlus,
-  UsersRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -83,6 +82,16 @@ type TeamDetail = {
       canReadMasked: boolean;
     }>;
   }>;
+  security?: {
+    encryptionManagedBy: "service";
+    kmsReady: boolean;
+    kmsReason:
+      | "disabled"
+      | "non_production_node"
+      | "non_production_runtime"
+      | "missing_configuration"
+      | null;
+  };
 };
 
 const ROLE_LABEL = { OWNER: "팀 대표", ADMIN: "팀장", MEMBER: "팀원" };
@@ -91,7 +100,7 @@ const PAGE_MEMBERS = 10;
 const PAGE_MEETINGS = 5;
 
 const CARD_SHADOW =
-  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+  "panel-surface rounded-2xl";
 
 const FIELD_CLASS =
   "min-h-12 rounded-xl bg-surface-2 px-3 text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
@@ -216,13 +225,25 @@ function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        "inline-flex h-8 w-[52px] shrink-0 cursor-pointer items-center rounded-full p-1 transition-colors",
+        "relative inline-flex h-12 w-[52px] shrink-0 cursor-pointer items-center",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-45",
-        checked ? "justify-end bg-primary" : "justify-start bg-surface-2",
       )}
     >
-      <span className="block h-6 w-6 rounded-full bg-card shadow-[0_1px_2px_rgba(17,24,46,0.18)]" />
+      <span
+        className={cn(
+          "absolute inset-x-0 top-1/2 h-8 -translate-y-1/2 rounded-full transition-colors",
+          checked ? "bg-primary" : "bg-surface-2",
+        )}
+        aria-hidden
+      />
+      <span
+        className={cn(
+          "absolute top-1/2 block h-6 w-6 -translate-y-1/2 rounded-full bg-card shadow-[0_1px_2px_rgba(17,24,46,0.18)] transition-transform",
+          checked ? "translate-x-6" : "translate-x-1",
+        )}
+        aria-hidden
+      />
     </button>
   );
 }
@@ -253,7 +274,7 @@ function Segmented({
           disabled={disabled}
           onClick={() => onChange(option.value)}
           className={cn(
-            "cursor-pointer rounded-lg px-3.5 py-2 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            "min-h-12 cursor-pointer rounded-lg px-3.5 py-2 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
             value === option.value
               ? "bg-card text-foreground shadow-soft"
               : "text-muted hover:text-foreground",
@@ -729,6 +750,12 @@ export function TeamManagePanel({
     `${activeTeamId ?? ""}|${view}|${scenarioId}`,
   );
   const visibleMembers = previewMembers.slice(0, memberListPage.visible);
+  const encryptionReady =
+    scenarioId === "security-key-ready"
+      ? true
+      : scenarioId === "security-key-attention"
+        ? false
+        : Boolean(detail?.security?.kmsReady);
 
   useEffect(() => {
     if (scenarioId === "popup-invite" || scenarioId === "popup-invite-search") {
@@ -889,7 +916,7 @@ export function TeamManagePanel({
         )}
       >
         <p className="text-base text-muted">이 관리 화면은 권한이 없습니다.</p>
-        <Button asChild variant="secondary" className="mt-4 min-h-11 rounded-xl">
+        <Button asChild variant="secondary" className="mt-4 min-h-12 rounded-xl">
           <Link href="/team">팀 공간으로</Link>
         </Button>
       </div>
@@ -933,8 +960,7 @@ export function TeamManagePanel({
       {teams.length === 0 ? (
         <ManageCard title="팀">
           <div className="px-6 py-12 text-center">
-            <UsersRound className="mx-auto h-10 w-10 text-muted-2" strokeWidth={1.5} />
-            <p className="mt-4 text-lg font-semibold text-foreground">
+            <p className="text-lg font-semibold text-foreground">
               참여 중인 팀이 없습니다
             </p>
             <p className="mt-1 text-base text-muted">
@@ -965,48 +991,94 @@ export function TeamManagePanel({
 
           {detail ? (
             view === "security" ? (
-              <ManageCard title="보안 정책" description="팀 전체에 적용됩니다.">
-                <div className="divide-y divide-border px-6 pb-2">
-                  <SettingRow label="보존 기간">
-                    <Segmented
-                      ariaLabel="데이터 보존 기간"
-                      value={String(detail.team.policy?.retentionDays ?? 90)}
-                      disabled={saving}
-                      onChange={(value) =>
-                        void updatePolicy({ retentionDays: Number(value) })
-                      }
-                      options={[
-                        { value: "30", label: "30일" },
-                        { value: "60", label: "60일" },
-                        { value: "90", label: "90일" },
-                      ]}
-                    />
-                  </SettingRow>
-                  <SettingRow
-                    label="팀장 언마스크"
-                    description="마스킹 원문 열람"
-                  >
-                    <Toggle
+              <div className="space-y-6">
+                <ManageCard
+                  title="보안 키 준비"
+                  description="서비스 오픈에 필요한 운영 KMS 설정 상태입니다."
+                >
+                  <div className="px-6 py-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-lg font-semibold text-foreground">
+                        서비스 관리
+                      </p>
+                      <span
+                        className={cn(
+                          "inline-flex min-h-8 items-center rounded-full px-3 text-sm font-semibold",
+                          encryptionReady
+                            ? "bg-success-soft text-success"
+                            : "bg-warning-soft text-warning",
+                        )}
+                      >
+                        {encryptionReady ? "설정 확인됨" : "설정 필요"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-base leading-6 text-muted">
+                      콘텐츠·감사 키 원문은 팀 화면에 노출하지 않습니다. 생성과
+                      교체는 운영 KMS에서 수행하며 팀 대표는 준비 상태만
+                      확인합니다.
+                    </p>
+                    {!encryptionReady ? (
+                      <p className="mt-3 text-base leading-6 text-muted">
+                        서비스 오픈 전에 콘텐츠 키와 감사 키를 모두 연결해야
+                        합니다.
+                      </p>
+                    ) : null}
+                  </div>
+                </ManageCard>
+
+                <ManageCard title="보안 정책" description="팀 전체에 적용됩니다.">
+                  <div className="divide-y divide-border px-6 pb-2">
+                    <SettingRow
+                      label="보존 기간"
+                      description="종료된 팀 회의에 적용됩니다. 운영 보존 작업이 기간이 지난 기록을 정리합니다."
+                    >
+                      <Segmented
+                        ariaLabel="데이터 보존 기간"
+                        value={String(detail.team.policy?.retentionDays ?? 90)}
+                        disabled={saving}
+                        onChange={(value) =>
+                          void updatePolicy({ retentionDays: Number(value) })
+                        }
+                        options={[
+                          { value: "30", label: "30일" },
+                          { value: "60", label: "60일" },
+                          { value: "90", label: "90일" },
+                        ]}
+                      />
+                    </SettingRow>
+                    <SettingRow
                       label="팀장 언마스크"
-                      checked={Boolean(detail.team.policy?.allowAdminUnmask)}
-                      disabled={saving}
-                      onChange={(value) =>
-                        void updatePolicy({ allowAdminUnmask: value })
-                      }
-                    />
-                  </SettingRow>
-                  <SettingRow label="외부 공유">
-                    <Toggle
+                      description="마스킹 원문 열람"
+                    >
+                      <Toggle
+                        label="팀장 언마스크"
+                        checked={Boolean(detail.team.policy?.allowAdminUnmask)}
+                        disabled={saving}
+                        onChange={(value) =>
+                          void updatePolicy({ allowAdminUnmask: value })
+                        }
+                      />
+                    </SettingRow>
+                    <SettingRow
                       label="외부 공유"
-                      checked={Boolean(detail.team.policy?.allowExternalSharing)}
-                      disabled={saving}
-                      onChange={(value) =>
-                        void updatePolicy({ allowExternalSharing: value })
-                      }
-                    />
-                  </SettingRow>
-                </div>
-              </ManageCard>
+                      description="공개 열람 링크 준비 후 제공됩니다."
+                    >
+                      <Toggle
+                        label="외부 공유"
+                        checked={Boolean(
+                          detail.team.policy?.allowExternalSharing,
+                        )}
+                        disabled={
+                          saving || !detail.team.policy?.allowExternalSharing
+                        }
+                        onChange={(value) =>
+                          void updatePolicy({ allowExternalSharing: value })
+                        }
+                      />
+                    </SettingRow>
+                  </div>
+                </ManageCard>
+              </div>
             ) : (
               <ManageCard
                 title={view === "records" ? "기록 열람" : "구성원"}
@@ -1173,6 +1245,7 @@ function InviteDialog({
     id: string;
     name: string | null;
     handle: string | null;
+    role: "USER" | "ADMIN";
     alreadyMember: boolean;
     pendingInvite: { id: string } | null;
   } | null>(null);
@@ -1229,7 +1302,11 @@ function InviteDialog({
   }
 
   const canSubmit =
-    person && !person.alreadyMember && !person.pendingInvite && !searching;
+    person &&
+    person.role === "ADMIN" &&
+    !person.alreadyMember &&
+    !person.pendingInvite &&
+    !searching;
 
   useEffect(() => {
     if (previewSearching) {
@@ -1277,7 +1354,7 @@ function InviteDialog({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-10 shrink-0 gap-1.5 rounded-lg px-3 text-base font-semibold"
+          className="min-h-12 shrink-0 gap-1.5 rounded-lg px-3 text-base font-semibold"
           onClick={() => void search()}
           disabled={searching}
         >
@@ -1313,6 +1390,10 @@ function InviteDialog({
               {person.alreadyMember
                 ? "이미 팀에 참여 중입니다."
                 : "초대 응답 대기 중입니다."}
+            </p>
+          ) : person.role !== "ADMIN" ? (
+            <p className="border-t border-border py-4 text-base text-muted">
+              안정화 기간에는 관리자 계정만 팀에 초대할 수 있습니다.
             </p>
           ) : (
             <div className="divide-y divide-border border-t border-border">

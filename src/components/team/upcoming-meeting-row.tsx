@@ -84,7 +84,7 @@ function MeetingActions({
       {meeting.canJoin ? (
         <Button
           asChild
-          className="min-h-11 rounded-xl motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none"
+          className="min-h-12 rounded-xl motion-safe:transition-transform motion-safe:duration-200 motion-reduce:transition-none"
         >
           <Link href={`/meetings/team/${meeting.id}`}>참가</Link>
         </Button>

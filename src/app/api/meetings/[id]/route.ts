@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { normalizeMeetingDateIso } from "@/lib/meeting-date";
+import { canReadMeeting } from "@/lib/meeting-access";
 import { renameParticipantInRecord } from "@/lib/rename-meeting-participant";
 import { requireUser } from "@/lib/require-user";
 import { applyLineCorrection, setLineMemo } from "@/lib/transcript-line-edit";
@@ -9,6 +10,10 @@ import {
   getUserMeeting,
   updateUserMeeting,
 } from "@/lib/user-meetings-store";
+import {
+  getTeamFeatureAccess,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -42,6 +47,17 @@ export async function PATCH(request: Request, { params }: Params) {
       { ok: false, message: "회의 없음" },
       { status: 404 },
     );
+  }
+  if (row.workspace === "team") {
+    const teamFeature = await getTeamFeatureAccess(session.user.id);
+    if (!teamFeature.ok) return teamFeatureFailureResponse(teamFeature);
+    const access = await canReadMeeting(id, session.user.id);
+    if (!access.allowed) {
+      return NextResponse.json(
+        { ok: false, message: "팀 회의 접근 권한이 없습니다." },
+        { status: 403 },
+      );
+    }
   }
 
   let body: PatchBody;
@@ -189,6 +205,17 @@ export async function DELETE(_request: Request, { params }: Params) {
       { ok: false, message: "회의 없음" },
       { status: 404 },
     );
+  }
+  if (row.workspace === "team") {
+    const teamFeature = await getTeamFeatureAccess(session.user.id);
+    if (!teamFeature.ok) return teamFeatureFailureResponse(teamFeature);
+    const access = await canReadMeeting(id, session.user.id);
+    if (!access.allowed) {
+      return NextResponse.json(
+        { ok: false, message: "팀 회의 접근 권한이 없습니다." },
+        { status: 403 },
+      );
+    }
   }
 
   deleteUserMeeting(id);

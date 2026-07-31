@@ -4,21 +4,23 @@ import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { createNotification } from "@/lib/notifications-store";
-import { requireUser } from "@/lib/require-user";
 import { NOTIFICATION_KINDS } from "@/lib/team/notification-kinds";
 import {
   isTeamManager,
   requireTeamCapability,
   writeTeamAudit,
 } from "@/lib/team-permissions";
+import {
+  requireTeamFeatureUser,
+  teamFeatureFailureResponse,
+} from "@/lib/team-feature-access";
 
 type RouteContext = { params: Promise<{ teamId: string }> };
 
 export async function GET(_: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const member = await prisma.teamMember.findUnique({
     where: { teamId_userId: { teamId, userId: session.user.id } },
@@ -38,10 +40,9 @@ export async function GET(_: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const session = await requireUser();
-  if (!session) {
-    return NextResponse.json({ ok: false, message: "로그인이 필요합니다." }, { status: 401 });
-  }
+  const gate = await requireTeamFeatureUser();
+  if (!gate.ok) return teamFeatureFailureResponse(gate);
+  const { session } = gate;
   const { teamId } = await context.params;
   const actor = await requireTeamCapability(teamId, session.user.id, "manageTeam");
   if (!actor || !isTeamManager(actor.role)) {

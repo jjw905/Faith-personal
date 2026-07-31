@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/require-user";
 import { prisma } from "@/lib/prisma";
 import {
   parseAccountDisplayPrefs,
+  REALTIME_INVITE_POLICIES,
   SUMMARY_LANGUAGES,
   type AccountDisplayPrefs,
 } from "@/lib/account-settings";
@@ -73,6 +74,13 @@ export async function PATCH(request: Request) {
       nextSummaryLang = body.summaryLang as AccountDisplayPrefs["summaryLang"];
     }
   }
+  const nextRealtimeInvitePolicy =
+    typeof body.realtimeInvitePolicy === "string" &&
+    REALTIME_INVITE_POLICIES.includes(
+      body.realtimeInvitePolicy as AccountDisplayPrefs["realtimeInvitePolicy"],
+    )
+      ? (body.realtimeInvitePolicy as AccountDisplayPrefs["realtimeInvitePolicy"])
+      : current.realtimeInvitePolicy;
 
   const prefs: AccountDisplayPrefs = {
     autoMask:
@@ -82,6 +90,7 @@ export async function PATCH(request: Request) {
         ? body.speakerSplit
         : current.speakerSplit,
     summaryLang: nextSummaryLang,
+    realtimeInvitePolicy: nextRealtimeInvitePolicy,
   };
   // 다른 키가 displayPrefs에 있어도 지우지 않는다(/api/personal-settings와 공존).
   const next = { ...rawPrefs, ...prefs };
@@ -94,6 +103,25 @@ export async function PATCH(request: Request) {
     },
     update: { displayPrefs: next as unknown as Prisma.InputJsonValue },
   });
+  if (nextRealtimeInvitePolicy === "reject") {
+    await prisma.personalRealtimeAccess.updateMany({
+      where: {
+        userId: session.user.id,
+        status: "PENDING",
+      },
+      data: {
+        status: "DECLINED",
+        respondedAt: new Date(),
+      },
+    });
+    await prisma.notification.updateMany({
+      where: {
+        userId: session.user.id,
+        kind: "personal_realtime_invite",
+      },
+      data: { readAt: new Date(), confirmedAt: new Date() },
+    });
+  }
 
   return NextResponse.json({
     ok: true,

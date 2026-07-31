@@ -2,6 +2,7 @@ import WebSocket from "ws";
 
 import {
   DEFAULT_REALTIME_STT_MODEL,
+  REALTIME_STT_LIVE,
   REALTIME_STT_MINI,
   REALTIME_STT_USD_PER_MINUTE,
   type RealtimeSttModel,
@@ -277,13 +278,20 @@ export async function realtimeTranscribeFile(
           type: "session.update",
           session: {
             type: "transcription",
-            include: ["item.input_audio_transcription.logprobs"],
+            ...(model === REALTIME_STT_LIVE
+              ? {}
+              : {
+                  include: ["item.input_audio_transcription.logprobs"],
+                }),
             audio: {
               input: {
                 format: { type: "audio/pcm", rate: 24000 },
-                transcription: useServerVad
-                  ? { model, language }
-                  : { model, language, delay },
+                transcription:
+                  model === REALTIME_STT_LIVE
+                    ? { model, languages: [language], delay }
+                    : useServerVad
+                      ? { model, language }
+                      : { model, language, delay },
                 turn_detection: useServerVad
                   ? {
                       type: "server_vad",

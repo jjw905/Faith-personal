@@ -29,12 +29,18 @@ export type ChatReplaySettings = {
   /** 0~1 */
   volume: number;
   rate: (typeof SPEED_OPTIONS)[number];
+  /** 재생 중 활성 말풍선으로 스크롤 */
+  followChat: boolean;
+  /** 재생 위치 단어 하이라이트 */
+  wordFocus: boolean;
 };
 
 const DEFAULT_SETTINGS: ChatReplaySettings = {
   muted: false,
   volume: 1,
   rate: 1,
+  followChat: true,
+  wordFocus: true,
 };
 
 const dockIconBtn =
@@ -76,6 +82,14 @@ function readSettings(): ChatReplaySettings {
       muted: Boolean(parsed.muted),
       volume,
       rate,
+      followChat:
+        typeof parsed.followChat === "boolean"
+          ? parsed.followChat
+          : DEFAULT_SETTINGS.followChat,
+      wordFocus:
+        typeof parsed.wordFocus === "boolean"
+          ? parsed.wordFocus
+          : DEFAULT_SETTINGS.wordFocus,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -627,4 +641,4 @@ export function MeetingChatReplayBar({
   );
 }
 
-export { readSettings as readChatReplaySettings };
+export { readSettings as readChatReplaySettings, writeSettings as writeChatReplaySettings };
