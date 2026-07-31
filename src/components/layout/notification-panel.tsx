@@ -168,6 +168,7 @@ export function NotificationPanel({
   previewItems,
 }: NotificationPanelProps) {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const { scenarioId, isLive } = usePageUxPreview();
   const [unread, setUnread] = useState<AppNotification[]>([]);
   const [recent, setRecent] = useState<AppNotification[]>([]);
@@ -320,14 +321,25 @@ export function NotificationPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, reason, notificationId }),
     });
-    const data = (await res.json()) as { ok?: boolean; message?: string };
+    const data = (await res.json()) as {
+      ok?: boolean;
+      message?: string;
+      href?: string | null;
+    };
     if (res.ok && data.ok) {
       setActionMessage(null);
       await markRead(notificationId);
       await load();
+      if (action === "accept" && data.href) {
+        onClose?.();
+        router.push(data.href);
+      }
     } else {
       setActionMessage(
-        data.message ?? "팀 초대에 응답하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        data.message ??
+          (inviteType === "personal_realtime"
+            ? "개인 실시간 초대에 응답하지 못했습니다. 잠시 후 다시 시도해 주세요."
+            : "팀 초대에 응답하지 못했습니다. 잠시 후 다시 시도해 주세요."),
       );
     }
   }
