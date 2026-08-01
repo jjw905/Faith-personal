@@ -215,7 +215,7 @@ export function VaultUploadDialog({
                   className="relative z-20 min-h-12 rounded-xl px-4 text-base font-semibold text-primary hover:underline"
                   onClick={() => onQuotaFull?.()}
                 >
-                  용량이 가득 찼어요. 자세히 보기
+                  용량이 가득 찼습니다. 자세히 보기
                 </button>
               ) : null}
             </>

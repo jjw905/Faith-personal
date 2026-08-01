@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   FEATURE_KEYS,
   FEATURE_LABELS,
+  FREE_MONTHLY_MINUTES,
   IMPROVEMENT_NOTE_MAX,
   PAYMENT_INTENT_LABELS,
   PAYMENT_INTENTS,
@@ -22,6 +23,7 @@ import {
   type PaymentIntent,
   type PricePreference,
 } from "@/lib/stt/survey";
+import { formatSurveyCta } from "@/lib/usage-copy";
 import { cn } from "@/lib/utils";
 
 const SATISFACTION_SCALE = [1, 2, 3, 4, 5];
@@ -198,7 +200,7 @@ export function SurveyForm({
               참여해 주셔서 감사합니다
             </p>
             <p className="max-w-sm text-base leading-relaxed text-muted">
-              이번 주기 분석 가능 시간이{" "}
+              이번 주기 잔여 시간이{" "}
               <span className="font-semibold tabular-nums text-foreground">
                 {SURVEY_UNLOCKED_MONTHLY_MINUTES}분
               </span>
@@ -215,7 +217,7 @@ export function SurveyForm({
               authEnterDelay(2),
             )}
           >
-            <Link href="/plan">늘어난 시간 확인하기</Link>
+            <Link href="/plan">잔여 시간 확인하기</Link>
           </Button>
         </CardContent>
       </Card>
@@ -340,7 +342,7 @@ export function SurveyForm({
         onClick={() => void submit()}
         className="h-14 w-full rounded-xl text-base font-semibold"
       >
-        {submitting ? "제출하는 중" : "제출하고 분석 시간 늘리기"}
+        {submitting ? "제출 중…" : formatSurveyCta(FREE_MONTHLY_MINUTES)}
       </Button>
     </div>
   );

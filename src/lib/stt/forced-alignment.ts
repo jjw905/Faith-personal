@@ -9,7 +9,7 @@ import {
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import type { WordTiming } from "@/lib/stt/timed-segments";
+import type { TimedSegment, WordTiming } from "@/lib/stt/timed-segments";
 
 const execFileAsync = promisify(execFile);
 const ALIGN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
@@ -54,6 +54,8 @@ export async function forceAlignTranscript(params: {
   text: string;
   parts: string[];
   partRanges: Array<{ startSec: number; endSec: number }>;
+  /** 전사 세그먼트 시각. 5분 청크를 문장 단위 창으로 쪼개 정렬을 앞당긴다. */
+  timedSegments?: TimedSegment[];
   durationSec: number;
   workDir: string;
 }): Promise<ForcedAlignmentResult> {
@@ -69,6 +71,7 @@ export async function forceAlignTranscript(params: {
       text: params.parts.join("\n") || params.text,
       durationSec: params.durationSec,
       partRanges: params.partRanges,
+      timedSegments: params.timedSegments ?? [],
     }),
     "utf8",
   );

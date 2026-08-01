@@ -90,7 +90,7 @@ export async function POST(
       ok: false,
       code: "TEAM_EXTERNAL_SHARING_UNAVAILABLE",
       message:
-        "팀 기록 외부 공유는 공개 열람 링크가 준비된 뒤 제공됩니다. 현재는 팀 멤버에게만 공유할 수 있습니다.",
+        "팀 기록 외부 공유는 공개 열람 링크가 준비된 뒤 제공됩니다. 현재는 팀 구성원에게만 공유할 수 있습니다.",
     },
     { status: 503 },
   );

@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 
 import {
   evaluateKmsProvisioningRuntime,
-  evaluateKmsRuntime,
+  kmsProvider,
 } from "@/lib/kms-runtime-policy";
 import { prisma } from "@/lib/prisma";
 import {
@@ -89,20 +89,34 @@ export async function GET(_: Request, context: RouteContext) {
       where: { teamId },
       select: {
         status: true,
+        provider: true,
         region: true,
         contentKeyArn: true,
         auditKeyArn: true,
+        contentDataKeyCiphertext: true,
+        auditDataKeyCiphertext: true,
         createdAt: true,
         lastError: true,
       },
     }),
   ]);
-  const kms = evaluateKmsRuntime();
   const kmsProvisioning = evaluateKmsProvisioningRuntime();
+  const activeProvider = kmsProvider();
+  const expectedProvider =
+    activeProvider === "gcp"
+      ? "GCP"
+      : activeProvider === "aws"
+        ? "AWS"
+        : null;
   const teamKmsReady = Boolean(
+    kmsProvisioning.allowed &&
+    expectedProvider &&
     securityKey?.status === "ACTIVE" &&
+      securityKey.provider === expectedProvider &&
       securityKey.contentKeyArn &&
-      securityKey.auditKeyArn,
+      securityKey.auditKeyArn &&
+      securityKey.contentDataKeyCiphertext &&
+      securityKey.auditDataKeyCiphertext,
   );
   return NextResponse.json({
     ok: true,
@@ -128,9 +142,9 @@ export async function GET(_: Request, context: RouteContext) {
           : securityKey?.status === "FAILED"
             ? "failed"
             : securityKey
-              ? kms.allowed
+              ? kmsProvisioning.allowed
                 ? "missing_configuration"
-                : kms.reason
+                : kmsProvisioning.reason
               : "not_configured",
       kmsStatus: securityKey?.status ?? "NOT_CONFIGURED",
       kmsRegion: securityKey?.region ?? null,

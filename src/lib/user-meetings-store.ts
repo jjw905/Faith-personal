@@ -21,6 +21,12 @@ import { faithDataPath } from "@/lib/faith-data-root";
 import { prisma } from "@/lib/prisma";
 import { deleteAiUsageForMeeting } from "@/lib/stt/usage-store";
 import { deletePipelineAttemptsForMeeting } from "@/lib/stt/pipeline-stats-store";
+import {
+  isTeamEncryptedEnvelope,
+  openTeamJson,
+  sealTeamJson,
+  teamEncryptionRequired,
+} from "@/lib/team-encryption";
 
 export type MeetingProcessPhase =
   | "transcribing"
@@ -98,7 +104,73 @@ function payloadRecord(value: unknown, fallback: {
   };
 }
 
-export async function saveUserMeeting(record: UserMeetingRecord) {
+async function resolveTeamId(
+  meetingId: string,
+  explicitTeamId?: string,
+) {
+  if (explicitTeamId?.trim()) return explicitTeamId.trim();
+  const teamMeeting = await prisma.teamMeeting.findFirst({
+    where: { legacyMeetingId: meetingId },
+    select: { teamId: true },
+  });
+  return teamMeeting?.teamId ?? null;
+}
+
+async function payloadForSave(
+  record: UserMeetingRecord,
+  explicitTeamId?: string,
+) {
+  if (record.workspace !== "team") return record as unknown as Prisma.JsonValue;
+  const teamId = await resolveTeamId(record.id, explicitTeamId);
+  if (!teamId) {
+    if (teamEncryptionRequired()) {
+      throw new Error("팀 회의와 팀 보안 키 연결을 확인할 수 없습니다.");
+    }
+    return record as unknown as Prisma.JsonValue;
+  }
+  return sealTeamJson(
+    teamId,
+    "content",
+    record as unknown as Prisma.JsonValue,
+  );
+}
+
+async function recordFromStoredPayload(params: {
+  id: string;
+  userId: string;
+  workspace: string;
+  phase: string;
+  progressPercent: number | null;
+  payload: Prisma.JsonValue;
+}) {
+  let payload: unknown = params.payload;
+  if (params.workspace === "team") {
+    const teamId = await resolveTeamId(params.id);
+    if (teamId) {
+      payload =
+        (await openTeamJson<UserMeetingRecord>(
+          teamId,
+          "content",
+          params.payload,
+        )) ?? params.payload;
+    } else if (isTeamEncryptedEnvelope(params.payload)) {
+      throw new Error("암호화된 팀 회의의 팀 연결을 찾을 수 없습니다.");
+    }
+  }
+  return payloadRecord(payload, {
+    id: params.id,
+    userId: params.userId,
+    workspace: params.workspace,
+    phase: params.phase,
+    progressPercent: params.progressPercent,
+  });
+}
+
+export async function saveUserMeeting(
+  record: UserMeetingRecord,
+  options?: { teamId?: string },
+) {
+  const payload = await payloadForSave(record, options?.teamId);
   if (USE_DATABASE) {
     await prisma.userMeetingRecord.upsert({
       where: { id: record.id },
@@ -108,7 +180,7 @@ export async function saveUserMeeting(record: UserMeetingRecord) {
         workspace: record.workspace,
         phase: record.phase,
         progressPercent: record.progressPercent ?? null,
-        payload: record as unknown as Prisma.InputJsonValue,
+        payload: payload as Prisma.InputJsonValue,
         createdAt: dateOrNow(record.createdAt),
         updatedAt: dateOrNow(record.updatedAt),
       },
@@ -117,14 +189,25 @@ export async function saveUserMeeting(record: UserMeetingRecord) {
         workspace: record.workspace,
         phase: record.phase,
         progressPercent: record.progressPercent ?? null,
-        payload: record as unknown as Prisma.InputJsonValue,
+        payload: payload as Prisma.InputJsonValue,
         updatedAt: dateOrNow(record.updatedAt),
       },
     });
     return;
   }
   ensureRoot();
-  writeFileSync(pathFor(record.id), JSON.stringify(record, null, 2), "utf8");
+  const stored =
+    isTeamEncryptedEnvelope(payload) && record.workspace === "team"
+      ? {
+          id: record.id,
+          userId: record.userId,
+          workspace: record.workspace,
+          phase: record.phase,
+          progressPercent: record.progressPercent ?? null,
+          payload,
+        }
+      : record;
+  writeFileSync(pathFor(record.id), JSON.stringify(stored, null, 2), "utf8");
 }
 
 export async function getUserMeeting(id: string): Promise<UserMeetingRecord | null> {
@@ -132,19 +215,37 @@ export async function getUserMeeting(id: string): Promise<UserMeetingRecord | nu
   if (USE_DATABASE) {
     const row = await prisma.userMeetingRecord.findUnique({ where: { id } });
     return row
-      ? payloadRecord(row.payload, {
+      ? recordFromStoredPayload({
           id: row.id,
           userId: row.userId,
           workspace: row.workspace,
           phase: row.phase,
           progressPercent: row.progressPercent,
+          payload: row.payload,
         })
       : null;
   }
   const p = pathFor(id);
   if (!existsSync(p)) return null;
   try {
-    return JSON.parse(readFileSync(p, "utf8")) as UserMeetingRecord;
+    const stored = JSON.parse(readFileSync(p, "utf8")) as unknown;
+    if (
+      stored &&
+      typeof stored === "object" &&
+      !Array.isArray(stored) &&
+      "payload" in stored
+    ) {
+      const wrapper = stored as {
+        id: string;
+        userId: string;
+        workspace: string;
+        phase: string;
+        progressPercent: number | null;
+        payload: Prisma.JsonValue;
+      };
+      return await recordFromStoredPayload(wrapper);
+    }
+    return stored as UserMeetingRecord;
   } catch {
     return null;
   }
@@ -158,16 +259,19 @@ export async function listUserMeetings(
       where: userId ? { userId } : undefined,
       orderBy: { createdAt: "desc" },
     });
-    return rows
-      .map((row) =>
-        payloadRecord(row.payload, {
-          id: row.id,
-          userId: row.userId,
-          workspace: row.workspace,
-          phase: row.phase,
-          progressPercent: row.progressPercent,
-        }),
-      )
+    return (
+      await Promise.all(
+        rows.map((row) =>
+          recordFromStoredPayload({
+            id: row.id,
+            userId: row.userId,
+            workspace: row.workspace,
+            phase: row.phase,
+            progressPercent: row.progressPercent,
+            payload: row.payload,
+          }),
+        ),
+      ))
       .filter((row): row is UserMeetingRecord => Boolean(row));
   }
   ensureRoot();
@@ -175,9 +279,26 @@ export async function listUserMeetings(
   const rows: UserMeetingRecord[] = [];
   for (const f of files) {
     try {
-      const row = JSON.parse(
+      const stored = JSON.parse(
         readFileSync(join(ROOT, f), "utf8"),
-      ) as UserMeetingRecord;
+      ) as unknown;
+      const row =
+        stored &&
+        typeof stored === "object" &&
+        !Array.isArray(stored) &&
+        "payload" in stored
+          ? await recordFromStoredPayload(
+              stored as {
+                id: string;
+                userId: string;
+                workspace: string;
+                phase: string;
+                progressPercent: number | null;
+                payload: Prisma.JsonValue;
+              },
+            )
+          : (stored as UserMeetingRecord);
+      if (!row) continue;
       if (userId && row.userId !== userId) continue;
       rows.push(row);
     } catch {

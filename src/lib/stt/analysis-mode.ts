@@ -46,3 +46,25 @@ export function chargedUsageSec(
     safeDuration * ANALYSIS_MODE_POLICY[mode].usageMultiplier,
   );
 }
+
+/**
+ * 분석 방식 UI 카피.
+ * 모드 라벨은 짧은 제품어("화자 구분"), 보조 문구에서 결과(누가 말했는지)를 설명한다.
+ */
+export const ANALYSIS_MODE_COPY: Record<
+  AnalysisMode,
+  { label: string; costHint: string; benefit: string }
+> = {
+  standard: {
+    label: "빠른 정리",
+    costHint: "1분 → 1분",
+    benefit: "요약과 타임라인으로 빠르게 정리합니다.",
+  },
+  precision: {
+    label: "화자 구분",
+    costHint: "1분 → 1.5분",
+    benefit: "누가 말했는지 나눠 말풍선처럼 기록합니다.",
+  },
+};
+
+export const ANALYSIS_MODE_ARIA_LABEL = "정리 방식";

@@ -21,13 +21,26 @@ export async function POST(request: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { role: true, disabled: true },
   });
   if (!dbUser || dbUser.disabled || dbUser.role !== "ADMIN") {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
+  }
+  const useAnalysisQueue =
+    process.env.ANALYSIS_EXECUTION_MODE?.trim().toLowerCase() === "queue";
+  if (process.env.NODE_ENV === "production" && !useAnalysisQueue) {
+    console.error(
+      "[analysis] production runtime must use ANALYSIS_EXECUTION_MODE=queue",
+    );
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "분석 서버 설정이 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+      },
+      { status: 503 },
+    );
   }
 
   let body: { meetingId?: string };
@@ -71,7 +84,7 @@ export async function POST(request: Request) {
     errorMessage: undefined,
   });
 
-  if (process.env.ANALYSIS_EXECUTION_MODE === "queue") {
+  if (useAnalysisQueue) {
     try {
       await enqueueAnalysisJob({
         meetingId,

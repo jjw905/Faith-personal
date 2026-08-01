@@ -18,6 +18,7 @@ import {
   deleteUserMeeting,
   getUserMeeting,
 } from "@/lib/user-meetings-store";
+import { writeTeamAudit } from "@/lib/team-permissions";
 
 export {
   TEAM_AUDIT_RETENTION_DAYS,
@@ -262,16 +263,14 @@ export async function purgeExpiredTeamMeetings(params?: {
       }
       if (deletedForTeam > 0) {
         try {
-          await prisma.teamAuditLog.create({
-            data: {
-              teamId: team.id,
-              action: "meeting.retention_purged",
-              metadata: {
-                deletedMeetings: deletedForTeam,
-                deletedLegacyMeetings: legacyDeletedForTeam,
-                retentionDays,
-                cutoff: cutoff.toISOString(),
-              },
+          await writeTeamAudit({
+            teamId: team.id,
+            action: "meeting.retention_purged",
+            metadata: {
+              deletedMeetings: deletedForTeam,
+              deletedLegacyMeetings: legacyDeletedForTeam,
+              retentionDays,
+              cutoff: cutoff.toISOString(),
             },
           });
         } catch {

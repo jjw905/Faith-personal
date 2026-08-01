@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,31 +18,34 @@ import { cn } from "@/lib/utils";
  * - 새로고침(리마운트) 시 다시 재생
  * - prefers-reduced-motion이면 마지막 장면만 표시
  *
- * 구간별 ~9–12초, 5개 합치면 스크롤 따라볼 때 약 45–60초.
+ * 단계 간격은 원래 값의 92%로, 흐름은 유지하면서 약간 빠르게 재생한다.
  */
+const SHOWCASE_PHASE_FACTOR = 0.92;
+
 function useShowcasePlayOnce(
   phaseCount: number,
   phaseMs: number,
   ref: React.RefObject<HTMLElement | null>,
 ) {
-  const [reduced] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
-  const [phase, setPhase] = useState(reduced ? phaseCount - 1 : -1);
+  const reduced = usePrefersReducedMotion();
+  const [phase, setPhase] = useState(-1);
   const startedRef = useRef(false);
 
   useEffect(() => {
-    if (reduced) return;
+    if (reduced) {
+      ref.current?.setAttribute("data-showcase-done", "1");
+      return;
+    }
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") {
       setPhase(phaseCount - 1);
+      el?.setAttribute("data-showcase-done", "1");
       return;
     }
 
     let timer: number | null = null;
     let cancelled = false;
+    const phaseDelay = Math.max(1, Math.round(phaseMs * SHOWCASE_PHASE_FACTOR));
 
     function advance(i: number) {
       if (cancelled) return;
@@ -50,7 +54,7 @@ function useShowcasePlayOnce(
         el?.setAttribute("data-showcase-done", "1");
         return;
       }
-      timer = window.setTimeout(() => advance(i + 1), phaseMs);
+      timer = window.setTimeout(() => advance(i + 1), phaseDelay);
     }
 
     const io = new IntersectionObserver(
@@ -71,7 +75,7 @@ function useShowcasePlayOnce(
     };
   }, [reduced, phaseCount, phaseMs, ref]);
 
-  return phase;
+  return reduced ? phaseCount - 1 : phase;
 }
 
 const MOCK_CARD =
@@ -98,7 +102,7 @@ function SpeakerAvatar({
   );
 }
 
-/** STEP 01 — ~11초: 말풍선 4개가 차례로 쌓임 */
+/** STEP 01 — ~9초: 말풍선 4개가 차례로 쌓임 */
 export function MockLiveTranscribe() {
   const ref = useRef<HTMLDivElement>(null);
   const lines = [
@@ -166,7 +170,7 @@ export function MockLiveTranscribe() {
         ) : finished ? (
           <span className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-primary">
             <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.5} />
-            화자 4턴
+            대화 4턴
           </span>
         ) : null}
       </div>
@@ -175,7 +179,7 @@ export function MockLiveTranscribe() {
           <div
             key={`${line.time}-${line.text}`}
             className={cn(
-              "flex gap-2.5 transition-all duration-700",
+              "flex gap-2.5 transition-all duration-700 motion-reduce:opacity-100 motion-reduce:translate-y-0 motion-reduce:transition-none",
               line.mine ? "flex-row-reverse" : "flex-row",
               i < visibleCount
                 ? "translate-y-0 opacity-100"
@@ -218,7 +222,7 @@ export function MockLiveTranscribe() {
   );
 }
 
-/** STEP 04 — ~10초: 대화 → 스캔 → 마스킹 → 완료 */
+/** STEP 04 — ~8초: 대화 → 스캔 → 마스킹 → 완료 */
 export function MockAutoMask() {
   const ref = useRef<HTMLDivElement>(null);
   // 0 첫 말풍선, 1 연락처 말풍선(원문), 2 스캔, 3 마스킹, 4 완료 홀드
@@ -237,7 +241,7 @@ export function MockAutoMask() {
       <div className="mt-5 space-y-4">
         <div
           className={cn(
-            "flex gap-2.5 transition-all duration-700",
+            "flex gap-2.5 transition-all duration-700 motion-reduce:opacity-100 motion-reduce:transition-none",
             phase >= 0 ? "opacity-100" : "opacity-0",
           )}
         >
@@ -257,7 +261,7 @@ export function MockAutoMask() {
 
         <div
           className={cn(
-            "flex gap-2.5 transition-all duration-700",
+            "flex gap-2.5 transition-all duration-700 motion-reduce:opacity-100 motion-reduce:translate-y-0 motion-reduce:transition-none",
             showSecond ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
           )}
         >
@@ -273,7 +277,7 @@ export function MockAutoMask() {
               네, 연락처는{" "}
               <span
                 className={cn(
-                  "mx-0.5 inline-block rounded-md px-1.5 py-0.5 font-semibold transition-all duration-500",
+                  "mx-0.5 inline-block rounded-md px-1.5 py-0.5 font-semibold transition-all duration-500 motion-reduce:animate-none motion-reduce:transition-none",
                   masked
                     ? "animate-[mask-chip-in_220ms_ease-out] bg-masked-soft text-masked"
                     : scanning
@@ -291,7 +295,7 @@ export function MockAutoMask() {
       <div className="mt-4 flex items-center gap-1.5 text-sm font-medium text-muted">
         <span
           className={cn(
-            "h-1.5 w-1.5 rounded-full transition-colors",
+            "h-1.5 w-1.5 rounded-full transition-colors motion-reduce:transition-none",
             done || masked ? "bg-primary" : "bg-border-strong",
           )}
         />
@@ -305,7 +309,7 @@ export function MockAutoMask() {
   );
 }
 
-/** STEP 02 — ~12초: 타임라인 4구간 + 완료 */
+/** STEP 02 — ~9초: 타임라인 4구간 + 완료 */
 export function MockAutoSummary() {
   const ref = useRef<HTMLDivElement>(null);
   const segments = [
@@ -348,7 +352,7 @@ export function MockAutoSummary() {
           <li
             key={seg.time}
             className={cn(
-              "relative flex gap-3 pl-1 transition-all duration-700",
+              "relative flex gap-3 pl-1 transition-all duration-700 motion-reduce:opacity-100 motion-reduce:translate-y-0 motion-reduce:transition-none",
               i <= phase
                 ? "translate-y-0 opacity-100"
                 : "translate-y-1 opacity-0",
@@ -378,7 +382,7 @@ export function MockAutoSummary() {
       </ul>
       <span
         className={cn(
-          "mt-3 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-semibold text-primary transition-opacity duration-700",
+          "mt-3 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-semibold text-primary transition-opacity duration-700 motion-reduce:opacity-100 motion-reduce:transition-none",
           phase >= segments.length ? "opacity-100" : "opacity-0",
         )}
       >
@@ -389,7 +393,7 @@ export function MockAutoSummary() {
   );
 }
 
-/** STEP 03 — ~10초: 단어 하이라이트 → 메모 */
+/** STEP 03 — ~7초: 단어 하이라이트 → 메모 */
 export function MockReplayHighlight() {
   const ref = useRef<HTMLDivElement>(null);
   const words = ["오늘", "발표", "자료의", "발음을", "다시", "확인해주세요."];
@@ -426,7 +430,7 @@ export function MockReplayHighlight() {
                 <span
                   key={`${w}-${i}`}
                   className={cn(
-                    "rounded px-0.5 transition-colors duration-300",
+                    "rounded px-0.5 transition-colors duration-300 motion-reduce:transition-none",
                     i === activeWordIdx && "word-play-mark word-play-mark-on-primary",
                   )}
                 >
@@ -436,7 +440,7 @@ export function MockReplayHighlight() {
             </div>
             <span
               className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted transition-all duration-500",
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted transition-all duration-500 motion-reduce:opacity-100 motion-reduce:scale-100 motion-reduce:transition-none",
                 showMemo ? "scale-100 opacity-100" : "scale-90 opacity-0",
               )}
             >
@@ -449,7 +453,7 @@ export function MockReplayHighlight() {
   );
 }
 
-/** STEP 05 — 회의록 보관과 권한, ~10초: 잠금 → 파일 3개 등장 */
+/** STEP 05 — 회의록 보관과 권한, ~8초: 잠금 → 파일 3개 등장 */
 export function MockSecureVault() {
   const ref = useRef<HTMLDivElement>(null);
   const rows = [
@@ -467,7 +471,7 @@ export function MockSecureVault() {
       <div className="flex items-center gap-2">
         <span
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-xl transition-colors duration-700",
+            "flex h-9 w-9 items-center justify-center rounded-xl transition-colors duration-700 motion-reduce:transition-none",
             locked
               ? "bg-foreground text-background"
               : "bg-surface-2 text-muted",
@@ -485,7 +489,7 @@ export function MockSecureVault() {
           <div
             key={row.name}
             className={cn(
-              "flex items-center justify-between gap-3 rounded-xl bg-surface px-3.5 py-3 transition-all duration-700",
+              "flex items-center justify-between gap-3 rounded-xl bg-surface px-3.5 py-3 transition-all duration-700 motion-reduce:opacity-100 motion-reduce:translate-y-0 motion-reduce:transition-none",
               i < visibleFiles
                 ? "translate-y-0 opacity-100"
                 : "translate-y-1 opacity-0",

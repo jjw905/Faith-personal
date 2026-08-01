@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MEETING_PROCESS_LABEL } from "@/lib/meeting-process";
 import { useAppContext } from "@/context/app-context";
+import { cn } from "@/lib/utils";
 
 type ProcessingItem = {
   id: string;
@@ -12,6 +13,7 @@ type ProcessingItem = {
   status: string;
   workspace: string;
   progressPercent: number;
+  indeterminate?: boolean;
 };
 
 function isActiveItem(phase?: string, status?: string) {
@@ -61,6 +63,9 @@ export function ProcessingNowSection({
   const { workspaceId } = useAppContext();
   const [items, setItems] = useState<ProcessingItem[]>(demoItems ?? []);
   const lastActiveKeyRef = useRef<string | null>(null);
+  const lastProgressRef = useRef(
+    new Map<string, { percent: number; changedAt: number }>(),
+  );
   const onActiveChangeRef = useRef(onActiveChange);
   onActiveChangeRef.current = onActiveChange;
 
@@ -87,23 +92,39 @@ export function ProcessingNowSection({
         }>;
       };
       if (!data.ok || !Array.isArray(data.activity)) {
+        lastProgressRef.current.clear();
         setItems((prev) => (prev.length === 0 ? prev : []));
         return;
       }
+      const now = Date.now();
       const next = data.activity
         .filter(
           (a) =>
             a.workspace === workspaceId &&
             isActiveItem(a.phase, a.status),
         )
-        .map((a) => ({
-          id: a.id,
-          title: (a.title || a.fileName || "파일").trim() || "파일",
-          phase: a.phase,
-          status: a.status,
-          workspace: a.workspace,
-          progressPercent: clampPercent(a.progressPercent, a.phase),
-        }));
+        .map((a) => {
+          const progressPercent = clampPercent(a.progressPercent, a.phase);
+          const previous = lastProgressRef.current.get(a.id);
+          const progress =
+            previous && previous.percent === progressPercent
+              ? previous
+              : { percent: progressPercent, changedAt: now };
+          lastProgressRef.current.set(a.id, progress);
+          return {
+            id: a.id,
+            title: (a.title || a.fileName || "파일").trim() || "파일",
+            phase: a.phase,
+            status: a.status,
+            workspace: a.workspace,
+            progressPercent,
+            indeterminate: now - progress.changedAt >= 3_000,
+          };
+        });
+      const activeIds = new Set(next.map((item) => item.id));
+      for (const id of lastProgressRef.current.keys()) {
+        if (!activeIds.has(id)) lastProgressRef.current.delete(id);
+      }
       setItems((prev) => {
         if (
           prev.length === next.length &&
@@ -113,6 +134,7 @@ export function ProcessingNowSection({
               item.phase === next[i]?.phase &&
               item.status === next[i]?.status &&
               item.progressPercent === next[i]?.progressPercent &&
+              item.indeterminate === next[i]?.indeterminate &&
               item.title === next[i]?.title,
           )
         ) {
@@ -121,12 +143,14 @@ export function ProcessingNowSection({
         return next;
       });
     } catch {
+      lastProgressRef.current.clear();
       setItems((prev) => (prev.length === 0 ? prev : []));
     }
   }, [workspaceId, demoItems]);
 
   useEffect(() => {
     lastActiveKeyRef.current = null;
+    lastProgressRef.current.clear();
   }, [workspaceId]);
 
   useEffect(() => {
@@ -162,6 +186,7 @@ export function ProcessingNowSection({
       demoItems.map((item) => ({
         ...item,
         progressPercent: clampPercent(item.progressPercent, item.phase),
+        indeterminate: false,
       })),
     );
     const id = window.setInterval(() => {
@@ -177,9 +202,14 @@ export function ProcessingNowSection({
               phase,
               status: phase,
               progressPercent: phase === "structuring" ? 72 : 1,
+              indeterminate: false,
             };
           }
-          return { ...item, progressPercent: Math.round(next * 10) / 10 };
+          return {
+            ...item,
+            progressPercent: Math.round(next * 10) / 10,
+            indeterminate: false,
+          };
         }),
       );
     }, 220);
@@ -200,47 +230,66 @@ export function ProcessingNowSection({
   if (items.length === 0) return null;
 
   return (
-    <section className="space-y-2" aria-label="제작 중" aria-live="polite">
-      <ul className="space-y-2">
-        {items.map((item) => {
-          const percent = item.progressPercent;
+    <section
+      className="overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border"
+      aria-label={`분석 대기열 ${items.length}건`}
+      aria-live="polite"
+    >
+      <div className="space-y-3 bg-card px-4 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            분석 대기열
+          </h2>
+          <span className="shrink-0 text-base tabular-nums text-muted">
+            {items.length}건 처리 중
+          </span>
+        </div>
+        <ul className="max-h-[min(32rem,60vh)] space-y-2 overflow-y-auto overscroll-contain pr-1">
+          {items.map((item) => {
+            const percent = item.progressPercent;
+            const indeterminate = item.indeterminate === true;
 
-          return (
-            <li key={item.id}>
-              <div className="relative overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
-                <div className="flex items-center gap-3 px-4 py-3.5 pr-5 sm:px-5 sm:pr-6 sm:py-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-semibold tracking-tight text-foreground">
-                      {item.title}
-                    </p>
-                    <p
-                      key={`${item.id}-${item.phase}`}
-                      className="mt-0.5 text-base text-muted animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]"
+            return (
+              <li key={item.id}>
+                <div className="relative overflow-hidden rounded-2xl bg-surface shadow-soft ring-1 ring-border">
+                  <div className="flex items-center gap-3 px-4 py-3.5 pr-5 sm:px-5 sm:pr-6 sm:py-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-base font-semibold tracking-tight text-foreground">
+                        {item.title}
+                      </p>
+                      <p
+                        key={`${item.id}-${item.phase}`}
+                        className="mt-0.5 text-base text-muted animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]"
+                      >
+                        {phaseLabel(item.phase)}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 self-center tabular-nums text-base font-semibold tracking-tight text-primary"
+                      aria-label={`진행 ${percent}퍼센트`}
                     >
-                      {phaseLabel(item.phase)}
-                    </p>
+                      {percent}%
+                    </span>
                   </div>
-                  <span
-                    className="shrink-0 self-center tabular-nums text-base font-semibold tracking-tight text-primary"
-                    aria-label={`진행 ${percent}퍼센트`}
-                  >
-                    {percent}%
-                  </span>
-                </div>
-                <div
-                  className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-surface-2"
-                  aria-hidden
-                >
                   <div
-                    className="h-full rounded-full bg-primary/65 transition-[width] duration-300 ease-out"
-                    style={{ width: `${percent}%` }}
-                  />
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-surface-2"
+                    aria-hidden
+                  >
+                    <div
+                      className={cn(
+                        "h-full rounded-full bg-primary/65",
+                        indeterminate &&
+                          "motion-safe:animate-pulse motion-reduce:animate-none",
+                      )}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }

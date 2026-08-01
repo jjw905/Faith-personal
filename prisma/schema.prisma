@@ -34,6 +34,11 @@ enum TeamSecurityKeyStatus {
   FAILED
 }
 
+enum TeamKmsProvider {
+  AWS
+  GCP
+}
+
 enum TeamInviteStatus {
   PENDING
   ACCEPTED
@@ -330,6 +335,7 @@ model Team {
   invites       TeamInvite[]
   policy        TeamPolicy?
   securityKey   TeamSecurityKey?
+  vaultFiles    VaultFile[]
   meetings      TeamMeeting[]
   announcements TeamAnnouncement[]
   auditLogs     TeamAuditLog[]
@@ -341,15 +347,18 @@ model Team {
 }
 
 model TeamSecurityKey {
-  id            String                 @id @default(cuid())
-  teamId        String                 @unique @map("team_id")
-  region        String
-  contentKeyArn String?                @map("content_key_arn")
-  auditKeyArn   String?                @map("audit_key_arn")
-  status        TeamSecurityKeyStatus  @default(PROVISIONING)
-  lastError     String?                @map("last_error") @db.Text
-  createdAt     DateTime               @default(now()) @map("created_at")
-  updatedAt     DateTime               @updatedAt @map("updated_at")
+  id                       String                 @id @default(cuid())
+  teamId                   String                 @unique @map("team_id")
+  provider                 TeamKmsProvider?
+  region                   String
+  contentKeyArn            String?                @map("content_key_arn")
+  auditKeyArn              String?                @map("audit_key_arn")
+  contentDataKeyCiphertext String?                @map("content_data_key_ciphertext") @db.Text
+  auditDataKeyCiphertext   String?                @map("audit_data_key_ciphertext") @db.Text
+  status                   TeamSecurityKeyStatus  @default(PROVISIONING)
+  lastError                String?                @map("last_error") @db.Text
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
@@ -764,17 +773,21 @@ model SurveyResponse {
 }
 
 model VaultFile {
-  id        String       @id @default(cuid())
-  userId    String       @map("user_id")
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  size      Int
-  mime      String
-  key       String       @unique
-  purpose   VaultPurpose @default(VAULT)
-  createdAt DateTime     @default(now()) @map("created_at")
+  id                 String       @id @default(cuid())
+  userId             String       @map("user_id")
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId             String?      @map("team_id")
+  team               Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  name               String
+  size               Int
+  mime               String
+  key                String       @unique
+  purpose            VaultPurpose @default(VAULT)
+  contentEncryption  Json?        @map("content_encryption")
+  createdAt          DateTime     @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
+  @@index([teamId, createdAt])
   @@map("vault_files")
 }
 

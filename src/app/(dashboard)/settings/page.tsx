@@ -557,12 +557,12 @@ export default function SettingsPage() {
         ) : null}
 
         <SettingsSection
-          title="내 기록 기본값"
+          title="개인 기록 기본값"
           description="개인 워크스페이스 회의에만 적용됩니다."
         >
           <SettingRow
             label="자동 마스킹"
-            description="내 회의 기록을 열 때 개인정보를 기본으로 마스킹합니다."
+            description="개인 회의 기록을 열 때 개인정보를 기본으로 마스킹합니다."
           >
             <Toggle
               label="개인 자동 마스킹"
@@ -645,7 +645,7 @@ export default function SettingsPage() {
             title={
               TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
                 ? "팀 기능은 관리자에게만 제공됩니다"
-                : "팀 설정은 오픈 준비중이에요"
+                : "팀 설정은 현재 준비 중입니다"
             }
             description={
               TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY

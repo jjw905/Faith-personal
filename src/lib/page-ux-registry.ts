@@ -49,9 +49,9 @@ const POPUP = {
   announce: { id: "popup-announce", label: "공지 관리" },
   settings: { id: "popup-settings", label: "팀 설정" },
   alerts: { id: "banner-alerts", label: "미확인 알림" },
-  invite: { id: "popup-invite", label: "멤버 초대" },
+  invite: { id: "popup-invite", label: "구성원 초대" },
   inviteSearch: { id: "popup-invite-search", label: "초대 검색 중" },
-  member: { id: "popup-member", label: "멤버 권한" },
+  member: { id: "popup-member", label: "구성원 권한" },
   access: { id: "popup-access", label: "기록 접근" },
   createTeamFirst: {
     id: "popup-create-team-first",

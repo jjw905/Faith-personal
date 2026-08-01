@@ -24,7 +24,7 @@ export async function POST(request: Request, context: RouteContext) {
   const membership = await getTeamMember(teamId, session.user.id);
   if (!membership || membership.role !== "OWNER") {
     return NextResponse.json(
-      { ok: false, message: "팀 대표만 팀 보안 키를 만들 수 있습니다." },
+      { ok: false, message: "팀 대표만 팀 보안 키를 준비할 수 있습니다." },
       { status: 403 },
     );
   }
@@ -49,14 +49,11 @@ export async function POST(request: Request, context: RouteContext) {
         createdAt: securityKey.createdAt,
       },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error
-            ? error.message
-            : "팀 보안 키를 만들지 못했습니다.",
+        message: "현재 팀 보안 키를 준비할 수 없습니다. 잠시 후 다시 시도해 주세요.",
       },
       { status: 503 },
     );

@@ -57,7 +57,7 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
     try {
       await signIn(provider, { callbackUrl: "/account?linked=1" });
     } catch {
-      setMsg("연결을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
+      setMsg("연결을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.");
       setPending(null);
     }
   }
@@ -65,7 +65,7 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
   async function unlink(provider: string) {
     if (provider === primary) {
       setMsg(
-        "이 방법으로 가입한 계정이에요. 다른 로그인 방법을 추가한 뒤에는 연결을 해제할 수 있어요.",
+        "이 방법으로 가입한 계정입니다. 다른 로그인 방법을 추가한 뒤 연결을 해제할 수 있습니다.",
       );
       return;
     }
@@ -79,11 +79,11 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
       });
       const json = (await res.json()) as { ok?: boolean; message?: string };
       if (!res.ok || !json.ok) {
-        setMsg(json.message ?? "연결을 해제하지 못했어요.");
+        setMsg(json.message ?? "연결을 해제하지 못했습니다.");
         return;
       }
       setLinked((prev) => prev.filter((p) => p !== provider));
-      setMsg("연결을 해제했어요.");
+      setMsg("연결이 해제되었습니다.");
       router.refresh();
     } finally {
       setPending(null);

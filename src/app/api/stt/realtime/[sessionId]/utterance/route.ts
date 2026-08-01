@@ -179,7 +179,7 @@ export async function POST(request: Request, context: RouteContext) {
           ok: false,
           code: "ANALYSIS_GRACE_EXHAUSTED",
           message:
-            "분 잔량과 5분 유예를 모두 사용했습니다. 기록을 종료하고 분 팩을 구매해 주세요.",
+            "이번 주기 잔여 시간이 없습니다. 기록을 종료하고 추가 시간을 이용해 주세요.",
         },
         { status: 429 },
       );

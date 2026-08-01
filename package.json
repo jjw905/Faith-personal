@@ -33,6 +33,7 @@
     "lint": "eslint",
     "security:secrets": "node scripts/check-secret-hygiene.mjs",
     "test:team": "npx tsx --tsconfig tsconfig.json scripts/test-team-permissions.ts",
+    "test:team:encryption": "npx tsx --tsconfig tsconfig.json scripts/test-team-encryption.ts",
     "test:team:policy": "npx tsx --tsconfig tsconfig.json scripts/test-team-permissions.ts",
     "test:team:launch": "npx tsx --tsconfig tsconfig.json scripts/test-team-launch-readiness.ts",
     "test:team:retention": "npx tsx --tsconfig tsconfig.json scripts/test-team-retention.ts",

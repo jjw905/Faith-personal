@@ -22,7 +22,7 @@ export type TeamFeatureAccess =
   | { ok: true; role: Role };
 
 function unavailableMessage() {
-  if (!TEAM_FEATURE_ENABLED) return "팀 기능은 오픈 준비중이에요.";
+  if (!TEAM_FEATURE_ENABLED) return "팀 기능은 현재 준비 중입니다.";
   if (TEAM_FEATURE_ADMIN_ONLY) return "팀 기능은 현재 관리자에게만 제공됩니다.";
   return "팀 기능을 사용할 수 없습니다.";
 }

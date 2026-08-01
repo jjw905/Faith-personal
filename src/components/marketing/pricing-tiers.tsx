@@ -8,9 +8,7 @@ import { CtaButton } from "@/components/marketing/cta-button";
 import { PAID_PLANS_ENABLED, TEAM_FEATURE_ENABLED } from "@/lib/feature-flags";
 import {
   PLAN_CATALOG,
-  PLAN_OVERAGE_NOTE,
   TOPUP_PACKS,
-  formatPlanMinutes,
   formatPlanWon,
   type CatalogPlanId,
   type PlanCatalogEntry,
@@ -30,7 +28,7 @@ const TIER_CTA: Record<CatalogPlanId, TierCta> = {
   TEAM: { label: "Team 시작", href: "/signup?plan=team" },
 };
 
-/** 오픈 준비 기간에는 Free만 가입 가능. Pro/Team은 카드는 그대로 보이되 시작 버튼만 잠근다. */
+/** Pro/Team·추가 구매는 결제 연동 전이라 라벨만 두고 반응 없음. */
 const TIER_LOCKED: Record<CatalogPlanId, boolean> = {
   FREE: false,
   PRO: !PAID_PLANS_ENABLED,
@@ -49,7 +47,7 @@ function BillingSwitch({
       <div
         role="group"
         aria-label="결제 주기"
-        className="flex w-full rounded-full bg-card p-0.5 shadow-soft ring-1 ring-border/50"
+        className="flex w-full rounded-full bg-card p-0.5 shadow-[0_1px_4px_rgba(17,22,46,0.08),0_6px_16px_-8px_rgba(17,22,46,0.16)] ring-1 ring-border"
       >
         <button
           type="button"
@@ -84,7 +82,7 @@ function BillingSwitch({
           value === "yearly" ? "text-primary opacity-100" : "opacity-0",
         )}
       >
-        Pro 연간 2개월 무료
+        연 결제 시 2개월 무료
       </p>
     </div>
   );
@@ -119,7 +117,8 @@ function TierCard({
 
   const ctaClass = cn(
     "mt-5 w-full py-3.5 text-base sm:mt-6 sm:py-3",
-    tier.featured ? "" : "bg-surface hover:bg-surface-2",
+    !tier.featured && "bg-surface",
+    !locked && !tier.featured && "hover:bg-surface-2",
   );
 
   const badges = tier.badges ?? [];
@@ -129,32 +128,30 @@ function TierCard({
       className={cn(
         "relative flex h-full flex-col rounded-3xl bg-card p-6 sm:p-7 xl:p-8",
         tier.featured
-          ? "shadow-[0_10px_40px_rgba(17,24,46,0.16)] ring-2 ring-primary"
-          : "shadow-soft ring-1 ring-border/50",
+          ? "shadow-[0_2px_6px_rgba(17,22,46,0.1),0_12px_28px_rgba(17,22,46,0.16),0_28px_64px_-18px_rgba(17,22,46,0.32)] ring-2 ring-primary"
+          : "shadow-[0_1px_3px_rgba(17,22,46,0.1),0_8px_20px_rgba(17,22,46,0.12),0_22px_48px_-16px_rgba(17,22,46,0.24)] ring-1 ring-border",
       )}
     >
-      {badges.length > 0 ? (
-        <div className="absolute right-4 top-4 flex max-w-[min(100%,15rem)] flex-wrap justify-end gap-1.5 sm:right-5 sm:top-5 sm:max-w-[17rem]">
-          {badges.map((label) => (
-            <span
-              key={label}
-              className="rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground"
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      <p
-        className={cn(
-          "text-xl font-bold tracking-tight text-foreground",
-          badges.length > 0 && "pr-16",
-        )}
-      >
-        {tier.name}
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 text-xl font-bold tracking-tight text-foreground">
+          {tier.name}
+        </p>
+        {badges.length > 0 ? (
+          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+            {badges.map((label) => (
+              <span
+                key={label}
+                className="whitespace-nowrap rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground"
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <p className="mt-1 min-h-12 text-base font-medium text-muted">
+        {tier.tagline}
       </p>
-      <p className="mt-1 text-base font-medium text-muted">{tier.tagline}</p>
 
       <div className="mt-5 flex min-h-[3.25rem] items-baseline gap-1.5 sm:mt-6">
         <span className="text-3xl font-bold tracking-tight text-foreground tabular-nums xl:text-4xl">
@@ -168,31 +165,19 @@ function TierCard({
       </div>
       <p className="mt-1.5 min-h-5 text-sm font-medium text-muted-2">{note}</p>
 
-      <div className="mt-4 rounded-2xl bg-surface px-4 py-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-semibold text-muted">포함 분석</span>
-          <span className="text-lg font-bold tabular-nums text-foreground">
-            {formatPlanMinutes(tier)}
-          </span>
-        </div>
-        <p className="mt-1 text-sm leading-relaxed text-muted-2">
-          {PLAN_OVERAGE_NOTE}
-        </p>
-      </div>
-
       {locked ? (
-        <button
-          type="button"
-          disabled
+        <span
           aria-disabled="true"
-          title="준비 중입니다"
           className={cn(
-            "inline-flex cursor-not-allowed items-center justify-center rounded-xl bg-surface text-base font-semibold text-muted-2",
+            "inline-flex cursor-default select-none items-center justify-center rounded-xl px-5 text-base font-semibold",
+            tier.featured
+              ? "bg-primary text-primary-foreground"
+              : "text-foreground",
             ctaClass,
           )}
         >
-          준비중
-        </button>
+          {cta.label}
+        </span>
       ) : cta.contact ? (
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
@@ -232,54 +217,82 @@ function TierCard({
   );
 }
 
-/** 포함 차감분을 다 썼을 때 고르는 팩. 결제 연동 전이라 안내만 한다. */
+/** 사용 시간을 다 썼을 때 고르는 추가 시간. 결제 연동 전이라 안내만 한다. */
+function formatTopupDuration(minutes: number) {
+  if (minutes >= 60 && minutes % 60 === 0) {
+    return `${minutes / 60}시간`;
+  }
+  return `${minutes}분`;
+}
+
+const TIER_CARD_SHADOW =
+  "shadow-[0_1px_3px_rgba(17,22,46,0.1),0_8px_20px_rgba(17,22,46,0.12),0_22px_48px_-16px_rgba(17,22,46,0.24)] ring-1 ring-border";
+const TIER_CARD_SHADOW_FEATURED =
+  "shadow-[0_2px_6px_rgba(17,22,46,0.1),0_12px_28px_rgba(17,22,46,0.16),0_28px_64px_-18px_rgba(17,22,46,0.32)] ring-2 ring-primary";
+
 function TopupPacks() {
-  const locked = !PAID_PLANS_ENABLED;
+  const inert = !PAID_PLANS_ENABLED;
 
   return (
-    <div className="mx-auto mt-8 w-full max-w-lg lg:max-w-5xl">
-      <div className="rounded-3xl bg-card p-6 shadow-soft ring-1 ring-border/50 sm:p-7">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">
-            추가 차감분 팩
-          </h2>
-        </div>
+    <div className="mx-auto mt-10 w-full max-w-lg lg:max-w-5xl">
+      <div className="mx-auto max-w-2xl text-center">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          필요할 때 추가하는 시간
+        </h2>
+      </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {TOPUP_PACKS.map((pack) => (
-            <div key={pack.id} className="relative rounded-2xl bg-surface px-4 py-4">
-              {pack.badge ? (
-                <span className="absolute right-3 top-3 rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-primary-foreground">
-                  {pack.badge}
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:grid-cols-3 sm:gap-5">
+        {TOPUP_PACKS.map((pack) => {
+          const featured = Boolean(pack.badge);
+          return (
+            <div
+              key={pack.id}
+              className={cn(
+                "flex h-full flex-col rounded-3xl bg-card p-6 sm:p-7",
+                featured ? TIER_CARD_SHADOW_FEATURED : TIER_CARD_SHADOW,
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="min-w-0 text-xl font-bold tracking-tight text-foreground">
+                  {formatTopupDuration(pack.minutes)}
+                </p>
+                {pack.badge ? (
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
+                    {pack.badge}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-base font-medium text-muted">
+                {pack.minutes.toLocaleString("ko-KR")}분 추가
+              </p>
+
+              <div className="mt-5 flex items-baseline gap-1.5 sm:mt-6">
+                <span className="text-3xl font-bold tracking-tight tabular-nums text-foreground">
+                  {formatPlanWon(pack.priceWon)}
                 </span>
-              ) : null}
-              <p className="text-lg font-bold tabular-nums text-foreground">
-                {pack.minutes}차감분
-              </p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">
-                {formatPlanWon(pack.priceWon)}
-              </p>
-              <button
-                type="button"
-                disabled={locked}
-                aria-disabled={locked}
-                title={locked ? "준비 중입니다" : undefined}
+              </div>
+
+              <span
+                aria-disabled={inert || undefined}
                 className={cn(
-                  "mt-3 min-h-9 w-full rounded-lg text-sm font-semibold transition-colors",
-                  locked
-                    ? "cursor-not-allowed bg-border/60 text-muted-2"
-                    : "bg-foreground text-background hover:bg-foreground/90",
+                  "mt-auto inline-flex min-h-12 w-full cursor-default select-none items-center justify-center rounded-xl px-5 text-base font-semibold sm:mt-6",
+                  featured
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface text-foreground",
                 )}
               >
-                {locked ? "준비중" : "구매"}
-              </button>
+                구매
+              </span>
             </div>
-          ))}
-        </div>
-        <p className="mt-4 text-sm text-muted-2">
-          선불 충전, 유효기간 12개월
-        </p>
+          );
+        })}
       </div>
+
+      <p className="mt-4 text-center text-sm font-medium leading-snug text-muted-2">
+        사용 시간을 다 썼을 때 고르는 선불 이용 시간입니다.
+        {" "}
+        유효기간 12개월 · 구독과 별도 · 잔여 시간에 합산
+      </p>
     </div>
   );
 }
@@ -293,7 +306,7 @@ export function PricingTiers() {
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl xl:text-5xl">
-            규모에 맞는 요금제
+            나의 방식에 맞는 요금제를 골라보세요.
           </h1>
         </div>
 

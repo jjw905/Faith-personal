@@ -72,7 +72,7 @@ function SectionBlock({
   );
 }
 
-/** 회사 소개 — 도움말/약관 문서와 같은 목차 + 검색 레이아웃. */
+/** 제품 소개 — 도움말/약관 문서와 같은 목차 + 검색 레이아웃. */
 export function AboutDocsView() {
   const router = useRouter();
 
@@ -201,7 +201,7 @@ export function AboutDocsView() {
 
                 <header className="max-w-2xl">
                   <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    회사 소개
+                    제품 소개
                   </h1>
                   <p className="mt-2 text-base text-muted">
                     Faith를 만드는 이유와 방식을 정리했습니다.
@@ -229,7 +229,7 @@ export function AboutDocsView() {
               <DocsScrollTopFab visible={showFloatChrome} pageRef={pageRef} />
 
               <DocsMobileTocRail
-                ariaLabel="회사 소개 목차"
+                ariaLabel="제품 소개 목차"
                 activeId={activeId}
                 onNavClick={onNavClick}
                 emptyLabel="일치하는 내용이 없습니다."
@@ -245,7 +245,7 @@ export function AboutDocsView() {
 
               <div className="flex flex-col gap-6 pb-32 md:flex-row md:gap-8 md:pb-0 lg:gap-12">
                 <DocsDesktopToc
-                  ariaLabel="회사 소개 목차"
+                  ariaLabel="제품 소개 목차"
                   stickyTopClass={showFloatChrome ? "md:top-20" : "md:top-4"}
                 >
                   {searching ? (

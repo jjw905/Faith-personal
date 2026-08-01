@@ -4,8 +4,12 @@ import { Gift, HardDrive, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
 
-import { formatBytes } from "@/lib/storage/quota";
 import { DEMAND_SURVEY_ACTIVE, PAID_PLANS_ENABLED } from "@/lib/feature-flags";
+import {
+  formatSurveyBenefit,
+  formatSurveyCta,
+  monthlyMinutesFromSeconds,
+} from "@/lib/usage-copy";
 import { cn } from "@/lib/utils";
 
 export type UsageLimitTimeStatus = {
@@ -60,7 +64,9 @@ export function UsageLimitDialog({
   if (!open) return null;
 
   const isTime = variant === "time";
-  const title = isTime ? "이번 주기 분석 시간을 모두 썼어요" : "보관함 용량이 가득 찼어요";
+  const title = isTime
+    ? "이번 주기 잔여 시간이 없습니다"
+    : "보관함이 가득 찼습니다";
   const Icon = isTime ? Sparkles : HardDrive;
 
   const showSurveyCta =
@@ -71,16 +77,21 @@ export function UsageLimitDialog({
     DEMAND_SURVEY_ACTIVE &&
     !PAID_PLANS_ENABLED &&
     Boolean(timeStatus?.surveyCompleted);
+  const monthlyLimitMin = timeStatus
+    ? monthlyMinutesFromSeconds(
+        timeStatus.monthlyLimitSec ?? timeStatus.limitSec,
+      )
+    : undefined;
 
   const description = isTime
     ? timeStatus
       ? surveyDoneNoPlan
-        ? `이번 주기 ${Math.round((timeStatus.monthlyLimitSec ?? timeStatus.limitSec) / 60)}차감분과 5분 유예를 모두 사용했습니다. ${timeStatus.resetsAtLabel}에 초기화됩니다. 지금은 분 팩 결제를 준비하고 있습니다.`
-        : `이번 주기 ${Math.round((timeStatus.monthlyLimitSec ?? timeStatus.limitSec) / 60)}차감분과 5분 유예를 모두 사용했습니다. 분 팩을 구매하면 계속할 수 있습니다.`
-      : "이번 주기 분석 가능 시간을 모두 사용했습니다."
+        ? `이번 주기 잔여 시간이 없습니다. ${timeStatus.resetsAtLabel}에 다시 사용할 수 있습니다.`
+        : `이번 주기 잔여 시간이 없습니다. ${formatSurveyBenefit(monthlyLimitMin)}`
+      : "이번 주기 잔여 시간이 없습니다."
     : storageStatus
-      ? `사용 ${formatBytes(storageStatus.used)} / 한도 ${formatBytes(storageStatus.quota)}. 파일을 정리하면 바로 다시 올릴 수 있습니다.`
-      : "보관함 용량 한도에 도달했습니다.";
+      ? `보관함이 가득 찼습니다. 파일을 정리하면 바로 다시 업로드할 수 있습니다.`
+      : "보관함이 가득 찼습니다.";
 
   return (
     <div
@@ -127,10 +138,10 @@ export function UsageLimitDialog({
             <Link
               href="/survey"
               onClick={onClose}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-primary px-5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
             >
-              <Gift className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-              짧은 설문하고 60분까지 늘리기
+              <Gift className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
+              {formatSurveyCta(monthlyLimitMin)}
             </Link>
           ) : null}
 
@@ -138,10 +149,10 @@ export function UsageLimitDialog({
             <Link
               href="/plan"
               onClick={onClose}
-              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+              className="inline-flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-primary px-5 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
             >
-              <Sparkles className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-              {isTime ? "더 많은 분석 시간 보기" : "더 많은 저장 공간 보기"}
+              <Sparkles className="h-5 w-5 shrink-0" strokeWidth={1.75} aria-hidden />
+              {isTime ? "추가 시간 이용하기" : "더 많은 저장 공간 보기"}
             </Link>
           ) : null}
 
@@ -150,7 +161,7 @@ export function UsageLimitDialog({
               href="/vault"
               onClick={onClose}
               className={cn(
-                "inline-flex h-12 w-full items-center justify-center rounded-2xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2",
+                "inline-flex h-12 w-full items-center justify-center whitespace-nowrap rounded-2xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2",
                 showPlanCta ? "ring-1 ring-border" : "bg-primary text-primary-foreground hover:bg-primary-hover",
               )}
             >
@@ -163,7 +174,7 @@ export function UsageLimitDialog({
             onClick={onClose}
             className="inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-2xl px-5 text-base font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
           >
-            나중에 하기
+            나중에
           </button>
         </div>
       </div>

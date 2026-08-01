@@ -11,9 +11,9 @@ const AVAILABLE_FOR_NEW_LINK = LINKABLE.filter(
 );
 
 function noticeFromSearch(linked?: string, error?: string) {
-  if (linked === "1") return "계정을 연결했어요.";
+  if (linked === "1") return "계정이 연결되었습니다.";
   if (error === "EmailConflict") {
-    return "이미 다른 계정에서 쓰는 이메일이에요. 그 계정으로 로그인한 뒤 연결해 주세요.";
+    return "이미 다른 계정에서 사용하는 이메일입니다. 해당 계정으로 로그인한 뒤 연결해 주세요.";
   }
   return undefined;
 }

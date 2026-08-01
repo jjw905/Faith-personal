@@ -20,6 +20,7 @@ function isQuotaBlockedMessage(message: string | null | undefined) {
   return (
     message.includes("분석 가능 시간") ||
     message.includes("무료 분석 시간") ||
+    message.includes("잔여 시간이 없습니다") ||
     message.includes("설문에 참여하면")
   );
 }
@@ -32,6 +33,10 @@ const ETA_MAX_REMAINING_SEC = 60 * 60;
 const ETA_RATE_SMOOTH = 0.3;
 /** 남은 시간이 갑자기 늘지 않게 상한 배율 */
 const ETA_UPWARD_CAP = 1.25;
+
+function monotonicNow() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
 
 function clampPercent(n: unknown, phase: MeetingProcessPhase): number {
   if (typeof n === "number" && Number.isFinite(n)) {
@@ -52,21 +57,21 @@ function stageAnimationKey(label: string) {
 export function friendlyProcessStageLabel(raw: string): string {
   const t = raw.trim();
   if (!t) return t;
-  if (/보완/.test(t)) return "추가 보완중이예요";
+  if (/보완/.test(t)) return "추가 보완 중입니다";
   const stripped = t
     .replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/, "")
     .replace(/\s*\(\d+\)\s*$/, "")
     .trim();
   if (stripped === "분석하는 중" || stripped.startsWith("분석하는 중")) {
-    return "이야기의 흐름을 잡는 중이에요";
+    return "이야기의 흐름을 정리하는 중입니다";
   }
-  if (stripped === "받아쓰는 중") return "받아쓰는 중이에요";
-  if (stripped === "정리하는 중") return "정리하는 중이에요";
-  if (stripped === "파일 확인하는 중") return "파일을 살펴보는 중이에요";
-  if (stripped === "오디오 불러오는 중") return "소리를 불러오는 중이에요";
-  if (stripped === "타임라인 작성하는 중") return "타임라인을 그리는 중이에요";
-  if (stripped === "화자 확인하는 중") return "누가 말했는지 맞추는 중이에요";
-  if (stripped === "표현 다듬는 중") return "표현을 다듬는 중이에요";
+  if (stripped === "받아쓰는 중") return "받아쓰는 중입니다";
+  if (stripped === "정리하는 중") return "정리하는 중입니다";
+  if (stripped === "파일 확인하는 중") return "파일을 확인하는 중입니다";
+  if (stripped === "오디오 불러오는 중") return "오디오를 불러오는 중입니다";
+  if (stripped === "타임라인 작성하는 중") return "타임라인을 작성하는 중입니다";
+  if (stripped === "화자 확인하는 중") return "화자를 확인하는 중입니다";
+  if (stripped === "표현 다듬는 중") return "표현을 다듬는 중입니다";
   return stripped;
 }
 
@@ -113,9 +118,11 @@ export function estimateRemainingSec(params: {
 /** M3 원형 진행. viewBox 고정으로 크기만 바꿔도 비율 유지. */
 function ProcessProgressRing({
   percent,
+  indeterminate = false,
   className,
 }: {
   percent: number;
+  indeterminate?: boolean;
   className?: string;
 }) {
   const size = 120;
@@ -134,7 +141,10 @@ function ProcessProgressRing({
     >
       <svg
         viewBox={`0 0 ${size} ${size}`}
-        className="block h-full w-full -rotate-90"
+        className={cn(
+          "block h-full w-full -rotate-90",
+          indeterminate && "motion-safe:animate-spin motion-reduce:animate-none",
+        )}
       >
         <circle
           cx={size / 2}
@@ -153,9 +163,9 @@ function ProcessProgressRing({
           stroke="currentColor"
           strokeWidth={stroke}
           strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={offset}
-          className="text-primary transition-[stroke-dashoffset] duration-75 ease-out motion-reduce:transition-none"
+          strokeDasharray={indeterminate ? `${c * 0.24} ${c * 0.76}` : c}
+          strokeDashoffset={indeterminate ? c * 0.08 : offset}
+          className="text-primary"
         />
       </svg>
       <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -175,6 +185,7 @@ export function MeetingProcessLoader({
   progressPercent,
   stageLabel,
   etaLabel,
+  indeterminate = false,
   className,
 }: {
   phase: MeetingProcessPhase;
@@ -184,6 +195,8 @@ export function MeetingProcessLoader({
   stageLabel?: string | null;
   /** "5분 남음" 같은 남은 시간 문구. */
   etaLabel?: string | null;
+  /** 서버 진행률이 갱신되지 않을 때 링만 indeterminate로 움직인다. 숫자는 유지한다. */
+  indeterminate?: boolean;
   className?: string;
 }) {
   const active = phase === "transcribing" || phase === "structuring";
@@ -195,6 +208,7 @@ export function MeetingProcessLoader({
   const rawLabel =
     (active && stageLabel?.trim()) || MEETING_PROCESS_LABEL[phase];
   const label = friendlyProcessStageLabel(rawLabel);
+  const showIndeterminate = active && indeterminate;
 
   return (
     <div
@@ -204,9 +218,18 @@ export function MeetingProcessLoader({
       )}
       aria-live="polite"
       aria-busy={active}
-      aria-label={active ? `${label}, ${percentLabel}퍼센트` : label}
+      aria-label={
+        active
+          ? `${label}, ${percentLabel}퍼센트`
+          : label
+      }
     >
-      {active ? <ProcessProgressRing percent={percentRaw} /> : null}
+      {active ? (
+        <ProcessProgressRing
+          percent={percentRaw}
+          indeterminate={showIndeterminate}
+        />
+      ) : null}
 
       <div className="relative h-6 overflow-hidden md:h-5">
         <p
@@ -255,6 +278,7 @@ export function MeetingProcessBanner({
   const [stageLabel, setStageLabel] = useState<string | null>(
     initialStageLabel ?? null,
   );
+  const [indeterminate, setIndeterminate] = useState(false);
   const [etaLabel, setEtaLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(() =>
     initialPhase === "error" || initialPhase === "empty"
@@ -270,9 +294,7 @@ export function MeetingProcessBanner({
   const initialPercent = clampPercent(initialProgressPercent, initialPhase);
   const [displayPercent, setDisplayPercent] = useState(initialPercent);
   const targetPercentRef = useRef(initialPercent);
-  const targetRaisedAtRef = useRef(
-    typeof performance !== "undefined" ? performance.now() : Date.now(),
-  );
+  const targetRaisedAtRef = useRef<number | null>(null);
   const lastFrameAtRef = useRef(0);
   const etaRef = useRef<{
     lastSample: { time: number; percent: number } | null;
@@ -280,10 +302,29 @@ export function MeetingProcessBanner({
     remainingSec: number | null;
   }>({ lastSample: null, rate: null, remainingSec: null });
 
-  // 서버 값은 1초 폴링. 화면은 프레임마다 따라가며, target이 멈춰도
-  // 단계 밴드 안에서는 천천히 더 올라간다 (옛 77% 영구 정지 방지).
+  // 서버 값은 1초 폴링. 화면은 프레임마다 실측 target을 따라가며,
+  // target이 멈추면 숫자를 부풀리지 않고 indeterminate 상태로 전환한다.
   useEffect(() => {
     if (!active) return;
+    if (targetRaisedAtRef.current == null) {
+      targetRaisedAtRef.current = monotonicNow();
+    }
+    const id = window.setInterval(() => {
+      const now = monotonicNow();
+      const raisedAt = targetRaisedAtRef.current ?? now;
+      const stalled = now - raisedAt >= 3_000;
+      setIndeterminate((prev) => (prev === stalled ? prev : stalled));
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    if (targetRaisedAtRef.current == null) {
+      targetRaisedAtRef.current = monotonicNow();
+    }
     let raf = 0;
     lastFrameAtRef.current = 0;
     const reduceMotion =
@@ -294,7 +335,10 @@ export function MeetingProcessBanner({
       const prevAt = lastFrameAtRef.current || now;
       lastFrameAtRef.current = now;
       const dtMs = now - prevAt;
-      const stalledMs = Math.max(0, now - targetRaisedAtRef.current);
+      const stalledMs = Math.max(
+        0,
+        now - (targetRaisedAtRef.current ?? now),
+      );
 
       setDisplayPercent((cur) => {
         const target = targetPercentRef.current;
@@ -351,8 +395,7 @@ export function MeetingProcessBanner({
         setPhase(data.phase);
         setStageLabel(data.stageLabel ?? null);
         if (nextPercent > targetPercentRef.current + 0.05) {
-          targetRaisedAtRef.current =
-            typeof performance !== "undefined" ? performance.now() : Date.now();
+          targetRaisedAtRef.current = monotonicNow();
         }
         targetPercentRef.current = Math.max(
           targetPercentRef.current,
@@ -370,11 +413,13 @@ export function MeetingProcessBanner({
             remainingSec: null,
           };
           setEtaLabel(null);
+          setIndeterminate(false);
           return;
         }
         if (data.phase === "done") {
           setDisplayPercent(100);
           setEtaLabel(null);
+          setIndeterminate(false);
           router.refresh();
           return;
         }
@@ -451,6 +496,7 @@ export function MeetingProcessBanner({
         progressPercent={displayPercent}
         stageLabel={stageLabel}
         etaLabel={etaLabel}
+        indeterminate={indeterminate}
       />
       <UsageLimitDialog
         open={usageDialogOpen}

@@ -5,6 +5,10 @@ import { Gauge } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Progress } from "@/components/ui/progress";
+import {
+  formatQuotaRemainingLabel,
+  monthlyMinutesFromSeconds,
+} from "@/lib/usage-copy";
 import { cn } from "@/lib/utils";
 
 type QuotaStatus = {
@@ -98,22 +102,24 @@ export function SidebarUsage({
     };
   }, []);
 
-  const label = "사용량";
+  const label = "잔여 시간";
   const enforced = status?.enforced !== false;
-  const usedMin = status ? Math.floor(status.usedSec / 60) : 0;
   const effectiveLimitSec = status
     ? (status.monthlyLimitSec ?? status.limitSec)
     : 0;
-  const limitMin = Math.round(effectiveLimitSec / 60);
+  const remainingMin = status
+    ? Math.floor(status.remainingSec / 60)
+    : 0;
+  const limitMin = monthlyMinutesFromSeconds(effectiveLimitSec);
   const pct =
     status && effectiveLimitSec > 0
       ? (status.usedSec / effectiveLimitSec) * 100
       : 0;
   const title =
     status && enforced
-      ? `${usedMin} / ${limitMin}차감분`
+      ? formatQuotaRemainingLabel(status.remainingSec, effectiveLimitSec)
       : status && !enforced
-        ? "한도 없음"
+        ? "이용 제한 없음"
         : label;
 
   if (collapsed) {
@@ -165,15 +171,15 @@ export function SidebarUsage({
           <span className="h-4 w-16 animate-pulse rounded bg-surface-2" />
         ) : status && enforced ? (
           <p className="shrink-0 text-base font-semibold tabular-nums text-foreground">
-            {usedMin}
+            {remainingMin}
             <span className="font-medium text-muted">
               {" "}
-              / {limitMin}차감분
+              / {limitMin}분
             </span>
           </p>
         ) : status && !enforced ? (
           <p className="shrink-0 text-base font-semibold text-foreground">
-            한도 없음
+            이용 제한 없음
           </p>
         ) : (
           <p className="shrink-0 text-base font-medium text-muted-2">—</p>
@@ -191,9 +197,9 @@ export function SidebarUsage({
       ) : null}
 
       {!loading && status?.resetsAtLabel && enforced ? (
-        <p className="mt-1.5 text-base font-medium text-muted-2">
-          <span className="tabular-nums text-muted">{status.resetsAtLabel}</span>{" "}
-          초기화
+        <p className="mt-1.5 truncate whitespace-nowrap text-base font-medium text-muted-2">
+          <span className="tabular-nums text-muted">{status.resetsAtLabel}</span>
+          에 초기화
         </p>
       ) : null}
     </Link>

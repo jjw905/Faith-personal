@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { openTeamText } from "@/lib/team-encryption";
 import { listWorkspaceMeetingAcks } from "@/lib/notifications-store";
 import { deriveMeetingState } from "@/lib/team/meeting-lifecycle";
 import { reconcileTeamMeeting } from "@/lib/team/reconcile-meeting";
@@ -228,21 +229,23 @@ export async function GET(_: Request, context: RouteContext) {
     });
   }
   const unconfirmedAlerts = [...unconfirmedByMeeting.values()];
-  const visibleAnnouncements = announcements
-    .filter((row) => {
-      const read = row.reads[0];
-      if (!read) return true;
-      return !hideAfterRead;
-    })
-    .map((row) => ({
-      id: row.id,
-      title: row.title,
-      body: row.body,
-      pinned: row.pinned,
-      createdAt: row.createdAt,
-      author: row.author,
-      read: Boolean(row.reads[0]),
-    }));
+  const visibleAnnouncements = await Promise.all(
+    announcements
+      .filter((row) => {
+        const read = row.reads[0];
+        if (!read) return true;
+        return !hideAfterRead;
+      })
+      .map(async (row) => ({
+        id: row.id,
+        title: await openTeamText(teamId, "content", row.title),
+        body: await openTeamText(teamId, "content", row.body),
+        pinned: row.pinned,
+        createdAt: row.createdAt,
+        author: row.author,
+        read: Boolean(row.reads[0]),
+      })),
+  );
 
   const mic = resolveEntryMicrophoneOn({
     inTeamWorkspace: true,

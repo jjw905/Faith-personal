@@ -9,29 +9,27 @@ export const PROGRESS_STRUCTURE_DONE = 90;
 export const PROGRESS_ALIGNED = 95;
 export const PROGRESS_BUILT = 98;
 
-/** 폴링 사이 최대 자체 전진 (%). 실측을 넘지 않는 수준만. */
-const POLL_SMOOTH_GAP = 1.1;
-
 function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
 }
 
 /**
- * 폴링 사이 표시 상한 = 실측 + 작은 여유.
- * stalled로 밴드를 부풀리지 않는다 (진행상황에 맞춤).
+ * 표시 상한은 서버 실측값과 같다.
+ * 서버가 멈춘 동안 숫자를 앞세우면 72→73처럼 가짜 진행률이 된다.
  */
-export function softCreepCeiling(target: number, _stalledMs = 0): number {
-  const t = clamp(target, 0, 100);
-  if (t >= 99.5) return 100;
-  return Math.min(98.5, t + POLL_SMOOTH_GAP);
+export function softCreepCeiling(target: number, stalledMs = 0): number {
+  void stalledMs;
+  return clamp(target, 0, 100);
 }
 
 /** @deprecated softCreepCeiling 사용. 호환용. */
 export function displayCreepCeiling(
   target: number,
-  _gapMax?: number,
-  _max?: number,
+  gapMax?: number,
+  max?: number,
 ): number {
+  void gapMax;
+  void max;
   return softCreepCeiling(target, 0);
 }
 
@@ -57,7 +55,7 @@ export type DisplayPercentStepInput = {
 
 /**
  * 한 프레임 뒤 표시 퍼센트.
- * 서버 target을 ease로 따라가고, target 위로는 최대 POLL_SMOOTH_GAP만.
+ * 서버 target을 ease로 따라가되 target을 절대 넘지 않는다.
  */
 export function nextDisplayPercent(input: DisplayPercentStepInput): number {
   const current = clamp(input.current, 0, 100);
@@ -68,10 +66,12 @@ export function nextDisplayPercent(input: DisplayPercentStepInput): number {
 
   if (current < target - 0.03) {
     const dist = target - current;
-    const k = 1 - Math.exp(-0.18 * frame);
+    // 큰 점프는 더 빠르게 따라가 실시간처럼 보이게 한다.
+    const catchUp = dist > 8 ? 0.42 : dist > 3 ? 0.32 : 0.26;
+    const k = 1 - Math.exp(-catchUp * frame);
     const zone =
       current < 25 ? 1.12 : current < 55 ? 1 : current < 78 ? 0.9 : 0.78;
-    const step = Math.max(0.06 * frame, dist * k * zone);
+    const step = Math.max(0.08 * frame, dist * k * zone);
     return Math.min(target, current + step);
   }
 

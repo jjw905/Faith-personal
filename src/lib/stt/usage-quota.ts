@@ -16,6 +16,7 @@ import {
   FREE_MONTHLY_MINUTES,
   SURVEY_UNLOCKED_MONTHLY_MINUTES,
 } from "@/lib/stt/survey";
+import { formatSurveyBenefit } from "@/lib/usage-copy";
 
 /**
  * 오픈 준비 기간 한정 월간 업로드 분석 쿼터.
@@ -291,14 +292,13 @@ export async function getUploadQuotaStatus(
 export class UploadQuotaExceededError extends Error {
   readonly status: UploadQuotaStatus;
   constructor(status: UploadQuotaStatus) {
-    const remainingMin = Math.floor(status.remainingSec / 60);
     const limitMin = Math.round(status.monthlyLimitSec / 60);
     const message =
       status.monthlyLimitSec >= PRO_MONTHLY_SEC
-        ? `이번 주기 분석 가능 시간(월 ${PRO_MONTHLY_MINUTES}차감분)과 5분 유예를 모두 사용했습니다. 남은 차감분 ${remainingMin}분입니다. 분 팩을 구매하면 계속할 수 있습니다.`
+        ? "이번 주기 잔여 시간이 없습니다. 추가 시간을 이용하면 계속 사용할 수 있습니다."
         : status.surveyCompleted
-          ? `이번 주기 분석 가능 시간(${limitMin}차감분)과 5분 유예를 모두 사용했습니다. 남은 차감분 ${remainingMin}분, ${status.resetsAtLabel}에 초기화됩니다.`
-          : `무료 분석 시간(월 ${FREE_MONTHLY_MINUTES}분)을 모두 사용했습니다. 짧은 설문에 참여하면 이번 주기 최대 ${SURVEY_UNLOCKED_MONTHLY_MINUTES}분까지 늘어납니다.`;
+          ? `이번 주기 잔여 시간이 없습니다. ${status.resetsAtLabel}에 다시 사용할 수 있습니다.`
+          : `이번 주기 잔여 시간이 없습니다. ${formatSurveyBenefit(limitMin)}`;
     super(message);
     this.name = "UploadQuotaExceededError";
     this.status = status;
@@ -427,7 +427,7 @@ async function reserveWithRetry(params: {
       throw error;
     }
   }
-  throw new Error("분 사용량을 예약하지 못했습니다.");
+  throw new Error("사용 시간을 예약하지 못했습니다.");
 }
 
 /**
@@ -481,7 +481,7 @@ export async function grantMinuteCredit(params: {
   expiresAt?: Date;
 }): Promise<void> {
   const deltaSec = Math.floor(params.sec);
-  if (deltaSec <= 0) throw new Error("충전할 차감분은 0보다 커야 합니다.");
+  if (deltaSec <= 0) throw new Error("사용할 시간은 0보다 커야 합니다.");
   await prisma.minuteCreditLedger.upsert({
     where: { reference: params.reference },
     create: {

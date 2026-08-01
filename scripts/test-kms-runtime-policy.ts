@@ -55,7 +55,7 @@ const gcpConfigured = {
   GCP_KMS_ENABLED: "1",
   GCP_KMS_RUNTIME_ENV: "production",
   GCP_PROJECT_ID: "faith-production",
-  GCP_KMS_LOCATION: "asia-northeast3",
+  GCP_KMS_LOCATION: "asia-northeast1",
   GCP_KMS_KEY_RING: "faith",
   GCP_KMS_CONTENT_KEY: "faith-content",
   GCP_KMS_AUDIT_KEY: "faith-audit",

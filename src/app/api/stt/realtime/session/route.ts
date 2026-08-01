@@ -367,7 +367,7 @@ export async function POST(request: Request) {
             ok: false,
             code: "ANALYSIS_GRACE_EXHAUSTED",
             message:
-              "분 잔량과 5분 유예를 모두 사용했습니다. 분 팩 구매 후 다시 시작해 주세요.",
+              "이번 주기 잔여 시간이 없습니다. 추가 시간을 이용한 뒤 다시 시작해 주세요.",
           },
           { status: 429 },
         );

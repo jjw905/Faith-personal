@@ -1245,7 +1245,7 @@ export function UpcomingDetailPanel({
                   {editing ? (
                     data.agenda.length === 0 ? (
                       <p className="text-base text-muted md:text-xs">
-                        미리 적어 두면 회의 때 흐름을 잡기 좋아요.
+                        미리 적어 두면 회의 때 흐름을 잡기 좋습니다.
                       </p>
                     ) : (
                       <ol className="space-y-2">

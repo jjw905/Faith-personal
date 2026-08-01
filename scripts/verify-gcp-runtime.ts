@@ -26,6 +26,15 @@ const required: string[] = [
 if (process.env.LIVEKIT_ENABLED === "1") {
   required.push("LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET");
 }
+if (process.env.AWS_KMS_ENABLED === "1") {
+  required.push(
+    "AWS_REGION",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_KMS_CONTENT_KEY_ARN",
+    "AWS_KMS_AUDIT_KEY_ARN",
+  );
+}
 
 const durableTables = [
   "vault_files",
@@ -54,7 +63,7 @@ async function verifyGcsAccess() {
 }
 
 async function main() {
-  const [{ prisma }, { evaluateKmsRuntime }] = await Promise.all([
+    const [{ prisma }, { evaluateKmsRuntime, kmsProvider }] = await Promise.all([
     import("../src/lib/prisma"),
     import("../src/lib/kms-runtime-policy"),
   ]);
@@ -68,6 +77,9 @@ async function main() {
     }
     if (process.env.STORAGE_BACKEND !== "gcs") {
       missing.push("STORAGE_BACKEND=gcs");
+    }
+    if (process.env.ANALYSIS_EXECUTION_MODE !== "queue") {
+      missing.push("ANALYSIS_EXECUTION_MODE=queue");
     }
     if (missing.length > 0) {
       throw new Error(
@@ -92,9 +104,13 @@ async function main() {
     }
 
     const kms = evaluateKmsRuntime();
-    if (process.env.GCP_KMS_ENABLED === "1" && !kms.allowed) {
+    if (
+      (process.env.GCP_KMS_ENABLED === "1" ||
+        process.env.AWS_KMS_ENABLED === "1") &&
+      !kms.allowed
+    ) {
       throw new Error(
-        `GCP KMS configuration is incomplete: ${kms.reason}${
+        `${kmsProvider()?.toUpperCase() ?? "KMS"} configuration is incomplete: ${kms.reason}${
           kms.reason === "missing_configuration"
             ? ` (${kms.missing?.join(", ")})`
             : ""

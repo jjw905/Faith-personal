@@ -50,7 +50,8 @@ export const REALTIME_FEATURE_ENABLED = publicBoolean(
 /**
  * 오픈 준비 기간 동안 Pro/Team 유료 플랜 가입 유도는 하지 않는다(설문
  * 자체가 결제 의향을 묻는 절차라 실제 결제 전환 CTA와 병행하면 신호가 섞인다).
- * 요금 카탈로그·문의 메일 유틸은 그대로 두고, 마케팅/플랜 페이지의 CTA만
- * "준비중"으로 잠근다. 오픈 준비가 끝나면 이 값만 true로 되돌리면 된다.
+ * 요금 카탈로그·문의 메일 유틸은 그대로 두고, 마케팅/플랜 페이지 CTA는
+ * 정상 라벨로 보이되 클릭·호버 반응 없이 둔다. 오픈 준비가 끝나면 이 값만
+ * true로 되돌리면 된다.
  */
 export const PAID_PLANS_ENABLED = false;

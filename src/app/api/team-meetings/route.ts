@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     !hasTeamCapability(actor, "manageTeam")
   ) {
     return NextResponse.json(
-      { ok: false, message: "다른 멤버를 주최자로 지정할 권한이 없습니다." },
+      { ok: false, message: "다른 구성원을 주최자로 지정할 권한이 없습니다." },
       { status: 403 },
     );
   }
@@ -164,12 +164,12 @@ export async function POST(request: Request) {
     actor.team.seatLimit,
   );
   if (!validIds.includes(schedule.value.organizerId)) {
-    return NextResponse.json({ ok: false, message: "주최자는 팀 멤버여야 합니다." }, { status: 400 });
+    return NextResponse.json({ ok: false, message: "주최자는 팀 구성원이어야 합니다." }, { status: 400 });
   }
   const otherInvitees = validIds.filter((id) => id !== schedule.value.organizerId);
   if (otherInvitees.length < 1) {
     return NextResponse.json(
-      { ok: false, message: "함께할 팀원을 초대해 주세요." },
+      { ok: false, message: "함께할 구성원을 초대해 주세요." },
       { status: 400 },
     );
   }
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
     !validIds.includes(schedule.value.backupHostId)
   ) {
     return NextResponse.json(
-      { ok: false, message: "대리 주최자는 초대된 팀 멤버여야 합니다." },
+      { ok: false, message: "대리 주최자는 초대된 팀 구성원이어야 합니다." },
       { status: 400 },
     );
   }

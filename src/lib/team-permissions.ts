@@ -10,6 +10,7 @@ import {
   hasTeamCapability,
   type TeamCapability,
 } from "@/lib/team-permission-matrix";
+import { sealTeamJson } from "@/lib/team-encryption";
 
 export { hasTeamCapability, isTeamManager } from "@/lib/team-permission-matrix";
 
@@ -96,6 +97,13 @@ export async function writeTeamAudit(params: {
   metadata?: Record<string, unknown>;
   request?: Request;
 }) {
+  const metadata = params.metadata
+    ? await sealTeamJson(
+        params.teamId,
+        "audit",
+        params.metadata as Prisma.JsonValue,
+      )
+    : undefined;
   return prisma.teamAuditLog.create({
     data: {
       id: randomUUID(),
@@ -104,7 +112,7 @@ export async function writeTeamAudit(params: {
       targetUserId: params.targetUserId,
       meetingId: params.meetingId,
       action: params.action,
-      metadata: params.metadata as Prisma.InputJsonValue | undefined,
+      metadata: metadata as Prisma.InputJsonValue | undefined,
       ip: params.request ? clientIp(params.request) : null,
       userAgent: params.request?.headers.get("user-agent")?.slice(0, 500) ?? null,
     },

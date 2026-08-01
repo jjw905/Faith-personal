@@ -3,7 +3,9 @@
  *
  * 분당 과금 구조 (2026-07-31 반영). 원가 근거는
  * Faith-office/Faith_요금제_분당과금_반영_2026-07-31.md 참고.
- * Team 포함 분은 좌석당 부여 후 팀 워크스페이스 합산 풀로 쓴다.
+ * Team은 2026-08-02부터 좌석당 과금을 폐지하고 인원 무관 고정가로 전환했다.
+ * 포함 분은 팀 전체가 나눠 쓰는 단일 풀이며, 인원이 늘어도 요금이 바뀌지 않는다.
+ * 근거: Faith-office/Faith_요금제_Team_인원무관_전환_2026-08-02.md
  */
 
 export type CatalogPlanId = "FREE" | "PRO" | "TEAM";
@@ -28,8 +30,8 @@ export type PlanCatalogEntry = {
   badges?: string[];
   /**
    * 월 포함 분.
-   * Team은 좌석당 분이지만 개인 지갑이 아니라 팀 워크스페이스 합산 풀이다.
-   * 팀 회의는 누가 시작하든 팀 풀에서만 차감한다.
+   * Team은 인원 수와 무관한 팀 전체 단일 풀이다.
+   * 팀 회의는 누가 시작하든 이 풀에서만 차감한다.
    */
   includedMinutes: number;
   overage: PlanOverage;
@@ -42,7 +44,7 @@ export const PLAN_CATALOG: Record<CatalogPlanId, PlanCatalogEntry> = {
   FREE: {
     id: "FREE",
     name: "Free",
-    tagline: "개인 시작",
+    tagline: "회의 정리를 시작하는 기본 플랜",
     monthlyPrice: 0,
     yearlyMonthlyPrice: 0,
     yearlyTotal: 0,
@@ -50,57 +52,57 @@ export const PLAN_CATALOG: Record<CatalogPlanId, PlanCatalogEntry> = {
     overage: { upload: 20, realtime: 30 },
     storageLabel: "500MB",
     features: [
+      "사용 시간 60분",
       "보관함 500MB",
-      "음성 텍스트 추출",
-      "정밀 화자·대화추적 선택(1.5배 차감)",
-      "개인정보 자동 마스킹",
+      "요약, 타임라인",
+      "개인정보 마스킹",
     ],
   },
   PRO: {
     id: "PRO",
     name: "Pro",
-    tagline: "개인 회의록",
+    tagline: "개인 생산성을 위한 플랜",
     monthlyPrice: 19_000,
     yearlyMonthlyPrice: 15_833,
     yearlyTotal: 190_000,
-    badges: ["연 결제 시 2개월 무료", "추천"],
+    badges: ["추천"],
     includedMinutes: 1_000,
     overage: { upload: 20, realtime: 30 },
     storageLabel: "20GB",
     features: [
+      "사용 시간 1,000분",
       "보관함 20GB",
-      "고급 요약, 타임라인",
-      "단어 단위 재생 하이라이트",
-      "정밀 화자·대화추적 선택(1.5배 차감)",
-      "개인 워크스페이스",
+      "요약, 타임라인",
+      "화자 구분",
+      "단어 단위 마스킹",
+      "개인정보 마스킹",
     ],
     featured: true,
   },
   TEAM: {
     id: "TEAM",
     name: "Team",
-    tagline: "팀 2명 이상",
-    monthlyPrice: 15_200,
-    yearlyMonthlyPrice: 15_200,
-    priceUnit: "/ 인 / 월",
-    badges: ["Pro 월간 대비 20% 할인"],
-    includedMinutes: 300,
+    tagline: "협업을 위한 팀 플랜",
+    monthlyPrice: 99_000,
+    yearlyMonthlyPrice: 82_500,
+    yearlyTotal: 990_000,
+    badges: ["인원 무관 고정가"],
+    includedMinutes: 5_000,
     overage: { upload: 20, realtime: 30 },
-    storageLabel: "좌석당 20GB",
+    storageLabel: "100GB",
     features: [
-      "보관함 좌석당 20GB",
-      "팀 워크스페이스, 초대",
-      "역할, 기록 열람 권한",
-      "온라인 팀 회의",
-      "정밀 화자·대화추적 선택(1.5배 차감)",
-      "팀 분은 좌석 합산 풀에서 차감",
-      "예정 회의, 알림, 팀 공지",
-      "감사 로그, 팀 보안 정책",
+      "사용 시간 5,000분",
+      "보관함 100GB",
+      "요약, 타임라인, 화자 구분",
+      "단어 단위 마스킹, 개인정보 마스킹",
+      "팀 워크스페이스, 초대, 역할",
+      "온라인 회의, 일정, 공지",
+      "감사 로그, 보안 정책",
     ],
   },
 };
 
-/** 추가 분 팩. 포함 분을 다 썼을 때 업그레이드 대신 고를 수 있는 소액 결제. */
+/** 추가 시간. 포함 시간을 다 썼을 때 업그레이드 대신 고를 수 있는 소액 결제. */
 export type TopupPack = {
   id: string;
   minutes: number;
@@ -110,8 +112,8 @@ export type TopupPack = {
 
 export const TOPUP_PACKS: TopupPack[] = [
   { id: "pack-30", minutes: 30, priceWon: 600 },
-  { id: "pack-120", minutes: 120, priceWon: 2_400, badge: "가장 많이 선택" },
-  { id: "pack-360", minutes: 360, priceWon: 7_200, badge: "가장 알차게" },
+  { id: "pack-120", minutes: 120, priceWon: 2_400, badge: "추천" },
+  { id: "pack-360", minutes: 360, priceWon: 7_200 },
 ];
 
 export function formatPlanWon(n: number) {
@@ -120,8 +122,7 @@ export function formatPlanWon(n: number) {
 
 export function formatPlanMinutes(entry: PlanCatalogEntry) {
   const minutes = entry.includedMinutes.toLocaleString("ko-KR");
-  if (entry.id === "TEAM") return `좌석당 ${minutes}차감분 합산`;
-  return `월 ${minutes}차감분`;
+  return `사용 시간 ${minutes}분`;
 }
 
 export function planMonthlyFeeLabel(entry: PlanCatalogEntry) {
@@ -133,6 +134,11 @@ export function planMonthlyFeeLabel(entry: PlanCatalogEntry) {
   return `월 ${formatPlanWon(entry.monthlyPrice)}`;
 }
 
-/** 포함 분을 다 썼을 때 안내하는 공통 문구. 분당 단가는 노출하지 않는다. */
-export const PLAN_OVERAGE_NOTE =
-  "일반 분석 1분은 1차감분, 정밀 분석 1분은 1.5차감분입니다";
+/** Free는 빠른 정리만. 화자 구분은 Pro(및 Admin)부터. */
+export function planIncludesSpeakerSplit(
+  plan?: string | null,
+  role?: string | null,
+) {
+  if (role === "ADMIN") return true;
+  return plan === "PRO";
+}

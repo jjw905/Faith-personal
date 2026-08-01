@@ -25,7 +25,7 @@ export default async function SurveyPage() {
           <p className="text-base text-muted">
             {completed
               ? "소중한 의견 감사합니다. 다음 개선에 반영하겠습니다."
-              : `1분이면 끝나는 짧은 설문입니다. 응답을 제출하면 이번 주기 분석 가능 시간이 최대 ${SURVEY_UNLOCKED_MONTHLY_MINUTES}분으로 늘어납니다.`}
+              : `1분이면 끝나는 짧은 설문입니다. 응답을 제출하면 이번 주기 잔여 시간이 최대 ${SURVEY_UNLOCKED_MONTHLY_MINUTES}분으로 늘어납니다.`}
           </p>
         </header>
 

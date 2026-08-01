@@ -93,10 +93,10 @@ export async function POST(request: Request) {
     current?.plan !== "PRO" ||
     !current.teamEntitlement ||
     current.teamEntitlement.remainingTeamSlots < 1 ||
-    current.teamEntitlement.seatLimit < 2
+    current.teamEntitlement.seatLimit < 1
   ) {
     return NextResponse.json(
-      { ok: false, message: "관리자가 부여한 PRO 팀 슬롯과 2좌석 이상이 필요합니다." },
+      { ok: false, message: "관리자가 부여한 PRO 팀 슬롯이 필요합니다." },
       { status: 403 },
     );
   }
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       where: {
         userId: session.user.id,
         remainingTeamSlots: { gte: 1 },
-        seatLimit: { gte: 2 },
+        seatLimit: { gte: 1 },
       },
       data: { remainingTeamSlots: { decrement: 1 } },
     });

@@ -50,7 +50,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     },
   });
   if (!member) {
-    return NextResponse.json({ ok: false, message: "팀 멤버가 아닙니다." }, { status: 404 });
+    return NextResponse.json({ ok: false, message: "팀 구성원이 아닙니다." }, { status: 404 });
   }
   if (TEAM_FEATURE_ADMIN_ONLY) {
     const target = await prisma.user.findUnique({
@@ -99,7 +99,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       userId: body.userId,
       type: "meeting",
       kind: body.canReadMasked ? NOTIFICATION_KINDS.MEETING_ACK : undefined,
-      title: body.canReadMasked ? "회의 기록 열람이 허용되었습니다" : "회의 기록 열람이 해제되었습니다",
+      title: body.canReadMasked ? "회의 기록 접근이 허용되었습니다" : "회의 기록 접근이 해제되었습니다",
       body: meeting.title,
       teamId: meeting.teamId,
       meetingId,

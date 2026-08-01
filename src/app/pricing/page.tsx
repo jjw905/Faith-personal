@@ -8,7 +8,7 @@ import { SiteNav } from "@/components/marketing/site-nav";
 export const metadata: Metadata = {
   title: "요금제 · Faith",
   description:
-    "개인 회의록은 Pro, 함께하는 회의는 Team으로 이용하는 Faith 요금제.",
+    "나의 방식에 맞는 Faith 요금제를 골라보세요. 개인 회의 정리부터 팀 협업까지.",
 };
 
 /** 요금제 소개 페이지. */

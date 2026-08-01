@@ -350,15 +350,15 @@ const PERMISSION_META: Record<
 > = {
   canInvite: {
     label: "초대",
-    description: "팀에 멤버를 초대합니다.",
+    description: "팀에 구성원을 초대합니다.",
   },
   canCreateMeeting: {
     label: "회의 생성",
     description: "팀 회의를 만듭니다.",
   },
   canManageRecordAccess: {
-    label: "기록 열람",
-    description: "마스킹 기록 열람을 회의별로 허용합니다.",
+    label: "기록 접근",
+    description: "마스킹된 기록을 회의별로 허용합니다.",
   },
 };
 
@@ -493,7 +493,7 @@ function MemberRecordAccessSheet({
 
   if (!member) return null;
 
-  const title = member.user.name || member.user.handle || "기록 열람";
+  const title = member.user.name || member.user.handle || "기록 접근";
   const visibleMeetings = meetings.slice(0, meetingPage.visible);
 
   return (
@@ -535,7 +535,7 @@ function MemberRecordAccessSheet({
                   }
                 >
                   <Toggle
-                    label={`${meeting.title} 기록 열람`}
+                    label={`${meeting.title} 기록 접근`}
                     checked={Boolean(meetingAccess?.canReadMasked)}
                     disabled={saving || member.role === "OWNER"}
                     onChange={(value) => onToggleMeeting(meeting.id, value)}
@@ -724,7 +724,7 @@ export function TeamManagePanel({
         canManageRecordAccess: index < 3,
         user: {
           id: `ux-member-${index + 1}`,
-          name: `미리보기 멤버 ${index + 1}`,
+          name: `미리보기 구성원 ${index + 1}`,
           email: `ux${index + 1}@example.com`,
           image: null,
           handle: `ux${index + 1}`,
@@ -852,7 +852,7 @@ export function TeamManagePanel({
     if (!isLive) {
       await new Promise((resolve) => window.setTimeout(resolve, 400));
       setSaving(false);
-      setMessage("미리보기에서는 실제 KMS 키를 만들지 않습니다.");
+      setMessage("미리보기에서는 실제 팀 보안 키를 만들지 않습니다.");
       return;
     }
     try {
@@ -868,13 +868,13 @@ export function TeamManagePanel({
         message?: string;
       };
       if (!response.ok || !data.ok) {
-        setMessage(data.message ?? "팀 보안 키를 만들지 못했습니다.");
+      setMessage(data.message ?? "팀 보안 키를 준비하지 못했습니다.");
         return;
       }
       await refreshDetail(detail.team.id);
-      setMessage("팀 전용 콘텐츠·감사 키를 준비했습니다.");
+      setMessage("팀 보안 키를 준비했습니다.");
     } catch {
-      setMessage("팀 보안 키를 만들지 못했습니다.");
+      setMessage("팀 보안 키를 준비하지 못했습니다.");
     } finally {
       setSaving(false);
     }
@@ -964,7 +964,9 @@ export function TeamManagePanel({
           CARD_SHADOW,
         )}
       >
-        <p className="text-base text-muted">이 관리 화면은 권한이 없습니다.</p>
+        <p className="text-base text-muted">
+          이 관리 화면에 접근할 권한이 없습니다.
+        </p>
         <Button asChild variant="secondary" className="mt-4 min-h-12 rounded-xl">
           <Link href="/team">팀 공간으로</Link>
         </Button>
@@ -1043,7 +1045,7 @@ export function TeamManagePanel({
               <div className="space-y-6">
                 <ManageCard
                   title="보안 키 준비"
-                  description="팀 전용 콘텐츠·감사 암호화 키를 관리합니다."
+                  description="팀 전용 콘텐츠와 감사 기록을 보호하는 키를 관리합니다."
                 >
                   <div className="px-6 py-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1065,32 +1067,28 @@ export function TeamManagePanel({
                         )}
                       >
                         {encryptionReady
-                          ? "생성됨"
+                          ? "준비됨"
                           : detail.security?.kmsStatus === "PROVISIONING"
-                            ? "생성 중"
+                            ? "준비 중"
                             : detail.security?.kmsStatus === "FAILED"
                               ? "다시 시도 필요"
                               : "설정 필요"}
                       </span>
                     </div>
                     <p className="mt-2 text-base leading-6 text-muted">
-                      키 원문과 ARN은 팀 화면에 노출하지 않습니다. 팀 대표가
-                      생성 요청을 하면 운영 KMS에 콘텐츠용과 감사용 키를
-                      각각 만들고, Faith에는 참조 정보만 저장합니다.
+                      팀 전용 콘텐츠와 감사 기록에 사용하는 암호화 키입니다. 팀
+                      대표가 준비를 요청하면 팀 보안 정책에 따라 적용됩니다.
                     </p>
                     {encryptionReady ? (
                       <p className="mt-3 text-base leading-6 text-muted">
-                        {detail.security?.kmsRegion
-                          ? `${detail.security.kmsRegion} 리전에 키가 준비되었습니다.`
-                          : "팀 전용 키가 준비되었습니다."} 실제 데이터 암호화
-                        적용은 운영 IAM 권한 연결 후 활성화됩니다.
+                        팀 보안 키가 준비되었습니다.
                       </p>
                     ) : (
                       <>
                         <p className="mt-3 text-base leading-6 text-muted">
                           {detail.security?.kmsStatus === "FAILED"
-                            ? "이전 생성 요청이 완료되지 않았습니다. 운영 환경과 IAM 권한을 확인한 뒤 다시 시도하세요."
-                            : "생성에는 운영 KMS 환경과 키 생성 권한이 필요합니다. 로컬에서는 실제 키를 만들 수 없습니다."}
+                            ? "이전 요청이 완료되지 않았습니다. 잠시 후 다시 시도해 주세요."
+                            : "현재 보안 키를 준비할 수 없습니다. 환경이 준비되면 다시 시도해 주세요."}
                         </p>
                         <Button
                           type="button"
@@ -1104,8 +1102,8 @@ export function TeamManagePanel({
                         >
                           {saving ||
                           detail.security?.kmsStatus === "PROVISIONING"
-                            ? "생성 중…"
-                            : "팀 KMS 키 2개 만들기"}
+                            ? "준비 중…"
+                            : "팀 보안 키 준비하기"}
                         </Button>
                       </>
                     )}
@@ -1116,7 +1114,7 @@ export function TeamManagePanel({
                   <div className="divide-y divide-border px-6 pb-2">
                     <SettingRow
                       label="보존 기간"
-                      description="종료된 팀 회의에 적용됩니다. 운영 보존 작업이 기간이 지난 기록을 정리합니다."
+                      description="종료된 팀 회의에 적용되며, 설정한 기간이 지나면 기록을 정리합니다."
                     >
                       <Segmented
                         ariaLabel="데이터 보존 기간"
@@ -1133,11 +1131,11 @@ export function TeamManagePanel({
                       />
                     </SettingRow>
                     <SettingRow
-                      label="팀장 언마스크"
-                      description="마스킹 원문 열람"
+                      label="팀장 원문 보기"
+                      description="마스킹된 기록의 원문을 볼 수 있습니다."
                     >
                       <Toggle
-                        label="팀장 언마스크"
+                        label="팀장 원문 보기"
                         checked={Boolean(detail.team.policy?.allowAdminUnmask)}
                         disabled={saving}
                         onChange={(value) =>
@@ -1147,7 +1145,7 @@ export function TeamManagePanel({
                     </SettingRow>
                     <SettingRow
                       label="외부 공유"
-                      description="공개 열람 링크 준비 후 제공됩니다."
+                      description="공개 열람 링크가 준비되면 사용할 수 있습니다."
                     >
                       <Toggle
                         label="외부 공유"
@@ -1167,10 +1165,10 @@ export function TeamManagePanel({
               </div>
             ) : (
               <ManageCard
-                title={view === "records" ? "기록 열람" : "구성원"}
+                title={view === "records" ? "기록 접근" : "구성원"}
                 description={
                   view === "records"
-                    ? "멤버를 눌러 회의별 열람을 설정합니다."
+                    ? "구성원을 선택해 회의별 기록 접근을 설정합니다."
                     : undefined
                 }
                 action={
@@ -1181,7 +1179,7 @@ export function TeamManagePanel({
                       size="icon"
                       className="h-12 w-12 rounded-full text-muted hover:bg-surface hover:text-foreground"
                       onClick={() => setShowInvite(true)}
-                      aria-label="멤버 초대"
+                      aria-label="구성원 초대"
                     >
                       <UserRoundPlus className="h-5 w-5" strokeWidth={1.75} />
                     </Button>
@@ -1191,7 +1189,7 @@ export function TeamManagePanel({
                 <div className="divide-y divide-border">
                   {previewMembers.length === 0 ? (
                     <p className="px-6 py-10 text-center text-base text-muted">
-                      멤버가 없습니다.
+                      구성원이 없습니다.
                     </p>
                   ) : (
                     visibleMembers.map((member) => (
@@ -1405,7 +1403,7 @@ function InviteDialog({
   return (
     <TeamSheet
       open
-      title="멤버 초대"
+      title="구성원 초대"
       onClose={onClose}
       footer={
         canSubmit ? (
@@ -1479,7 +1477,7 @@ function InviteDialog({
             </p>
           ) : person.role !== "ADMIN" ? (
             <p className="border-t border-border py-4 text-base text-muted">
-              안정화 기간에는 관리자 계정만 팀에 초대할 수 있습니다.
+              현재는 관리자 계정만 구성원으로 초대할 수 있습니다.
             </p>
           ) : (
             <div className="divide-y divide-border border-t border-border">

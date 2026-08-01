@@ -13,9 +13,9 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     ],
   },
   {
-    title: "회사",
+    title: "안내",
     links: [
-      { label: "소개", href: "/about" },
+      { label: "제품 소개", href: "/about" },
       { label: "도움말", href: "/help" },
     ],
   },

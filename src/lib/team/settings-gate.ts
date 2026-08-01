@@ -75,7 +75,7 @@ export const TEAM_SETTINGS_DIALOG_COPY: Record<
     secondaryLabel: "닫기",
   },
   "feature-off": {
-    title: "팀 설정은 오픈 준비중이에요",
+    title: "팀 설정은 현재 준비 중입니다",
     body: "",
     primaryLabel: "확인",
     primaryHref: null,

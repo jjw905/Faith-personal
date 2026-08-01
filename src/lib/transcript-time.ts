@@ -91,8 +91,12 @@ export function readMediaDurationSec(el: HTMLMediaElement): number {
 /**
  * 말하기 바로 전에 다음 단어로 포커스가 넘어가게 하는 선행 시간(초).
  * 클로바노트처럼 발화 직전에 형광펜이 먼저 붙는 느낌을 낸다.
+ *
+ * KTV 실측에서 단어 시각 자체는 오디오 온셋과 0.1초 안쪽으로 맞는데도
+ * 형광펜이 늦게 느껴졌다. 어절 사이 공백에서 직전 단어를 계속 붙잡기
+ * 때문이다. 한국어 어절 간격(0.2~0.3초)만큼 미리 넘긴다.
  */
-export const WORD_FOCUS_LOOKAHEAD_SEC = 0.1;
+export const WORD_FOCUS_LOOKAHEAD_SEC = 0.25;
 
 /**
  * 현재 재생 시각에 맞는 단어 하나.

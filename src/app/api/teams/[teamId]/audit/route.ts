@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { openTeamJson } from "@/lib/team-encryption";
 import { purgeExpiredTeamAuditLogs } from "@/lib/team/retention";
 import { getTeamMember, writeTeamAudit } from "@/lib/team-permissions";
 import {
@@ -43,6 +44,16 @@ export async function GET(request: Request, context: RouteContext) {
   });
   const nextCursor = logs.length > 50 ? logs[49]!.id : null;
   if (logs.length > 50) logs.length = 50;
+  const publicLogs = await Promise.all(
+    logs.map(async (log) => ({
+      ...log,
+      metadata: await openTeamJson<Record<string, unknown>>(
+        teamId,
+        "audit",
+        log.metadata,
+      ),
+    })),
+  );
   await writeTeamAudit({
     teamId,
     actorId: session.user.id,
@@ -52,7 +63,7 @@ export async function GET(request: Request, context: RouteContext) {
   });
   return NextResponse.json({
     ok: true,
-    logs,
+    logs: publicLogs,
     nextCursor,
     retentionDays: purged.retentionDays,
     purged: purged.deleted,

@@ -52,7 +52,7 @@ export async function POST(request: Request, context: RouteContext) {
     where: { teamId_userId: { teamId, userId: body.userId } },
   });
   if (!member) {
-    return NextResponse.json({ ok: false, message: "팀 멤버가 아닙니다." }, { status: 404 });
+    return NextResponse.json({ ok: false, message: "팀 구성원이 아닙니다." }, { status: 404 });
   }
   if (TEAM_FEATURE_ADMIN_ONLY) {
     const target = await prisma.user.findUnique({

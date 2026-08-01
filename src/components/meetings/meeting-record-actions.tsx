@@ -683,7 +683,7 @@ export function MeetingRecordActions({
           size="icon"
           className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
           aria-label="다운로드"
-          title={processing ? "분석이 끝나면 다운로드할 수 있어요" : "다운로드"}
+          title={processing ? "분석이 끝나면 다운로드할 수 있습니다" : "다운로드"}
           disabled={disabled}
           onClick={() => setActionMode("download")}
         >
@@ -695,7 +695,7 @@ export function MeetingRecordActions({
           size="icon"
           className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
           aria-label="공유"
-          title={processing ? "분석이 끝나면 공유할 수 있어요" : "공유"}
+          title={processing ? "분석이 끝나면 공유할 수 있습니다" : "공유"}
           disabled={disabled}
           onClick={() => setActionMode("share")}
         >
@@ -707,7 +707,7 @@ export function MeetingRecordActions({
           size="icon"
           className="h-12 w-12 text-masked hover:bg-masked-soft hover:text-masked md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
           aria-label="기록 삭제"
-          title={processing ? "분석이 끝나면 삭제할 수 있어요" : "기록 삭제"}
+          title={processing ? "분석이 끝나면 삭제할 수 있습니다" : "기록 삭제"}
           disabled={disabled}
           onClick={() => setActionMode("delete")}
         >

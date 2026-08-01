@@ -15,8 +15,8 @@ const STORAGE_KEY = "faith.features.headline.pos";
 
 type XY = { x: number; y: number };
 type Pos = { title: XY; bubble: XY };
-/** 고정 좌표(사용자 확정). 일반 렌더는 항상 이 값 사용, ?edit=1 에서만 드래그. */
-const DEFAULT: Pos = { title: { x: 10, y: 60 }, bubble: { x: 46, y: -12 } };
+/** 고정 좌표. 일반 렌더는 X축 중앙 정렬(레이아웃)을 쓰고, ?edit=1 에서만 드래그. */
+const DEFAULT: Pos = { title: { x: 0, y: 0 }, bubble: { x: 0, y: 0 } };
 
 function readPos(): Pos {
   if (typeof window === "undefined") return DEFAULT;
@@ -68,26 +68,12 @@ function useEditMode() {
   );
 }
 
-function useWideLayout() {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia("(min-width: 640px)");
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia("(min-width: 640px)").matches,
-    () => true,
-  );
-}
-
 /**
  * 기능 섹션 타이틀 + 말풍선.
- * 글자 크기는 뷰포트 scale로 줄이지 않는다. 좁은 폭은 반응형 타입·배치만 사용.
- * ?edit=1 이면 드래그로 위치 조절(값은 이 브라우저에 저장, 코드에 옮겨 고정).
+ * 일반 화면은 폭과 무관하게 X축 중앙. ?edit=1 이면 드래그로 위치 조절.
  */
 export function FeaturesHeadline() {
   const edit = useEditMode();
-  const wide = useWideLayout();
   const storedPos = useSyncExternalStore(
     subscribePos,
     getPosSnapshot,
@@ -184,7 +170,8 @@ export function FeaturesHeadline() {
   }
 
   const view = edit ? pos : DEFAULT;
-  const applyOffset = edit || wide;
+  // 일반 화면은 폭과 무관하게 X축 중앙. translate는 편집 모드에서만 적용.
+  const applyOffset = edit;
   const snippet = `title: translate(${pos.title.x}px, ${pos.title.y}px)\nbubble: translate(${pos.bubble.x}px, ${pos.bubble.y}px)`;
 
   return (
@@ -192,10 +179,10 @@ export function FeaturesHeadline() {
       <div className="mx-auto flex w-full max-w-4xl flex-col items-center">
         <div aria-hidden className="mb-8 h-12 w-px sm:mb-12" />
 
-        <div className="grid w-full grid-cols-1 items-start gap-8 sm:grid-cols-2 sm:gap-x-8 xl:gap-x-10">
+        <div className="flex w-full flex-col items-center gap-8 text-center sm:gap-10">
           <div
             className={cn(
-              "min-w-0 text-left sm:justify-self-end",
+              "mx-auto min-w-0 max-w-2xl",
               edit &&
                 "cursor-grab outline outline-1 outline-dashed active:cursor-grabbing",
               edit && sel === "title"
@@ -214,14 +201,14 @@ export function FeaturesHeadline() {
               <br />
               하나의 흐름으로.
             </h2>
-            <p className="mt-4 break-keep text-lg leading-relaxed text-muted sm:mt-5 sm:text-xl xl:mt-6 xl:text-2xl">
-              받아쓰기부터 요약까지, Faith가 자동으로 이어줍니다.
+            <p className="mx-auto mt-4 max-w-xl break-keep text-lg leading-relaxed text-muted sm:mt-5 sm:text-xl xl:mt-6 xl:text-2xl">
+              받아쓰기부터 요약까지, 회의의 흐름을 자동으로 이어갑니다.
             </p>
           </div>
 
           <div
             className={cn(
-              "justify-self-center pt-1 sm:justify-self-start",
+              "mx-auto flex justify-center pt-1",
               edit &&
                 "cursor-grab outline outline-1 outline-dashed active:cursor-grabbing",
               edit && sel === "bubble"

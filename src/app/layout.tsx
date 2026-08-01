@@ -36,7 +36,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Faith | AI 회의록",
   description:
-    "화자 구분 받아쓰기, 요약, 타임라인까지 자동으로 만드는 AI 회의록. 개인정보 마스킹은 부가로 따라옵니다.",
+    "화자 구분 받아쓰기, 요약·타임라인까지 자동으로 만드는 AI 회의록. 개인정보 마스킹은 부가로 따라옵니다.",
 };
 
 /** Android Chrome: 키보드가 레이아웃을 줄여 하단 입력이 가려지지 않게 한다. iOS는 visualViewport로 보정. */

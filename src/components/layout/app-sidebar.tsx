@@ -382,7 +382,7 @@ function MeetingsNav({
                 title={
                   TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
                     ? "팀 기능은 관리자에게만 제공됩니다"
-                    : "팀 설정은 오픈 준비중이에요"
+                      : "팀 설정은 현재 준비 중입니다"
                 }
                 className="flex min-h-12 cursor-not-allowed items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-2 opacity-50"
               >

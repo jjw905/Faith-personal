@@ -93,7 +93,7 @@ const SPEAKERS = [
     side: "right" as const,
     name: "박지우",
     initial: "박",
-    team: "운영팀",
+    team: "프로젝트팀",
   },
 ];
 
@@ -1779,7 +1779,7 @@ export function NewMeetingSession() {
                   aria-label={isRecording ? "녹음 중지" : "녹음 시작"}
                   title={
                     !isRecording && !REALTIME_FEATURE_ENABLED
-                      ? "실시간 기록은 오픈 준비중이에요. 업로드 분석을 이용해 주세요."
+                      ? "실시간 기록은 현재 준비 중입니다. 업로드 분석을 이용해 주세요."
                       : isRecording
                         ? "인식 중지"
                         : "인식 시작"

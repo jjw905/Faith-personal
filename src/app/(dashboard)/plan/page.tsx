@@ -17,20 +17,23 @@ import { Progress } from "@/components/ui/progress";
 import { PAID_PLANS_ENABLED } from "@/lib/feature-flags";
 import {
   PLAN_CATALOG,
-  PLAN_OVERAGE_NOTE,
   TOPUP_PACKS,
   formatPlanMinutes,
   formatPlanWon,
   planMonthlyFeeLabel,
   type CatalogPlanId,
 } from "@/lib/plans";
-import { SURVEY_UNLOCKED_MONTHLY_MINUTES } from "@/lib/stt/survey";
 import { buildSupportMailto } from "@/lib/support-email";
+import {
+  formatQuotaRemainingLabel,
+  formatSurveyCta,
+  monthlyMinutesFromSeconds,
+} from "@/lib/usage-copy";
 import { cn } from "@/lib/utils";
 import type { AccountTier } from "@/types/user";
 
 const CARD_SHADOW =
-  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
+  "rounded-3xl shadow-[0_1px_3px_rgba(17,22,46,0.1),0_8px_20px_rgba(17,22,46,0.12),0_22px_48px_-16px_rgba(17,22,46,0.24)] ring-1 ring-border";
 
 const TIER_BADGE: Record<AccountTier, string> = {
   FREE: "bg-surface-2 text-muted",
@@ -100,14 +103,17 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
   const { status, loading } = useUploadQuota();
   const resetLabel = status?.resetsAtLabel;
   const enforced = status?.enforced !== false;
+  const monthlyLimitSec = status
+    ? (status.monthlyLimitSec ?? status.limitSec)
+    : 0;
+  const monthlyLimitMin = monthlyMinutesFromSeconds(monthlyLimitSec);
+  const remainingMin = status ? Math.floor(status.remainingSec / 60) : 0;
 
   return (
     <Card className={CARD_SHADOW}>
       <CardContent className="px-6 py-6">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-base font-semibold text-muted">
-            사용량
-          </p>
+          <p className="text-base font-semibold text-muted">잔여 시간</p>
           <span
             className={cn(
               "inline-flex min-h-8 items-center rounded-full px-3 text-sm font-semibold",
@@ -126,22 +132,25 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
         ) : !enforced ? (
           <div className="mt-4 space-y-2">
             <p className="text-2xl font-bold tracking-tight text-foreground">
-              한도 없음
+              이용 제한 없음
             </p>
             <p className="text-base font-medium text-muted">
-              지금은 분석 시간 한도를 적용하지 않습니다.
+              현재 잔여 시간 제한을 적용하지 않습니다.
             </p>
           </div>
         ) : (
           <>
             <div className="mt-2 flex items-baseline gap-1.5">
               <span className="text-4xl font-bold tracking-tight text-foreground tabular-nums">
-                {Math.floor(status.usedSec / 60)}차감분
+                {remainingMin}분
               </span>
               <span className="text-lg font-medium text-muted">
-                / {Math.round((status.monthlyLimitSec ?? status.limitSec) / 60)}차감분
+                / {monthlyLimitMin}분
               </span>
             </div>
+            <p className="mt-1 text-base font-medium text-muted">
+              {formatQuotaRemainingLabel(status.remainingSec, monthlyLimitSec)}
+            </p>
 
             <Progress
               value={
@@ -158,24 +167,24 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
                   <span className="font-semibold tabular-nums text-foreground">
                     {resetLabel}
                   </span>{" "}
-                  초기화
+                  다시 사용할 수 있습니다.
                 </p>
               ) : (
                 <span />
               )}
               {status.surveyCompleted ? (
-                <span className="text-base font-semibold text-primary">
-                  설문 참여로 한도 확장 적용 중
+                <span className="whitespace-nowrap text-base font-semibold text-primary">
+                  설문으로 {monthlyLimitMin}분 적용 중
                 </span>
               ) : (
                 <Button
                   asChild
                   size="sm"
-                  className="h-10 rounded-full px-4 text-sm"
+                  className="h-10 shrink-0 rounded-full px-4 text-sm"
                 >
-                  <Link href="/survey">
+                  <Link href="/survey" className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     <Gift className="h-4 w-4" strokeWidth={1.75} />
-                    설문 참여하고 {SURVEY_UNLOCKED_MONTHLY_MINUTES}분까지
+                    {formatSurveyCta(monthlyLimitMin)}
                   </Link>
                 </Button>
               )}
@@ -187,54 +196,72 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
   );
 }
 
-/** 추가 분 팩. 결제 연동 전이라 안내만 한다. */
+/** 추가 시간. 결제 연동 전이라 안내만 한다. */
 function TopupPacksCard() {
-  const locked = !PAID_PLANS_ENABLED;
+  const inert = !PAID_PLANS_ENABLED;
 
   return (
-    <Card className={CARD_SHADOW}>
-      <CardHeader className="space-y-0 px-6 pb-0 pt-6">
-        <CardTitle className="text-xl font-bold tracking-tight">
-          추가 차감분 구매
-        </CardTitle>
-        <p className="mt-1.5 text-base font-medium text-muted">
-          선불 차감분, 유효기간 12개월
-        </p>
-      </CardHeader>
-      <CardContent className="px-6 pb-6 pt-4">
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-          {TOPUP_PACKS.map((pack) => (
-            <div key={pack.id} className="relative rounded-xl bg-surface px-3.5 py-3">
-              {pack.badge ? (
-                <span className="absolute right-2.5 top-2.5 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
-                  {pack.badge}
-                </span>
-              ) : null}
-              <p className="text-base font-bold tabular-nums text-foreground">
-                {pack.minutes}차감분
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight text-foreground">
+          추가 시간 구매
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {TOPUP_PACKS.map((pack) => {
+          const featured = Boolean(pack.badge);
+          const durationLabel =
+            pack.minutes >= 60 && pack.minutes % 60 === 0
+              ? `${pack.minutes / 60}시간`
+              : `${pack.minutes}분`;
+          return (
+            <div
+              key={pack.id}
+              className={cn(
+                "flex h-full flex-col rounded-3xl bg-card p-5",
+                CARD_SHADOW,
+                featured && "ring-2 ring-primary",
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 text-lg font-bold tracking-tight text-foreground">
+                  {durationLabel}
+                </p>
+                {pack.badge ? (
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
+                    {pack.badge}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-base font-medium text-muted">
+                {pack.minutes.toLocaleString("ko-KR")}분 추가
               </p>
-              <p className="mt-0.5 text-xl font-bold tabular-nums text-foreground">
+              <p className="mt-3 text-2xl font-bold tabular-nums text-foreground">
                 {formatPlanWon(pack.priceWon)}
               </p>
-              <button
-                type="button"
-                disabled={locked}
-                aria-disabled={locked}
-                title={locked ? "준비 중입니다" : undefined}
+              <span
+                aria-disabled={inert || undefined}
                 className={cn(
-                  "mt-2 min-h-8 w-full rounded-lg text-sm font-semibold transition-colors",
-                  locked
-                    ? "cursor-not-allowed bg-border/60 text-muted-2"
-                    : "bg-foreground text-background hover:bg-foreground/90",
+                  "mt-auto inline-flex min-h-10 w-full cursor-default select-none items-center justify-center rounded-xl text-sm font-semibold",
+                  featured
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface text-foreground",
                 )}
               >
-                {locked ? "준비중" : "구매"}
-              </button>
+                구매
+              </span>
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          );
+        })}
+      </div>
+
+      <p className="text-sm font-medium leading-snug text-muted-2">
+        사용 시간을 다 썼을 때 고르는 선불 이용 시간입니다.
+        {" "}
+        유효기간 12개월 · 구독과 별도 · 잔여 시간에 합산
+      </p>
+    </div>
   );
 }
 
@@ -271,7 +298,7 @@ export default function PlanPage() {
             플랜
           </h1>
           <p className="mt-2 text-base font-medium text-muted">
-            현재 플랜과 사용량을 확인하세요.
+            현재 플랜과 잔여 시간을 확인하세요.
           </p>
         </header>
 
@@ -314,11 +341,6 @@ export default function PlanPage() {
                 </div>
               ) : null}
             </div>
-            {tier !== "ADMIN" ? (
-              <p className="mt-4 text-sm leading-relaxed text-muted">
-                {PLAN_OVERAGE_NOTE}
-              </p>
-            ) : null}
           </CardContent>
         </Card>
 
@@ -362,7 +384,7 @@ export default function PlanPage() {
                       {planMonthlyFeeLabel(entry)}
                     </p>
                     <p className="mt-1 text-sm font-medium text-muted">
-                      {formatPlanMinutes(entry)}, {entry.storageLabel}
+                      {formatPlanMinutes(entry)} · 보관함 {entry.storageLabel}
                     </p>
                     <p className="mt-1 text-sm font-medium text-muted">
                       {entry.tagline}
@@ -395,14 +417,12 @@ export default function PlanPage() {
                     </a>
                   </Button>
                 ) : (
-                  <Button
-                    disabled
-                    variant="outline"
-                    className="h-11 cursor-not-allowed rounded-full px-5 text-base text-muted-2"
-                    title="준비 중입니다"
+                  <span
+                    aria-disabled="true"
+                    className="inline-flex h-11 cursor-default select-none items-center justify-center rounded-full border border-border bg-background px-5 text-base font-semibold text-foreground"
                   >
-                    {tier === "FREE" ? "업그레이드" : "Team 전환"} · 준비중
-                  </Button>
+                    {tier === "FREE" ? "업그레이드 문의" : "Team 문의"}
+                  </span>
                 )
               ) : null}
             </div>

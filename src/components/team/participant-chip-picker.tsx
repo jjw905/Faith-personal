@@ -21,7 +21,7 @@ export function ParticipantChipPicker({
   label = "팀원 초대",
   required = false,
   emptyHref = "/team?manage=invite",
-  emptyLabel = "팀에 멤버 초대",
+  emptyLabel = "팀에 구성원 초대",
   disabled = false,
 }: {
   members: ParticipantOption[];

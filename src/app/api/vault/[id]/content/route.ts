@@ -12,6 +12,7 @@ import {
   localVaultAllowed,
   objectStorageConfigured,
 } from "@/lib/storage/object-store";
+import { readUserFileBytes } from "@/lib/storage/vault-service";
 import { safeVaultMime, vaultContentDisposition } from "@/lib/vault";
 
 type Params = { params: Promise<{ id: string }> };
@@ -63,6 +64,43 @@ export async function GET(request: Request, { params }: Params) {
         { ok: false, message: "파일 없음" },
         { status: 404 },
       );
+    }
+
+    if (row.contentEncryption) {
+      const file = await readUserFileBytes(session.user.id, id);
+      if (!file) {
+        return NextResponse.json(
+          { ok: false, message: "파일 없음" },
+          { status: 404 },
+        );
+      }
+      const body = file.body;
+      const range = parseRange(request.headers.get("range"), body.length);
+      const start = range?.start ?? 0;
+      const end = range?.end ?? body.length - 1;
+      const chunk = body.subarray(start, end + 1);
+      let mime = "application/octet-stream";
+      try {
+        mime = safeVaultMime(file.row.name, file.row.mime);
+      } catch {
+        mime = "application/octet-stream";
+      }
+      const disposition = vaultContentDisposition(file.row.name, mime);
+      const headers: Record<string, string> = {
+        "Content-Type": mime,
+        "Content-Length": String(chunk.length),
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(file.row.name)}`,
+      };
+      if (range) {
+        headers["Content-Range"] = `bytes ${start}-${end}/${body.length}`;
+      }
+      return new NextResponse(chunk as unknown as BodyInit, {
+        status: range ? 206 : 200,
+        headers,
+      });
     }
 
     if (objectStorageConfigured()) {

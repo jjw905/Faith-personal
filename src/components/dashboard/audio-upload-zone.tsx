@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Archive,
   AudioLines,
@@ -29,12 +30,15 @@ import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { formatBytes } from "@/lib/storage/quota";
 import { stripFileExtension } from "@/lib/meeting-process";
+import { planIncludesSpeakerSplit } from "@/lib/plans";
 import {
   MAX_UPLOAD_AUDIO_MINUTES,
 } from "@/lib/stt/upload-limits";
 import { cn } from "@/lib/utils";
 import { UploadQuotaBanner } from "@/components/dashboard/upload-quota-banner";
 import {
+  ANALYSIS_MODE_ARIA_LABEL,
+  ANALYSIS_MODE_COPY,
   PRECISION_USAGE_MULTIPLIER,
   type AnalysisMode,
 } from "@/lib/stt/analysis-mode";
@@ -101,6 +105,7 @@ export const AudioUploadZone = forwardRef<
   ref,
 ) {
   const router = useRouter();
+  const { data: session } = useSession();
   const { workspaceId, activeTeamId } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
   const [mode, setMode] = useState<Mode>("idle");
@@ -115,6 +120,16 @@ export const AudioUploadZone = forwardRef<
   const [usageDialogOpen, setUsageDialogOpen] = useState(false);
   const [analysisMode, setAnalysisMode] =
     useState<AnalysisMode>("standard");
+  const speakerSplitAllowed = planIncludesSpeakerSplit(
+    session?.user?.plan,
+    session?.user?.role,
+  );
+
+  useEffect(() => {
+    if (!speakerSplitAllowed && analysisMode === "precision") {
+      setAnalysisMode("standard");
+    }
+  }, [speakerSplitAllowed, analysisMode]);
 
   function applyQuotaPayload(
     data: { ok?: boolean } & Partial<UsageLimitTimeStatus>,
@@ -496,7 +511,7 @@ export const AudioUploadZone = forwardRef<
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-primary sm:h-11 sm:w-11">
               <Mic className="h-5 w-5" strokeWidth={1.75} />
             </span>
-            <span className="min-w-0 text-base font-semibold tracking-tight sm:text-lg">
+            <span className="min-w-0 truncate text-base font-semibold leading-tight tracking-tight sm:text-lg">
               {ctaStart}
             </span>
           </Link>
@@ -514,7 +529,7 @@ export const AudioUploadZone = forwardRef<
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground sm:h-11 sm:w-11">
               <Upload className="h-5 w-5" strokeWidth={1.75} />
             </span>
-            <span className="min-w-0 text-base font-semibold tracking-tight text-foreground sm:text-lg">
+            <span className="min-w-0 truncate text-base font-semibold leading-tight tracking-tight text-foreground sm:text-lg">
               {ctaUpload}
             </span>
           </button>
@@ -574,66 +589,62 @@ export const AudioUploadZone = forwardRef<
                 </Button>
               </div>
 
-              <div
-                className="grid grid-cols-1 gap-2 sm:grid-cols-2"
-                role="radiogroup"
-                aria-label="분석 방식"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={analysisMode === "standard"}
-                  disabled={showStarting}
-                  onClick={() => setAnalysisMode("standard")}
-                  className={cn(
-                    "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
-                    analysisMode === "standard"
-                      ? "bg-primary-soft ring-primary"
-                      : "bg-surface ring-border hover:bg-surface-2",
-                  )}
+              {speakerSplitAllowed ? (
+                <div
+                  className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                  role="radiogroup"
+                  aria-label={ANALYSIS_MODE_ARIA_LABEL}
                 >
-                  <AudioLines className="mt-0.5 h-5 w-5 shrink-0" />
-                  <span>
-                    <span className="block text-base font-semibold">
-                      일반 분석
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={analysisMode === "standard"}
+                    disabled={showStarting}
+                    onClick={() => setAnalysisMode("standard")}
+                    className={cn(
+                      "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
+                      analysisMode === "standard"
+                        ? "bg-primary-soft ring-primary"
+                        : "bg-surface ring-border hover:bg-surface-2",
+                    )}
+                  >
+                    <AudioLines className="mt-0.5 h-5 w-5 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block truncate whitespace-nowrap text-base font-semibold">
+                        {ANALYSIS_MODE_COPY.standard.label}
+                      </span>
                     </span>
-                    <span className="mt-0.5 block text-base text-muted">
-                      1분당 1차감분
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={analysisMode === "precision"}
+                    disabled={showStarting}
+                    onClick={() => setAnalysisMode("precision")}
+                    className={cn(
+                      "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
+                      analysisMode === "precision"
+                        ? "bg-primary-soft ring-primary"
+                        : "bg-surface ring-border hover:bg-surface-2",
+                    )}
+                  >
+                    <Users className="mt-0.5 h-5 w-5 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block truncate whitespace-nowrap text-base font-semibold">
+                        {ANALYSIS_MODE_COPY.precision.label}
+                      </span>
                     </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={analysisMode === "precision"}
-                  disabled={showStarting}
-                  onClick={() => setAnalysisMode("precision")}
-                  className={cn(
-                    "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
-                    analysisMode === "precision"
-                      ? "bg-primary-soft ring-primary"
-                      : "bg-surface ring-border hover:bg-surface-2",
-                  )}
-                >
-                  <Users className="mt-0.5 h-5 w-5 shrink-0" />
-                  <span>
-                    <span className="block text-base font-semibold">
-                      정밀 화자·대화추적
-                    </span>
-                    <span className="mt-0.5 block text-base text-muted">
-                      1분당 1.5차감분
-                    </span>
-                  </span>
-                </button>
-              </div>
+                  </button>
+                </div>
+              ) : null}
 
               {actualMinutes != null && expectedChargedMinutes != null ? (
                 <p className="text-base font-medium text-muted">
-                  실제 약 {actualMinutes}분, 예상 {expectedChargedMinutes}차감분
+                  실제 약 {actualMinutes}분, 잔여 시간 {expectedChargedMinutes}분 사용 예정
                 </p>
               ) : (
                 <p className="text-base font-medium text-muted">
-                  정밀 분석은 화자 구분과 단어 위치를 더 정확하게 맞춥니다.
+                  {ANALYSIS_MODE_COPY[analysisMode].benefit}
                 </p>
               )}
 

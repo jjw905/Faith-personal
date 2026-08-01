@@ -30,7 +30,38 @@ import {
   putObject,
   storageBackend,
 } from "@/lib/storage/object-store";
+import {
+  decryptTeamBuffer,
+  encryptTeamBuffer,
+  isTeamEncryptedEnvelope,
+  teamEncryptionRequired,
+} from "@/lib/team-encryption";
 import { assertVaultAllowedUpload, safeVaultMime } from "@/lib/vault";
+
+function teamObjectKey(teamId: string, fileId: string) {
+  const safeTeamId = teamId.replace(/[^A-Za-z0-9_-]/g, "_");
+  const safeFileId = fileId.replace(/[^A-Za-z0-9_-]/g, "_");
+  return `teams/${safeTeamId}/files/${safeFileId}`;
+}
+
+async function readStoredObject(key: string) {
+  if (objectStorageConfigured()) return getObjectBuffer(key);
+  return localReadObject(key);
+}
+
+async function writeStoredObject(params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+}) {
+  if (objectStorageConfigured()) return putObject(params);
+  return localPutObject(params.key, params.body);
+}
+
+async function deleteStoredObject(key: string) {
+  if (objectStorageConfigured()) return deleteObject(key);
+  return localDeleteObject(key);
+}
 
 export async function getUserStorageUsage(userId: string) {
   const agg = await prisma.vaultFile.aggregate({
@@ -359,11 +390,82 @@ export async function completeObjectStorageProxyUpload(params: {
   }
 }
 
+/**
+ * 팀 회의로 연결되는 원본 파일을 팀 content data key로 보호한다.
+ * 업로드 API는 팀 선택 전에도 사용할 수 있으므로, 회의 시작 직전에
+ * 서버가 객체를 한 번 읽어 암호화된 팀 객체로 교체한다.
+ */
+export async function protectUserFileForTeam(params: {
+  userId: string;
+  fileId: string;
+  teamId: string;
+}) {
+  assertObjectStorageReady();
+  const row = await prisma.vaultFile.findFirst({
+    where: { id: params.fileId, userId: params.userId },
+  });
+  if (!row) throw new Error("팀 회의 원본 파일을 찾을 수 없습니다.");
+  if (row.teamId && row.teamId !== params.teamId) {
+    throw new Error("원본 파일이 다른 팀에 연결되어 있습니다.");
+  }
+  if (row.teamId === params.teamId && isTeamEncryptedEnvelope(row.contentEncryption)) {
+    return row;
+  }
+
+  if (!teamEncryptionRequired()) {
+    return prisma.vaultFile.update({
+      where: { id: row.id },
+      data: { teamId: params.teamId },
+    });
+  }
+
+  const plaintext = await readStoredObject(row.key);
+  const encrypted = await encryptTeamBuffer({
+    teamId: params.teamId,
+    purpose: "content",
+    plaintext,
+  });
+  if (!encrypted.encrypted || !encrypted.envelope) {
+    return prisma.vaultFile.update({
+      where: { id: row.id },
+      data: { teamId: params.teamId },
+    });
+  }
+
+  const encryptedKey = teamObjectKey(params.teamId, row.id);
+  await writeStoredObject({
+    key: encryptedKey,
+    body: encrypted.body,
+    contentType: row.mime,
+  });
+  try {
+    const updated = await prisma.vaultFile.update({
+      where: { id: row.id },
+      data: {
+        teamId: params.teamId,
+        key: encryptedKey,
+        contentEncryption: encrypted.envelope,
+      },
+    });
+    if (row.key !== encryptedKey) {
+      await deleteStoredObject(row.key).catch(() => undefined);
+    }
+    return updated;
+  } catch (error) {
+    await deleteStoredObject(encryptedKey).catch(() => undefined);
+    throw error;
+  }
+}
+
 export async function getUserFileDownloadUrl(userId: string, fileId: string) {
   const row = await prisma.vaultFile.findFirst({
     where: { id: fileId, userId },
   });
   if (!row) return null;
+
+  if (row.contentEncryption) {
+    return { row, url: `/api/vault/${encodeURIComponent(row.id)}/content` };
+  }
 
   if (objectStorageConfigured()) {
     const url = await getDownloadUrl(row.key);
@@ -384,12 +486,7 @@ export async function readUserFileContent(userId: string, fileId: string) {
   if (objectStorageConfigured() || !localVaultAllowed()) {
     throw new Error("로컬 파일 읽기를 사용할 수 없습니다.");
   }
-  const row = await prisma.vaultFile.findFirst({
-    where: { id: fileId, userId },
-  });
-  if (!row) return null;
-  const body = await localReadObject(row.key);
-  return { row, body };
+  return readUserFileBytes(userId, fileId);
 }
 
 /** GCS/S3/로컬 공통: STT 등 서버 처리용 바이트 읽기. */
@@ -402,14 +499,38 @@ export async function readUserFileBytes(userId: string, fileId: string) {
 
   if (objectStorageConfigured()) {
     const body = await getObjectBuffer(row.key);
-    return { row, body };
+    if (!row.contentEncryption) return { row, body };
+    if (!row.teamId || !isTeamEncryptedEnvelope(row.contentEncryption)) {
+      throw new Error("팀 파일 암호화 메타데이터가 올바르지 않습니다.");
+    }
+    return {
+      row,
+      body: await decryptTeamBuffer({
+        teamId: row.teamId,
+        purpose: "content",
+        body,
+        envelope: row.contentEncryption,
+      }),
+    };
   }
 
   if (!localVaultAllowed()) {
     throw new Error("스토리지에서 파일을 읽을 수 없습니다.");
   }
   const body = await localReadObject(row.key);
-  return { row, body };
+  if (!row.contentEncryption) return { row, body };
+  if (!row.teamId || !isTeamEncryptedEnvelope(row.contentEncryption)) {
+    throw new Error("팀 파일 암호화 메타데이터가 올바르지 않습니다.");
+  }
+  return {
+    row,
+    body: await decryptTeamBuffer({
+      teamId: row.teamId,
+      purpose: "content",
+      body,
+      envelope: row.contentEncryption,
+    }),
+  };
 }
 
 export async function deleteUserFile(userId: string, fileId: string) {

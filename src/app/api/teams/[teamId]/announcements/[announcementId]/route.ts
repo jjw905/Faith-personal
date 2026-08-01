@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
+import { openTeamText, sealTeamText } from "@/lib/team-encryption";
 import {
   isTeamManager,
   requireTeamCapability,
@@ -54,12 +55,30 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (!actor || !isTeamManager(actor.role)) {
     return NextResponse.json({ ok: false, message: "공지 권한이 없습니다." }, { status: 403 });
   }
+  let storedTitle: string | undefined;
+  let storedBody: string | undefined;
+  try {
+    storedTitle = body.title?.trim()
+      ? await sealTeamText(teamId, "content", body.title.trim().slice(0, 120))
+      : undefined;
+    storedBody = body.body?.trim()
+      ? await sealTeamText(teamId, "content", body.body.trim().slice(0, 5000))
+      : undefined;
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "팀 보안 키가 준비되지 않아 공지를 저장할 수 없습니다.",
+      },
+      { status: 503 },
+    );
+  }
   const updated = await prisma.teamAnnouncement.update({
     where: { id: announcementId },
     data: {
       ...(typeof body.pinned === "boolean" ? { pinned: body.pinned } : {}),
-      ...(body.title?.trim() ? { title: body.title.trim().slice(0, 120) } : {}),
-      ...(body.body?.trim() ? { body: body.body.trim().slice(0, 5000) } : {}),
+      ...(storedTitle ? { title: storedTitle } : {}),
+      ...(storedBody ? { body: storedBody } : {}),
       ...(body.archive ? { archivedAt: new Date() } : {}),
     },
   });
@@ -70,5 +89,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     metadata: { announcementId, archive: Boolean(body.archive) },
     request,
   });
-  return NextResponse.json({ ok: true, announcement: updated });
+  return NextResponse.json({
+    ok: true,
+    announcement: {
+      ...updated,
+      title: await openTeamText(teamId, "content", updated.title),
+      body: await openTeamText(teamId, "content", updated.body),
+    },
+  });
 }

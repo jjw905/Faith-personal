@@ -24,6 +24,8 @@ import {
   MockReplayHighlight,
   MockSecureVault,
 } from "@/components/marketing/feature-showcase-mocks";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
+import { REALTIME_FEATURE_ENABLED } from "@/lib/feature-flags";
 import { cn } from "@/lib/utils";
 
 type Step = {
@@ -37,8 +39,12 @@ type Step = {
 const STEPS: Step[] = [
   {
     step: "01",
-    title: "업로드 또는 실시간, 화자 구분 받아쓰기",
-    desc: "파일을 올리거나 실시간으로 녹음하면 음성을 텍스트로 바꾸고, 누가 말했는지 화자별로 구분해 기록합니다.",
+    title: REALTIME_FEATURE_ENABLED
+      ? "업로드 또는 실시간, 화자 구분 받아쓰기"
+      : "음성 업로드, 화자 구분 받아쓰기",
+    desc: REALTIME_FEATURE_ENABLED
+      ? "파일을 올리거나 실시간으로 녹음하면 음성을 텍스트로 바꾸고, 누가 말했는지 나눠 대화처럼 보여 줍니다."
+      : "음성 파일을 올리면 음성을 텍스트로 바꾸고, 누가 말했는지 나눠 대화처럼 보여 줍니다.",
     icon: Mic,
     mock: MockLiveTranscribe,
   },
@@ -58,14 +64,14 @@ const STEPS: Step[] = [
   },
   {
     step: "04",
-    title: "개인정보 마스킹도 부가로",
-    desc: "회의록을 남긴 뒤, 전화번호나 주민번호 같은 민감정보는 자동으로 가립니다.",
+    title: "민감정보 자동 마스킹",
+    desc: "전화번호나 주민번호 같은 민감정보를 자동으로 가려 공유 전 검토를 돕습니다.",
     icon: Shield,
     mock: MockAutoMask,
   },
   {
     step: "05",
-    title: "회의록 보관과 권한",
+    title: "암호화 보관과 권한 관리",
     desc: "암호화 저장, 역할 기반 접근 권한, 활동 로그로 회의록을 보관합니다.",
     icon: Lock,
     mock: MockSecureVault,
@@ -84,16 +90,13 @@ function FeatureStep({
   step,
   index,
   visible,
+  reduced,
 }: {
   step: Step;
   index: number;
   visible: boolean;
+  reduced: boolean;
 }) {
-  const [reduced] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
   const Icon = step.icon;
   const Mock = step.mock;
 
@@ -101,7 +104,7 @@ function FeatureStep({
     <li
       data-feature-step={step.step}
       className={cn(
-        "relative transition-all duration-700 ease-out motion-reduce:transition-none",
+        "relative transition-all duration-700 ease-out motion-reduce:translate-y-0 motion-reduce:opacity-100 motion-reduce:transition-none",
         visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0",
       )}
       style={{
@@ -109,40 +112,32 @@ function FeatureStep({
           visible && !reduced ? `${Math.min(index, 4) * 70}ms` : "0ms",
       }}
     >
-      <div className="flex gap-3 sm:gap-4 lg:gap-6">
-        <div className="relative flex flex-col items-center">
-          <StepNode Icon={Icon} />
-          {index < STEPS.length - 1 ? (
-            <span
-              aria-hidden
-              className="mt-3 w-px flex-1 bg-gradient-to-b from-border-strong via-border to-transparent"
-            />
-          ) : null}
+      <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+        <StepNode Icon={Icon} />
+
+        <div data-feature-sentinel={step.step} className="mt-5 w-full">
+          <span className="text-sm font-semibold tracking-widest text-muted-2">
+            STEP {step.step}
+          </span>
+          <h3 className="mt-1.5 text-xl font-semibold text-foreground sm:text-2xl">
+            {step.title}
+          </h3>
+          <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-muted">
+            {step.desc}
+          </p>
         </div>
 
-        <div
-          className={cn(
-            "min-w-0 flex-1",
-            index < STEPS.length - 1 && "pb-16 sm:pb-20 lg:pb-24",
-          )}
-        >
-          <div data-feature-sentinel={step.step}>
-            <span className="text-sm font-semibold tracking-widest text-muted-2">
-              STEP {step.step}
-            </span>
-            <h3 className="mt-1.5 text-xl font-semibold text-foreground sm:text-2xl">
-              {step.title}
-            </h3>
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">
-              {step.desc}
-            </p>
-          </div>
-
-          <div className="mt-6 max-w-lg lg:mt-8 lg:max-w-xl">
-            <Mock />
-          </div>
+        <div className="mt-6 w-full lg:mt-8">
+          <Mock />
         </div>
       </div>
+
+      {index < STEPS.length - 1 ? (
+        <div
+          aria-hidden
+          className="mx-auto mt-10 flex h-16 w-px justify-center bg-gradient-to-b from-border-strong via-border to-transparent sm:mt-12 sm:h-20 lg:mt-14 lg:h-24"
+        />
+      ) : null}
     </li>
   );
 }
@@ -150,12 +145,8 @@ function FeatureStep({
 /** 왼쪽부터 일자 나열. 스크롤 시 순서대로 등장, 모든 폭에서 데모 재생. */
 export function FeatureTimeline() {
   const listRef = useRef<HTMLOListElement>(null);
-  const [reduced] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
-  const [revealedThrough, setRevealedThrough] = useState(reduced ? STEPS.length - 1 : -1);
+  const reduced = usePrefersReducedMotion();
+  const [revealedThrough, setRevealedThrough] = useState(-1);
 
   useEffect(() => {
     if (reduced) return;
@@ -199,7 +190,8 @@ export function FeatureTimeline() {
               key={s.step}
               step={s}
               index={i}
-              visible={i <= revealedThrough}
+              visible={reduced || i <= revealedThrough}
+              reduced={reduced}
             />
           ))}
         </ol>

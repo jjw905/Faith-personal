@@ -26,7 +26,7 @@ export function SiteNav() {
   }
 
   const linkClass =
-    "shrink-0 text-base font-semibold text-foreground/80 transition-colors hover:text-foreground";
+    "shrink-0 whitespace-nowrap text-base font-semibold text-foreground/80 transition-colors hover:text-foreground";
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background shadow-[0_1px_0_rgba(17,24,39,0.04)]">
@@ -55,11 +55,11 @@ export function SiteNav() {
         <div className="flex shrink-0 items-center gap-2">
           <Link
             href="/login"
-            className="px-[clamp(0.25rem,1vw,0.5rem)] py-2 text-base font-semibold text-foreground/80 transition-colors hover:text-foreground"
+            className="shrink-0 whitespace-nowrap px-[clamp(0.25rem,1vw,0.5rem)] py-2 text-base font-semibold text-foreground/80 transition-colors hover:text-foreground"
           >
             로그인
           </Link>
-          <CtaButton href="/signup" className="px-[clamp(0.75rem,2vw,1rem)] py-2 text-base">
+          <CtaButton href="/signup" className="whitespace-nowrap px-[clamp(0.75rem,2vw,1rem)] py-2 text-base">
             시작하기
           </CtaButton>
         </div>

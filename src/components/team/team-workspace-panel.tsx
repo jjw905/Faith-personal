@@ -231,8 +231,42 @@ type UpcomingCard = {
 
 const PREVIEW_LABEL = TEAM_PREVIEW_ROLE_LABEL;
 
-const CTA_CLASS =
-  "group flex min-h-16 w-full cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 text-left transition-colors duration-150 hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50";
+const TEAM_ACTION_CLASS =
+  "group inline-flex min-h-12 shrink-0 cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-xl border px-4 text-left text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
+function TeamActionButton({
+  icon,
+  label,
+  primary = false,
+  disabled = false,
+  onClick,
+  className,
+}: {
+  icon: ReactNode;
+  label: string;
+  primary?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        TEAM_ACTION_CLASS,
+        primary
+          ? "border-primary bg-primary text-primary-foreground hover:bg-primary-hover"
+          : "border-border bg-card text-foreground hover:bg-surface",
+        className,
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
 
 function todayDateLabel() {
   const now = new Date();
@@ -366,7 +400,7 @@ function TeamWorkspaceEmpty() {
     "팀원, 팀장, 팀 대표 역할과 세부 권한 분리",
     "온라인 음성 회의와 기록 상태 공유",
     "예정 회의, 참가, 일정 알림 연동",
-    "회의별 기록 열람 권한 관리",
+    "회의별 기록 접근 권한 관리",
     "팀 공지와 확인 상태 관리",
     "중요 변경과 접근 감사 로그",
     "팀 보존 기간과 보안 정책 설정",
@@ -1182,10 +1216,10 @@ export function TeamWorkspacePanel() {
       manageView === "security"
         ? "팀 보안 정책"
         : manageView === "records"
-          ? "기록 접근 정책"
+          ? "기록 접근"
           : manageView === "invite"
-            ? "멤버 초대"
-            : "구성원과 권한";
+            ? "구성원 초대"
+            : "구성원 관리";
 
     return (
       <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -1277,7 +1311,7 @@ export function TeamWorkspacePanel() {
                   onClick={() => setSettingsOpen(true)}
                 >
                   <Settings className="h-4 w-4" />
-                  팀 설정
+                  기본 설정
                 </Button>
               ) : null}
             </div>
@@ -1315,61 +1349,47 @@ export function TeamWorkspacePanel() {
       </div>
 
       {caps.showCreator || caps.showLeader ? (
-        <section className="max-md:hidden space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="hidden space-y-3 md:block" aria-label="팀 주요 작업">
+          <div className="flex flex-wrap items-center gap-2">
             {caps.showCreator ? (
-              <div className="min-w-0">
-                <button
-                  type="button"
-                  disabled={!caps.canActCreator}
-                  onClick={() => router.push("/team/live")}
-                  className={CTA_CLASS}
-                >
+              <TeamActionButton
+                primary
+                icon={
                   <Mic
-                    className="h-5 w-5 shrink-0 text-primary"
+                    className="h-5 w-5 shrink-0 text-primary-foreground"
                     strokeWidth={1.75}
                   />
-                  <span className="text-lg font-semibold tracking-tight text-foreground">
-                    실시간 회의
-                  </span>
-                </button>
-              </div>
+                }
+                label="실시간 회의 시작"
+                disabled={!caps.canActCreator}
+                onClick={() => router.push("/team/live")}
+              />
             ) : null}
             {caps.showCreator ? (
-              <div className="min-w-0">
-                <button
-                  type="button"
-                  disabled={!caps.canActCreator}
-                  onClick={() => router.push("/team/schedule")}
-                  className={CTA_CLASS}
-                >
+              <TeamActionButton
+                icon={
                   <CalendarDays
                     className="h-5 w-5 shrink-0 text-muted"
                     strokeWidth={1.75}
                   />
-                  <span className="text-lg font-semibold tracking-tight text-foreground">
-                    일정 만들기
-                  </span>
-                </button>
-              </div>
+                }
+                label="일정 만들기"
+                disabled={!caps.canActCreator}
+                onClick={() => router.push("/team/schedule")}
+              />
             ) : null}
             {caps.showLeader ? (
-              <div className="min-w-0">
-                <button
-                  type="button"
-                  disabled={!caps.canActLeader}
-                  onClick={openAnnouncementSheet}
-                  className={CTA_CLASS}
-                >
+              <TeamActionButton
+                icon={
                   <Megaphone
                     className="h-5 w-5 shrink-0 text-muted"
                     strokeWidth={1.75}
                   />
-                  <span className="text-lg font-semibold tracking-tight text-foreground">
-                    공지 작성
-                  </span>
-                </button>
-              </div>
+                }
+                label="공지 작성"
+                disabled={!caps.canActLeader}
+                onClick={openAnnouncementSheet}
+              />
             ) : null}
           </div>
         </section>
@@ -1382,92 +1402,82 @@ export function TeamWorkspacePanel() {
         <section className="space-y-3">
           <div>
             <h2 className="text-xl font-semibold tracking-tight text-foreground">
-              팀 운영
+              팀 관리
             </h2>
             <p className="mt-1 text-base text-muted">
-              팀 관리 기능은 이 화면에서 필요한 항목으로 들어갑니다.
+              구성원, 보안, 기록 접근을 관리합니다.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="flex flex-wrap gap-2">
             {caps.showInvite ? (
-              <button
-                type="button"
+              <TeamActionButton
+                icon={
+                  <UserRoundPlus
+                    className="h-5 w-5 shrink-0 text-muted"
+                    strokeWidth={1.75}
+                  />
+                }
+                label="구성원 초대"
                 disabled={!caps.canActInvite}
                 onClick={() => router.push("/team?manage=invite")}
-                className={CTA_CLASS}
-              >
-                <UserRoundPlus
-                  className="h-5 w-5 shrink-0 text-muted"
-                  strokeWidth={1.75}
-                />
-                <span className="text-lg font-semibold tracking-tight text-foreground">
-                  멤버 초대
-                </span>
-              </button>
+                className="w-full sm:w-auto"
+              />
             ) : null}
             {caps.showOwner ? (
-              <button
-                type="button"
+              <TeamActionButton
+                icon={
+                  <UsersRound
+                    className="h-5 w-5 shrink-0 text-muted"
+                    strokeWidth={1.75}
+                  />
+                }
+                label="구성원 관리"
                 disabled={!caps.canActOwner}
                 onClick={() => router.push("/team?manage=members")}
-                className={CTA_CLASS}
-              >
-                <UsersRound
-                  className="h-5 w-5 shrink-0 text-muted"
-                  strokeWidth={1.75}
-                />
-                <span className="text-lg font-semibold tracking-tight text-foreground">
-                  구성원과 권한
-                </span>
-              </button>
+                className="w-full sm:w-auto"
+              />
             ) : null}
             {caps.showOwner ? (
-              <button
-                type="button"
+              <TeamActionButton
+                icon={
+                  <ShieldCheck
+                    className="h-5 w-5 shrink-0 text-muted"
+                    strokeWidth={1.75}
+                  />
+                }
+                label="보안 정책"
                 disabled={!caps.canActOwner}
                 onClick={() => router.push("/team?manage=security")}
-                className={CTA_CLASS}
-              >
-                <ShieldCheck
-                  className="h-5 w-5 shrink-0 text-muted"
-                  strokeWidth={1.75}
-                />
-                <span className="text-lg font-semibold tracking-tight text-foreground">
-                  보안 정책
-                </span>
-              </button>
+                className="w-full sm:w-auto"
+              />
             ) : null}
             {caps.showRecordAccess ? (
-              <button
-                type="button"
+              <TeamActionButton
+                icon={
+                  <KeyRound
+                    className="h-5 w-5 shrink-0 text-muted"
+                    strokeWidth={1.75}
+                  />
+                }
+                label="기록 접근"
                 disabled={!caps.canActRecordAccess}
                 onClick={() => router.push("/team?manage=records")}
-                className={CTA_CLASS}
-              >
-                <KeyRound
-                  className="h-5 w-5 shrink-0 text-muted"
-                  strokeWidth={1.75}
-                />
-                <span className="text-lg font-semibold tracking-tight text-foreground">
-                  기록 열람
-                </span>
-              </button>
+                className="w-full sm:w-auto"
+              />
             ) : null}
             {caps.showAudit ? (
-              <button
-                type="button"
+              <TeamActionButton
+                icon={
+                  <ScrollText
+                    className="h-5 w-5 shrink-0 text-muted"
+                    strokeWidth={1.75}
+                  />
+                }
+                label="감사 로그"
                 disabled={!caps.canActAudit}
                 onClick={() => router.push("/audit")}
-                className={CTA_CLASS}
-              >
-                <ScrollText
-                  className="h-5 w-5 shrink-0 text-muted"
-                  strokeWidth={1.75}
-                />
-                <span className="text-lg font-semibold tracking-tight text-foreground">
-                  감사 로그
-                </span>
-              </button>
+                className="w-full sm:w-auto"
+              />
             ) : null}
           </div>
         </section>
@@ -1630,7 +1640,7 @@ export function TeamWorkspacePanel() {
                 variant="ghost"
                 size="icon"
                 className="h-12 w-12 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground md:h-8 md:w-8"
-                aria-label="공지 생성"
+                aria-label="공지 작성"
                 onClick={openAnnouncementSheet}
               >
                 <Plus className="h-4 w-4" strokeWidth={1.75} />
@@ -1652,7 +1662,7 @@ export function TeamWorkspacePanel() {
                 message="등록된 공지가 없습니다."
                 actionLabel={
                   caps.showLeader && caps.canActLeader
-                    ? "공지 생성"
+                    ? "공지 작성"
                     : undefined
                 }
                 onAction={
@@ -1763,7 +1773,7 @@ export function TeamWorkspacePanel() {
               message={
                 normalizedSearch
                   ? "검색된 기록이 없습니다."
-                  : "열람 가능한 기록이 없습니다."
+                  : "접근 가능한 기록이 없습니다."
               }
             />
           ) : undefined
@@ -1957,7 +1967,7 @@ export function TeamWorkspacePanel() {
 
       <TeamSheet
         open={settingsOpen || scenarioId === "popup-settings"}
-        title="설정"
+        title="기본 설정"
         onClose={() => {
           if (scenarioId === "popup-settings") return;
           setSettingsOpen(false);
@@ -1968,10 +1978,8 @@ export function TeamWorkspacePanel() {
             [
               ["announcementHideAfterRead", "공지 확인 후 숨기기"],
               ["forceMicrophoneOff", "입장 시 마이크 끄기"],
-              ["preHostRecordingDefault", "주최자 전 기록 허용"],
-              ["preHostRecordingLocked", "주최자 전 기록 잠금"],
-              ["allowAdminUnmask", "팀장 언마스크"],
-              ["allowExternalSharing", "외부 공유"],
+              ["preHostRecordingDefault", "주최자 입장 전 기록 허용"],
+              ["preHostRecordingLocked", "주최자 입장 전 기록 잠금"],
             ] as const
           ).map(([key, label]) => (
             <label
@@ -1982,12 +1990,7 @@ export function TeamWorkspacePanel() {
               <input
                 type="checkbox"
                 className="h-5 w-5 accent-primary"
-                disabled={
-                  !caps.canActOwner ||
-                  saving ||
-                  (key === "allowExternalSharing" &&
-                    !Boolean(data.team.policy?.allowExternalSharing))
-                }
+                disabled={!caps.canActOwner || saving}
                 checked={Boolean(data.team.policy?.[key])}
                 onChange={(event) =>
                   void updatePolicy({ [key]: event.target.checked })
@@ -1997,9 +2000,6 @@ export function TeamWorkspacePanel() {
           ))}
         </div>
         <p className="mt-3 text-base text-muted">
-          외부 공유는 공개 열람 링크 준비 후 제공됩니다.
-        </p>
-        <p className="mt-2 text-base text-muted">
           좌석 {data.team.seatLimit}명
           {caps.canActOwner && data.capabilities.viewAudit
             ? `, 감사 ${data.auditCount}`
@@ -2014,7 +2014,7 @@ export function TeamWorkspacePanel() {
               router.push("/team?manage=members");
             }}
           >
-            구성원과 권한
+            구성원 관리
           </Button>
         ) : null}
       </TeamSheet>

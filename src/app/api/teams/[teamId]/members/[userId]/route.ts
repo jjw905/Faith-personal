@@ -93,14 +93,14 @@ export async function DELETE(request: Request, context: RouteContext) {
   const actor = await getTeamMember(teamId, session.user.id);
   const target = await getTeamMember(teamId, userId);
   if (!actor || !target) {
-    return NextResponse.json({ ok: false, message: "멤버를 찾을 수 없습니다." }, { status: 404 });
+    return NextResponse.json({ ok: false, message: "구성원을 찾을 수 없습니다." }, { status: 404 });
   }
   const selfLeave = userId === session.user.id;
   if (!selfLeave && !hasTeamCapability(actor, "manageTeam")) {
     return NextResponse.json({ ok: false, message: "권한이 없습니다." }, { status: 403 });
   }
   if (target.role === "OWNER") {
-    return NextResponse.json({ ok: false, message: "팀 대표는 대표를 다른 멤버에게 넘긴 뒤에만 탈퇴할 수 있습니다." }, { status: 400 });
+    return NextResponse.json({ ok: false, message: "팀 대표는 대표 권한을 다른 구성원에게 넘긴 뒤에만 탈퇴할 수 있습니다." }, { status: 400 });
   }
   await prisma.$transaction([
     prisma.teamMember.delete({

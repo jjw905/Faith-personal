@@ -5,13 +5,16 @@ import { requireUser } from "@/lib/require-user";
 import { enqueueAnalysisJob } from "@/lib/stt/analysis-job-queue";
 import {
   ANALYSIS_MODE_POLICY,
+  DEFAULT_ANALYSIS_MODE,
   parseAnalysisMode,
 } from "@/lib/stt/analysis-mode";
 import { processUploadedMeeting } from "@/lib/stt/process-upload";
 import { placeholderMeeting } from "@/lib/stt/to-meeting";
 import { stripFileExtension } from "@/lib/meeting-process";
+import { planIncludesSpeakerSplit } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { protectUserFileForTeam } from "@/lib/storage/vault-service";
 import {
   getUploadQuotaStatus,
   UploadQuotaExceededError,
@@ -34,6 +37,25 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { ok: false, message: "로그인이 필요합니다." },
       { status: 401 },
+    );
+  }
+  const useAnalysisQueue =
+    process.env.ANALYSIS_EXECUTION_MODE?.trim().toLowerCase() === "queue";
+  if (process.env.NODE_ENV === "production" && !useAnalysisQueue) {
+    console.error(
+      "[analysis] production runtime must use ANALYSIS_EXECUTION_MODE=queue",
+    );
+    return NextResponse.json(
+      {
+        ok: false,
+        message: "분석 서버 설정이 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+      },
+      { status: 503 },
+    );
+  }
+  if (!useAnalysisQueue) {
+    console.warn(
+      "[analysis] local inline execution; use the staging URL to use Cloud Run workers",
     );
   }
   const startLimit = rateLimit({
@@ -70,7 +92,13 @@ export async function POST(request: Request) {
 
   // 클라이언트는 공개된 분석 모드만 고른다. 실제 모델과 비용 경로는 서버가
   // 고정해 임의의 비싼 모델명 주입이나 차감 우회를 막는다.
-  const analysisMode = parseAnalysisMode(body.analysisMode);
+  // Free는 화자 구분을 쓸 수 없어 precision 요청도 빠른 정리로 내린다.
+  const requestedMode = parseAnalysisMode(body.analysisMode);
+  const analysisMode =
+    requestedMode === "precision" &&
+    !planIncludesSpeakerSplit(session.user.plan, session.user.role)
+      ? DEFAULT_ANALYSIS_MODE
+      : requestedMode;
   const policy = ANALYSIS_MODE_POLICY[analysisMode];
   const model = policy.model;
 
@@ -132,6 +160,28 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+  if (workspace === "team" && teamId && teamMember) {
+    try {
+      await protectUserFileForTeam({
+        userId: session.user.id,
+        fileId: vaultFileId,
+        teamId,
+      });
+    } catch (error) {
+      console.error("[team-encryption] 원본 파일 보호 실패", {
+        meetingId: vaultFileId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          message:
+            "팀 회의 원본을 보호하지 못했습니다. 팀 보안 키와 저장소 설정을 확인해 주세요.",
+        },
+        { status: 503 },
+      );
+    }
+  }
 
   const meetingId = `mtg-up-${randomUUID().slice(0, 8)}`;
   const now = new Date().toISOString();
@@ -157,7 +207,7 @@ export async function POST(request: Request) {
     transcript: placeholder.transcript,
     timeline: placeholder.timeline,
   };
-  await saveUserMeeting(record);
+  await saveUserMeeting(record, { teamId });
 
   if (teamId && teamMember) {
     await prisma.teamMeeting.create({
@@ -192,7 +242,7 @@ export async function POST(request: Request) {
     });
   }
 
-  if (process.env.ANALYSIS_EXECUTION_MODE === "queue") {
+  if (useAnalysisQueue) {
     try {
       await updateUserMeeting(meetingId, {
         stageLabel: "분석 대기 중",
@@ -231,6 +281,7 @@ export async function POST(request: Request) {
     ok: true,
     meetingId,
     phase: "transcribing",
+    executionMode: useAnalysisQueue ? "queue" : "inline",
     href: `/meetings/${meetingId}`,
   });
 }

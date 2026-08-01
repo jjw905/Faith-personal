@@ -86,13 +86,13 @@ export const TEAM_NAV_ITEMS: TeamNavItem[] = [
     capability: "manageTeam",
   },
   {
-    title: "멤버 초대",
+    title: "구성원 초대",
     href: "/team?manage=invite",
     icon: UserRoundPlus,
     capability: "invite",
   },
   {
-    title: "구성원과 권한",
+    title: "구성원 관리",
     href: "/team?manage=members",
     icon: UsersRound,
     capability: "owner",
@@ -104,7 +104,7 @@ export const TEAM_NAV_ITEMS: TeamNavItem[] = [
     capability: "owner",
   },
   {
-    title: "기록 열람",
+    title: "기록 접근",
     href: "/team?manage=records",
     icon: KeyRound,
     capability: "manageRecordAccess",
@@ -249,6 +249,6 @@ export const PAGE_TITLES: Record<
   },
   "/plan": {
     title: "플랜",
-    description: "현재 플랜, 포함 기능, 한도를 확인합니다.",
+    description: "현재 플랜, 포함 기능, 잔여 시간 제한을 확인합니다.",
   },
 };

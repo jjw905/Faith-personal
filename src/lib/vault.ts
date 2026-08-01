@@ -33,6 +33,26 @@ export const VAULT_ALLOWED_EXTENSIONS = [
 
 const VAULT_ALLOWED_EXT_SET = new Set<string>(VAULT_ALLOWED_EXTENSIONS);
 
+/**
+ * 서버에서 m4a로 바꿔 저장하는 오디오 확장자.
+ *
+ * 브라우저는 인덱스 없는 MP3에서 seek 위치를 바이트 비율로 추정한다.
+ * 다시듣기에서 말풍선을 눌렀을 때 소리와 형광펜이 어긋나는 원인이라
+ * 보관함에 넣기 전에 샘플 표가 있는 MP4로 바꾼다.
+ * m4a는 이미 샘플 표가 있어 대상이 아니다.
+ */
+const PLAYBACK_NORMALIZE_EXT_SET = new Set<string>([
+  ".mp3",
+  ".wav",
+  ".ogg",
+  ".flac",
+  ".webm",
+]);
+
+export function needsPlaybackNormalize(name: string): boolean {
+  return PLAYBACK_NORMALIZE_EXT_SET.has(vaultFileExtension(name));
+}
+
 export function vaultFileExtension(name: string): string {
   const i = name.lastIndexOf(".");
   if (i < 0) return "";
@@ -335,6 +355,18 @@ export async function addVaultFile(
   if (prepared.mode === "local" || !prepared.uploadUrl) {
     return uploadViaServer(
       "/api/vault/local",
+      file,
+      preparedMeta,
+      purpose,
+      mime,
+    );
+  }
+
+  // 오디오는 서버를 거쳐야 m4a로 바꿔 저장할 수 있다. 저장소로 바로 올리면
+  // 서버가 파일을 못 봐서 변환할 기회가 없다.
+  if (needsPlaybackNormalize(file.name)) {
+    return uploadViaServer(
+      "/api/vault/proxy",
       file,
       preparedMeta,
       purpose,

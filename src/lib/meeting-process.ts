@@ -3,8 +3,8 @@ import type { MeetingProcessPhase } from "@/lib/user-meetings-store";
 export type { MeetingProcessPhase };
 
 export const MEETING_PROCESS_LABEL: Record<MeetingProcessPhase, string> = {
-  transcribing: "받아쓰는 중이에요",
-  structuring: "정리하는 중이에요",
+  transcribing: "받아쓰는 중입니다",
+  structuring: "정리하는 중입니다",
   done: "완료",
   error: "실패",
   empty: "저장되지 않음",
@@ -40,7 +40,7 @@ export function meetingProcessDetail(
   if (phase === "error" || phase === "empty") {
     const msg = errorMessage?.trim();
     if (phase === "error" && msg && isUploadQuotaErrorMessage(msg)) {
-      return "한도";
+      return "사용 제한";
     }
     return msg || MEETING_PROCESS_LABEL[phase];
   }
@@ -53,6 +53,7 @@ export function isUploadQuotaErrorMessage(message: string): boolean {
   return (
     t.includes("분석 가능 시간") ||
     t.includes("무료 분석 시간") ||
+    t.includes("잔여 시간이 없습니다") ||
     t.includes("모두 사용")
   );
 }

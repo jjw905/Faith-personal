@@ -223,7 +223,7 @@ run("S3 long structure LLM wait with heartbeats", () => {
 run("S4 regression: no fake freeze-inflate at 77", () => {
   const c0 = softCreepCeiling(72);
   const c60 = softCreepCeiling(72, 60_000);
-  assert(c0 <= 73.2 && c60 <= 73.2, `ceiling ${c0}/${c60}`);
+  assert(c0 === 72 && c60 === 72, `ceiling ${c0}/${c60}`);
 
   let cur = 70;
   for (let t = 0; t < 45_000; t += 16.67) {
@@ -235,7 +235,7 @@ run("S4 regression: no fake freeze-inflate at 77", () => {
       nowMs: t,
     });
   }
-  assert(cur <= 73.25, `stuck display ${cur}`);
+  assert(cur <= 72.001, `stuck display ${cur}`);
   assert(cur >= 72, `reached 72 ${cur}`);
   assert(cur < 77, "must not reach old freeze point 77 without real progress");
 });

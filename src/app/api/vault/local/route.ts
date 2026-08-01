@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/require-user";
+import { normalizeUploadAudio } from "@/lib/storage/playback-audio";
 import { completeLocalUpload } from "@/lib/storage/vault-service";
 
 /** 원격 객체 저장소 미설정 시 서버 로컬 디스크 업로드. */
@@ -34,16 +35,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
-    const row = await completeLocalUpload({
+    const upload = normalizeUploadAudio({
       userId: session.user.id,
       id,
       key,
       fileName: name,
       mime: mime || file.type || "application/octet-stream",
-      size: buf.length,
+      body: Buffer.from(await file.arrayBuffer()),
+    });
+    const row = await completeLocalUpload({
+      userId: session.user.id,
+      id,
+      key: upload.key,
+      fileName: upload.fileName,
+      mime: upload.mime,
+      size: upload.body.length,
       purpose,
-      body: buf,
+      body: upload.body,
     });
     return NextResponse.json({
       ok: true,

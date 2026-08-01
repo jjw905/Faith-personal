@@ -290,8 +290,8 @@ export function PersonalRealtimeStartDialog({
               </div>
             ) : null}
             <p className="mt-3 text-sm leading-5 text-muted">
-              초대받은 회원은 알림에서 수락해야 입장할 수 있습니다. 호스트의 사용량에서
-              회의 시간만 한 번 차감됩니다.
+              초대받은 회원은 알림에서 수락해야 입장할 수 있습니다. 호스트의 잔여
+              시간에서 회의 시간만 한 번 사용됩니다.
             </p>
           </div>
         ) : null}

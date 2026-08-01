@@ -572,6 +572,104 @@ function alignTokenSequences(
   return matches.reverse();
 }
 
+/** 한국어 발화 속도 근사. 미매칭 토큰 구간 길이를 어림할 때만 쓴다. */
+const FILL_SEC_PER_CHAR = 0.16;
+const FILL_MIN_WORD_SEC = 0.08;
+
+/**
+ * 매칭에 실패한 토큰에 시각을 채운다.
+ *
+ * "네,", "예," 같은 한두 글자 앞머리는 wordMatchScore가 완전 일치만 허용해
+ * 자주 탈락한다. 그러면 그 줄의 첫 단어가 두 번째 어절이 되고, 줄 시작
+ * 시각이 실제 발화보다 늦게 잡힌다. KTV 실측에서 빠른 분석 14%의 줄이
+ * 이래서 중앙 +1초 지연이 났다.
+ *
+ * 빈 구간은 다음 실측 앵커에 붙여 뒤에서부터 채운다. 침묵이 길어도 말은
+ * 다음 발화 직전에 이어지기 때문이다. 뒤에 앵커가 없을 때만 앞으로 늘린다.
+ */
+function fillUnmatchedTokenTimings(
+  texts: string[],
+  assigned: TranscriptWordTiming[][],
+): void {
+  let prevLineEnd = 0;
+
+  texts.forEach((text, lineIndex) => {
+    const timings = assigned[lineIndex]!;
+    // 한 단어도 못 붙은 줄은 건드리지 않는다. 그런 줄은 앞뒤 앵커 사이에서
+    // 글자량 비율로 보간하는 기존 경로가 더 안전하다.
+    if (timings.length === 0) return;
+
+    const byOffset = new Map(timings.map((t) => [t.startOffset, t]));
+    const tokens = lexicalTokens(text);
+    const lineEnd = Math.max(...timings.map((t) => t.endSec));
+
+    let cursor = 0;
+    while (cursor < tokens.length) {
+      if (byOffset.has(tokens[cursor]!.startOffset)) {
+        cursor += 1;
+        continue;
+      }
+      let runEnd = cursor;
+      while (
+        runEnd < tokens.length &&
+        !byOffset.has(tokens[runEnd]!.startOffset)
+      ) {
+        runEnd += 1;
+      }
+
+      const run = tokens.slice(cursor, runEnd);
+      const chars = run.reduce(
+        (sum, token) => sum + Math.max(1, token.endOffset - token.startOffset),
+        0,
+      );
+      const wanted = Math.max(
+        FILL_MIN_WORD_SEC * run.length,
+        chars * FILL_SEC_PER_CHAR,
+      );
+
+      const before =
+        cursor > 0
+          ? byOffset.get(tokens[cursor - 1]!.startOffset)!.endSec
+          : prevLineEnd;
+      const after =
+        runEnd < tokens.length
+          ? byOffset.get(tokens[runEnd]!.startOffset)!.startSec
+          : null;
+
+      let from: number;
+      let to: number;
+      if (after != null) {
+        // 뒤 앵커에 붙인다. 앞이 침묵이어도 말은 다음 어절 직전에 이어진다.
+        const span = Math.min(Math.max(0, after - before), wanted);
+        from = after - span;
+        to = after;
+      } else {
+        from = before;
+        to = before + wanted;
+      }
+
+      let at = from;
+      for (const token of run) {
+        const width = Math.max(1, token.endOffset - token.startOffset);
+        const share = chars > 0 ? (to - from) * (width / chars) : 0;
+        const startSec = at;
+        const endSec = Math.max(startSec + FILL_MIN_WORD_SEC, startSec + share);
+        at = endSec;
+        timings.push({
+          text: text.slice(token.startOffset, token.endOffset),
+          startSec,
+          endSec,
+          startOffset: token.startOffset,
+          endOffset: token.endOffset,
+        });
+      }
+      cursor = runEnd;
+    }
+
+    prevLineEnd = Math.max(prevLineEnd, lineEnd);
+  });
+}
+
 function matchWordTimingsToTexts(
   texts: string[],
   words: WordTiming[],
@@ -610,6 +708,7 @@ function matchWordTimingsToTexts(
       endOffset: token.endOffset,
     });
   }
+  fillUnmatchedTokenTimings(texts, assigned);
   assigned.forEach((line) => {
     line.sort((left, right) => left.startOffset - right.startOffset);
   });

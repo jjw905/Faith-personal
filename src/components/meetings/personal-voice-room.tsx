@@ -171,8 +171,8 @@ export function PersonalVoiceRoom({ meetingId }: { meetingId: string }) {
           {meeting.title}
         </h1>
         <p className="mt-2 text-base leading-7 text-muted">
-          초대한 회원과 음성 통화에 참여합니다. 기록을 시작하면 호스트의 사용량에서
-          실제 회의 시간만 한 번 차감됩니다.
+          초대한 회원과 음성 통화에 참여합니다. 기록을 시작하면 호스트의 잔여
+          시간에서 실제 회의 시간만 한 번 사용됩니다.
         </p>
         <div className="mt-6 flex flex-wrap gap-2">
           {meeting.participants.map((participant) => {
@@ -482,7 +482,7 @@ function PersonalVoiceRoomBody({
             </span>
           </div>
           <p className="mt-2 text-base text-muted">
-            호스트 사용량에서 회의 시간만 한 번 차감됩니다.
+            호스트의 잔여 시간에서 회의 시간만 한 번 사용됩니다.
           </p>
         </div>
         <span className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-full bg-primary-soft px-3 text-sm font-semibold">

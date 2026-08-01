@@ -8,6 +8,13 @@ import {
   UsageLimitDialog,
   type UsageLimitTimeStatus,
 } from "@/components/dashboard/usage-limit-dialog";
+import {
+  formatQuotaLimitLabel,
+  formatQuotaRemainingLabel,
+  formatSurveyCta,
+  isQuotaLow,
+  monthlyMinutesFromSeconds,
+} from "@/lib/usage-copy";
 import { cn } from "@/lib/utils";
 
 type QuotaStatus = UsageLimitTimeStatus & {
@@ -40,11 +47,13 @@ export function UploadQuotaBanner() {
 
   if (!status) return null;
 
-  const remainingMin = Math.floor(status.remainingSec / 60);
-  const limitMin = Math.round(
-    (status.monthlyLimitSec ?? status.limitSec) / 60,
+  const monthlyLimitSec = status.monthlyLimitSec ?? status.limitSec;
+  const monthlyLimitMin = monthlyMinutesFromSeconds(monthlyLimitSec);
+  const low = isQuotaLow(status.remainingSec, monthlyLimitSec);
+  const remainingLabel = formatQuotaRemainingLabel(
+    status.remainingSec,
+    monthlyLimitSec,
   );
-  const low = status.remainingSec <= 0;
 
   return (
     <>
@@ -54,27 +63,30 @@ export function UploadQuotaBanner() {
           low ? "bg-primary-soft" : "bg-surface",
         )}
       >
-        <p className="text-base font-medium text-foreground">
-          이번 주기 {remainingMin}차감분 남음{" "}
-          <span className="text-muted">(월 {limitMin}차감분)</span>
+        <p className="whitespace-nowrap text-base font-medium text-foreground">
+          {remainingLabel}
+          <span className="text-muted">
+            {" "}
+            · {formatQuotaLimitLabel(monthlyLimitSec)}
+          </span>
         </p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
           {!status.surveyCompleted ? (
             <Link
               href="/survey"
-              className="inline-flex min-h-8 items-center gap-1 text-base font-semibold text-primary hover:underline"
+              className="inline-flex min-h-12 items-center gap-1 whitespace-nowrap text-base font-semibold text-primary hover:underline"
             >
-              <Gift className="h-4 w-4" strokeWidth={1.75} aria-hidden />
-              짧은 설문하고 시간 늘리기
+              <Gift className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+              {formatSurveyCta(monthlyLimitMin)}
             </Link>
           ) : null}
           {low ? (
             <button
               type="button"
-              className="inline-flex min-h-8 items-center text-base font-semibold text-primary hover:underline"
+              className="inline-flex min-h-12 items-center whitespace-nowrap text-base font-semibold text-primary hover:underline"
               onClick={() => setDetailOpen(true)}
             >
-              자세히
+              자세히 보기
             </button>
           ) : null}
         </div>
