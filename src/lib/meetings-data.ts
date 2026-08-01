@@ -63,8 +63,8 @@ function withContentKeywords(
   };
 }
 
-function userMeetingAsMeeting(id: string): Meeting | null {
-  const row = getUserMeeting(id);
+async function userMeetingAsMeeting(id: string): Promise<Meeting | null> {
+  const row = await getUserMeeting(id);
   if (!row) return null;
   return withContentKeywords(row.meeting, row);
 }
@@ -78,9 +78,9 @@ export function getMeetingsByWorkspace(workspaceId: WorkspaceId): Meeting[] {
   return getRecentMeetings().filter((m) => m.workspace === workspaceId);
 }
 
-export function getMeetingById(meetingId: string): Meeting | null {
+export async function getMeetingById(meetingId: string): Promise<Meeting | null> {
   return (
-    userMeetingAsMeeting(meetingId) ??
+    (await userMeetingAsMeeting(meetingId)) ??
     getMockRecentMeetings().find((m) => m.id === meetingId) ??
     null
   );
@@ -112,8 +112,10 @@ function enrichSegmentSpeakers(
   return { ...timeline, segments };
 }
 
-export function getMeetingTimeline(meetingId: string): MeetingTimeline {
-  const row = getUserMeeting(meetingId);
+export async function getMeetingTimeline(
+  meetingId: string,
+): Promise<MeetingTimeline> {
+  const row = await getUserMeeting(meetingId);
   if (row) {
     if (row.phase === "error" || row.phase === "empty") {
       return {
@@ -133,8 +135,10 @@ export function getMeetingTimeline(meetingId: string): MeetingTimeline {
   return getMockTimeline(meetingId);
 }
 
-export function getMeetingTranscript(meetingId: string): MeetingTranscript {
-  const row = getUserMeeting(meetingId);
+export async function getMeetingTranscript(
+  meetingId: string,
+): Promise<MeetingTranscript> {
+  const row = await getUserMeeting(meetingId);
   if (row) return row.transcript;
   return getMockTranscript(meetingId);
 }
@@ -143,15 +147,15 @@ export function getMeetingTranscript(meetingId: string): MeetingTranscript {
  * 클라이언트/API용: 해당 유저 업로드 회의.
  * 목 회의는 로컬 데모에서만 목록에 섞는다(프로덕션 공유 열람 차단).
  */
-export function getMeetingsForUser(
+export async function getMeetingsForUser(
   userId: string,
   workspaceId: WorkspaceId,
-): Meeting[] {
+): Promise<Meeting[]> {
   const mocks =
     process.env.NODE_ENV === "production"
       ? []
       : getMockMeetingsByWorkspace(workspaceId);
-  const users = listUserMeetings(userId)
+  const users = (await listUserMeetings(userId))
     .filter((r) => r.workspace === workspaceId)
     .map((r) => withContentKeywords(r.meeting, r));
   const byId = new Map<string, Meeting>();

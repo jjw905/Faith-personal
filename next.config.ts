@@ -3,6 +3,16 @@ import type { NextConfig } from "next";
 // 롤링 배포에서 Server Action ID가 어긋나지 않게 BUILD+RUNTIME에
 // NEXT_SERVER_ACTIONS_ENCRYPTION_KEY를 동일하게 둔다. 코드에 키를 넣지 않는다.
 
+function serverActionAllowedOrigins() {
+  const configured = process.env.NEXT_SERVER_ACTION_ALLOWED_ORIGINS
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  return configured?.length
+    ? configured
+    : ["localhost:3000", "localhost:3001", "dofaith.net", "www.dofaith.net"];
+}
+
 const nextConfig: NextConfig = {
   // 불필요한 X-Powered-By 응답 헤더 제거(대역폭, 정보 노출 최소화)
   poweredByHeader: false,
@@ -41,10 +51,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "32mb",
       allowedOrigins: [
-        "faith-web-r9q5i.ondigitalocean.app",
-        "dofaith.net",
-        "www.dofaith.net",
-        "localhost:3000",
+        ...serverActionAllowedOrigins(),
       ],
     },
   },

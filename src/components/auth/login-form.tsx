@@ -38,6 +38,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   OAuthAccountNotLinked:
     "이미 있는 계정이에요. 예전에 쓰던 방식으로 로그인한 뒤, 계정 설정에서 연결해 주세요.",
   AccessDenied: "로그인을 완료하지 못했어요.",
+  MfaPasswordRequired:
+    "MFA가 켜진 계정은 소셜 로그인을 사용할 수 없습니다. 이메일과 비밀번호로 로그인해 주세요.",
   OAuthCallback: "소셜 로그인 중 문제가 생겼어요. 다시 시도해 주세요.",
   Callback: "로그인 처리 중 문제가 생겼어요. 다시 시도해 주세요.",
   Verification: "인증 링크가 만료되었거나 올바르지 않아요.",
@@ -51,6 +53,8 @@ const CODE_MESSAGES: Record<string, string> = {
     "이메일 인증이 완료되지 않은 계정입니다. 고객지원에 문의해 주세요.",
   credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
   captcha_failed: "보안 확인에 실패했습니다. 다시 시도해 주세요.",
+  mfa_required: "인증 앱의 6자리 코드 또는 복구 코드를 입력해 주세요.",
+  mfa_invalid: "인증 앱 코드 또는 복구 코드가 올바르지 않습니다.",
 };
 
 export type LoginFormProps = {
@@ -77,6 +81,8 @@ export function LoginForm({
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState(initialPassword);
   const [remember, setRemember] = useState(true);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaStep, setMfaStep] = useState(false);
   const [error, setError] = useState(initialError);
   const [pending, setPending] = useState(false);
 
@@ -111,6 +117,7 @@ export function LoginForm({
         email: normalizeAuthEmail(email),
         password,
         captchaToken: captchaToken ?? "",
+        mfaCode: mfaCode.trim(),
         redirect: false,
         callbackUrl: "/dashboard",
       });
@@ -124,6 +131,9 @@ export function LoginForm({
             ERROR_MESSAGES[res?.error ?? ""] ||
             "이메일 또는 비밀번호가 올바르지 않습니다.",
         );
+        if (code === "mfa_required" || code === "mfa_invalid") {
+          setMfaStep(true);
+        }
         return;
       }
 
@@ -190,6 +200,29 @@ export function LoginForm({
             />
           </div>
 
+          {mfaStep ? (
+            <div className="rounded-2xl bg-primary-soft p-4">
+              <label htmlFor="mfa-code" className={AUTH_LABEL}>
+                추가 인증
+              </label>
+              <p className="mb-3 text-sm leading-5 text-muted">
+                인증 앱의 6자리 코드 또는 저장해 둔 복구 코드 1개를 입력하세요.
+              </p>
+              <Input
+                id="mfa-code"
+                name="mfaCode"
+                type="text"
+                inputMode="text"
+                autoComplete="one-time-code"
+                placeholder="인증 코드"
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                className={AUTH_FIELD_INPUT}
+                required
+              />
+            </div>
+          ) : null}
+
           <div>
             <label htmlFor="password" className={AUTH_LABEL}>
               비밀번호
@@ -225,7 +258,7 @@ export function LoginForm({
           </div>
 
           <button type="submit" disabled={busy} className={AUTH_PRIMARY_BTN}>
-            {busy ? "로그인 중…" : "로그인"}
+            {busy ? "확인 중…" : mfaStep ? "인증하고 로그인" : "로그인"}
           </button>
           <RecaptchaLegalNote className="pt-1" />
         </form>

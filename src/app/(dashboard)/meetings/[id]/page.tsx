@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { requireAdmin } from "@/lib/admin";
 import { canReadMeeting } from "@/lib/meeting-access";
 import { meetingTopicKeywords } from "@/lib/meeting-keywords";
+import { resolveMeetingShareMask } from "@/lib/meeting-share";
 import {
   getMeetingById,
   getMeetingTimeline,
@@ -32,10 +33,13 @@ import { requireUser } from "@/lib/require-user";
 
 export default async function MeetingDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ mask?: string | string[] }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
 
   if (id === "live-mask") {
     await requireAdmin();
@@ -58,21 +62,26 @@ export default async function MeetingDetailPage({
   }
   if (!access.allowed) notFound();
 
-  const rawMeeting = getMeetingById(id);
+  const rawMeeting = await getMeetingById(id);
   if (!rawMeeting) notFound();
   const names = rawMeeting.participants.map((participant) => participant.name);
-  const meeting = access.maskedOnly
-    ? maskTeamMeeting(rawMeeting, names)
-    : rawMeeting;
-  const rawTimeline = getMeetingTimeline(id);
-  const rawTranscript = getMeetingTranscript(id);
-  const timeline = access.maskedOnly
-    ? maskTeamTimeline(rawTimeline, names)
-    : rawTimeline;
-  const transcript = access.maskedOnly
-    ? maskTeamTranscript(rawTranscript, names)
-    : rawTranscript;
-  const userRow = getUserMeeting(id);
+  const requestedMask = resolveMeetingShareMask(query.mask);
+  const displayMask = access.maskedOnly ? "partial" : requestedMask;
+  const meeting =
+    displayMask && displayMask !== "off"
+      ? maskTeamMeeting(rawMeeting, names, displayMask)
+      : rawMeeting;
+  const rawTimeline = await getMeetingTimeline(id);
+  const rawTranscript = await getMeetingTranscript(id);
+  const timeline =
+    displayMask && displayMask !== "off"
+      ? maskTeamTimeline(rawTimeline, names, displayMask)
+      : rawTimeline;
+  const transcript =
+    displayMask && displayMask !== "off"
+      ? maskTeamTranscript(rawTranscript, names, displayMask)
+      : rawTranscript;
+  const userRow = await getUserMeeting(id);
   const keywords = meetingTopicKeywords(
     meeting.summaryTags,
     meeting.tags,

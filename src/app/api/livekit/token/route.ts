@@ -12,6 +12,12 @@ import {
 } from "@/lib/team-feature-access";
 
 export async function POST(request: Request) {
+  if (process.env.LIVEKIT_ENABLED !== "1") {
+    return NextResponse.json(
+      { ok: false, message: "음성 회의 기능은 현재 비활성화되어 있습니다." },
+      { status: 503 },
+    );
+  }
   const gate = await requireTeamFeatureUser();
   if (!gate.ok) return teamFeatureFailureResponse(gate);
   const { session } = gate;

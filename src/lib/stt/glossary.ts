@@ -84,8 +84,11 @@ function fromTitle(title: string): string[] {
  * 참석자 이름만 쓴다. 화면에 표시된 보정 추천은 사용자가 확인한 값이 아니므로
  * 다음 회의 용어로 다시 넣지 않는다.
  */
-function fromPastMeetings(userId: string, limit: number): string[] {
-  const rows = listUserMeetings(userId)
+async function fromPastMeetings(
+  userId: string,
+  limit: number,
+): Promise<string[]> {
+  const rows = (await listUserMeetings(userId))
     .slice()
     .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
     .slice(0, limit);
@@ -105,19 +108,19 @@ function fromPastMeetings(userId: string, limit: number): string[] {
  *
  * 앞에 올수록 중요한 순서로 담는다. 자리가 모자라면 뒤가 잘린다.
  */
-export function buildGlossary(params: {
+export async function buildGlossary(params: {
   userId?: string;
   title?: string;
   participantNames?: string[];
   extra?: string[];
   pastMeetingLimit?: number;
-}): string[] {
+}): Promise<string[]> {
   const ordered = [
     ...(params.extra ?? []).map(clean),
     ...(params.participantNames ?? []).map(clean),
     ...fromTitle(params.title ?? ""),
     ...(params.userId
-      ? fromPastMeetings(params.userId, params.pastMeetingLimit ?? 20)
+      ? await fromPastMeetings(params.userId, params.pastMeetingLimit ?? 20)
       : []),
   ].filter(usable);
 

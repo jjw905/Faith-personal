@@ -117,14 +117,14 @@ export function createLiveMeetingId(): string {
   return `mtg-live-${randomUUID().slice(0, 12)}`;
 }
 
-export function ensureLiveMeetingRecord(params: {
+export async function ensureLiveMeetingRecord(params: {
   meetingId: string;
   userId: string;
   title: string;
   workspace: WorkspaceId;
   createdAt?: Date;
 }) {
-  if (getUserMeeting(params.meetingId)) return;
+  if (await getUserMeeting(params.meetingId)) return;
   const createdAt = (params.createdAt ?? new Date()).toISOString();
   const placeholder = placeholderMeeting({
     meetingId: params.meetingId,
@@ -146,7 +146,7 @@ export function ensureLiveMeetingRecord(params: {
     transcript: placeholder.transcript,
     timeline: placeholder.timeline,
   };
-  saveUserMeeting(record);
+  await saveUserMeeting(record);
 }
 
 export async function persistRealtimeUtterance(params: {
@@ -267,7 +267,7 @@ export async function persistRealtimeUtterance(params: {
     ...(session.teamMeeting?.access.map((access) => access.user.name?.trim()) ??
       []),
   ].filter((name): name is string => Boolean(name));
-  const glossary = buildGlossary({
+  const glossary = await buildGlossary({
     title: session.title,
     participantNames,
   });
@@ -308,7 +308,7 @@ export async function persistRealtimeUtterance(params: {
       wordTimings = timed.words;
       timingAudioSec = Math.max(0.2, timed.durationBillSec || 0);
       if (timingAudioSec > 0) {
-        appendAiUsage({
+        await appendAiUsage({
           meetingId: session.meetingId,
           userId: params.userId,
           title: session.title,
@@ -472,15 +472,15 @@ export async function completeRealtimeSession(params: {
     };
   }
 
+  const legacyOwner = owned.teamMeeting?.legacyMeetingId
+    ? await getUserMeeting(owned.teamMeeting.legacyMeetingId)
+    : null;
   return finalizeRealtimeRun({
     runId: owned.runId,
     meetingId: owned.meetingId,
     title: owned.title,
     workspace: owned.teamMeetingId ? "team" : "personal",
-    ownerUserId: owned.teamMeeting?.legacyMeetingId
-      ? getUserMeeting(owned.teamMeeting.legacyMeetingId)?.userId ??
-        owned.userId
-      : owned.userId,
+    ownerUserId: legacyOwner?.userId ?? owned.userId,
     teamMeetingId: owned.teamMeetingId ?? undefined,
   });
 }
@@ -575,7 +575,7 @@ async function finalizeRealtimeRun(params: {
   teamMeetingId?: string;
   personalMeetingId?: string;
 }) {
-  const existing = getUserMeeting(params.meetingId);
+  const existing = await getUserMeeting(params.meetingId);
   if (existing?.phase === "done") {
     return {
       meetingId: params.meetingId,
@@ -583,7 +583,7 @@ async function finalizeRealtimeRun(params: {
       finalized: true,
     };
   }
-  updateUserMeeting(params.meetingId, {
+  await updateUserMeeting(params.meetingId, {
     phase: "structuring",
     progressPercent: 72,
   });
@@ -639,7 +639,7 @@ async function finalizeRealtimeRun(params: {
     if (rows.length === 0) {
       // 실패가 아니라 "감지된 음성 없음". 기술적 오류가 아니므로 error가 아닌
       // 별도 phase로 남기고, 팀 회의 상태는 이미 ENDED이므로 건드리지 않는다.
-      updateUserMeeting(params.meetingId, {
+      await updateUserMeeting(params.meetingId, {
         phase: "empty",
         errorMessage: "감지된 음성이 없어 저장되지 않았습니다.",
       });
@@ -680,7 +680,7 @@ async function finalizeRealtimeRun(params: {
       const named = await identifySpeakerNames({ dialogue: structure.dialogue });
       applySpeakerNames(structure, named.guesses);
       if (named.usage.inputTokens > 0) {
-        appendAiUsage({
+        await appendAiUsage({
           meetingId: params.meetingId,
           userId: params.ownerUserId,
           title: params.title,
@@ -711,7 +711,7 @@ async function finalizeRealtimeRun(params: {
       capture: "live",
       date: existing?.createdAt,
     });
-    const glossary = buildGlossary({
+    const glossary = await buildGlossary({
       userId: params.ownerUserId,
       title: params.title,
       participantNames: [...new Set(rows.map((row) => row.speaker))],
@@ -739,7 +739,7 @@ async function finalizeRealtimeRun(params: {
       ...liveCorrections,
     ]);
 
-    saveUserMeeting({
+    await saveUserMeeting({
       id: params.meetingId,
       userId: params.ownerUserId,
       model: DEFAULT_STT_MODEL,
@@ -756,7 +756,7 @@ async function finalizeRealtimeRun(params: {
     });
 
     for (const session of sessions) {
-      appendAiUsage({
+      await appendAiUsage({
         meetingId: params.meetingId,
         userId: session.userId,
         title: params.title,
@@ -771,7 +771,7 @@ async function finalizeRealtimeRun(params: {
         billSource: "audio_minutes",
       });
     }
-    appendAiUsage({
+    await appendAiUsage({
       meetingId: params.meetingId,
       userId: params.ownerUserId,
       title: params.title,
@@ -813,7 +813,7 @@ async function finalizeRealtimeRun(params: {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "실시간 회의 정리에 실패했습니다.";
-    updateUserMeeting(params.meetingId, {
+    await updateUserMeeting(params.meetingId, {
       phase: "error",
       errorMessage: message,
     });

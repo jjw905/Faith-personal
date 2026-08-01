@@ -335,10 +335,10 @@ function prepareChunks(
     overlapSec: number;
   },
 ): AudioChunk[] {
-  mkdirSync(workDir, { recursive: true });
-  for (const f of readdirSync(workDir)) {
+  mkdirSync(/* turbopackIgnore: true */ workDir, { recursive: true });
+  for (const f of readdirSync(/* turbopackIgnore: true */ workDir)) {
     if (f.endsWith(".mp3")) {
-      rmSync(join(workDir, f), { force: true });
+      rmSync(/* turbopackIgnore: true */ join(workDir, f), { force: true });
     }
   }
 
@@ -366,7 +366,10 @@ function prepareChunks(
       coreEndSec +
         (index < boundaries.length - 2 ? options.overlapSec : 0),
     );
-    const path = join(workDir, `part_${String(index).padStart(3, "0")}.mp3`);
+    const path = join(
+      /* turbopackIgnore: true */ workDir,
+      `part_${String(index).padStart(3, "0")}.mp3`,
+    );
     execFileSync(
       requireAudioToolPath("ffmpeg"),
       [
@@ -387,7 +390,7 @@ function prepareChunks(
       ],
       { stdio: "pipe", timeout: CHUNK_ENCODE_TIMEOUT_MS, killSignal: "SIGKILL" },
     );
-    if (existsSync(path)) {
+    if (existsSync(/* turbopackIgnore: true */ path)) {
       chunks.push({
         path,
         startSec,
@@ -731,7 +734,7 @@ async function timeChunkWithWhisperWords(
   try {
     if (leadSec > 0) {
       const candidate = join(
-        tmpdir(),
+        /* turbopackIgnore: true */ tmpdir(),
         `faith-whisper-lead-${randomBytes(8).toString("hex")}.mp3`,
       );
       try {
@@ -741,11 +744,11 @@ async function timeChunkWithWhisperWords(
         trimSec = leadSec;
       } catch {
         // 침묵 잘라내기 실패는 실측 타이밍 자체를 막지 않는다. 원본으로 폴백.
-        rmSync(candidate, { force: true });
+        rmSync(/* turbopackIgnore: true */ candidate, { force: true });
       }
     }
 
-    const bytes = readFileSync(pathForWhisper);
+    const bytes = readFileSync(/* turbopackIgnore: true */ pathForWhisper);
     const name = basename(audioPath) || "timing.mp3";
     const res = await transcribeChunkText(
       "whisper-1",
@@ -774,7 +777,7 @@ async function timeChunkWithWhisperWords(
       durationBillSec: res.durationSec,
     };
   } finally {
-    if (tempPath) rmSync(tempPath, { force: true });
+    if (tempPath) rmSync(/* turbopackIgnore: true */ tempPath, { force: true });
   }
 }
 
@@ -870,7 +873,7 @@ async function transcribeWholeFile(params: {
   wordTimestamps?: boolean;
   report: StepReporter;
 }): Promise<ChunkedTranscribeResult> {
-  const bytes = readFileSync(params.audioPath);
+  const bytes = readFileSync(/* turbopackIgnore: true */ params.audioPath);
   assertUploadAudioBytes(bytes.length);
 
   const name = basename(params.audioPath) || "source.mp3";
@@ -988,7 +991,7 @@ export async function chunkedTranscribe(params: {
   const overlapSec = Math.max(0, params.overlapSec ?? CHUNK_OVERLAP_SEC);
   const contextualPrompt = params.contextualPrompt !== false;
   const hallucinationGuard = params.hallucinationGuard !== false;
-  if (!existsSync(params.audioPath)) {
+  if (!existsSync(/* turbopackIgnore: true */ params.audioPath)) {
     throw new Error("오디오 파일이 없습니다.");
   }
 
@@ -1068,7 +1071,7 @@ export async function chunkedTranscribe(params: {
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i]!;
-    const bytes = readFileSync(chunk.path);
+    const bytes = readFileSync(/* turbopackIgnore: true */ chunk.path);
     const chunkDur = Math.max(0, chunk.endSec - chunk.startSec);
     const offsetSec = chunk.startSec;
     const prompt =
@@ -1259,12 +1262,12 @@ export function writeSourceAudio(params: {
   filename: string;
   workDir: string;
 }): string {
-  mkdirSync(params.workDir, { recursive: true });
+  mkdirSync(/* turbopackIgnore: true */ params.workDir, { recursive: true });
   const ext = params.filename.includes(".")
     ? params.filename.slice(params.filename.lastIndexOf("."))
     : ".bin";
-  const audioPath = join(params.workDir, `source${ext}`);
-  writeFileSync(audioPath, params.audioBytes);
+  const audioPath = join(/* turbopackIgnore: true */ params.workDir, `source${ext}`);
+  writeFileSync(/* turbopackIgnore: true */ audioPath, params.audioBytes);
   return audioPath;
 }
 
@@ -1281,7 +1284,7 @@ export async function chunkedTranscribeBuffer(params: {
   const audioPath = writeSourceAudio(params);
   return chunkedTranscribe({
     audioPath,
-    workDir: join(params.workDir, "chunks"),
+    workDir: join(/* turbopackIgnore: true */ params.workDir, "chunks"),
     model: params.model,
     chunkSec: params.chunkSec,
     wordTimestamps: params.wordTimestamps,

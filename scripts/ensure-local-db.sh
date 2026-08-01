@@ -6,6 +6,17 @@ set +e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
 
+LOCAL_COMPOSE_FILE="${LOCAL_COMPOSE_FILE:-docker-compose.yml}"
+if [[ "$LOCAL_COMPOSE_FILE" = /* ]]; then
+  COMPOSE_PATH="$LOCAL_COMPOSE_FILE"
+else
+  COMPOSE_PATH="$ROOT/$LOCAL_COMPOSE_FILE"
+fi
+
+compose() {
+  docker compose -f "$COMPOSE_PATH" "$@"
+}
+
 log() { echo "[db] $*"; }
 
 ensure_docker() {
@@ -45,7 +56,7 @@ ensure_docker() {
 wait_postgres() {
   local i
   for i in $(seq 1 60); do
-    if docker compose exec -T db pg_isready -U faith -d faith >/dev/null 2>&1; then
+    if compose exec -T db pg_isready -U faith -d faith >/dev/null 2>&1; then
       return 0
     fi
     sleep 0.5
@@ -62,8 +73,8 @@ if ! ensure_docker; then
   exit 1
 fi
 
-log "Postgres 컨테이너 기동"
-docker compose up -d db
+log "Postgres 컨테이너 기동: $LOCAL_COMPOSE_FILE"
+compose up -d db
 if [ $? -ne 0 ]; then
   log "docker compose up 실패"
   exit 1

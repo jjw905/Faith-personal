@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { after, NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/require-user";
+import { enqueueAnalysisJob } from "@/lib/stt/analysis-job-queue";
 import {
   ANALYSIS_MODE_POLICY,
   parseAnalysisMode,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/stt/usage-quota";
 import {
   saveUserMeeting,
+  updateUserMeeting,
   type UserMeetingRecord,
 } from "@/lib/user-meetings-store";
 import type { WorkspaceId } from "@/lib/workspaces";
@@ -155,7 +157,7 @@ export async function POST(request: Request) {
     transcript: placeholder.transcript,
     timeline: placeholder.timeline,
   };
-  saveUserMeeting(record);
+  await saveUserMeeting(record);
 
   if (teamId && teamMember) {
     await prisma.teamMeeting.create({
@@ -190,15 +192,40 @@ export async function POST(request: Request) {
     });
   }
 
-  after(() =>
-    processUploadedMeeting({
-      meetingId,
-      userId: session.user.id,
-      vaultFileId,
-      analysisMode,
-      title,
-    }),
-  );
+  if (process.env.ANALYSIS_EXECUTION_MODE === "queue") {
+    try {
+      await updateUserMeeting(meetingId, {
+        stageLabel: "분석 대기 중",
+      });
+      await enqueueAnalysisJob({
+        meetingId,
+        userId: session.user.id,
+        vaultFileId,
+        analysisMode,
+        title,
+      });
+    } catch (error) {
+      await updateUserMeeting(meetingId, {
+        phase: "error",
+        errorMessage: "분석 대기열에 등록하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      });
+      console.error("[analysis-queue] 업로드 작업 등록 실패", error);
+      return NextResponse.json(
+        { ok: false, message: "분석 대기열에 등록하지 못했습니다." },
+        { status: 503 },
+      );
+    }
+  } else {
+    after(() =>
+      processUploadedMeeting({
+        meetingId,
+        userId: session.user.id,
+        vaultFileId,
+        analysisMode,
+        title,
+      }),
+    );
+  }
 
   return NextResponse.json({
     ok: true,

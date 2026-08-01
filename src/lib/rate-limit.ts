@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
@@ -155,43 +156,63 @@ export async function durableRateLimit(params: {
   const now = Date.now();
   const identifier = rlIdentifier(params.key);
   try {
-    const row = await prisma.verificationToken.findFirst({
-      where: { identifier },
-      orderBy: { expires: "desc" },
-    });
-    if (!row || row.expires.getTime() <= now) {
-      await prisma.verificationToken.deleteMany({ where: { identifier } });
-      await prisma.verificationToken.create({
-        data: {
-          identifier,
-          token: `${identifier}:${now}:1`,
-          expires: new Date(now + params.windowMs),
-        },
-      });
-      rateLimit(params); // L1 동기화
-      return { ok: true };
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const result = await prisma.$transaction(
+          async (tx) => {
+            const row = await tx.verificationToken.findFirst({
+              where: { identifier },
+              orderBy: { expires: "desc" },
+            });
+            if (!row || row.expires.getTime() <= now) {
+              await tx.verificationToken.deleteMany({ where: { identifier } });
+              await tx.verificationToken.create({
+                data: {
+                  identifier,
+                  token: `${identifier}:${now}:1`,
+                  expires: new Date(now + params.windowMs),
+                },
+              });
+              return { ok: true as const };
+            }
+            const countPart = row.token.split(":").pop();
+            const count = Number(countPart);
+            const safeCount = Number.isFinite(count) ? count : 0;
+            if (safeCount >= params.limit) {
+              return {
+                ok: false as const,
+                retryAfterSec: Math.max(
+                  1,
+                  Math.ceil((row.expires.getTime() - now) / 1000),
+                ),
+              };
+            }
+            await tx.verificationToken.deleteMany({ where: { identifier } });
+            await tx.verificationToken.create({
+              data: {
+                identifier,
+                token: `${identifier}:${now}:${safeCount + 1}`,
+                expires: row.expires,
+              },
+            });
+            return { ok: true as const };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+        if (result.ok) rateLimit(params); // L1 동기화
+        return result;
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2034" &&
+          attempt < 2
+        ) {
+          continue;
+        }
+        throw err;
+      }
     }
-    const countPart = row.token.split(":").pop();
-    const count = Number(countPart);
-    const safeCount = Number.isFinite(count) ? count : 0;
-    if (safeCount >= params.limit) {
-      return {
-        ok: false,
-        retryAfterSec: Math.max(
-          1,
-          Math.ceil((row.expires.getTime() - now) / 1000),
-        ),
-      };
-    }
-    await prisma.verificationToken.deleteMany({ where: { identifier } });
-    await prisma.verificationToken.create({
-      data: {
-        identifier,
-        token: `${identifier}:${now}:${safeCount + 1}`,
-        expires: row.expires,
-      },
-    });
-    return { ok: true };
+    return rateLimit(params);
   } catch (err) {
     console.error(
       "[rate-limit] durable fallback",
@@ -217,26 +238,45 @@ async function durableUnconsume(key: string) {
   const identifier = rlIdentifier(key);
   const now = Date.now();
   try {
-    const row = await prisma.verificationToken.findFirst({
-      where: { identifier },
-    });
-    if (!row || row.expires.getTime() <= now) {
-      await prisma.verificationToken.deleteMany({ where: { identifier } });
-      return;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await prisma.$transaction(
+          async (tx) => {
+            const row = await tx.verificationToken.findFirst({
+              where: { identifier },
+            });
+            if (!row || row.expires.getTime() <= now) {
+              await tx.verificationToken.deleteMany({ where: { identifier } });
+              return;
+            }
+            const countPart = row.token.split(":").pop();
+            const count = Number(countPart);
+            const safeCount = Number.isFinite(count) ? count : 0;
+            const next = Math.max(0, safeCount - 1);
+            await tx.verificationToken.deleteMany({ where: { identifier } });
+            if (next <= 0) return;
+            await tx.verificationToken.create({
+              data: {
+                identifier,
+                token: `${identifier}:${now}:${next}`,
+                expires: row.expires,
+              },
+            });
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+        return;
+      } catch (err) {
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2034" &&
+          attempt < 2
+        ) {
+          continue;
+        }
+        return;
+      }
     }
-    const countPart = row.token.split(":").pop();
-    const count = Number(countPart);
-    const safeCount = Number.isFinite(count) ? count : 0;
-    const next = Math.max(0, safeCount - 1);
-    await prisma.verificationToken.deleteMany({ where: { identifier } });
-    if (next <= 0) return;
-    await prisma.verificationToken.create({
-      data: {
-        identifier,
-        token: `${identifier}:${now}:${next}`,
-        expires: row.expires,
-      },
-    });
   } catch {
     // ignore
   }

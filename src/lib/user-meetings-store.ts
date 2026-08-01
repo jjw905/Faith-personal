@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { Prisma } from "@prisma/client";
 
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline } from "@/types/timeline";
@@ -16,6 +17,10 @@ import type { SemanticStructure } from "@/lib/stt/semantic-structure";
 import type { SttModel } from "@/lib/stt/models";
 import type { WorkspaceId } from "@/lib/workspaces";
 import type { AnalysisMode } from "@/lib/stt/analysis-mode";
+import { faithDataPath } from "@/lib/faith-data-root";
+import { prisma } from "@/lib/prisma";
+import { deleteAiUsageForMeeting } from "@/lib/stt/usage-store";
+import { deletePipelineAttemptsForMeeting } from "@/lib/stt/pipeline-stats-store";
 
 export type MeetingProcessPhase =
   | "transcribing"
@@ -48,7 +53,9 @@ export type UserMeetingRecord = {
   semantic?: SemanticStructure;
 };
 
-const ROOT = join(process.cwd(), ".data", "user-meetings");
+const ROOT = faithDataPath("user-meetings");
+const WORK_ROOT = faithDataPath("stt-work");
+const USE_DATABASE = process.env.DURABLE_STATE_BACKEND === "database";
 
 function ensureRoot() {
   mkdirSync(ROOT, { recursive: true });
@@ -65,13 +72,75 @@ function pathFor(id: string) {
   return join(ROOT, `${safe}.json`);
 }
 
-export function saveUserMeeting(record: UserMeetingRecord) {
+function dateOrNow(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : new Date();
+}
+
+function payloadRecord(value: unknown, fallback: {
+  id: string;
+  userId: string;
+  workspace: string;
+  phase: string;
+  progressPercent: number | null;
+}): UserMeetingRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as UserMeetingRecord;
+  return {
+    ...record,
+    id: fallback.id,
+    userId: fallback.userId,
+    workspace: fallback.workspace as WorkspaceId,
+    phase: fallback.phase as MeetingProcessPhase,
+    ...(fallback.progressPercent === null
+      ? {}
+      : { progressPercent: fallback.progressPercent }),
+  };
+}
+
+export async function saveUserMeeting(record: UserMeetingRecord) {
+  if (USE_DATABASE) {
+    await prisma.userMeetingRecord.upsert({
+      where: { id: record.id },
+      create: {
+        id: record.id,
+        userId: record.userId,
+        workspace: record.workspace,
+        phase: record.phase,
+        progressPercent: record.progressPercent ?? null,
+        payload: record as unknown as Prisma.InputJsonValue,
+        createdAt: dateOrNow(record.createdAt),
+        updatedAt: dateOrNow(record.updatedAt),
+      },
+      update: {
+        userId: record.userId,
+        workspace: record.workspace,
+        phase: record.phase,
+        progressPercent: record.progressPercent ?? null,
+        payload: record as unknown as Prisma.InputJsonValue,
+        updatedAt: dateOrNow(record.updatedAt),
+      },
+    });
+    return;
+  }
   ensureRoot();
   writeFileSync(pathFor(record.id), JSON.stringify(record, null, 2), "utf8");
 }
 
-export function getUserMeeting(id: string): UserMeetingRecord | null {
+export async function getUserMeeting(id: string): Promise<UserMeetingRecord | null> {
   if (!safeMeetingId(id)) return null;
+  if (USE_DATABASE) {
+    const row = await prisma.userMeetingRecord.findUnique({ where: { id } });
+    return row
+      ? payloadRecord(row.payload, {
+          id: row.id,
+          userId: row.userId,
+          workspace: row.workspace,
+          phase: row.phase,
+          progressPercent: row.progressPercent,
+        })
+      : null;
+  }
   const p = pathFor(id);
   if (!existsSync(p)) return null;
   try {
@@ -81,7 +150,26 @@ export function getUserMeeting(id: string): UserMeetingRecord | null {
   }
 }
 
-export function listUserMeetings(userId?: string): UserMeetingRecord[] {
+export async function listUserMeetings(
+  userId?: string,
+): Promise<UserMeetingRecord[]> {
+  if (USE_DATABASE) {
+    const rows = await prisma.userMeetingRecord.findMany({
+      where: userId ? { userId } : undefined,
+      orderBy: { createdAt: "desc" },
+    });
+    return rows
+      .map((row) =>
+        payloadRecord(row.payload, {
+          id: row.id,
+          userId: row.userId,
+          workspace: row.workspace,
+          phase: row.phase,
+          progressPercent: row.progressPercent,
+        }),
+      )
+      .filter((row): row is UserMeetingRecord => Boolean(row));
+  }
   ensureRoot();
   const files = readdirSync(ROOT).filter((f) => f.endsWith(".json"));
   const rows: UserMeetingRecord[] = [];
@@ -102,23 +190,23 @@ export function listUserMeetings(userId?: string): UserMeetingRecord[] {
   );
 }
 
-export function updateUserMeeting(
+export async function updateUserMeeting(
   id: string,
   patch: Partial<UserMeetingRecord>,
-): UserMeetingRecord | null {
-  const cur = getUserMeeting(id);
+): Promise<UserMeetingRecord | null> {
+  const cur = await getUserMeeting(id);
   if (!cur) return null;
   const next: UserMeetingRecord = {
     ...cur,
     ...patch,
     updatedAt: new Date().toISOString(),
   };
-  saveUserMeeting(next);
+  await saveUserMeeting(next);
   return next;
 }
 
 /** 진행률은 감소하지 않음. phase도 같이 갱신 가능. */
-export function setMeetingProgress(
+export async function setMeetingProgress(
   id: string,
   percent: number,
   patch: Partial<
@@ -127,8 +215,8 @@ export function setMeetingProgress(
       "phase" | "errorMessage" | "rawText" | "stageLabel"
     >
   > = {},
-): UserMeetingRecord | null {
-  const cur = getUserMeeting(id);
+): Promise<UserMeetingRecord | null> {
+  const cur = await getUserMeeting(id);
   if (!cur) return null;
   const clamped = Math.max(0, Math.min(100, Math.round(percent)));
   const prev = cur.progressPercent ?? 0;
@@ -145,11 +233,11 @@ export function setMeetingProgress(
  */
 export const STALE_PROCESSING_MS = 12 * 60 * 1000;
 
-export function healStaleProcessingMeeting(
+export async function healStaleProcessingMeeting(
   id: string,
   nowMs: number = Date.now(),
-): UserMeetingRecord | null {
-  const cur = getUserMeeting(id);
+): Promise<UserMeetingRecord | null> {
+  const cur = await getUserMeeting(id);
   if (!cur) return null;
   if (cur.phase !== "transcribing" && cur.phase !== "structuring") {
     return cur;
@@ -181,7 +269,7 @@ export function healStaleProcessingMeeting(
 function removeMeetingWorkDir(id: string) {
   const safe = safeMeetingId(id);
   if (!safe) return;
-  const dir = join(process.cwd(), ".data", "stt-work", safe);
+  const dir = join(WORK_ROOT, safe);
   if (!existsSync(dir)) return;
   try {
     rmSync(dir, { recursive: true, force: true });
@@ -190,12 +278,39 @@ function removeMeetingWorkDir(id: string) {
   }
 }
 
-export function deleteUserMeeting(id: string): boolean {
+export async function deleteUserMeeting(id: string): Promise<boolean> {
   if (!safeMeetingId(id)) return false;
+  if (USE_DATABASE) {
+    const deleted = await prisma.$transaction(async (tx) => {
+      const result = await tx.userMeetingRecord.deleteMany({ where: { id } });
+      if (result.count === 0) return false;
+      await tx.analysisJob.deleteMany({ where: { meetingId: id } });
+      await tx.analysisUsage.updateMany({
+        where: { meetingId: id, status: "RESERVED" },
+        data: { status: "RELEASED" },
+      });
+      await tx.aiUsageEvent.deleteMany({ where: { meetingId: id } });
+      await tx.pipelineAttempt.deleteMany({ where: { meetingId: id } });
+      return true;
+    });
+    if (deleted) removeMeetingWorkDir(id);
+    return deleted;
+  }
   const p = pathFor(id);
   if (!existsSync(p)) return false;
   try {
     unlinkSync(p);
+    await prisma.analysisUsage.updateMany({
+      where: { meetingId: id, status: "RESERVED" },
+      data: { status: "RELEASED" },
+    });
+    try {
+      await deleteAiUsageForMeeting(id);
+      await deletePipelineAttemptsForMeeting(id);
+    } catch {
+      // The meeting record is already gone; leave operational-log cleanup
+      // for the next retention run if a local log is temporarily unavailable.
+    }
     removeMeetingWorkDir(id);
     return true;
   } catch {
@@ -208,14 +323,15 @@ export function deleteUserMeeting(id: string): boolean {
  * 팀 워크스페이스 기록은 팀 정책 영역이라 개인 보존 설정으로 지우지 않는다.
  * 진행 중(transcribing/structuring) 건은 보존기간이 지나도 처리가 끝날 때까지 남긴다.
  */
-export function findExpiredUserMeetings(
+export async function findExpiredUserMeetings(
   userId: string,
   retentionDays: number,
   now: Date = new Date(),
-): UserMeetingRecord[] {
+): Promise<UserMeetingRecord[]> {
   const days = Math.max(1, Math.floor(retentionDays));
   const cutoff = now.getTime() - days * 24 * 60 * 60 * 1000;
-  return listUserMeetings(userId).filter((row) => {
+  const rows = await listUserMeetings(userId);
+  return rows.filter((row) => {
     if (row.workspace !== "personal") return false;
     if (row.phase === "transcribing" || row.phase === "structuring") {
       return false;
@@ -235,18 +351,18 @@ export const PURGE_USER_MEETINGS_MAX_PER_RUN = 50;
  * 조회 시 지연 실행)에만 실행하고 별도 백그라운드 크론은 두지 않는다.
  * stt-work 작업 폴더도 함께 정리한다.
  */
-export function purgeExpiredUserMeetings(
+export async function purgeExpiredUserMeetings(
   userId: string,
   retentionDays: number,
   now: Date = new Date(),
   options?: { max?: number },
-): { deleted: number; remaining: number } {
+): Promise<{ deleted: number; remaining: number }> {
   const max = Math.max(1, options?.max ?? PURGE_USER_MEETINGS_MAX_PER_RUN);
-  const expired = findExpiredUserMeetings(userId, retentionDays, now);
+  const expired = await findExpiredUserMeetings(userId, retentionDays, now);
   const batch = expired.slice(0, max);
   let deleted = 0;
   for (const row of batch) {
-    if (deleteUserMeeting(row.id)) deleted += 1;
+    if (await deleteUserMeeting(row.id)) deleted += 1;
   }
   return { deleted, remaining: Math.max(0, expired.length - batch.length) };
 }
@@ -254,7 +370,7 @@ export function purgeExpiredUserMeetings(
 export function workDirForMeeting(meetingId: string) {
   const safe = safeMeetingId(meetingId);
   if (!safe) throw new Error("잘못된 회의 id입니다.");
-  const dir = join(process.cwd(), ".data", "stt-work", safe);
+  const dir = join(WORK_ROOT, safe);
   mkdirSync(dir, { recursive: true });
   return dir;
 }

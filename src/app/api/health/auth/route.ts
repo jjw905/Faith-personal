@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { assertSetupSecret } from "@/lib/setup-auth";
-import { spacesConfigured } from "@/lib/storage/spaces";
+import {
+  objectStorageConfigured,
+  storageBackend,
+} from "@/lib/storage/object-store";
 
 const REQUIRED_TABLES = [
   "users",
@@ -9,6 +12,12 @@ const REQUIRED_TABLES = [
   "sessions",
   "verification_tokens",
   "vault_files",
+  "analysis_jobs",
+  "user_meeting_records",
+  "ai_usage_events",
+  "pipeline_attempts",
+  "mfa_recovery_codes",
+  "team_security_keys",
 ] as const;
 
 /**
@@ -33,6 +42,12 @@ export async function GET(request: Request) {
     sessions: false,
     verification_tokens: false,
     vault_files: false,
+    analysis_jobs: false,
+    user_meeting_records: false,
+    ai_usage_events: false,
+    pipeline_attempts: false,
+    mfa_recovery_codes: false,
+    team_security_keys: false,
   };
 
   if (required.DATABASE_URL) {
@@ -50,7 +65,13 @@ export async function GET(request: Request) {
             'accounts',
             'sessions',
             'verification_tokens',
-            'vault_files'
+            'vault_files',
+            'analysis_jobs',
+            'user_meeting_records',
+            'ai_usage_events',
+            'pipeline_attempts',
+            'mfa_recovery_codes',
+            'team_security_keys'
           )
       `;
       const found = new Set(rows.map((r) => r.tablename));
@@ -91,6 +112,7 @@ export async function GET(request: Request) {
     AUTH_NAVER_SECRET: Boolean(process.env.AUTH_NAVER_SECRET?.trim()),
     AUTH_TWITTER_ID: Boolean(process.env.AUTH_TWITTER_ID?.trim()),
     AUTH_TWITTER_SECRET: Boolean(process.env.AUTH_TWITTER_SECRET?.trim()),
+    GCS_BUCKET: Boolean(process.env.GCS_BUCKET?.trim()),
     DO_SPACES_BUCKET: Boolean(process.env.DO_SPACES_BUCKET?.trim()),
     SETUP_SECRET: Boolean(process.env.SETUP_SECRET?.trim()),
     ADMIN_EMAILS: Boolean(process.env.ADMIN_EMAILS?.trim()),
@@ -107,7 +129,8 @@ export async function GET(request: Request) {
       databaseOk,
       schemaOk,
       tables,
-      spacesConfigured: spacesConfigured(),
+      storageBackend: storageBackend(),
+      objectStorageConfigured: objectStorageConfigured(),
       resendConfigured: Boolean(process.env.AUTH_RESEND_KEY?.trim()),
       adminEnvConfigured: Boolean(
         process.env.ADMIN_EMAILS?.trim() &&

@@ -3,6 +3,7 @@ import { after, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { writeAdminAudit } from "@/lib/admin-audit";
 import { prisma } from "@/lib/prisma";
+import { enqueueAnalysisJob } from "@/lib/stt/analysis-job-queue";
 import { processUploadedMeeting } from "@/lib/stt/process-upload";
 import { getUserMeeting, updateUserMeeting } from "@/lib/user-meetings-store";
 
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const record = getUserMeeting(meetingId);
+  const record = await getUserMeeting(meetingId);
   if (!record || !record.vaultFileId) {
     return NextResponse.json(
       { ok: false, error: "다시 처리할 원본 파일을 찾을 수 없습니다." },
@@ -63,23 +64,43 @@ export async function POST(request: Request) {
     request,
   });
 
-  updateUserMeeting(meetingId, {
+  await updateUserMeeting(meetingId, {
     phase: "transcribing",
     progressPercent: 0,
     stageLabel: "이의제기 재처리 대기 중",
     errorMessage: undefined,
   });
 
-  after(() =>
-    processUploadedMeeting({
-      meetingId,
-      userId: record.userId,
-      vaultFileId: record.vaultFileId!,
-      analysisMode: record.analysisMode,
-      title: record.meeting.title,
-      bypassModeration: true,
-    }),
-  );
+  if (process.env.ANALYSIS_EXECUTION_MODE === "queue") {
+    try {
+      await enqueueAnalysisJob({
+        meetingId,
+        userId: record.userId,
+        vaultFileId: record.vaultFileId,
+        analysisMode: record.analysisMode,
+        title: record.meeting.title,
+        bypassModeration: true,
+        force: true,
+      });
+    } catch (error) {
+      console.error("[analysis-queue] 재처리 작업 등록 실패", error);
+      return NextResponse.json(
+        { ok: false, error: "재처리 대기열에 등록하지 못했습니다." },
+        { status: 503 },
+      );
+    }
+  } else {
+    after(() =>
+      processUploadedMeeting({
+        meetingId,
+        userId: record.userId,
+        vaultFileId: record.vaultFileId!,
+        analysisMode: record.analysisMode,
+        title: record.meeting.title,
+        bypassModeration: true,
+      }),
+    );
+  }
 
   return NextResponse.json({ ok: true, meetingId });
 }

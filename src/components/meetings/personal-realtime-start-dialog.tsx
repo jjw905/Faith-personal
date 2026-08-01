@@ -43,19 +43,9 @@ export function PersonalRealtimeStartDialog({
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (!open) return;
-    setMode("solo");
-    setQuery("");
-    setResults([]);
-    setSelected([]);
-    setMessage("");
-  }, [open]);
-
-  useEffect(() => {
     if (!open || mode !== "shared") return;
     const value = query.trim();
     if (value.length < 3) {
-      setResults([]);
       return;
     }
     let cancelled = false;
@@ -95,8 +85,19 @@ export function PersonalRealtimeStartDialog({
 
   if (!open) return null;
 
+  function resetDialog() {
+    setMode("solo");
+    setQuery("");
+    setResults([]);
+    setSelected([]);
+    setMessage("");
+  }
+
   function close() {
-    if (!saving) onClose();
+    if (!saving) {
+      resetDialog();
+      onClose();
+    }
   }
 
   function addPerson(person: Person) {
@@ -162,6 +163,8 @@ export function PersonalRealtimeStartDialog({
             )}
             onClick={() => {
               setMode("solo");
+              setQuery("");
+              setResults([]);
               setMessage("");
             }}
           >
@@ -186,6 +189,8 @@ export function PersonalRealtimeStartDialog({
             )}
             onClick={() => {
               setMode("shared");
+              setQuery("");
+              setResults([]);
               setMessage("");
             }}
           >
@@ -220,7 +225,11 @@ export function PersonalRealtimeStartDialog({
               />
               <input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  const nextQuery = event.target.value;
+                  setQuery(nextQuery);
+                  if (nextQuery.trim().length < 3) setResults([]);
+                }}
                 placeholder="핸들 또는 초대코드 검색"
                 aria-label="초대할 회원 검색"
                 className="min-h-12 w-full rounded-2xl border border-border bg-card pl-10 pr-4 text-base outline-none focus:ring-2 focus:ring-ring"
@@ -305,9 +314,14 @@ export function PersonalRealtimeStartDialog({
           <Button
             type="button"
             className="min-h-12 rounded-full px-5 text-base"
-            onClick={() =>
-              mode === "solo" ? onSolo() : onShared(selected.map((p) => p.id))
-            }
+            onClick={() => {
+              if (mode === "solo") {
+                resetDialog();
+                onSolo();
+              } else {
+                onShared(selected.map((p) => p.id));
+              }
+            }}
             disabled={saving || (mode === "shared" && selected.length === 0)}
           >
             <UserPlus className="h-5 w-5" aria-hidden />

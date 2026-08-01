@@ -18,7 +18,10 @@ import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-record
 import { MaterialSymbol } from "@/components/ui/material-symbol";
 import type { ChatReplaySettings } from "@/components/meetings/meeting-chat-replay-bar";
 import type { MeetingExportFormat } from "@/lib/meeting-export";
-import { shareMeetingLink } from "@/lib/meeting-share";
+import {
+  buildMeetingShareUrl,
+  shareMeetingLink,
+} from "@/lib/meeting-share";
 import type { MaskStyle } from "@/lib/masking/types";
 import { cn } from "@/lib/utils";
 import type { Meeting } from "@/types/meeting";
@@ -109,6 +112,7 @@ export function ChatReplayTools({
   const [menuOpen, setMenuOpen] = useState(false);
   const [maskOpen, setMaskOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [shareHint, setShareHint] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
@@ -137,7 +141,7 @@ export function ChatReplayTools({
     return () => window.clearTimeout(t);
   }, [shareHint]);
 
-  async function onShare() {
+  async function onShare(maskStyle: MaskStyle) {
     if (meeting.workspace === "team") {
       try {
         const response = await fetch(
@@ -154,8 +158,18 @@ export function ChatReplayTools({
         return;
       }
     }
-    const result = await shareMeetingLink({ title: meeting.title });
-    if (result === "copied") setShareHint("링크를 복사했습니다");
+    const result = await shareMeetingLink({
+      title: meeting.title,
+      url: buildMeetingShareUrl(maskStyle),
+    });
+    if (result === "shared") setShareHint("공유했습니다");
+    else if (result === "copied") {
+      setShareHint(
+        maskStyle === "off"
+          ? "원문 링크를 복사했습니다"
+          : "마스킹 적용 링크를 복사했습니다",
+      );
+    }
     else if (result === "failed") setShareHint("공유에 실패했습니다");
   }
 
@@ -176,7 +190,7 @@ export function ChatReplayTools({
       <ToolIconBtn
         label="공유"
         className={className}
-        onClick={() => void onShare()}
+        onClick={() => setShareOpen(true)}
       >
         <Share2 className="h-5 w-5" strokeWidth={1.75} />
       </ToolIconBtn>
@@ -314,9 +328,24 @@ export function ChatReplayTools({
         meetings={[meeting]}
         busy={false}
         onCancel={() => setDownloadOpen(false)}
-        onConfirm={(format?: MeetingExportFormat) => {
-          void exportMeetingDownload({ meeting, transcript }, format ?? "txt");
+        onConfirm={(format?: MeetingExportFormat, maskStyle?: MaskStyle) => {
+          void exportMeetingDownload(
+            { meeting, transcript },
+            format ?? "txt",
+            maskStyle ?? "partial",
+          );
           setDownloadOpen(false);
+        }}
+      />
+      <MeetingRecordsActionDialog
+        open={shareOpen}
+        mode="share"
+        meetings={[meeting]}
+        busy={false}
+        onCancel={() => setShareOpen(false)}
+        onConfirm={(_format, maskStyle) => {
+          setShareOpen(false);
+          void onShare(maskStyle ?? "partial");
         }}
       />
     </>

@@ -11,6 +11,8 @@ export type MeetingExportFormatMeta = {
   toneClass: string;
   blurb: string;
   phase: 1 | 2;
+  /** 최종 사용자에게 기본 노출하는 문서·업무용 포맷. */
+  popular?: boolean;
 };
 
 export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
@@ -23,6 +25,7 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
     toneClass: "bg-[#e8eef8] text-[#3d5a8a]",
     blurb: "일반 텍스트",
     phase: 1,
+    popular: true,
   },
   {
     id: "md",
@@ -53,6 +56,7 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
     toneClass: "bg-[#e7f2ea] text-[#2f6b45]",
     blurb: "표·엑셀",
     phase: 1,
+    popular: true,
   },
   {
     id: "srt",
@@ -76,13 +80,14 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
   },
   {
     id: "docx",
-    label: "Word",
+    label: "DOCX (한글·Word)",
     ext: "docx",
     mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     symbol: "description",
     toneClass: "bg-[#e8eef8] text-[#3d5a8a]",
-    blurb: "Word 문서",
+    blurb: "한글에서 열 수 있는 문서",
     phase: 2,
+    popular: true,
   },
   {
     id: "pdf",
@@ -93,8 +98,14 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
     toneClass: "bg-[#f3e8e8] text-[#8a3d3d]",
     blurb: "PDF 문서",
     phase: 2,
+    popular: true,
   },
 ];
+
+/** 사용자 화면에서 우선 제공하는 일반 문서 포맷. HWP 대신 한글 호환 DOCX를 사용한다. */
+export const POPULAR_MEETING_EXPORT_FORMATS = MEETING_EXPORT_FORMATS.filter(
+  (format) => format.popular,
+);
 
 export function meetingExportFormatMeta(
   id: MeetingExportFormat,

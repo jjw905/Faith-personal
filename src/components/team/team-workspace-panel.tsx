@@ -8,11 +8,16 @@ import {
   LayoutGrid,
   List,
   LoaderCircle,
+  KeyRound,
   Megaphone,
   Mic,
   Pencil,
   Plus,
+  ScrollText,
   Settings,
+  ShieldCheck,
+  UserRoundPlus,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -171,7 +176,9 @@ type WorkspacePayload = {
   currentMember: {
     userId: string;
     role: PreviewRole;
+    canInvite: boolean;
     canCreateMeeting: boolean;
+    canManageRecordAccess: boolean;
   };
   unconfirmedAlerts: Array<{
     notificationId: string | null;
@@ -198,7 +205,9 @@ type WorkspacePayload = {
   members?: ParticipantOption[];
   capabilities: {
     manageTeam: boolean;
+    invite: boolean;
     createMeeting: boolean;
+    manageRecordAccess: boolean;
     viewAudit: boolean;
     isOwner: boolean;
     isLeader: boolean;
@@ -636,9 +645,15 @@ export function TeamWorkspacePanel() {
         showLeader: false,
         showOwner: false,
         showCreator: false,
+        showInvite: false,
+        showRecordAccess: false,
+        showAudit: false,
         canActLeader: false,
         canActOwner: false,
         canActCreator: false,
+        canActInvite: false,
+        canActRecordAccess: false,
+        canActAudit: false,
       };
     }
     return {
@@ -648,9 +663,19 @@ export function TeamWorkspacePanel() {
         viewRole === "ADMIN" ||
         viewRole === "OWNER" ||
         (!isPreviewing && real.createMeeting),
+      showInvite: isPreviewing
+        ? viewRole === "ADMIN" || viewRole === "OWNER"
+        : real.invite,
+      showRecordAccess: isPreviewing
+        ? viewRole === "ADMIN" || viewRole === "OWNER"
+        : real.manageRecordAccess,
+      showAudit: viewRole === "OWNER",
       canActLeader: real.isLeader,
       canActOwner: real.isOwner,
       canActCreator: real.createMeeting,
+      canActInvite: real.invite,
+      canActRecordAccess: real.manageRecordAccess,
+      canActAudit: real.viewAudit,
     };
   }, [data?.capabilities, isPreviewing, viewRole]);
 
@@ -804,11 +829,17 @@ export function TeamWorkspacePanel() {
   const manageView = searchParams.get("manage");
   const allowedManage =
     manageView === "members" || manageView === "security"
-      ? actualRole === "OWNER"
+      ? viewRole === "OWNER"
       : manageView === "records" ||
           manageView === "invite" ||
           manageView === "announcements"
-        ? actualRole === "OWNER" || actualRole === "ADMIN"
+        ? isPreviewing
+          ? viewRole === "OWNER" || viewRole === "ADMIN"
+          : manageView === "invite"
+            ? Boolean(data?.capabilities.invite)
+            : manageView === "records"
+              ? Boolean(data?.capabilities.manageRecordAccess)
+              : Boolean(data?.capabilities.manageTeam)
         : false;
   const managementPageOpen =
     allowedManage &&
@@ -1339,6 +1370,104 @@ export function TeamWorkspacePanel() {
                   </span>
                 </button>
               </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {caps.showInvite ||
+      caps.showOwner ||
+      caps.showRecordAccess ||
+      caps.showAudit ? (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight text-foreground">
+              팀 운영
+            </h2>
+            <p className="mt-1 text-base text-muted">
+              팀 관리 기능은 이 화면에서 필요한 항목으로 들어갑니다.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {caps.showInvite ? (
+              <button
+                type="button"
+                disabled={!caps.canActInvite}
+                onClick={() => router.push("/team?manage=invite")}
+                className={CTA_CLASS}
+              >
+                <UserRoundPlus
+                  className="h-5 w-5 shrink-0 text-muted"
+                  strokeWidth={1.75}
+                />
+                <span className="text-lg font-semibold tracking-tight text-foreground">
+                  멤버 초대
+                </span>
+              </button>
+            ) : null}
+            {caps.showOwner ? (
+              <button
+                type="button"
+                disabled={!caps.canActOwner}
+                onClick={() => router.push("/team?manage=members")}
+                className={CTA_CLASS}
+              >
+                <UsersRound
+                  className="h-5 w-5 shrink-0 text-muted"
+                  strokeWidth={1.75}
+                />
+                <span className="text-lg font-semibold tracking-tight text-foreground">
+                  구성원과 권한
+                </span>
+              </button>
+            ) : null}
+            {caps.showOwner ? (
+              <button
+                type="button"
+                disabled={!caps.canActOwner}
+                onClick={() => router.push("/team?manage=security")}
+                className={CTA_CLASS}
+              >
+                <ShieldCheck
+                  className="h-5 w-5 shrink-0 text-muted"
+                  strokeWidth={1.75}
+                />
+                <span className="text-lg font-semibold tracking-tight text-foreground">
+                  보안 정책
+                </span>
+              </button>
+            ) : null}
+            {caps.showRecordAccess ? (
+              <button
+                type="button"
+                disabled={!caps.canActRecordAccess}
+                onClick={() => router.push("/team?manage=records")}
+                className={CTA_CLASS}
+              >
+                <KeyRound
+                  className="h-5 w-5 shrink-0 text-muted"
+                  strokeWidth={1.75}
+                />
+                <span className="text-lg font-semibold tracking-tight text-foreground">
+                  기록 열람
+                </span>
+              </button>
+            ) : null}
+            {caps.showAudit ? (
+              <button
+                type="button"
+                disabled={!caps.canActAudit}
+                onClick={() => router.push("/audit")}
+                className={CTA_CLASS}
+              >
+                <ScrollText
+                  className="h-5 w-5 shrink-0 text-muted"
+                  strokeWidth={1.75}
+                />
+                <span className="text-lg font-semibold tracking-tight text-foreground">
+                  감사 로그
+                </span>
+              </button>
             ) : null}
           </div>
         </section>

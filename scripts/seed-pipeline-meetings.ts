@@ -167,7 +167,7 @@ async function buildOne(sample: Sample) {
   console.log(`\n== ${sample.meetingId}`);
   const baseText = readFileSync(join(BENCH, sample.text), "utf8").trim();
 
-  const glossary = buildGlossary({
+  const glossary = await buildGlossary({
     title: sample.title,
     participantNames: knownParticipants(sample.meetingId),
   });

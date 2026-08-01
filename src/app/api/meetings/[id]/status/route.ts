@@ -24,8 +24,8 @@ export async function GET(_request: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const healed = healStaleProcessingMeeting(id);
-  const row = healed ?? getUserMeeting(id);
+  const healed = await healStaleProcessingMeeting(id);
+  const row = healed ?? (await getUserMeeting(id));
   if (!row || row.userId !== session.user.id) {
     return NextResponse.json(
       { ok: false, message: "회의 없음" },

@@ -28,7 +28,7 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
-  const events = listPipelineAttempts(5000);
+  const events = await listPipelineAttempts(5000);
   const summary = summarizePipelineStats(events);
   const blocked = await prisma.moderationFlag.findMany({
     where: { blocked: true },

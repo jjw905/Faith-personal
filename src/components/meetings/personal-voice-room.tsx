@@ -9,7 +9,7 @@ import {
 } from "@livekit/components-react";
 import { RoomEvent, Track } from "livekit-client";
 import { LoaderCircle, LogOut, Mic, MicOff, PhoneOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   PersonAvatar,
@@ -227,7 +227,6 @@ export function PersonalVoiceRoom({ meetingId }: { meetingId: string }) {
         title={meeting.title}
         isHost={connection.isHost}
         initialRecordingActive={Boolean(connection.recordingActive)}
-        micOn={micOn}
         onMicChange={setMicOn}
         onMeetingChange={(patch) =>
           setMeeting((current) => (current ? { ...current, ...patch } : current))
@@ -243,7 +242,6 @@ function PersonalVoiceRoomBody({
   title,
   isHost,
   initialRecordingActive,
-  micOn,
   onMicChange,
   onMeetingChange,
 }: {
@@ -251,7 +249,6 @@ function PersonalVoiceRoomBody({
   title: string;
   isHost: boolean;
   initialRecordingActive: boolean;
-  micOn: boolean;
   onMicChange: (value: boolean) => void;
   onMeetingChange: (patch: Partial<Meeting>) => void;
 }) {
@@ -285,12 +282,15 @@ function PersonalVoiceRoomBody({
     });
   }
 
-  async function publish(message: unknown) {
-    await room.localParticipant.publishData(
-      new TextEncoder().encode(JSON.stringify(message)),
-      { reliable: true, topic: "faith-personal-stt" },
-    );
-  }
+  const publish = useCallback(
+    async (message: unknown) => {
+      await room.localParticipant.publishData(
+        new TextEncoder().encode(JSON.stringify(message)),
+        { reliable: true, topic: "faith-personal-stt" },
+      );
+    },
+    [room],
+  );
 
   useEffect(() => {
     const onData = (

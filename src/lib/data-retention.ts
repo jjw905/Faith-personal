@@ -10,13 +10,13 @@ export const NOTIFICATION_RECENT_DISPLAY_DAYS = 7;
 
 /**
  * 팀 감사 로그(접속기록) 서버 보관 일수. 조회·퍼지 시 적용.
- * 사용자가 줄일 수 없는 법정 최소값이다 — "개인정보의 안전성 확보조치 기준"
- * 제8조(접속기록의 보관 및 점검): 개인정보처리시스템 접속기록은 최소 1년
- * 보관·관리 의무(5만 명 이상 정보주체 처리, 고유식별정보·민감정보 처리,
- * 기간통신사업자 중 하나에 해당하면 최소 2년). 일반 데이터(회의 기록, 알림)
+ * 사용자가 줄일 수 없다 — "개인정보의 안전성 확보조치 기준" 제8조
+ * (접속기록의 보관 및 점검). 기본 법정 최소는 1년이나, Faith는 회의 내용에
+ * 고유식별·민감정보가 포함될 수 있는 처리 특성을 고려해 고시 상한 구간인
+ * 최소 2년(730일)을 제품 고정값으로 둔다. 일반 데이터(회의 기록, 알림)
  * 보존 기간은 이 조항의 대상이 아니며 사용자가 선택한다(DATA_RETENTION_OPTIONS).
  */
-export const TEAM_AUDIT_RETENTION_DAYS = 365;
+export const TEAM_AUDIT_RETENTION_DAYS = 730;
 
 /**
  * Soft-delete / trash for team meetings is not modeled (`deletedAt` absent).

@@ -54,7 +54,7 @@ export async function GET(request: Request, { params }: Params) {
     );
   }
 
-  const file = resolveReplayAudioFile(id);
+  const file = await resolveReplayAudioFile(id);
   if (!file) {
     return NextResponse.json(
       { ok: false, message: "녹음 없음" },

@@ -108,15 +108,15 @@ export async function GET(request: Request) {
     select: { meetingRetentionDays: true },
   });
   if (account) {
-    const result = purgeExpiredUserMeetings(
+    const result = await purgeExpiredUserMeetings(
       session.user.id,
       parseDataRetentionDays(account.meetingRetentionDays),
     );
     purgedCount = result.deleted;
   }
 
-  let meetings = getMeetingsForUser(session.user.id, workspace);
-  let inWorkspace = listUserMeetings(session.user.id).filter(
+  let meetings = await getMeetingsForUser(session.user.id, workspace);
+  let inWorkspace = (await listUserMeetings(session.user.id)).filter(
     (r) => r.workspace === workspace,
   );
   if (workspace === "team" && inWorkspace.length > 0) {
@@ -140,7 +140,7 @@ export async function GET(request: Request) {
     );
     inWorkspace = inWorkspace.filter((row) => accessibleIds.has(row.id));
     const userMeetingIds = new Set(
-      listUserMeetings(session.user.id)
+      (await listUserMeetings(session.user.id))
         .filter((row) => row.workspace === workspace)
         .map((row) => row.id),
     );

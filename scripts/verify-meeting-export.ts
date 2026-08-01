@@ -9,11 +9,16 @@ import { inflateRawSync } from "node:zlib";
 import {
   buildMeetingExportArtifact,
   buildMeetingExportModel,
+  maskMeetingExportModel,
   serializeMeetingTxt,
   type MeetingExportFormat,
 } from "../src/lib/meeting-export";
 import { escapeCsvField } from "../src/lib/meeting-export/csv";
 import { escapeMarkdownBodyLine } from "../src/lib/meeting-export/md";
+import {
+  buildMeetingShareUrl,
+  resolveMeetingShareMask,
+} from "../src/lib/meeting-share";
 import type { Meeting } from "../src/types/meeting";
 import type { MeetingTimeline } from "../src/types/timeline";
 import type { MeetingTranscript } from "../src/types/transcript";
@@ -30,7 +35,14 @@ const meeting: Meeting = {
   summaryTags: ["검증"],
   date: "2026-07-31 14:00",
   duration: "32분",
-  participants: [],
+  participants: [
+    {
+      id: "participant-1",
+      name: "김Faith",
+      initials: "김",
+      color: "bg-primary",
+    },
+  ],
   status: "completed",
   security: "unprotected",
   workspace: "personal",
@@ -96,7 +108,7 @@ const transcript: MeetingTranscript = {
       time: "01:00",
       startSec: 60,
       speaker: "참석자",
-      text: "후속 액션을 정리합니다 --> 아님 → 로 바꿔야 함",
+      text: "후속 액션을 정리합니다 --> 아님 → 로 바꿔야 함, 연락처 010-1234-5678",
     },
   ],
 };
@@ -247,6 +259,21 @@ async function main() {
   const pCount = (documentXml!.match(/<w:p[\s>]/g) || []).length;
   assert(pCount >= 10, `docx paragraph count (${pCount})`);
 
+  // Masked export: source model stays intact, all output formats use the masked model.
+  const maskedModel = maskMeetingExportModel(model, "partial", ["김Faith"]);
+  const maskedTxt = serializeMeetingTxt(maskedModel);
+  assertIncludes(maskedTxt, "김****", "masked txt name");
+  assert(!maskedTxt.includes("010-1234-5678"), "masked txt phone");
+  assert(model.actions[0]?.owner === "김Faith", "source model unchanged");
+  const maskedDocx = await buildMeetingExportArtifact(maskedModel, "docx");
+  const maskedDocumentXml = unzipLocalFile(
+    maskedDocx.bytes,
+    "word/document.xml",
+  );
+  assert(Boolean(maskedDocumentXml), "masked docx has document.xml");
+  assert(!maskedDocumentXml!.includes("김Faith"), "masked docx name");
+  assert(!maskedDocumentXml!.includes("010-1234-5678"), "masked docx phone");
+
   // PDF (compressed streams — use pdf-lib to inspect)
   const fontPath = path.join(
     process.cwd(),
@@ -266,6 +293,21 @@ async function main() {
     loaded.getForm !== undefined && pageCount >= 2,
     "pdf loads after hangul embed",
   );
+
+  // Share link masking policy is encoded and parsed without changing access control.
+  const maskedShareUrl = buildMeetingShareUrl(
+    "partial",
+    "https://faith.test/meetings/mtg-export-verify?line=l2",
+  );
+  const maskedShare = new URL(maskedShareUrl);
+  assert(maskedShare.searchParams.get("mask") === "partial", "share mask query");
+  assert(maskedShare.searchParams.get("line") === "l2", "share focus preserved");
+  const originalShare = new URL(
+    buildMeetingShareUrl("off", maskedShareUrl),
+  );
+  assert(!originalShare.searchParams.has("mask"), "share off removes mask");
+  assert(resolveMeetingShareMask("label") === "label", "share label parsed");
+  assert(resolveMeetingShareMask("unexpected") === null, "share invalid rejected");
 
   // All formats build
   const formats: MeetingExportFormat[] = [

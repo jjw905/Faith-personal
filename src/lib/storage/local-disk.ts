@@ -1,7 +1,9 @@
 import { mkdir, readFile, unlink, writeFile } from "fs/promises";
-import path from "path";
+import path from "node:path";
 
-const ROOT = path.join(process.cwd(), ".data", "vault");
+import { faithDataPath } from "@/lib/faith-data-root";
+
+const ROOT = faithDataPath("vault");
 
 function resolveKey(key: string) {
   const full = path.resolve(ROOT, key);

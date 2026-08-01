@@ -3,12 +3,16 @@ import {
   mkdirSync,
   readFileSync,
   appendFileSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { AnalysisMode as PrismaAnalysisMode } from "@prisma/client";
 
 import type { TopicBucket } from "@/lib/stt/semantic-structure";
 import type { AnalysisMode } from "@/lib/stt/analysis-mode";
+import { faithDataPath } from "@/lib/faith-data-root";
+import { prisma } from "@/lib/prisma";
 
 /**
  * 회의 처리 1건의 결과만 남기는 통계 전용 로그.
@@ -45,17 +49,17 @@ export type PipelineAttemptEvent = {
   topicBucket?: TopicBucket;
 };
 
-const ROOT = join(process.cwd(), ".data", "pipeline-stats");
+const ROOT = faithDataPath("pipeline-stats");
 const LOG = join(ROOT, "events.jsonl");
+const USE_DATABASE = process.env.DURABLE_STATE_BACKEND === "database";
 
 function ensureDir() {
   if (!existsSync(ROOT)) mkdirSync(ROOT, { recursive: true });
 }
 
-export function appendPipelineAttempt(
+export async function appendPipelineAttempt(
   partial: Omit<PipelineAttemptEvent, "id" | "at"> & { at?: string },
-): PipelineAttemptEvent {
-  ensureDir();
+): Promise<PipelineAttemptEvent> {
   const event: PipelineAttemptEvent = {
     id: randomUUID(),
     at: partial.at ?? new Date().toISOString(),
@@ -70,11 +74,62 @@ export function appendPipelineAttempt(
     failedStage: partial.failedStage,
     topicBucket: partial.topicBucket,
   };
+  if (USE_DATABASE) {
+    await prisma.pipelineAttempt.create({
+      data: {
+        id: event.id,
+        at: new Date(event.at),
+        meetingId: event.meetingId,
+        userId: event.userId,
+        model: event.model,
+        analysisMode:
+          event.analysisMode === "precision"
+            ? PrismaAnalysisMode.PRECISION
+            : event.analysisMode === "standard"
+              ? PrismaAnalysisMode.STANDARD
+              : null,
+        durationSec: event.durationSec,
+        chargedSec: event.chargedSec,
+        speakerCount: event.speakerCount,
+        outcome: event.outcome,
+        failedStage: event.failedStage,
+        topicBucket: event.topicBucket,
+      },
+    });
+    return event;
+  }
+  ensureDir();
   appendFileSync(LOG, `${JSON.stringify(event)}\n`, "utf8");
   return event;
 }
 
-export function listPipelineAttempts(limit = 5000): PipelineAttemptEvent[] {
+export async function listPipelineAttempts(
+  limit = 5000,
+): Promise<PipelineAttemptEvent[]> {
+  if (USE_DATABASE) {
+    const rows = await prisma.pipelineAttempt.findMany({
+      orderBy: { at: "desc" },
+      take: Math.max(1, Math.floor(limit)),
+    });
+    return rows.reverse().map((row) => ({
+      id: row.id,
+      at: row.at.toISOString(),
+      meetingId: row.meetingId,
+      userId: row.userId,
+      model: row.model,
+      analysisMode: row.analysisMode
+        ? (row.analysisMode.toLowerCase() as AnalysisMode)
+        : undefined,
+      durationSec: row.durationSec ?? undefined,
+      chargedSec: row.chargedSec ?? undefined,
+      speakerCount: row.speakerCount ?? undefined,
+      outcome: row.outcome as PipelineOutcome,
+      failedStage: row.failedStage
+        ? (row.failedStage as PipelineFailedStage)
+        : undefined,
+      topicBucket: row.topicBucket as TopicBucket | undefined,
+    }));
+  }
   if (!existsSync(LOG)) return [];
   const raw = readFileSync(LOG, "utf8");
   const lines = raw.split("\n").filter(Boolean);
@@ -87,6 +142,72 @@ export function listPipelineAttempts(limit = 5000): PipelineAttemptEvent[] {
     }
   }
   return out.reverse();
+}
+
+export async function deletePipelineAttemptsForMeeting(
+  meetingId: string,
+): Promise<number> {
+  if (USE_DATABASE) {
+    const result = await prisma.pipelineAttempt.deleteMany({
+      where: { meetingId },
+    });
+    return result.count;
+  }
+  if (!existsSync(LOG)) return 0;
+  const kept: string[] = [];
+  let deleted = 0;
+  for (const line of readFileSync(LOG, "utf8").split("\n").filter(Boolean)) {
+    try {
+      const event = JSON.parse(line) as Partial<PipelineAttemptEvent>;
+      if (event.meetingId === meetingId) {
+        deleted += 1;
+        continue;
+      }
+    } catch {
+      // Preserve malformed historical lines for manual inspection.
+    }
+    kept.push(line);
+  }
+  if (deleted > 0) {
+    writeFileSync(LOG, kept.length > 0 ? `${kept.join("\n")}\n` : "", "utf8");
+  }
+  return deleted;
+}
+
+export async function purgePipelineAttemptsForUserBefore(
+  userId: string,
+  cutoff: Date,
+): Promise<number> {
+  if (USE_DATABASE) {
+    const result = await prisma.pipelineAttempt.deleteMany({
+      where: { userId, at: { lt: cutoff } },
+    });
+    return result.count;
+  }
+  if (!existsSync(LOG)) return 0;
+  const kept: string[] = [];
+  let deleted = 0;
+  for (const line of readFileSync(LOG, "utf8").split("\n").filter(Boolean)) {
+    try {
+      const event = JSON.parse(line) as Partial<PipelineAttemptEvent>;
+      const at = event.at ? Date.parse(event.at) : Number.NaN;
+      if (
+        event.userId === userId &&
+        Number.isFinite(at) &&
+        at < cutoff.getTime()
+      ) {
+        deleted += 1;
+        continue;
+      }
+    } catch {
+      // Preserve malformed historical lines for manual inspection.
+    }
+    kept.push(line);
+  }
+  if (deleted > 0) {
+    writeFileSync(LOG, kept.length > 0 ? `${kept.join("\n")}\n` : "", "utf8");
+  }
+  return deleted;
 }
 
 export const DURATION_BUCKETS = ["0-10", "10-30", "30-60", "60+"] as const;
@@ -194,16 +315,16 @@ export function summarizePipelineStats(
  * 실패도 STT 비용은 이미 발생했으므로 쿼터에 포함). 쿼터로 막힌 시도(durationSec
  * 없음)는 비용이 없으니 합산하지 않는다.
  */
-export function sumUserDurationSecInRange(
+export async function sumUserDurationSecInRange(
   userId: string,
   start: Date,
   end: Date,
   events?: PipelineAttemptEvent[],
   excludedMeetingIds?: ReadonlySet<string>,
-): number {
+): Promise<number> {
   const startMs = start.getTime();
   const endMs = end.getTime();
-  const all = events ?? listPipelineAttempts();
+  const all = events ?? (await listPipelineAttempts());
   let total = 0;
   for (const e of all) {
     if (e.userId !== userId) continue;

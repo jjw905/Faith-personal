@@ -26,12 +26,12 @@ function mimeForAudioPath(path: string): string {
  * meeting.replayAudio → 로컬 벤치 파일.
  * path traversal 방지: `.data/stt-bench` 아래 basename만.
  */
-export function resolveReplayAudioFile(meetingId: string): {
+export async function resolveReplayAudioFile(meetingId: string): Promise<{
   absolutePath: string;
   label: string;
   mime: string;
-} | null {
-  const meeting = getMeetingById(meetingId);
+} | null> {
+  const meeting = await getMeetingById(meetingId);
   const raw = meeting?.replayAudio?.trim();
   if (!raw || raw.startsWith("/")) return null;
 
@@ -56,12 +56,12 @@ export function resolveReplayAudioFile(meetingId: string): {
  * 보관함 원본 → meeting.replayAudio(벤치/공개 샘플).
  * 첨부 파일명·해시 샘플로 긴 타임라인을 가짜 매칭하지 않음.
  */
-export function resolveMeetingReplayAudio(input: {
+export async function resolveMeetingReplayAudio(input: {
   meeting: Meeting;
   transcript: MeetingTranscript;
-}): { src: string; label: string } | null {
+}): Promise<{ src: string; label: string } | null> {
   const { meeting } = input;
-  const row = getUserMeeting(meeting.id);
+  const row = await getUserMeeting(meeting.id);
   if (row?.vaultFileId) {
     return {
       src: `/api/vault/${row.vaultFileId}/content`,
@@ -79,7 +79,7 @@ export function resolveMeetingReplayAudio(input: {
     };
   }
 
-  if (!resolveReplayAudioFile(meeting.id)) return null;
+  if (!(await resolveReplayAudioFile(meeting.id))) return null;
 
   return {
     src: `/api/meetings/${meeting.id}/replay-audio`,

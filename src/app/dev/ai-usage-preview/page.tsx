@@ -8,7 +8,7 @@ import { listAiUsage } from "@/lib/stt/usage-store";
 /** 로컬 렌더 검사용. 로그인 없이 AI 사용량 레이아웃 확인. */
 export default async function AiUsagePreviewPage() {
   if (process.env.NODE_ENV === "production") notFound();
-  const summary = await summarizeAiUsageWithFx(listAiUsage(5000));
+  const summary = await summarizeAiUsageWithFx(await listAiUsage(5000));
   const initialUsers = summary.byUser.map((u) => ({
     id: u.userId,
     label: u.userId,

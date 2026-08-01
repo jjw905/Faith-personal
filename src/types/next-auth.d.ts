@@ -14,6 +14,8 @@ declare module "next-auth" {
       provider?: string;
       disabled?: boolean;
       hasPassword?: boolean;
+      mfaEnabled?: boolean;
+      mfaVerified?: boolean;
     };
   }
 
@@ -21,6 +23,9 @@ declare module "next-auth" {
     role?: Role;
     plan?: Plan;
     disabled?: boolean;
+    mfaEnabled?: boolean;
+    mfaVersion?: number;
+    mfaVerified?: boolean;
   }
 }
 
@@ -33,6 +38,10 @@ declare module "next-auth/jwt" {
     picture?: string;
     disabled?: boolean;
     hasPassword?: boolean;
+    mfaEnabled?: boolean;
+    mfaVersion?: number;
+    mfaVerified?: boolean;
+    mfaVerifiedVersion?: number;
     /** 마지막 DB 동기화 epoch ms */
     lastDbSync?: number;
   }

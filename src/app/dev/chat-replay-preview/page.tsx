@@ -9,13 +9,15 @@ import {
 import { resolveMeetingReplayAudio } from "@/lib/meeting-replay-audio";
 
 /** 로컬 음성+대사 다시듣기 렌더 검수. */
-export default function ChatReplayPreviewPage() {
+export default async function ChatReplayPreviewPage() {
   if (process.env.NODE_ENV === "production") notFound();
 
-  const meeting = getMeetingById("mtg-stt-assembly") ?? getMeetingById("mtg-001");
+  const meeting =
+    (await getMeetingById("mtg-stt-assembly")) ??
+    (await getMeetingById("mtg-001"));
   if (!meeting) notFound();
-  const transcript = getMeetingTranscript(meeting.id);
-  const audio = resolveMeetingReplayAudio({ meeting, transcript });
+  const transcript = await getMeetingTranscript(meeting.id);
+  const audio = await resolveMeetingReplayAudio({ meeting, transcript });
 
   return (
     <div className="min-h-screen bg-background p-4 sm:p-6">

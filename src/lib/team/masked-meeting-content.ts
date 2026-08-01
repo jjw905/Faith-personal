@@ -1,4 +1,4 @@
-import { maskPii } from "@/lib/masking";
+import { maskPii, type MaskStyle } from "@/lib/masking";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline, TimelineSegment } from "@/types/timeline";
 import type {
@@ -6,33 +6,41 @@ import type {
   TranscriptLine,
 } from "@/types/transcript";
 
-function redactText(text: string | undefined, names: string[]) {
+function redactText(
+  text: string | undefined,
+  names: string[],
+  style: MaskStyle,
+) {
   if (!text) return text;
-  return maskPii(text, { names, style: "partial" }).masked;
+  return maskPii(text, { names, style }).masked;
 }
 
 function redactTranscriptLine(
   line: TranscriptLine,
   names: string[],
+  style: MaskStyle,
 ): TranscriptLine {
   return {
     ...line,
-    speaker: redactText(line.speaker, names) ?? line.speaker,
-    text: redactText(line.text, names),
+    speaker: redactText(line.speaker, names, style) ?? line.speaker,
+    text: redactText(line.text, names, style),
     attachment: line.attachment
       ? {
           ...line.attachment,
-          name: redactText(line.attachment.name, names) ?? line.attachment.name,
+          name:
+            redactText(line.attachment.name, names, style) ??
+            line.attachment.name,
         }
       : undefined,
     corrections: line.corrections?.map((correction) => ({
       ...correction,
-      wrong: redactText(correction.wrong, names) ?? correction.wrong,
+      wrong: redactText(correction.wrong, names, style) ?? correction.wrong,
       suggestion:
-        redactText(correction.suggestion, names) ?? correction.suggestion,
-      reason: redactText(correction.reason, names),
+        redactText(correction.suggestion, names, style) ??
+        correction.suggestion,
+      reason: redactText(correction.reason, names, style),
     })),
-    memo: redactText(line.memo, names),
+    memo: redactText(line.memo, names, style),
     // Word text and offsets describe the original transcript. Do not send
     // either to a masked-only viewer because they can reconstruct the source.
     words: undefined,
@@ -42,31 +50,35 @@ function redactTranscriptLine(
 export function maskTeamTranscript(
   transcript: MeetingTranscript,
   names: string[] = [],
+  style: MaskStyle = "partial",
 ): MeetingTranscript {
   return {
     ...transcript,
-    lines: transcript.lines.map((line) => redactTranscriptLine(line, names)),
+    lines: transcript.lines.map((line) =>
+      redactTranscriptLine(line, names, style),
+    ),
   };
 }
 
 function redactSegment(
   segment: TimelineSegment,
   names: string[],
+  style: MaskStyle,
 ): TimelineSegment {
   return {
     ...segment,
-    title: redactText(segment.title, names) ?? segment.title,
-    summary: redactText(segment.summary, names) ?? segment.summary,
+    title: redactText(segment.title, names, style) ?? segment.title,
+    summary: redactText(segment.summary, names, style) ?? segment.summary,
     points: segment.points?.map(
-      (point) => redactText(point, names) ?? point,
+      (point) => redactText(point, names, style) ?? point,
     ),
     speakerNotes: segment.speakerNotes?.map((note) => ({
       ...note,
-      name: redactText(note.name, names) ?? note.name,
-      said: redactText(note.said, names) ?? note.said,
+      name: redactText(note.name, names, style) ?? note.name,
+      said: redactText(note.said, names, style) ?? note.said,
     })),
     speakers: segment.speakers?.map(
-      (speaker) => redactText(speaker, names) ?? speaker,
+      (speaker) => redactText(speaker, names, style) ?? speaker,
     ),
   };
 }
@@ -74,22 +86,24 @@ function redactSegment(
 export function maskTeamTimeline(
   timeline: MeetingTimeline,
   names: string[] = [],
+  style: MaskStyle = "partial",
 ): MeetingTimeline {
   return {
     ...timeline,
     overallSummary:
-      redactText(timeline.overallSummary, names) ?? timeline.overallSummary,
+      redactText(timeline.overallSummary, names, style) ??
+      timeline.overallSummary,
     decisions: timeline.decisions?.map(
-      (decision) => redactText(decision, names) ?? decision,
+      (decision) => redactText(decision, names, style) ?? decision,
     ),
     actions: timeline.actions?.map((action) => ({
       ...action,
-      owner: redactText(action.owner, names) ?? action.owner,
-      task: redactText(action.task, names) ?? action.task,
-      due: redactText(action.due, names),
+      owner: redactText(action.owner, names, style) ?? action.owner,
+      task: redactText(action.task, names, style) ?? action.task,
+      due: redactText(action.due, names, style),
     })),
     segments: timeline.segments.map((segment) =>
-      redactSegment(segment, names),
+      redactSegment(segment, names, style),
     ),
   };
 }
@@ -97,19 +111,25 @@ export function maskTeamTimeline(
 export function maskTeamMeeting(
   meeting: Meeting,
   names: string[] = [],
+  style: MaskStyle = "partial",
 ): Meeting {
   return {
     ...meeting,
-    title: redactText(meeting.title, names) ?? meeting.title,
+    title: redactText(meeting.title, names, style) ?? meeting.title,
     participants: meeting.participants.map((participant) => ({
       ...participant,
-      name: redactText(participant.name, names) ?? participant.name,
+      name: redactText(participant.name, names, style) ?? participant.name,
       initials:
-        redactText(participant.initials, names) ?? participant.initials,
-      recognitionNote: redactText(participant.recognitionNote, names),
-      summary: redactText(participant.summary, names),
+        redactText(participant.initials, names, style) ??
+        participant.initials,
+      recognitionNote: redactText(
+        participant.recognitionNote,
+        names,
+        style,
+      ),
+      summary: redactText(participant.summary, names, style),
       tags: participant.tags?.map(
-        (tag) => redactText(tag, names) ?? tag,
+        (tag) => redactText(tag, names, style) ?? tag,
       ),
     })),
   };

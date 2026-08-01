@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Bell,
@@ -32,9 +32,7 @@ import {
   DEV_NAV_ITEMS,
   NAV_ITEMS,
   OPS_NAV_ITEMS,
-  TEAM_NAV_ITEMS,
   type NavItem,
-  type TeamNavCapability,
 } from "@/lib/constants";
 import {
   DEMAND_SURVEY_ACTIVE,
@@ -75,28 +73,6 @@ function isNavActive(pathname: string, href: string) {
 
 function sectionHasActive(pathname: string, items: NavItem[]) {
   return items.some((item) => isNavActive(pathname, item.href));
-}
-
-type TeamNavSubject = {
-  role: "OWNER" | "ADMIN" | "MEMBER";
-  canInvite: boolean;
-  canCreateMeeting: boolean;
-  canManageRecordAccess: boolean;
-};
-
-function canUseTeamNav(
-  team: TeamNavSubject,
-  viewRole: TeamNavSubject["role"],
-  capability: TeamNavCapability,
-  previewing: boolean,
-) {
-  if (viewRole === "OWNER") return true;
-  if (capability === "owner" || capability === "viewAudit") return false;
-  if (viewRole === "ADMIN") return true;
-  if (previewing || capability === "manageTeam") return false;
-  if (capability === "invite") return team.canInvite;
-  if (capability === "createMeeting") return team.canCreateMeeting;
-  return team.canManageRecordAccess;
 }
 
 function readStoredOpen(key: string, fallback = true): boolean {
@@ -249,7 +225,6 @@ function MeetingsNav({
   const { workspaceId, setWorkspaceId, activeTeamId, setActiveTeamId } =
     useAppContext();
   const { resolveRole, isPreviewing, previewRole } = useTeamRolePreview();
-  const searchParams = useSearchParams();
   const meetingsActive = isMeetingsRoute(pathname);
   const teamRouteActive = isTeamRoute(pathname);
   const sectionActive = meetingsActive || teamRouteActive;
@@ -259,7 +234,8 @@ function MeetingsNav({
       {
         id: string;
         name: string;
-      } & TeamNavSubject
+        role: "OWNER" | "ADMIN" | "MEMBER";
+      }
     >
   >([]);
   const open = userOpen ?? true;
@@ -442,33 +418,15 @@ function MeetingsNav({
             ) : (
               <ul className="space-y-0.5">
                 {teams.map((team) => {
-                  const manageParam = searchParams.get("manage");
-                  const onTeamDashboard = pathname === "/team" && !manageParam;
                   const teamContextActive =
                     activeTeamId === team.id &&
                     workspaceId === "team" &&
                     (meetingsActive || teamRouteActive);
-                  const teamActive = teamContextActive && onTeamDashboard;
+                  const teamActive = teamContextActive && pathname === "/team";
                   const viewRole =
                     activeTeamId === team.id
                       ? resolveRole(team.role)
                       : team.role;
-                  const previewingTeam =
-                    isPreviewing && activeTeamId === team.id;
-                  const visibleTeamNavItems = TEAM_NAV_ITEMS.filter((sub) =>
-                    canUseTeamNav(
-                      team,
-                      viewRole,
-                      sub.capability,
-                      previewingTeam,
-                    ),
-                  );
-                  // 팀 화면(/team, 감사, 팀 회의)에 있을 때만 하위 메뉴 유지.
-                  // 개인 워크스페이스, 보관함, 도움말 등으로 나가면 접는다.
-                  const showTeamChildren =
-                    activeTeamId === team.id &&
-                    visibleTeamNavItems.length > 0 &&
-                    teamRouteActive;
 
                   return (
                     <li key={team.id}>
@@ -510,70 +468,7 @@ function MeetingsNav({
                             </span>
                           ) : null}
                         </span>
-                        {visibleTeamNavItems.length > 0 ? (
-                          <ChevronRight
-                            className={cn(
-                              "h-3.5 w-3.5 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
-                              showTeamChildren && "rotate-90",
-                              teamActive ||
-                                teamContextActive ||
-                                showTeamChildren
-                                ? "text-primary"
-                                : "text-muted-2/80",
-                            )}
-                            strokeWidth={2}
-                            aria-hidden
-                          />
-                        ) : null}
                       </Link>
-
-                      <div
-                        className={cn(
-                          "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
-                          showTeamChildren
-                            ? "grid-rows-[1fr]"
-                            : "grid-rows-[0fr]",
-                        )}
-                        aria-hidden={!showTeamChildren}
-                      >
-                        <div className="overflow-hidden">
-                          <ul className="mt-0.5 space-y-0.5 border-l border-border ml-3 pl-2">
-                            {visibleTeamNavItems.map((sub) => {
-                              const [subPath, subQuery] = sub.href.split("?");
-                              const subManage = subQuery
-                                ? new URLSearchParams(subQuery).get("manage")
-                                : null;
-                              const subActive =
-                                pathname === subPath &&
-                                (subManage
-                                  ? searchParams.get("manage") === subManage
-                                  : !searchParams.get("manage"));
-                              return (
-                                <li key={sub.href}>
-                                  <Link
-                                    href={sub.href}
-                                    tabIndex={showTeamChildren ? undefined : -1}
-                                    onClick={() => {
-                                      setWorkspaceId("team");
-                                      setActiveTeamId(team.id);
-                                      onNavigate?.();
-                                    }}
-                                    className={cn(
-                                      "flex min-h-10 cursor-pointer items-center rounded-lg px-2.5 py-2 text-sm transition-colors",
-                                      "hover:bg-surface-2 hover:text-foreground",
-                                      subActive
-                                        ? "bg-primary-soft font-medium text-primary"
-                                        : "font-normal text-muted-2",
-                                    )}
-                                  >
-                                    <span className="truncate">{sub.title}</span>
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      </div>
                     </li>
                   );
                 })}

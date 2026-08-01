@@ -33,6 +33,7 @@ import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { meetingCaptureLabel } from "@/lib/meeting-capture";
 import type { MeetingExportFormat } from "@/lib/meeting-export";
+import type { MaskStyle } from "@/lib/masking";
 import {
   formatRecentDaysLabel,
   formatSeoulListLeading,
@@ -650,7 +651,10 @@ export function RecentMeetingsTable({
     setActionConfirmOpen(true);
   }
 
-  async function confirmSelectionAction(format?: MeetingExportFormat) {
+  async function confirmSelectionAction(
+    format?: MeetingExportFormat,
+    maskStyle: MaskStyle = "partial",
+  ) {
     if (busy || selectedMeetings.length === 0 || !selectMode) return;
     setActionConfirmOpen(false);
     setBusy(true);
@@ -661,7 +665,11 @@ export function RecentMeetingsTable({
         return;
       }
       if (selectMode === "download") {
-        await exportMeetingsListDownload(selectedMeetings, format ?? "txt");
+        await exportMeetingsListDownload(
+          selectedMeetings,
+          format ?? "txt",
+          maskStyle,
+        );
         exitMode();
         return;
       }
@@ -903,8 +911,8 @@ export function RecentMeetingsTable({
           }
           setActionConfirmOpen(false);
         }}
-        onConfirm={(format) => {
-          void confirmSelectionAction(format);
+        onConfirm={(format, maskStyle) => {
+          void confirmSelectionAction(format, maskStyle);
         }}
       />
 

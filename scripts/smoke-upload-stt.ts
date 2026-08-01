@@ -54,7 +54,7 @@ async function main() {
   });
 
   const now = new Date().toISOString();
-  saveUserMeeting({
+  await saveUserMeeting({
     id: meetingId,
     userId: "smoke-user",
     vaultFileId: "smoke-vault",
@@ -70,7 +70,7 @@ async function main() {
     semantic,
   });
 
-  const row = getUserMeeting(meetingId);
+  const row = await getUserMeeting(meetingId);
 
   console.log({
     meetingId,

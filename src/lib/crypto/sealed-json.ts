@@ -5,10 +5,10 @@ import {
   randomBytes,
 } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { faithDataPath } from "@/lib/faith-data-root";
 
-const LOCAL_KEY_DIR = join(process.cwd(), ".data", "crypto");
-const LOCAL_KEY_PATH = join(LOCAL_KEY_DIR, "notifications.key");
+const LOCAL_KEY_DIR = faithDataPath("crypto");
+const LOCAL_KEY_PATH = faithDataPath("crypto", "notifications.key");
 
 function resolveKeyMaterial(): Buffer {
   const secret =

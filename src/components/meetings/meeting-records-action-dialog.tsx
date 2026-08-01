@@ -1,22 +1,23 @@
 "use client";
 
-import { Download, Trash2 } from "lucide-react";
+import { Download, Share2, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { MeetingCaptureOverline } from "@/components/meetings/meeting-capture-label";
 import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
-  MEETING_EXPORT_FORMATS,
+  POPULAR_MEETING_EXPORT_FORMATS,
   type MeetingExportFormat,
 } from "@/lib/meeting-export";
+import type { MaskStyle } from "@/lib/masking";
 import { formatSeoulListLeading } from "@/lib/meeting-date";
 import type { Meeting } from "@/types/meeting";
 import { cn } from "@/lib/utils";
 
-export type RecordsActionMode = "delete" | "download";
+export type RecordsActionMode = "delete" | "download" | "share";
 
-/** 목록·상세 공통. 삭제/다운로드 확인. */
+/** 목록·상세 공통. 삭제·내보내기·공유 확인. */
 export function MeetingRecordsActionDialog({
   open,
   mode,
@@ -33,14 +34,24 @@ export function MeetingRecordsActionDialog({
   /** 디자인 랩: 프리뷰 영역 안에만 표시 */
   contained?: boolean;
   onCancel: () => void;
-  onConfirm: (format?: MeetingExportFormat) => void;
+  onConfirm: (format?: MeetingExportFormat, maskStyle?: MaskStyle) => void;
 }) {
   const { isLive } = usePageUxPreview();
   const blockDismiss = busy && isLive;
-  const [format, setFormat] = useState<MeetingExportFormat>("txt");
+  const [format, setFormat] = useState<MeetingExportFormat>("docx");
+  const [maskStyle, setMaskStyle] = useState<MaskStyle>("partial");
 
   useEffect(() => {
-    if (open && mode === "download") setFormat("txt");
+    if (!open || (mode !== "download" && mode !== "share")) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (mode === "download") setFormat("docx");
+      setMaskStyle("partial");
+    });
+    return () => {
+      active = false;
+    };
   }, [open, mode]);
 
   useEffect(() => {
@@ -61,31 +72,42 @@ export function MeetingRecordsActionDialog({
   const count = meetings.length;
   const single = count === 1;
   const isDelete = mode === "delete";
-  const selectedMeta = MEETING_EXPORT_FORMATS.find((f) => f.id === format);
+  const isDownload = mode === "download";
+  const formatOptions = [...POPULAR_MEETING_EXPORT_FORMATS].sort((a, b) => {
+    const order = ["docx", "pdf", "txt", "csv"];
+    return order.indexOf(a.id) - order.indexOf(b.id);
+  });
+  const selectedMeta = formatOptions.find((f) => f.id === format);
 
   const title = isDelete
     ? single
       ? "이 기록을 삭제할까요?"
       : "선택한 기록을 삭제할까요?"
-    : single
-      ? "이 기록을 받을까요?"
-      : "선택한 기록을 받을까요?";
+    : isDownload
+      ? single
+        ? "이 기록을 내보낼까요?"
+        : "선택한 기록을 내보낼까요?"
+      : "이 기록을 공유할까요?";
 
   const desc = isDelete
     ? "삭제 후 복구할 수 없습니다."
-    : selectedMeta
-      ? `${selectedMeta.blurb}로 저장합니다.`
-      : "선택한 형식으로 저장합니다.";
+    : isDownload
+      ? selectedMeta
+        ? `${selectedMeta.blurb}로 저장합니다.`
+        : "선택한 형식으로 저장합니다."
+      : "링크는 현재 권한을 유지하며, 아래에서 선택한 가림 방식으로 열립니다.";
 
   const confirmLabel = isDelete
     ? single
       ? "삭제"
       : `${count}건 삭제`
-    : single
-      ? "받기"
-      : `${count}건 받기`;
+    : isDownload
+      ? single
+        ? "내보내기"
+        : `${count}건 내보내기`
+      : "공유 링크 복사";
 
-  const ConfirmIcon = isDelete ? Trash2 : Download;
+  const ConfirmIcon = isDelete ? Trash2 : isDownload ? Download : Share2;
 
   return (
     <div
@@ -101,7 +123,7 @@ export function MeetingRecordsActionDialog({
         aria-modal="true"
         aria-labelledby="records-action-confirm-title"
         aria-describedby="records-action-confirm-desc"
-        className="w-full max-w-md rounded-t-3xl bg-card px-5 pt-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] shadow-float sm:rounded-3xl sm:p-7"
+        className="max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto rounded-t-3xl bg-card px-5 pt-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] shadow-float sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-7"
         onClick={(event) => event.stopPropagation()}
       >
         <h2
@@ -117,13 +139,13 @@ export function MeetingRecordsActionDialog({
           {desc}
         </p>
 
-        {!isDelete ? (
+        {!isDelete && isDownload ? (
           <div
             className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2"
             role="radiogroup"
             aria-label="저장 형식"
           >
-            {MEETING_EXPORT_FORMATS.map((item) => {
+            {formatOptions.map((item) => {
               const selected = format === item.id;
               return (
                 <button
@@ -159,6 +181,85 @@ export function MeetingRecordsActionDialog({
                 </button>
               );
             })}
+            <p className="col-span-full px-1 text-base leading-relaxed text-muted">
+              한글 전용 HWP 대신 한글에서 바로 열고 편집할 수 있는 DOCX를
+              제공합니다.
+            </p>
+          </div>
+        ) : null}
+
+        {!isDelete ? (
+          <div className="mt-4 rounded-2xl bg-surface p-3">
+            <div className="px-1">
+              <p className="text-base font-semibold text-foreground">
+                개인정보 마스킹
+              </p>
+              <p className="mt-1 text-base leading-relaxed text-muted">
+                {isDownload
+                  ? "파일에만 적용되며 원본 회의록은 바뀌지 않습니다."
+                  : "공유 링크를 연 사람에게 보이는 내용에 적용합니다."}
+              </p>
+            </div>
+            <div
+              className="mt-3 grid grid-cols-1 gap-2"
+              role="radiogroup"
+              aria-label="마스킹 방식"
+            >
+              {[
+                {
+                  id: "partial" as const,
+                  label: "부분 가림 (권장)",
+                  description: "앞·뒤 일부만 남기고 별표로 가립니다.",
+                },
+                {
+                  id: "label" as const,
+                  label: "항목명으로 가림",
+                  description: "[전화번호], [이메일]처럼 유형만 표시합니다.",
+                },
+                {
+                  id: "off" as const,
+                  label: "마스킹 안 함",
+                  description: "원문을 그대로 포함합니다. 외부 공유 전 확인하세요.",
+                },
+              ].map((item) => {
+                const selected = maskStyle === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={busy}
+                    onClick={() => setMaskStyle(item.id)}
+                    className={cn(
+                      "flex min-h-12 items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition-colors",
+                      selected
+                        ? "border-primary bg-card"
+                        : "border-transparent bg-surface-2/70 hover:bg-surface-2",
+                      busy && "opacity-50",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-base font-semibold text-foreground">
+                        {item.label}
+                      </span>
+                      <span className="block text-base leading-relaxed text-muted">
+                        {item.description}
+                      </span>
+                    </span>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "h-5 w-5 shrink-0 rounded-full border-2",
+                        selected
+                          ? "border-primary bg-primary"
+                          : "border-muted/60",
+                      )}
+                    />
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : null}
 
@@ -187,7 +288,12 @@ export function MeetingRecordsActionDialog({
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(isDelete ? undefined : format)}
+            onClick={() =>
+              onConfirm(
+                isDelete || !isDownload ? undefined : format,
+                isDelete ? undefined : maskStyle,
+              )
+            }
             disabled={busy}
             className={
               isDelete

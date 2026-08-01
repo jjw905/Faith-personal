@@ -2,6 +2,7 @@
 
 import {
   ChevronRight,
+  KeyRound,
   LoaderCircle,
   Search,
   UserRoundPlus,
@@ -86,6 +87,19 @@ type TeamDetail = {
     encryptionManagedBy: "service";
     kmsReady: boolean;
     kmsReason:
+      | "disabled"
+      | "non_production_node"
+      | "non_production_runtime"
+      | "missing_configuration"
+      | "not_configured"
+      | "provisioning"
+      | "failed"
+      | null;
+    kmsStatus: "NOT_CONFIGURED" | "PROVISIONING" | "ACTIVE" | "FAILED";
+    kmsRegion: string | null;
+    kmsCreatedAt: string | null;
+    kmsProvisioningReady: boolean;
+    kmsProvisioningReason:
       | "disabled"
       | "non_production_node"
       | "non_production_runtime"
@@ -831,6 +845,41 @@ export function TeamManagePanel({
     await refreshDetail(detail.team.id);
   }
 
+  async function provisionTeamSecurityKey() {
+    if (!detail) return;
+    setMessage("");
+    setSaving(true);
+    if (!isLive) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      setSaving(false);
+      setMessage("미리보기에서는 실제 KMS 키를 만들지 않습니다.");
+      return;
+    }
+    try {
+      const response = await fetch(
+        `/api/teams/${detail.team.id}/security-key`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+      const data = (await response.json()) as {
+        ok?: boolean;
+        message?: string;
+      };
+      if (!response.ok || !data.ok) {
+        setMessage(data.message ?? "팀 보안 키를 만들지 못했습니다.");
+        return;
+      }
+      await refreshDetail(detail.team.id);
+      setMessage("팀 전용 콘텐츠·감사 키를 준비했습니다.");
+    } catch {
+      setMessage("팀 보안 키를 만들지 못했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function updateMeetingAccess(
     userId: string,
     meetingId: string,
@@ -994,13 +1043,19 @@ export function TeamManagePanel({
               <div className="space-y-6">
                 <ManageCard
                   title="보안 키 준비"
-                  description="서비스 오픈에 필요한 운영 KMS 설정 상태입니다."
+                  description="팀 전용 콘텐츠·감사 암호화 키를 관리합니다."
                 >
                   <div className="px-6 py-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-lg font-semibold text-foreground">
-                        서비스 관리
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <KeyRound
+                          className="h-5 w-5 text-primary"
+                          aria-hidden
+                        />
+                        <p className="text-lg font-semibold text-foreground">
+                          팀 보안 키
+                        </p>
+                      </div>
                       <span
                         className={cn(
                           "inline-flex min-h-8 items-center rounded-full px-3 text-sm font-semibold",
@@ -1009,20 +1064,51 @@ export function TeamManagePanel({
                             : "bg-warning-soft text-warning",
                         )}
                       >
-                        {encryptionReady ? "설정 확인됨" : "설정 필요"}
+                        {encryptionReady
+                          ? "생성됨"
+                          : detail.security?.kmsStatus === "PROVISIONING"
+                            ? "생성 중"
+                            : detail.security?.kmsStatus === "FAILED"
+                              ? "다시 시도 필요"
+                              : "설정 필요"}
                       </span>
                     </div>
                     <p className="mt-2 text-base leading-6 text-muted">
-                      콘텐츠·감사 키 원문은 팀 화면에 노출하지 않습니다. 생성과
-                      교체는 운영 KMS에서 수행하며 팀 대표는 준비 상태만
-                      확인합니다.
+                      키 원문과 ARN은 팀 화면에 노출하지 않습니다. 팀 대표가
+                      생성 요청을 하면 운영 KMS에 콘텐츠용과 감사용 키를
+                      각각 만들고, Faith에는 참조 정보만 저장합니다.
                     </p>
-                    {!encryptionReady ? (
+                    {encryptionReady ? (
                       <p className="mt-3 text-base leading-6 text-muted">
-                        서비스 오픈 전에 콘텐츠 키와 감사 키를 모두 연결해야
-                        합니다.
+                        {detail.security?.kmsRegion
+                          ? `${detail.security.kmsRegion} 리전에 키가 준비되었습니다.`
+                          : "팀 전용 키가 준비되었습니다."} 실제 데이터 암호화
+                        적용은 운영 IAM 권한 연결 후 활성화됩니다.
                       </p>
-                    ) : null}
+                    ) : (
+                      <>
+                        <p className="mt-3 text-base leading-6 text-muted">
+                          {detail.security?.kmsStatus === "FAILED"
+                            ? "이전 생성 요청이 완료되지 않았습니다. 운영 환경과 IAM 권한을 확인한 뒤 다시 시도하세요."
+                            : "생성에는 운영 KMS 환경과 키 생성 권한이 필요합니다. 로컬에서는 실제 키를 만들 수 없습니다."}
+                        </p>
+                        <Button
+                          type="button"
+                          className="mt-4 min-h-12 rounded-xl text-base"
+                          disabled={
+                            saving ||
+                            !detail.security?.kmsProvisioningReady ||
+                            detail.security?.kmsStatus === "PROVISIONING"
+                          }
+                          onClick={() => void provisionTeamSecurityKey()}
+                        >
+                          {saving ||
+                          detail.security?.kmsStatus === "PROVISIONING"
+                            ? "생성 중…"
+                            : "팀 KMS 키 2개 만들기"}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </ManageCard>
 

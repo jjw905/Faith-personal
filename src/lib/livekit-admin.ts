@@ -5,6 +5,7 @@ import { RoomServiceClient } from "livekit-server-sdk";
 import { prisma } from "@/lib/prisma";
 
 function roomService() {
+  if (process.env.LIVEKIT_ENABLED !== "1") return null;
   const rawUrl = process.env.LIVEKIT_URL;
   const apiKey = process.env.LIVEKIT_API_KEY;
   const apiSecret = process.env.LIVEKIT_API_SECRET;

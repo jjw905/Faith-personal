@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const row = getUserMeeting(id);
+  const row = await getUserMeeting(id);
   if (!row || row.userId !== session.user.id) {
     return NextResponse.json(
       { ok: false, message: "회의 없음" },
@@ -92,7 +92,7 @@ export async function PATCH(request: Request, { params }: Params) {
         { status: 400 },
       );
     }
-    const next = updateUserMeeting(id, {
+    const next = await updateUserMeeting(id, {
       meeting: renamed.record.meeting,
       transcript: renamed.record.transcript,
       timeline: renamed.record.timeline,
@@ -128,7 +128,7 @@ export async function PATCH(request: Request, { params }: Params) {
         { status: 400 },
       );
     }
-    const next = updateUserMeeting(id, { transcript: applied.record.transcript });
+    const next = await updateUserMeeting(id, { transcript: applied.record.transcript });
     return NextResponse.json({ ok: true, transcript: next?.transcript });
   }
 
@@ -147,7 +147,7 @@ export async function PATCH(request: Request, { params }: Params) {
         { status: 400 },
       );
     }
-    const next = updateUserMeeting(id, { transcript: updated.record.transcript });
+    const next = await updateUserMeeting(id, { transcript: updated.record.transcript });
     return NextResponse.json({ ok: true, transcript: next?.transcript });
   }
 
@@ -182,7 +182,7 @@ export async function PATCH(request: Request, { params }: Params) {
     );
   }
 
-  const next = updateUserMeeting(id, {
+  const next = await updateUserMeeting(id, {
     meeting: { ...row.meeting, ...patch },
   });
 
@@ -199,7 +199,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   }
 
   const { id } = await params;
-  const row = getUserMeeting(id);
+  const row = await getUserMeeting(id);
   if (!row || row.userId !== session.user.id) {
     return NextResponse.json(
       { ok: false, message: "회의 없음" },
@@ -218,6 +218,6 @@ export async function DELETE(_request: Request, { params }: Params) {
     }
   }
 
-  deleteUserMeeting(id);
+  await deleteUserMeeting(id);
   return NextResponse.json({ ok: true });
 }

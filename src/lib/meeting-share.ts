@@ -1,3 +1,5 @@
+import type { MaskStyle } from "@/lib/masking";
+
 /** 회의 링크 공유. Web Share → 클립보드 폴백. */
 export async function shareMeetingLink(payload: {
   title: string;
@@ -33,4 +35,30 @@ export async function shareMeetingLink(payload: {
   } catch {
     return "failed";
   }
+}
+
+/** 공유 링크에 파일/화면과 같은 개인정보 가림 정책을 전달한다. */
+export function buildMeetingShareUrl(
+  maskStyle: MaskStyle,
+  baseUrl?: string,
+): string {
+  const rawUrl =
+    baseUrl ?? (typeof window !== "undefined" ? window.location.href : "");
+  if (!rawUrl) return "";
+
+  try {
+    const url = new URL(rawUrl);
+    if (maskStyle === "off") url.searchParams.delete("mask");
+    else url.searchParams.set("mask", maskStyle);
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+export function resolveMeetingShareMask(
+  value: string | string[] | undefined,
+): MaskStyle | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "partial" || raw === "label" || raw === "off" ? raw : null;
 }

@@ -93,7 +93,7 @@ export async function processRealtimeMeeting(params: {
     console.warn(`[realtime] 화자분리 없이 진행: ${diarizationReady.reason}`);
   }
 
-  const glossary = buildGlossary({
+  const glossary = await buildGlossary({
     userId: params.userId,
     title: params.title,
   });
@@ -128,7 +128,7 @@ export async function processRealtimeMeeting(params: {
   }
 
   if (params.logUsage !== false) {
-    appendAiUsage({
+    await appendAiUsage({
       meetingId: params.meetingId,
       userId: params.userId ?? "realtime",
       title: params.title,
@@ -155,7 +155,7 @@ export async function processRealtimeMeeting(params: {
         timed.durationBillSec || stt.durationSec,
       );
       if (params.logUsage !== false && timingUsd > 0) {
-        appendAiUsage({
+        await appendAiUsage({
           meetingId: params.meetingId,
           userId: params.userId ?? "realtime",
           title: params.title,
@@ -223,7 +223,7 @@ export async function processRealtimeMeeting(params: {
     confirmedNames.push(...named.guesses.map((g) => g.name));
     speakerNameUsd = named.usage.estimatedUsd;
     if (params.logUsage !== false && named.usage.inputTokens > 0) {
-      appendAiUsage({
+      await appendAiUsage({
         meetingId: params.meetingId,
         userId: params.userId ?? "realtime",
         title: params.title,
@@ -242,7 +242,7 @@ export async function processRealtimeMeeting(params: {
   }
 
   if (params.logUsage !== false) {
-    appendAiUsage({
+    await appendAiUsage({
       meetingId: params.meetingId,
       userId: params.userId ?? "realtime",
       title: params.title,
@@ -270,7 +270,7 @@ export async function processRealtimeMeeting(params: {
 
   let suggestUsd = 0;
   try {
-    const fullGlossary = buildGlossary({
+    const fullGlossary = await buildGlossary({
       userId: params.userId,
       title: params.title,
       participantNames: confirmedNames,
@@ -289,7 +289,7 @@ export async function processRealtimeMeeting(params: {
     );
     suggestUsd = suggested.usage.estimatedUsd;
     if (params.logUsage !== false && suggested.usage.inputTokens > 0) {
-      appendAiUsage({
+      await appendAiUsage({
         meetingId: params.meetingId,
         userId: params.userId ?? "realtime",
         title: params.title,
@@ -329,7 +329,7 @@ export async function processRealtimeMeeting(params: {
           );
         }
         if (params.logUsage !== false && secondPass.audioSec > 0) {
-          appendAiUsage({
+          await appendAiUsage({
             meetingId: params.meetingId,
             userId: params.userId ?? "realtime",
             title: params.title,

@@ -17,6 +17,7 @@ import { expireManualOverridesForUser } from "@/lib/admin-expire";
 import { prisma } from "@/lib/prisma";
 import { platformAdminEmails } from "@/lib/platform-admin";
 import { verifyPassword } from "@/lib/password";
+import { verifyMfaCodeForUser } from "@/lib/mfa";
 import {
   clientIpFromHeaders,
   durableRateLimit,
@@ -39,6 +40,12 @@ class UnverifiedEmailCredentials extends CredentialsSignin {
 }
 class CaptchaFailedCredentials extends CredentialsSignin {
   code = "captcha_failed";
+}
+class MfaRequiredCredentials extends CredentialsSignin {
+  code = "mfa_required";
+}
+class InvalidMfaCredentials extends CredentialsSignin {
+  code = "mfa_invalid";
 }
 
 function adminEmails() {
@@ -166,6 +173,8 @@ async function syncUserFromToken(userId: string) {
       plan: true,
       disabled: true,
       passwordHash: true,
+      mfaEnabled: true,
+      mfaVersion: true,
     },
   });
 }
@@ -211,6 +220,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         captchaToken: { label: "Captcha", type: "text" },
+        mfaCode: { label: "MFA code", type: "text" },
       },
       async authorize(credentials) {
         try {
@@ -231,6 +241,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           );
           const password = String(credentials?.password ?? "");
           const captchaToken = String(credentials?.captchaToken ?? "");
+          const mfaCode = String(credentials?.mfaCode ?? "").trim();
           if (!isValidEmail(email) || !password) {
             throw new InvalidCredentials();
           }
@@ -270,6 +281,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             disabled: true,
             passwordHash: true,
             emailVerified: true,
+            mfaEnabled: true,
+            mfaVersion: true,
           } as const;
           let user = null as null | {
             id: string;
@@ -280,6 +293,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             disabled: boolean;
             passwordHash: string | null;
             emailVerified: Date | null;
+            mfaEnabled: boolean;
+            mfaVersion: number;
           };
           for (const candidate of authEmailLookupOrder(email)) {
             user = await prisma.user.findUnique({
@@ -303,6 +318,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               disabled: true,
               passwordHash: true,
               emailVerified: true,
+              mfaEnabled: true,
+              mfaVersion: true,
             },
           });
           if (!fresh || !fresh.passwordHash) {
@@ -319,6 +336,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (!fresh.emailVerified) {
             throw new UnverifiedEmailCredentials();
           }
+          if (fresh.mfaEnabled) {
+            if (!mfaCode) throw new MfaRequiredCredentials();
+            if (!(await verifyMfaCodeForUser(fresh.id, mfaCode))) {
+              throw new InvalidMfaCredentials();
+            }
+          }
 
           await durableResetRateLimit(
             `login:ip:${ip}`,
@@ -332,6 +355,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             image: fresh.image,
             role: fresh.role,
             disabled: fresh.disabled,
+            mfaEnabled: fresh.mfaEnabled,
+            mfaVersion: fresh.mfaVersion,
+            mfaVerified: !fresh.mfaEnabled || Boolean(mfaCode),
           };
         } catch (err) {
           if (err instanceof CredentialsSignin) throw err;
@@ -359,20 +385,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             select: {
               id: true,
               passwordHash: true,
+              mfaEnabled: true,
               accounts: {
                 select: { provider: true, providerAccountId: true },
               },
             },
           });
           if (existing) {
+            const session = getAuth ? await getAuth() : null;
+            const sessionUserId = session?.user?.id;
+            if (existing.mfaEnabled && sessionUserId !== existing.id) {
+              return "/login?error=MfaPasswordRequired";
+            }
             const alreadyLinked = existing.accounts.some(
               (a) =>
                 a.provider === account.provider &&
                 a.providerAccountId === account.providerAccountId,
             );
             if (!alreadyLinked) {
-              const session = getAuth ? await getAuth() : null;
-              const sessionUserId = session?.user?.id;
               // 로그인 상태에서 본인 이메일과 같으면 연동 허용.
               if (sessionUserId === existing.id) {
                 // ok — Auth.js가 현재 세션 유저에 provider 연결
@@ -393,13 +423,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user.id) {
           const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { disabled: true, email: true, role: true },
+            select: {
+              disabled: true,
+              email: true,
+              role: true,
+              mfaEnabled: true,
+            },
           });
           if (dbUser) {
+            const oauthSession = getAuth ? await getAuth() : null;
+            if (
+              dbUser.mfaEnabled &&
+              oauthSession?.user?.id !== user.id
+            ) {
+              return "/login?error=MfaPasswordRequired";
+            }
             await expireManualOverridesForUser(user.id);
             const fresh = await prisma.user.findUnique({
               where: { id: user.id },
-              select: { disabled: true, email: true, role: true },
+              select: {
+                disabled: true,
+                email: true,
+                role: true,
+                mfaEnabled: true,
+              },
             });
             if (!fresh || fresh.disabled) return false;
 
@@ -422,7 +469,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
     },
     async jwt({ token, user, account, profile }) {
-      if (user?.id) token.sub = user.id;
+      if (user?.id) {
+        token.sub = user.id;
+        const authUser = user as typeof user & {
+          mfaEnabled?: boolean;
+          mfaVersion?: number;
+          mfaVerified?: boolean;
+        };
+        token.mfaEnabled = Boolean(authUser.mfaEnabled);
+        token.mfaVerified = !authUser.mfaEnabled || Boolean(authUser.mfaVerified);
+        if (typeof authUser.mfaVersion === "number") {
+          token.mfaVerifiedVersion = authUser.mfaVersion;
+        }
+      }
       if (account) {
         token.provider = account.provider;
         token.providerAccountId = account.providerAccountId;
@@ -463,6 +522,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.plan = dbUser.plan;
           token.disabled = dbUser.disabled;
           token.hasPassword = Boolean(dbUser.passwordHash);
+          token.mfaEnabled = dbUser.mfaEnabled;
+          if (!dbUser.mfaEnabled) {
+            token.mfaVerified = true;
+            token.mfaVerifiedVersion = dbUser.mfaVersion;
+          } else if (token.mfaVerifiedVersion !== dbUser.mfaVersion) {
+            token.mfaVerified = false;
+            token.mfaVerifiedVersion = dbUser.mfaVersion;
+          }
 
           // ADMIN_EMAILS 승격은 계정 DB 이메일만 근거로 판단한다.
           const adminMail = dbUser.email?.trim().toLowerCase();
@@ -483,6 +550,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.plan = "FREE" as Plan;
           token.disabled = true;
           token.hasPassword = false;
+          token.mfaEnabled = false;
+          token.mfaVerified = false;
         }
       } else if (!token.sub) {
         token.role = "USER" as Role;
@@ -513,6 +582,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         provider: token.provider as string | undefined,
         disabled: Boolean(token.disabled),
         hasPassword: Boolean(token.hasPassword),
+        mfaEnabled: Boolean(token.mfaEnabled),
+        mfaVerified: !token.mfaEnabled || Boolean(token.mfaVerified),
       } as typeof session.user;
       return session;
     },

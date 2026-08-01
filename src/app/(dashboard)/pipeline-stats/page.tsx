@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PipelineStatsPage() {
   await requireAdmin();
-  const events = listPipelineAttempts(5000);
+  const events = await listPipelineAttempts(5000);
   const summary = summarizePipelineStats(events);
   const blockedRows = await prisma.moderationFlag.findMany({
     where: { blocked: true },

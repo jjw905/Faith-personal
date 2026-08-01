@@ -187,11 +187,17 @@ export async function processUploadedMeeting(params: {
   const model = policy.model;
   const speakerSplitEnabled = policy.speakerSplit;
   const workDir = workDirForMeeting(params.meetingId);
+  let progressQueue: Promise<unknown> = Promise.resolve();
   const progress = (
     percent: number,
     patch?: Parameters<typeof setMeetingProgress>[2],
   ) => {
-    setMeetingProgress(params.meetingId, percent, patch);
+    progressQueue = progressQueue
+      .then(() => setMeetingProgress(params.meetingId, percent, patch))
+      .catch((error) => {
+        console.warn("[stt] 진행 상태 저장 실패", error);
+      });
+    return progressQueue;
   };
 
   // 실패율 통계용. 내용은 담지 않고 어느 단계에서 멈췄는지만 남긴다.
@@ -237,9 +243,9 @@ export async function processUploadedMeeting(params: {
       currentStage = "stt";
       // 분석이 끝나기 전에도 실제 길이를 바로 보여준다("-" 표기 없이).
       const durationLabel = formatDurationLabel(durationSec);
-      const beforeAnalysis = getUserMeeting(params.meetingId);
+      const beforeAnalysis = await getUserMeeting(params.meetingId);
       if (beforeAnalysis) {
-        updateUserMeeting(params.meetingId, {
+        await updateUserMeeting(params.meetingId, {
           meeting: { ...beforeAnalysis.meeting, duration: durationLabel },
           timeline: { ...beforeAnalysis.timeline, durationLabel },
         });
@@ -247,11 +253,11 @@ export async function processUploadedMeeting(params: {
     }
 
     // 고유명사는 소리만으로 못 가린다. 참석자와 지난 회의에서 모아 미리 알려 준다.
-    const glossary = buildGlossary({
+    const glossary = await buildGlossary({
       userId: params.userId,
       title: params.title,
       participantNames: (
-        getUserMeeting(params.meetingId)?.meeting.participants ?? []
+        (await getUserMeeting(params.meetingId))?.meeting.participants ?? []
       ).map((p) => p.name),
     });
 
@@ -310,7 +316,7 @@ export async function processUploadedMeeting(params: {
         transcriptText = reconciled.text;
         transcriptParts = reconciled.parts;
         if (reconciled.usage.inputTokens > 0) {
-          appendAiUsage({
+          await appendAiUsage({
             meetingId: params.meetingId,
             userId: params.userId,
             title: params.title,
@@ -351,7 +357,7 @@ export async function processUploadedMeeting(params: {
       }
     }
 
-    appendAiUsage({
+    await appendAiUsage({
       meetingId: params.meetingId,
       userId: params.userId,
       title: params.title,
@@ -431,7 +437,7 @@ export async function processUploadedMeeting(params: {
           speakerBlocks.map((block) => block.speaker),
         ).size;
         if (reconciled.usage.inputTokens > 0) {
-          appendAiUsage({
+          await appendAiUsage({
             meetingId: params.meetingId,
             userId: params.userId,
             title: params.title,
@@ -514,14 +520,14 @@ export async function processUploadedMeeting(params: {
       const named = await identifySpeakerNames({
         dialogue: structure.dialogue,
         candidates:
-          getUserMeeting(params.meetingId)?.meeting.participants.map(
+          (await getUserMeeting(params.meetingId))?.meeting.participants.map(
             (participant) => participant.name,
           ) ?? [],
       });
       applySpeakerNames(structure, named.guesses);
       confirmedNames.push(...named.guesses.map((g) => g.name));
       if (named.usage.inputTokens > 0) {
-        appendAiUsage({
+        await appendAiUsage({
           meetingId: params.meetingId,
           userId: params.userId,
           title: params.title,
@@ -539,7 +545,7 @@ export async function processUploadedMeeting(params: {
       console.warn("[stt] 화자 실명 추정 실패", err);
     }
 
-    appendAiUsage({
+    await appendAiUsage({
       meetingId: params.meetingId,
       userId: params.userId,
       title: params.title,
@@ -553,7 +559,7 @@ export async function processUploadedMeeting(params: {
       billSource: "tokens",
     });
 
-    const existing = getUserMeeting(params.meetingId);
+    const existing = await getUserMeeting(params.meetingId);
     const meetingDate =
       existing?.meeting.date?.trim() ||
       existing?.createdAt ||
@@ -587,7 +593,7 @@ export async function processUploadedMeeting(params: {
         })),
       );
       if (suggested.usage.inputTokens > 0) {
-        appendAiUsage({
+        await appendAiUsage({
           meetingId: params.meetingId,
           userId: params.userId,
           title: params.title,
@@ -628,7 +634,7 @@ export async function processUploadedMeeting(params: {
           );
         }
         if (secondPass.audioSec > 0) {
-          appendAiUsage({
+          await appendAiUsage({
             meetingId: params.meetingId,
             userId: params.userId,
             title: params.title,
@@ -653,8 +659,9 @@ export async function processUploadedMeeting(params: {
     const finalizedChargedSec = quotaReservation?.chargedSec;
     await quotaReservation?.finalize();
     quotaReservation = null;
+    await progressQueue;
 
-    updateUserMeeting(params.meetingId, {
+    await updateUserMeeting(params.meetingId, {
       phase: "done",
       progressPercent: PROGRESS.done,
       meeting: built.meeting,
@@ -675,7 +682,7 @@ export async function processUploadedMeeting(params: {
       kind: "analysis_done",
     });
     try {
-      appendPipelineAttempt({
+      await appendPipelineAttempt({
         meetingId: params.meetingId,
         userId: params.userId,
         model,
@@ -693,8 +700,9 @@ export async function processUploadedMeeting(params: {
     quotaBlocked = err instanceof UploadQuotaExceededError;
     const message =
       err instanceof Error ? err.message : "회의 정리에 실패했습니다.";
+    await progressQueue;
     try {
-      appendPipelineAttempt({
+      await appendPipelineAttempt({
         meetingId: params.meetingId,
         userId: params.userId,
         model,
@@ -712,8 +720,8 @@ export async function processUploadedMeeting(params: {
     } catch (statsErr) {
       console.warn("[stats] 파이프라인 통계 기록 실패", statsErr);
     }
-    const cur = getUserMeeting(params.meetingId);
-    updateUserMeeting(params.meetingId, {
+    const cur = await getUserMeeting(params.meetingId);
+    await updateUserMeeting(params.meetingId, {
       phase: "error",
       errorMessage: message,
       ...(cur
@@ -744,7 +752,7 @@ export async function processUploadedMeeting(params: {
       errorMessage: message,
     });
   } finally {
-    quotaReservation?.release();
+    await quotaReservation?.release();
     try {
       rmSync(workDir, { recursive: true, force: true });
     } catch {

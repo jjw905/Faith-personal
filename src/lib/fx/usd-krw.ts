@@ -8,6 +8,7 @@ import {
 import { join } from "node:path";
 
 import { seoulDateKey } from "@/lib/meeting-date";
+import { faithDataPath } from "@/lib/faith-data-root";
 
 export type UsdKrwQuote = {
   /** 조회한 달력일 (YYYY-MM-DD) */
@@ -19,7 +20,7 @@ export type UsdKrwQuote = {
   source: "frankfurter" | "open-er-api" | "cache" | "fallback";
 };
 
-const ROOT = join(process.cwd(), ".data", "fx", "usd-krw");
+const ROOT = faithDataPath("fx", "usd-krw");
 const FALLBACK_RATE = 1400;
 
 type CacheRow = {

@@ -1,4 +1,4 @@
-/** 보관함 클라이언트 — DO Spaces + DB API 연동. */
+/** 보관함 클라이언트 — 원격 객체 저장소/로컬 DB API 연동. */
 
 export const VAULT_CHANGED_EVENT = "faith.vault.changed";
 export const VAULT_MAX_BYTES = 100 * 1024 * 1024;
@@ -315,7 +315,7 @@ export async function addVaultFile(
   });
   const prepared = await readJson<{
     ok: boolean;
-    mode?: "local" | "spaces";
+    mode?: "local" | "remote";
     id?: string;
     key?: string;
     uploadUrl?: string | null;
@@ -344,7 +344,7 @@ export async function addVaultFile(
 
   const uploadUrl = prepared.uploadUrl;
 
-  // 브라우저 → Spaces 직접 업로드. CORS/Load failed면 서버 경유로 재시도.
+  // 브라우저 → 객체 저장소 직접 업로드. CORS/Load failed면 서버 경유로 재시도.
   try {
     const putRes = await fetch(uploadUrl, {
       method: "PUT",
@@ -354,7 +354,7 @@ export async function addVaultFile(
       },
     });
     if (!putRes.ok) {
-      throw new Error(`spaces_put_${putRes.status}`);
+      throw new Error(`object_storage_put_${putRes.status}`);
     }
 
     const completeRes = await fetch("/api/vault/complete", {

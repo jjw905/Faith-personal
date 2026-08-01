@@ -231,7 +231,7 @@ function RetentionConfirmDialog({
             : "지금 삭제되는 기록은 없습니다. 이후 기간이 지난 기록부터 삭제됩니다."}
         </p>
         <p className="mt-3 rounded-xl bg-surface px-3.5 py-3 text-sm leading-relaxed text-muted">
-          감사 로그(활동 기록)는 법령상 최소 1년 보관되며 이 설정과 무관합니다.
+          감사 로그(활동 기록)는 법령상 최소 2년 보관되며 이 설정과 무관합니다.
         </p>
         <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
           <button
@@ -613,7 +613,7 @@ export default function SettingsPage() {
           </SettingRow>
           <SettingRow
             label="회의 기록, 알림 보존 기간"
-            description="이 기간이 지난 개인 회의 기록과 알림은 삭제됩니다. 감사 로그(활동 기록)는 법령상 최소 1년 보관되며 이 설정과 무관합니다."
+            description="이 기간이 지난 개인 회의 기록과 알림은 삭제됩니다. 감사 로그(활동 기록)는 법령상 최소 2년 보관되며 이 설정과 무관합니다."
           >
             <Segmented
               ariaLabel="회의 기록, 알림 보존 기간"

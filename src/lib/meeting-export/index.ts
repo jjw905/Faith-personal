@@ -2,17 +2,23 @@ import { serializeMeetingCsv, serializeMeetingsListCsv } from "./csv";
 import { serializeMeetingDocx } from "./docx";
 import {
   MEETING_EXPORT_FORMATS,
+  POPULAR_MEETING_EXPORT_FORMATS,
   meetingExportFormatMeta,
 } from "./formats-meta";
 import { serializeMeetingJson, serializeMeetingsListJson } from "./json";
 import { serializeMeetingMd } from "./md";
-import { buildMeetingExportModel, safeExportFileName } from "./model";
+import {
+  buildMeetingExportModel,
+  maskMeetingExportModel,
+  safeExportFileName,
+} from "./model";
 import { serializeMeetingPdf } from "./pdf";
 import { serializeMeetingSrt } from "./srt";
 import { serializeMeetingTxt } from "./txt";
 import type { MeetingExportFormat, MeetingExportModel } from "./types";
 import { serializeMeetingVtt } from "./vtt";
 
+import type { MaskStyle } from "@/lib/masking";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline } from "@/types/timeline";
 import type { MeetingTranscript } from "@/types/transcript";
@@ -97,12 +103,17 @@ function triggerDownload(filename: string, data: Uint8Array, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-/** 단일 회의 다운로드. 기본 포맷 txt. */
+/** 단일 회의 내보내기. 기본 포맷 txt, 개인정보는 부분 가림. */
 export async function exportMeetingDownload(
   payload: MeetingExportPayload,
   format: MeetingExportFormat = "txt",
+  maskStyle: MaskStyle = "partial",
 ) {
-  const model = buildMeetingExportModel(payload);
+  const model = maskMeetingExportModel(
+    buildMeetingExportModel(payload),
+    maskStyle,
+    payload.meeting.participants.map((participant) => participant.name),
+  );
   const artifact = await buildMeetingExportArtifact(model, format);
   triggerDownload(artifact.filename, artifact.bytes, artifact.mime);
 }
@@ -114,12 +125,17 @@ export async function exportMeetingDownload(
 export async function exportMeetingsListDownload(
   meetings: Meeting[],
   format: MeetingExportFormat = "txt",
+  maskStyle: MaskStyle = "partial",
 ) {
   if (meetings.length === 0) return;
 
   if (format === "csv" || format === "json") {
     const models = meetings.map((meeting) =>
-      buildMeetingExportModel({ meeting }),
+      maskMeetingExportModel(
+        buildMeetingExportModel({ meeting }),
+        maskStyle,
+        meeting.participants.map((participant) => participant.name),
+      ),
     );
     const text =
       format === "csv"
@@ -136,13 +152,15 @@ export async function exportMeetingsListDownload(
   }
 
   for (const meeting of meetings) {
-    await exportMeetingDownload({ meeting }, format);
+    await exportMeetingDownload({ meeting }, format, maskStyle);
   }
 }
 
 export {
   buildMeetingExportModel,
+  maskMeetingExportModel,
   MEETING_EXPORT_FORMATS,
+  POPULAR_MEETING_EXPORT_FORMATS,
   meetingExportFormatMeta,
   safeExportFileName,
   serializeMeetingTxt,

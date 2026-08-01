@@ -7,10 +7,11 @@ import { requireUser } from "@/lib/require-user";
 import { localObjectPath } from "@/lib/storage/local-disk";
 import { prisma } from "@/lib/prisma";
 import {
-  assertVaultBackendReady,
+  assertObjectStorageReady,
+  getDownloadUrl,
   localVaultAllowed,
-  spacesConfigured,
-} from "@/lib/storage/spaces";
+  objectStorageConfigured,
+} from "@/lib/storage/object-store";
 import { safeVaultMime, vaultContentDisposition } from "@/lib/vault";
 
 type Params = { params: Promise<{ id: string }> };
@@ -45,7 +46,7 @@ export async function GET(request: Request, { params }: Params) {
     );
   }
 
-  if (spacesConfigured() || !localVaultAllowed()) {
+  if (!objectStorageConfigured() && !localVaultAllowed()) {
     return NextResponse.json(
       { ok: false, message: "로컬 파일 읽기를 사용할 수 없습니다." },
       { status: 400 },
@@ -54,7 +55,6 @@ export async function GET(request: Request, { params }: Params) {
 
   const { id } = await params;
   try {
-    assertVaultBackendReady();
     const row = await prisma.vaultFile.findFirst({
       where: { id, userId: session.user.id },
     });
@@ -65,6 +65,13 @@ export async function GET(request: Request, { params }: Params) {
       );
     }
 
+    if (objectStorageConfigured()) {
+      assertObjectStorageReady();
+      const url = await getDownloadUrl(row.key);
+      return NextResponse.redirect(url);
+    }
+
+    assertObjectStorageReady();
     const absolutePath = localObjectPath(row.key);
     const size = statSync(absolutePath).size;
     const range = parseRange(request.headers.get("range"), size);

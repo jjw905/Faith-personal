@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AiUsagePage() {
   await requireAdmin();
-  const events = listAiUsage(5000);
+  const events = await listAiUsage(5000);
   const summary = await summarizeAiUsageWithFx(events);
 
   const userIds = [...new Set(events.map((e) => e.userId))];

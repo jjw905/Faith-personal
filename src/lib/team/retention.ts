@@ -249,10 +249,10 @@ export async function purgeExpiredTeamMeetings(params?: {
         deletedForTeam += 1;
         remaining -= 1;
         if (candidate.legacyMeetingId) {
-          const legacyRecord = getUserMeeting(candidate.legacyMeetingId);
+          const legacyRecord = await getUserMeeting(candidate.legacyMeetingId);
           if (
             legacyRecord?.workspace === "team" &&
-            deleteUserMeeting(candidate.legacyMeetingId)
+            (await deleteUserMeeting(candidate.legacyMeetingId))
           ) {
             legacyDeletedForTeam += 1;
             deletedLegacyMeetings += 1;

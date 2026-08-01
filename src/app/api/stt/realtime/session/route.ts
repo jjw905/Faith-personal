@@ -375,7 +375,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const glossary = buildGlossary({
+  const glossary = await buildGlossary({
     userId: userSession.user.id,
     title,
     participantNames,
@@ -437,7 +437,7 @@ export async function POST(request: Request) {
 
   let liveSessionId = reconnectSessionId;
   if (!liveSessionId) {
-    ensureLiveMeetingRecord({
+    await ensureLiveMeetingRecord({
       meetingId,
       title,
       userId: ownerUserId,

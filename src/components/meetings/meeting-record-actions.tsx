@@ -18,7 +18,11 @@ import {
   seoulDateKey,
   toSeoulDateTimeLocal,
 } from "@/lib/meeting-date";
-import { shareMeetingLink } from "@/lib/meeting-share";
+import {
+  buildMeetingShareUrl,
+  shareMeetingLink,
+} from "@/lib/meeting-share";
+import type { MaskStyle } from "@/lib/masking";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline } from "@/types/timeline";
 import type { MeetingTranscript } from "@/types/transcript";
@@ -582,9 +586,9 @@ export function MeetingRecordActions({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [actionMode, setActionMode] = useState<"delete" | "download" | null>(
-    null,
-  );
+  const [actionMode, setActionMode] = useState<
+    "delete" | "download" | "share" | null
+  >(null);
   const [shareHint, setShareHint] = useState<string | null>(null);
   const disabled = busy || processing;
 
@@ -594,7 +598,10 @@ export function MeetingRecordActions({
     return () => window.clearTimeout(t);
   }, [shareHint]);
 
-  async function confirmAction(format?: MeetingExportFormat) {
+  async function confirmAction(
+    format?: MeetingExportFormat,
+    maskStyle: MaskStyle = "partial",
+  ) {
     if (busy || !actionMode) return;
     const mode = actionMode;
     setActionMode(null);
@@ -608,7 +615,42 @@ export function MeetingRecordActions({
           summary,
         },
         format ?? "txt",
+        maskStyle,
       );
+      return;
+    }
+
+    if (mode === "share") {
+      if (meeting.workspace === "team") {
+        try {
+          const res = await fetch(
+            `/api/team-meetings/${encodeURIComponent(meetingId)}/share`,
+            { method: "POST" },
+          );
+          const data = (await res.json()) as {
+            message?: string;
+          };
+          if (!res.ok) {
+            setShareHint(data.message ?? "팀 기록은 외부 공유할 수 없습니다");
+            return;
+          }
+        } catch {
+          setShareHint("팀 기록 공유를 확인하지 못했습니다");
+          return;
+        }
+      }
+      const result = await shareMeetingLink({
+        title: meeting.title,
+        url: buildMeetingShareUrl(maskStyle),
+      });
+      if (result === "shared") setShareHint("공유했습니다");
+      else if (result === "copied") {
+        setShareHint(
+          maskStyle === "off"
+            ? "원문 링크를 복사했습니다"
+            : "마스킹 적용 링크를 복사했습니다",
+        );
+      } else if (result === "failed") setShareHint("공유에 실패했습니다");
       return;
     }
 
@@ -655,33 +697,7 @@ export function MeetingRecordActions({
           aria-label="공유"
           title={processing ? "분석이 끝나면 공유할 수 있어요" : "공유"}
           disabled={disabled}
-          onClick={() => {
-            void (async () => {
-              if (meeting.workspace === "team") {
-                try {
-                  const res = await fetch(
-                    `/api/team-meetings/${encodeURIComponent(meetingId)}/share`,
-                    { method: "POST" },
-                  );
-                  const data = (await res.json()) as {
-                    message?: string;
-                  };
-                  if (!res.ok) {
-                    setShareHint(
-                      data.message ?? "팀 기록은 외부 공유할 수 없습니다",
-                    );
-                    return;
-                  }
-                } catch {
-                  setShareHint("팀 기록 공유를 확인하지 못했습니다");
-                  return;
-                }
-              }
-              const result = await shareMeetingLink({ title: meeting.title });
-              if (result === "copied") setShareHint("링크를 복사했습니다");
-              else if (result === "failed") setShareHint("공유에 실패했습니다");
-            })();
-          }}
+          onClick={() => setActionMode("share")}
         >
           <Share2 strokeWidth={1.75} />
         </Button>
@@ -713,7 +729,9 @@ export function MeetingRecordActions({
         meetings={[meeting]}
         busy={busy}
         onCancel={() => setActionMode(null)}
-        onConfirm={(format) => void confirmAction(format)}
+        onConfirm={(format, maskStyle) =>
+          void confirmAction(format, maskStyle)
+        }
       />
     </>
   );

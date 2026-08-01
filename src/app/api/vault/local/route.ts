@@ -4,7 +4,7 @@ import { enforceAuthRateLimit } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/require-user";
 import { completeLocalUpload } from "@/lib/storage/vault-service";
 
-/** Spaces 미설정 시 서버 로컬 디스크 업로드. */
+/** 원격 객체 저장소 미설정 시 서버 로컬 디스크 업로드. */
 export async function POST(request: Request) {
   const limited = enforceAuthRateLimit(request, "vault-local", 20, 60_000);
   if (limited) return limited;
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "업로드 실패";
-    const storageMissing = /Spaces|스토리지|로컬 업로드/i.test(message);
+    const storageMissing = /GCS|S3|Spaces|객체 저장소|스토리지|로컬 업로드/i.test(message);
     return NextResponse.json(
       { ok: false, message },
       { status: storageMissing ? 503 : 400 },

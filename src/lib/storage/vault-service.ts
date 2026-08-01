@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 
-import type { VaultPurpose } from "@prisma/client";
+import { Prisma, type VaultPurpose } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import {
@@ -15,18 +15,21 @@ import {
   formatBytes,
 } from "@/lib/storage/quota";
 import {
-  assertVaultBackendReady,
   assertOwnedVaultObjectKey,
   buildObjectKey,
+} from "@/lib/storage/spaces";
+import {
+  assertObjectStorageReady,
   deleteObject,
   getDownloadUrl,
   getObjectBuffer,
   getUploadUrl,
   headObject,
   localVaultAllowed,
+  objectStorageConfigured,
   putObject,
-  spacesConfigured,
-} from "@/lib/storage/spaces";
+  storageBackend,
+} from "@/lib/storage/object-store";
 import { assertVaultAllowedUpload, safeVaultMime } from "@/lib/vault";
 
 export async function getUserStorageUsage(userId: string) {
@@ -36,8 +39,8 @@ export async function getUserStorageUsage(userId: string) {
     _count: true,
   });
   const used = agg._sum.size ?? 0;
-  const backend = spacesConfigured()
-    ? ("spaces" as const)
+  const backend = objectStorageConfigured()
+    ? storageBackend()
     : localVaultAllowed()
       ? ("local" as const)
       : ("unavailable" as const);
@@ -66,7 +69,9 @@ export async function listUserVaultFiles(userId: string) {
 }
 
 function assertUploadSize(size: number, used: number) {
-  if (size <= 0) throw new Error("빈 파일은 업로드할 수 없습니다.");
+  if (!Number.isFinite(size) || size <= 0) {
+    throw new Error("빈 파일은 업로드할 수 없습니다.");
+  }
   if (size > STORAGE_MAX_FILE_BYTES) {
     throw new Error(
       `파일은 ${formatBytes(STORAGE_MAX_FILE_BYTES)} 이하만 올릴 수 있습니다.`,
@@ -79,7 +84,99 @@ function assertUploadSize(size: number, used: number) {
   }
 }
 
-/** 브라우저 → Spaces 직접 업로드용 프리사인. Spaces 없으면 local 모드. */
+type PersistVaultFileParams = {
+  userId: string;
+  id: string;
+  key: string;
+  fileName: string;
+  mime: string;
+  size: number;
+  purpose?: VaultPurpose;
+};
+
+function assertMatchingExistingVaultFile(
+  row: {
+    userId: string;
+    key: string;
+    name: string;
+    size: number;
+    mime: string;
+    purpose: VaultPurpose;
+  },
+  params: PersistVaultFileParams,
+) {
+  if (
+    row.userId !== params.userId ||
+    row.key !== params.key ||
+    row.name !== params.fileName ||
+    row.size !== params.size ||
+    row.mime !== params.mime ||
+    row.purpose !== (params.purpose ?? "VAULT")
+  ) {
+    throw new Error("업로드 완료 요청이 기존 파일과 일치하지 않습니다.");
+  }
+}
+
+async function existingVaultFile(params: PersistVaultFileParams) {
+  const row = await prisma.vaultFile.findUnique({ where: { id: params.id } });
+  if (row) assertMatchingExistingVaultFile(row, params);
+  return row;
+}
+
+/**
+ * 같은 사용자의 동시 업로드가 quota 조회를 우회하지 않도록 DB transaction
+ * 안에서 사용자별 advisory lock을 잡고 파일 row를 생성한다.
+ */
+async function persistVaultFileWithQuota(params: PersistVaultFileParams) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${params.userId}))`;
+          const existing = await tx.vaultFile.findUnique({
+            where: { id: params.id },
+          });
+          if (existing) {
+            assertMatchingExistingVaultFile(existing, params);
+            return { row: existing, created: false };
+          }
+
+          const usage = await tx.vaultFile.aggregate({
+            where: { userId: params.userId },
+            _sum: { size: true },
+          });
+          assertUploadSize(params.size, usage._sum.size ?? 0);
+
+          const row = await tx.vaultFile.create({
+            data: {
+              id: params.id,
+              userId: params.userId,
+              name: params.fileName,
+              size: params.size,
+              mime: params.mime,
+              key: params.key,
+              purpose: params.purpose ?? "VAULT",
+            },
+          });
+          return { row, created: true };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2034" &&
+        attempt < 2
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("저장 공간을 예약하지 못했습니다.");
+}
+
+/** 브라우저 → 객체 저장소 직접 업로드용 프리사인. 설정이 없으면 local 모드. */
 export async function prepareUserUpload(params: {
   userId: string;
   fileName: string;
@@ -87,7 +184,7 @@ export async function prepareUserUpload(params: {
   size: number;
   purpose?: VaultPurpose;
 }) {
-  assertVaultBackendReady();
+  assertObjectStorageReady();
   assertVaultAllowedUpload(params.fileName);
   const usage = await getUserStorageUsage(params.userId);
   assertUploadSize(params.size, usage.used);
@@ -97,9 +194,9 @@ export async function prepareUserUpload(params: {
   const key = buildObjectKey(params.userId, id, params.fileName);
   const purpose = params.purpose ?? ("VAULT" as VaultPurpose);
 
-  if (!spacesConfigured()) {
+  if (!objectStorageConfigured()) {
     if (!localVaultAllowed()) {
-      throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
+      throw new Error("객체 저장소(GCS/S3) 설정이 없습니다.");
     }
     return {
       mode: "local" as const,
@@ -113,7 +210,7 @@ export async function prepareUserUpload(params: {
 
   const uploadUrl = await getUploadUrl({ key, contentType: mime });
   return {
-    mode: "spaces" as const,
+    mode: "remote" as const,
     id,
     key,
     uploadUrl,
@@ -133,32 +230,32 @@ export async function completeLocalUpload(params: {
   purpose?: VaultPurpose;
   body: Buffer;
 }) {
-  assertVaultBackendReady();
-  if (spacesConfigured() || !localVaultAllowed()) {
+  assertObjectStorageReady();
+  if (objectStorageConfigured() || !localVaultAllowed()) {
     throw new Error("로컬 업로드를 사용할 수 없습니다.");
   }
   assertVaultAllowedUpload(params.fileName);
   assertOwnedVaultObjectKey(params.userId, params.id, params.key);
-  const usage = await getUserStorageUsage(params.userId);
-  assertUploadSize(params.size, usage.used);
   if (params.body.length !== params.size) {
     throw new Error("업로드 파일 크기가 일치하지 않습니다.");
   }
   const mime = safeVaultMime(params.fileName, params.mime);
+  const persistParams = {
+    userId: params.userId,
+    id: params.id,
+    key: params.key,
+    fileName: params.fileName,
+    mime,
+    size: params.size,
+    purpose: params.purpose,
+  } satisfies PersistVaultFileParams;
+  const existing = await existingVaultFile(persistParams);
+  if (existing) return existing;
 
   await localPutObject(params.key, params.body);
   try {
-    return await prisma.vaultFile.create({
-      data: {
-        id: params.id,
-        userId: params.userId,
-        name: params.fileName,
-        size: params.size,
-        mime,
-        key: params.key,
-        purpose: params.purpose ?? "VAULT",
-      },
-    });
+    const result = await persistVaultFileWithQuota(persistParams);
+    return result.row;
   } catch (err) {
     await localDeleteObject(params.key).catch(() => undefined);
     throw err;
@@ -175,15 +272,24 @@ export async function completeUserUpload(params: {
   size: number;
   purpose?: VaultPurpose;
 }) {
-  if (!spacesConfigured()) {
-    throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
+  if (!objectStorageConfigured()) {
+    throw new Error("객체 저장소(GCS/S3) 설정이 없습니다.");
   }
   assertVaultAllowedUpload(params.fileName);
   assertOwnedVaultObjectKey(params.userId, params.id, params.key);
 
-  const usage = await getUserStorageUsage(params.userId);
-  assertUploadSize(params.size, usage.used);
   const mime = safeVaultMime(params.fileName, params.mime);
+  const persistParams = {
+    userId: params.userId,
+    id: params.id,
+    key: params.key,
+    fileName: params.fileName,
+    mime,
+    size: params.size,
+    purpose: params.purpose,
+  } satisfies PersistVaultFileParams;
+  const existing = await existingVaultFile(persistParams);
+  if (existing) return existing;
 
   let head: { size: number; contentType: string };
   try {
@@ -197,25 +303,16 @@ export async function completeUserUpload(params: {
   }
 
   try {
-    return await prisma.vaultFile.create({
-      data: {
-        id: params.id,
-        userId: params.userId,
-        name: params.fileName,
-        size: params.size,
-        mime,
-        key: params.key,
-        purpose: params.purpose ?? "VAULT",
-      },
-    });
+    const result = await persistVaultFileWithQuota(persistParams);
+    return result.row;
   } catch (err) {
     await deleteObject(params.key).catch(() => undefined);
     throw err;
   }
 }
 
-/** CORS 실패 시 서버가 Spaces로 대신 업로드. */
-export async function completeSpacesProxyUpload(params: {
+/** CORS 실패 시 서버가 객체 저장소로 대신 업로드. */
+export async function completeObjectStorageProxyUpload(params: {
   userId: string;
   id: string;
   key: string;
@@ -225,18 +322,28 @@ export async function completeSpacesProxyUpload(params: {
   purpose?: VaultPurpose;
   body: Buffer;
 }) {
-  if (!spacesConfigured()) {
-    throw new Error("스토리지(DO Spaces) 설정이 없습니다.");
+  if (!objectStorageConfigured()) {
+    throw new Error("객체 저장소(GCS/S3) 설정이 없습니다.");
   }
   assertVaultAllowedUpload(params.fileName);
   assertOwnedVaultObjectKey(params.userId, params.id, params.key);
-  const usage = await getUserStorageUsage(params.userId);
-  assertUploadSize(params.size, usage.used);
   if (params.body.length !== params.size) {
     throw new Error("업로드 파일 크기가 일치하지 않습니다.");
   }
 
   const mime = safeVaultMime(params.fileName, params.mime);
+  const persistParams = {
+    userId: params.userId,
+    id: params.id,
+    key: params.key,
+    fileName: params.fileName,
+    mime,
+    size: params.size,
+    purpose: params.purpose,
+  } satisfies PersistVaultFileParams;
+  const existing = await existingVaultFile(persistParams);
+  if (existing) return existing;
+
   await putObject({
     key: params.key,
     body: params.body,
@@ -244,17 +351,8 @@ export async function completeSpacesProxyUpload(params: {
   });
 
   try {
-    return await prisma.vaultFile.create({
-      data: {
-        id: params.id,
-        userId: params.userId,
-        name: params.fileName,
-        size: params.size,
-        mime,
-        key: params.key,
-        purpose: params.purpose ?? "VAULT",
-      },
-    });
+    const result = await persistVaultFileWithQuota(persistParams);
+    return result.row;
   } catch (err) {
     await deleteObject(params.key).catch(() => undefined);
     throw err;
@@ -267,12 +365,12 @@ export async function getUserFileDownloadUrl(userId: string, fileId: string) {
   });
   if (!row) return null;
 
-  if (spacesConfigured()) {
+  if (objectStorageConfigured()) {
     const url = await getDownloadUrl(row.key);
     return { row, url };
   }
 
-  assertVaultBackendReady();
+  assertObjectStorageReady();
   try {
     await localHeadObject(row.key);
   } catch {
@@ -282,8 +380,8 @@ export async function getUserFileDownloadUrl(userId: string, fileId: string) {
 }
 
 export async function readUserFileContent(userId: string, fileId: string) {
-  assertVaultBackendReady();
-  if (spacesConfigured() || !localVaultAllowed()) {
+  assertObjectStorageReady();
+  if (objectStorageConfigured() || !localVaultAllowed()) {
     throw new Error("로컬 파일 읽기를 사용할 수 없습니다.");
   }
   const row = await prisma.vaultFile.findFirst({
@@ -294,15 +392,15 @@ export async function readUserFileContent(userId: string, fileId: string) {
   return { row, body };
 }
 
-/** Spaces/로컬 공통: STT 등 서버 처리용 바이트 읽기. */
+/** GCS/S3/로컬 공통: STT 등 서버 처리용 바이트 읽기. */
 export async function readUserFileBytes(userId: string, fileId: string) {
-  assertVaultBackendReady();
+  assertObjectStorageReady();
   const row = await prisma.vaultFile.findFirst({
     where: { id: fileId, userId },
   });
   if (!row) return null;
 
-  if (spacesConfigured()) {
+  if (objectStorageConfigured()) {
     const body = await getObjectBuffer(row.key);
     return { row, body };
   }
@@ -319,10 +417,10 @@ export async function deleteUserFile(userId: string, fileId: string) {
     where: { id: fileId, userId },
   });
   if (!row) return false;
-  if (spacesConfigured()) {
-    await deleteObject(row.key).catch(() => undefined);
+  if (objectStorageConfigured()) {
+    await deleteObject(row.key);
   } else {
-    assertVaultBackendReady();
+    assertObjectStorageReady();
     await localDeleteObject(row.key);
   }
   await prisma.vaultFile.delete({ where: { id: fileId } });
@@ -335,10 +433,10 @@ export async function clearUserVault(userId: string) {
     select: { id: true, key: true },
   });
   for (const row of rows) {
-    if (spacesConfigured()) {
-      await deleteObject(row.key).catch(() => undefined);
+    if (objectStorageConfigured()) {
+      await deleteObject(row.key);
     } else {
-      assertVaultBackendReady();
+      assertObjectStorageReady();
       await localDeleteObject(row.key);
     }
   }

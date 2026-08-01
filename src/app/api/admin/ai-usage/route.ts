@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
 
-  const allEvents = listAiUsage(5000);
+  const allEvents = await listAiUsage(5000);
   const filtered = filterAiUsageEvents(allEvents, { userId, from, to });
   const [summary, allSummary] = await Promise.all([
     summarizeAiUsageWithFx(filtered),

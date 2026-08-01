@@ -28,6 +28,12 @@ enum TeamRole {
   MEMBER
 }
 
+enum TeamSecurityKeyStatus {
+  PROVISIONING
+  ACTIVE
+  FAILED
+}
+
 enum TeamInviteStatus {
   PENDING
   ACCEPTED
@@ -91,6 +97,13 @@ enum AnalysisUsageStatus {
   RELEASED
 }
 
+enum AnalysisJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
 model User {
   id                        String                 @id @default(cuid())
   name                      String?
@@ -98,6 +111,12 @@ model User {
   emailVerified             DateTime?              @map("email_verified")
   image                     String?
   passwordHash              String?                @map("password_hash")
+  mfaEnabled                Boolean                @default(false) @map("mfa_enabled")
+  mfaVersion                Int                    @default(0) @map("mfa_version")
+  mfaSecretEncrypted        String?                @map("mfa_secret_encrypted") @db.Text
+  mfaPendingSecretEncrypted String?                @map("mfa_pending_secret_encrypted") @db.Text
+  mfaPendingCreatedAt       DateTime?              @map("mfa_pending_created_at")
+  mfaLastUsedStep           Int?                   @map("mfa_last_used_step")
   /**
    * 최초 가입 수단: credentials | google | naver | twitter
    */
@@ -146,7 +165,10 @@ model User {
   personalRealtimeAccess     PersonalRealtimeAccess[] @relation("PersonalRealtimeInvitee")
   surveyResponse            SurveyResponse?
   analysisUsages            AnalysisUsage[]
+  analysisJobs              AnalysisJob[]
+  meetingRecords            UserMeetingRecord[]
   minuteCreditLedger        MinuteCreditLedger[]
+  mfaRecoveryCodes          MfaRecoveryCode[]
   /**
    * 오픈 준비 기간 임시 보관·통계 목적 이용 고지에 동의한 시각.
    * null이면 아직 고지를 보지 않은 상태. 가입 후 최초 업로드 진입 시 1회만 노출한다.
@@ -157,6 +179,19 @@ model User {
 
   @@index([role, disabled])
   @@map("users")
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  codeHash  String    @unique @map("code_hash")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("mfa_recovery_codes")
 }
 
 model AnalysisUsage {
@@ -180,6 +215,94 @@ model AnalysisUsage {
   @@index([userId, periodKey, status])
   @@index([status, expiresAt])
   @@map("analysis_usage")
+}
+
+model AnalysisJob {
+  id                String           @id @default(cuid())
+  meetingId         String           @unique @map("meeting_id")
+  userId            String           @map("user_id")
+  vaultFileId       String           @map("vault_file_id")
+  title             String
+  analysisMode      AnalysisMode     @default(STANDARD) @map("analysis_mode")
+  bypassModeration  Boolean          @default(false) @map("bypass_moderation")
+  status            AnalysisJobStatus @default(QUEUED)
+  attempts          Int              @default(0)
+  availableAt       DateTime         @default(now()) @map("available_at")
+  lockedAt          DateTime?        @map("locked_at")
+  lockedBy          String?          @map("locked_by")
+  startedAt         DateTime?        @map("started_at")
+  finishedAt        DateTime?        @map("finished_at")
+  lastError         String?          @map("last_error") @db.Text
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt, createdAt])
+  @@index([status, lockedAt])
+  @@index([userId, createdAt])
+  @@map("analysis_jobs")
+}
+
+model UserMeetingRecord {
+  id               String   @id
+  userId           String   @map("user_id")
+  workspace         String
+  phase             String
+  progressPercent   Int?     @map("progress_percent")
+  payload           Json
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspace, createdAt])
+  @@index([phase, updatedAt])
+  @@map("user_meeting_records")
+}
+
+model AiUsageEvent {
+  id            String   @id
+  at            DateTime
+  meetingId     String   @map("meeting_id")
+  userId        String   @map("user_id")
+  title         String?
+  stage         String
+  model         String
+  durationSec   Int?     @map("duration_sec")
+  chunkCount    Int?     @map("chunk_count")
+  inputTokens   Int      @map("input_tokens")
+  outputTokens  Int      @map("output_tokens")
+  totalTokens   Int      @map("total_tokens")
+  estimatedUsd  Float    @map("estimated_usd")
+  billSource    String   @map("bill_source")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId, at])
+  @@index([meetingId, at])
+  @@index([at])
+  @@map("ai_usage_events")
+}
+
+model PipelineAttempt {
+  id            String   @id
+  at            DateTime
+  meetingId     String   @map("meeting_id")
+  userId        String   @map("user_id")
+  model         String
+  analysisMode  AnalysisMode? @map("analysis_mode")
+  durationSec   Int?     @map("duration_sec")
+  chargedSec    Int?     @map("charged_sec")
+  speakerCount  Int?     @map("speaker_count")
+  outcome       String
+  failedStage   String?  @map("failed_stage")
+  topicBucket   String?  @map("topic_bucket")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId, at])
+  @@index([meetingId, at])
+  @@index([outcome, at])
+  @@map("pipeline_attempts")
 }
 
 model MinuteCreditLedger {
@@ -206,6 +329,7 @@ model Team {
   members       TeamMember[]
   invites       TeamInvite[]
   policy        TeamPolicy?
+  securityKey   TeamSecurityKey?
   meetings      TeamMeeting[]
   announcements TeamAnnouncement[]
   auditLogs     TeamAuditLog[]
@@ -214,6 +338,22 @@ model Team {
 
   @@index([ownerId])
   @@map("teams")
+}
+
+model TeamSecurityKey {
+  id            String                 @id @default(cuid())
+  teamId        String                 @unique @map("team_id")
+  region        String
+  contentKeyArn String?                @map("content_key_arn")
+  auditKeyArn   String?                @map("audit_key_arn")
+  status        TeamSecurityKeyStatus  @default(PROVISIONING)
+  lastError     String?                @map("last_error") @db.Text
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("team_security_keys")
 }
 
 model TeamMember {

@@ -1,0 +1,13 @@
+[
+  {
+    "origin": [
+      "https://dofaith.net",
+      "https://www.dofaith.net",
+      "http://localhost:3000",
+      "http://localhost:3001"
+    ],
+    "method": ["GET", "HEAD", "PUT"],
+    "responseHeader": ["Content-Type", "Content-Length", "ETag", "Range"],
+    "maxAgeSeconds": 3600
+  }
+]

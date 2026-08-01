@@ -283,16 +283,16 @@ assert.ok(LIVE_TEAM_STT_INTEGRATION.toLowerCase().includes("livekit"));
 assert.ok(liveTeamSttUnavailableMessage(false).includes("중지"));
 assert.ok(liveTeamSttUnavailableMessage(true).includes("설정"));
 
-// Retention: audit 1y is enforceable; trash 7d lifecycle is not modeled.
-assert.equal(TEAM_AUDIT_RETENTION_DAYS, 365);
+// Retention: audit 2y is enforceable; trash 7d lifecycle is not modeled.
+assert.equal(TEAM_AUDIT_RETENTION_DAYS, 730);
 assert.equal(TEAM_TRASH_RETENTION_SUPPORTED, false);
 const retentionNow = new Date("2026-07-24T00:00:00.000Z");
 assert.equal(
-  isPastDataRetention("2025-07-23T00:00:00.000Z", TEAM_AUDIT_RETENTION_DAYS, retentionNow),
+  isPastDataRetention("2024-07-23T00:00:00.000Z", TEAM_AUDIT_RETENTION_DAYS, retentionNow),
   true,
 );
 assert.equal(
-  isPastDataRetention("2025-07-25T00:00:00.000Z", TEAM_AUDIT_RETENTION_DAYS, retentionNow),
+  isPastDataRetention("2024-07-25T00:00:00.000Z", TEAM_AUDIT_RETENTION_DAYS, retentionNow),
   false,
 );
 assert.equal(

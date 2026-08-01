@@ -1,3 +1,4 @@
+import { maskPii, type MaskStyle } from "@/lib/masking";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTimeline } from "@/types/timeline";
 import type { MeetingTranscript } from "@/types/transcript";
@@ -87,6 +88,49 @@ export function buildMeetingExportModel(payload: {
     })),
     lines,
     cues: buildCues(lines),
+  };
+}
+
+/**
+ * 내보내기용 모델에만 개인정보 가림을 적용한다.
+ * 원본 회의·대화 데이터와 화면 상태는 변경하지 않는다.
+ */
+export function maskMeetingExportModel(
+  model: MeetingExportModel,
+  style: MaskStyle,
+  names: string[] = [],
+): MeetingExportModel {
+  if (style === "off") return model;
+
+  const redact = (value: string | undefined) =>
+    value == null ? value : maskPii(value, { names, style }).masked;
+
+  return {
+    ...model,
+    title: redact(model.title) ?? model.title,
+    summary: redact(model.summary) ?? model.summary,
+    decisions: model.decisions.map((decision) => redact(decision) ?? decision),
+    actions: model.actions.map((action) => ({
+      ...action,
+      owner: redact(action.owner) ?? action.owner,
+      task: redact(action.task) ?? action.task,
+      due: redact(action.due),
+    })),
+    segments: model.segments.map((segment) => ({
+      ...segment,
+      title: redact(segment.title) ?? segment.title,
+      summary: redact(segment.summary) ?? segment.summary,
+    })),
+    lines: model.lines.map((line) => ({
+      ...line,
+      speaker: redact(line.speaker) ?? line.speaker,
+      text: redact(line.text) ?? line.text,
+    })),
+    cues: model.cues.map((cue) => ({
+      ...cue,
+      speaker: redact(cue.speaker) ?? cue.speaker,
+      text: redact(cue.text) ?? cue.text,
+    })),
   };
 }
 

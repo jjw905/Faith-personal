@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 
-import { evaluateKmsRuntime } from "@/lib/kms-runtime-policy";
+import {
+  evaluateKmsProvisioningRuntime,
+  evaluateKmsRuntime,
+} from "@/lib/kms-runtime-policy";
 import { prisma } from "@/lib/prisma";
 import {
   getTeamMember,
@@ -27,7 +30,7 @@ export async function GET(_: Request, context: RouteContext) {
       { status: 404 },
     );
   }
-  const [members, invites, meetings] = await Promise.all([
+  const [members, invites, meetings, securityKey] = await Promise.all([
     prisma.teamMember.findMany({
       where: { teamId },
       include: {
@@ -82,8 +85,25 @@ export async function GET(_: Request, context: RouteContext) {
       orderBy: { createdAt: "desc" },
       take: 20,
     }),
+    prisma.teamSecurityKey.findUnique({
+      where: { teamId },
+      select: {
+        status: true,
+        region: true,
+        contentKeyArn: true,
+        auditKeyArn: true,
+        createdAt: true,
+        lastError: true,
+      },
+    }),
   ]);
   const kms = evaluateKmsRuntime();
+  const kmsProvisioning = evaluateKmsProvisioningRuntime();
+  const teamKmsReady = Boolean(
+    securityKey?.status === "ACTIVE" &&
+      securityKey.contentKeyArn &&
+      securityKey.auditKeyArn,
+  );
   return NextResponse.json({
     ok: true,
     team: {
@@ -100,8 +120,26 @@ export async function GET(_: Request, context: RouteContext) {
     meetings,
     security: {
       encryptionManagedBy: "service",
-      kmsReady: kms.allowed,
-      kmsReason: kms.allowed ? null : kms.reason,
+      kmsReady: teamKmsReady,
+      kmsReason: teamKmsReady
+        ? null
+        : securityKey?.status === "PROVISIONING"
+          ? "provisioning"
+          : securityKey?.status === "FAILED"
+            ? "failed"
+            : securityKey
+              ? kms.allowed
+                ? "missing_configuration"
+                : kms.reason
+              : "not_configured",
+      kmsStatus: securityKey?.status ?? "NOT_CONFIGURED",
+      kmsRegion: securityKey?.region ?? null,
+      kmsCreatedAt: securityKey?.createdAt ?? null,
+      kmsLastError: securityKey?.lastError ?? null,
+      kmsProvisioningReady: kmsProvisioning.allowed,
+      kmsProvisioningReason: kmsProvisioning.allowed
+        ? null
+        : kmsProvisioning.reason,
     },
   });
 }

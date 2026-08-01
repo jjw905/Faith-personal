@@ -229,11 +229,11 @@ async function quotaSnapshot(
     _sum: { deltaSec: true },
   });
   const excludedMeetings = new Set(currentUsage.map((row) => row.meetingId));
-  const legacyUsedSec = sumUserDurationSecInRange(
+  const legacyUsedSec = await sumUserDurationSecInRange(
     userId,
     context.periodStart,
     context.resetsAt,
-    listPipelineAttempts(),
+    await listPipelineAttempts(),
     excludedMeetings,
   );
   const monthlyUsedSec =

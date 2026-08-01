@@ -70,7 +70,7 @@ export async function canReadMeeting(meetingId: string, userId: string) {
     };
   }
 
-  const legacy = getUserMeeting(meetingId);
+  const legacy = await getUserMeeting(meetingId);
   if (legacy) {
     return {
       allowed: legacy.userId === userId,

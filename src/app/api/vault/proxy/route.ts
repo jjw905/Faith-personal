@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 
 import { enforceAuthRateLimit } from "@/lib/rate-limit";
 import { requireUser } from "@/lib/require-user";
-import { completeSpacesProxyUpload } from "@/lib/storage/vault-service";
+import { completeObjectStorageProxyUpload } from "@/lib/storage/vault-service";
 
-/** Spaces CORS 실패 시 서버 경유 업로드. */
+/** 객체 저장소 CORS 실패 시 서버 경유 업로드. */
 export async function POST(request: Request) {
   const limited = enforceAuthRateLimit(request, "vault-proxy", 20, 60_000);
   if (limited) return limited;
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
   try {
     const buf = Buffer.from(await file.arrayBuffer());
-    const row = await completeSpacesProxyUpload({
+    const row = await completeObjectStorageProxyUpload({
       userId: session.user.id,
       id,
       key,
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "업로드 실패";
-    const storageMissing = /Spaces|스토리지/i.test(message);
+    const storageMissing = /GCS|S3|Spaces|객체 저장소|스토리지/i.test(message);
     return NextResponse.json(
       { ok: false, message },
       { status: storageMissing ? 503 : 400 },

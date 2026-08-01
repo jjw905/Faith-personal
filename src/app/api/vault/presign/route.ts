@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "업로드 준비에 실패했습니다.";
-    const storageMissing = /Spaces|스토리지/i.test(message);
+    const storageMissing = /GCS|S3|Spaces|객체 저장소|스토리지/i.test(message);
     return NextResponse.json(
       { ok: false, message },
       { status: storageMissing ? 503 : 400 },

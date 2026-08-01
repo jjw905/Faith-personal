@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { parseDataRetentionDays } from "@/lib/data-retention";
 import { setUserNotificationRetention } from "@/lib/notifications-store";
 import {
+  purgeAiUsageForUserBefore,
+} from "@/lib/stt/usage-store";
+import {
+  purgePipelineAttemptsForUserBefore,
+} from "@/lib/stt/pipeline-stats-store";
+import {
   findExpiredUserMeetings,
   purgeExpiredUserMeetings,
 } from "@/lib/user-meetings-store";
@@ -13,8 +19,11 @@ import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 
 /**
- * 개인 데이터(회의 기록, 알림) 보존 기간. 감사 로그(고정 365일, 법정 최소)는
- * 이 설정과 무관하다. GET은 조회 전용 미리보기 — 저장하지 않는다.
+ * 개인 데이터(회의 기록, 알림, AI 운영 이벤트) 보존 기간. 감사 로그(고정
+ * 730일, 법정 상한 구간)는 이 설정과 무관하다. GET은 조회 전용 미리보기 —
+ * 저장하지 않는다.
+ * `analysis_usage`와 분 크레딧 원장은 유료/쿼터 중복 차감을 막는 최소
+ * 회계 기록이라 회의 본문 삭제와 함께 지우지 않는다.
  *
  * 배포 시 `meeting_retention_days` 컬럼이 필요하면 서버에서
  * `npx prisma migrate deploy`를 한 번 실행한다.
@@ -43,11 +52,11 @@ export async function GET(request: Request) {
     : currentDays;
 
   const now = new Date();
-  const expiredMeetings = findExpiredUserMeetings(
+  const expiredMeetings = (await findExpiredUserMeetings(
     session.user.id,
     proposedDays,
     now,
-  ).length;
+  )).length;
   const cutoff = new Date(now.getTime() - proposedDays * 24 * 60 * 60 * 1000);
   const expiredNotifications = await prisma.notification.count({
     where: { userId: session.user.id, createdAt: { lt: cutoff } },
@@ -93,7 +102,12 @@ export async function PATCH(request: Request) {
   // setUserNotificationRetention이 notification + meeting 보존일을 함께 맞춘다.
   await setUserNotificationRetention(session.user.id, days);
 
-  const [{ deleted: deletedMeetings }, deletedNotifications] =
+  const [
+    { deleted: deletedMeetings },
+    deletedNotifications,
+    deletedAiUsage,
+    deletedPipelineAttempts,
+  ] =
     await Promise.all([
       Promise.resolve(
         purgeExpiredUserMeetings(session.user.id, days, new Date(), {
@@ -105,6 +119,8 @@ export async function PATCH(request: Request) {
           where: { userId: session.user.id, createdAt: { lt: cutoff } },
         })
         .then((r) => r.count),
+      purgeAiUsageForUserBefore(session.user.id, cutoff),
+      purgePipelineAttemptsForUserBefore(session.user.id, cutoff),
     ]);
 
   return NextResponse.json({
@@ -112,5 +128,7 @@ export async function PATCH(request: Request) {
     days,
     deletedMeetings,
     deletedNotifications,
+    deletedAiUsage,
+    deletedPipelineAttempts,
   });
 }

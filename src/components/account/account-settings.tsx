@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useState } from "react";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { MfaSettings } from "@/components/account/mfa-settings";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Card,
@@ -448,6 +449,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
             </CardContent>
           </Card>
         </div>
+        <MfaSettings />
       </div>
     </PageContainer>
   );

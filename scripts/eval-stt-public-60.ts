@@ -334,7 +334,7 @@ async function main() {
     // 오염 방지 경계: 모델 출력과 추천 생성 전에는 정답을 읽지 않는다.
     const suggested = suggestionsEnabled
       ? await suggestTermCorrections(transcript.text.split("\n"), {
-          glossary: buildGlossary({ title: meta.title }),
+          glossary: await buildGlossary({ title: meta.title }),
         })
       : null;
     const referencePath = fixturePaths(fixture.alias).reference;

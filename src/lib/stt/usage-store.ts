@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { seoulDateKey } from "@/lib/meeting-date";
+import { faithDataPath } from "@/lib/faith-data-root";
+import { prisma } from "@/lib/prisma";
 
 export type AiUsageStage = "stt" | "structure";
 
@@ -29,17 +31,17 @@ export type AiUsageEvent = {
   billSource: "tokens" | "audio_minutes" | "mixed";
 };
 
-const ROOT = join(process.cwd(), ".data", "ai-usage");
+const ROOT = faithDataPath("ai-usage");
 const LOG = join(ROOT, "events.jsonl");
+const USE_DATABASE = process.env.DURABLE_STATE_BACKEND === "database";
 
 function ensureDir() {
   if (!existsSync(ROOT)) mkdirSync(ROOT, { recursive: true });
 }
 
-export function appendAiUsage(
+export async function appendAiUsage(
   partial: Omit<AiUsageEvent, "id" | "at"> & { at?: string },
-): AiUsageEvent {
-  ensureDir();
+): Promise<AiUsageEvent> {
   const event: AiUsageEvent = {
     id: randomUUID(),
     at: partial.at ?? new Date().toISOString(),
@@ -56,11 +58,55 @@ export function appendAiUsage(
     estimatedUsd: Math.max(0, partial.estimatedUsd),
     billSource: partial.billSource,
   };
+  if (USE_DATABASE) {
+    await prisma.aiUsageEvent.create({
+      data: {
+        id: event.id,
+        at: new Date(event.at),
+        meetingId: event.meetingId,
+        userId: event.userId,
+        title: event.title,
+        stage: event.stage,
+        model: event.model,
+        durationSec: event.durationSec,
+        chunkCount: event.chunkCount,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        totalTokens: event.totalTokens,
+        estimatedUsd: event.estimatedUsd,
+        billSource: event.billSource,
+      },
+    });
+    return event;
+  }
+  ensureDir();
   appendFileSync(LOG, `${JSON.stringify(event)}\n`, "utf8");
   return event;
 }
 
-export function listAiUsage(limit = 2000): AiUsageEvent[] {
+export async function listAiUsage(limit = 2000): Promise<AiUsageEvent[]> {
+  if (USE_DATABASE) {
+    const rows = await prisma.aiUsageEvent.findMany({
+      orderBy: { at: "desc" },
+      take: Math.max(1, Math.floor(limit)),
+    });
+    return rows.reverse().map((row) => ({
+      id: row.id,
+      at: row.at.toISOString(),
+      meetingId: row.meetingId,
+      userId: row.userId,
+      title: row.title ?? undefined,
+      stage: row.stage as AiUsageStage,
+      model: row.model,
+      durationSec: row.durationSec ?? undefined,
+      chunkCount: row.chunkCount ?? undefined,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      totalTokens: row.totalTokens,
+      estimatedUsd: row.estimatedUsd,
+      billSource: row.billSource as AiUsageEvent["billSource"],
+    }));
+  }
   if (!existsSync(LOG)) return [];
   const raw = readFileSync(LOG, "utf8");
   const lines = raw.split("\n").filter(Boolean);
@@ -73,6 +119,68 @@ export function listAiUsage(limit = 2000): AiUsageEvent[] {
     }
   }
   return out.reverse();
+}
+
+export async function deleteAiUsageForMeeting(meetingId: string): Promise<number> {
+  if (USE_DATABASE) {
+    const result = await prisma.aiUsageEvent.deleteMany({ where: { meetingId } });
+    return result.count;
+  }
+  if (!existsSync(LOG)) return 0;
+  const kept: string[] = [];
+  let deleted = 0;
+  for (const line of readFileSync(LOG, "utf8").split("\n").filter(Boolean)) {
+    try {
+      const event = JSON.parse(line) as Partial<AiUsageEvent>;
+      if (event.meetingId === meetingId) {
+        deleted += 1;
+        continue;
+      }
+    } catch {
+      // Preserve malformed historical lines for manual inspection.
+    }
+    kept.push(line);
+  }
+  if (deleted > 0) {
+    writeFileSync(LOG, kept.length > 0 ? `${kept.join("\n")}\n` : "", "utf8");
+  }
+  return deleted;
+}
+
+export async function purgeAiUsageForUserBefore(
+  userId: string,
+  cutoff: Date,
+): Promise<number> {
+  if (USE_DATABASE) {
+    const result = await prisma.aiUsageEvent.deleteMany({
+      where: { userId, at: { lt: cutoff } },
+    });
+    return result.count;
+  }
+  if (!existsSync(LOG)) return 0;
+  const kept: string[] = [];
+  let deleted = 0;
+  for (const line of readFileSync(LOG, "utf8").split("\n").filter(Boolean)) {
+    try {
+      const event = JSON.parse(line) as Partial<AiUsageEvent>;
+      const at = event.at ? Date.parse(event.at) : Number.NaN;
+      if (
+        event.userId === userId &&
+        Number.isFinite(at) &&
+        at < cutoff.getTime()
+      ) {
+        deleted += 1;
+        continue;
+      }
+    } catch {
+      // Preserve malformed historical lines for manual inspection.
+    }
+    kept.push(line);
+  }
+  if (deleted > 0) {
+    writeFileSync(LOG, kept.length > 0 ? `${kept.join("\n")}\n` : "", "utf8");
+  }
+  return deleted;
 }
 
 export type AiUsageDayBucket = {
