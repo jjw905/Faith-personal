@@ -296,7 +296,7 @@ export function AboutDocsView() {
 
                 <div className="min-w-0 flex-1">
                   {searching && results.length === 0 ? (
-                    <p className="text-sm text-muted">
+                    <p className="text-base text-muted">
                       다른 검색어로 다시 시도해 보세요.
                     </p>
                   ) : (
