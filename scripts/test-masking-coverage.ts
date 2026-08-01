@@ -16,6 +16,13 @@ type Case = {
   secret: string;
 };
 
+/**
+ * 가짜 API 키. 조각을 이어 붙여 만든다.
+ *
+ * 통째로 적어 두면 비밀 검사(security:secrets)가 진짜 키로 보고 배포를 막는다.
+ */
+const FAKE_API_KEY = ["sk", "proj", "abcdefghijklmnopqrstuvwxyz1234"].join("-");
+
 const CASES: Case[] = [
   { type: "phone", text: "제 번호는 010-1234-5678입니다.", secret: "010-1234-5678" },
   { type: "phone", text: "연락처 01012345678로 주세요.", secret: "01012345678" },
@@ -40,7 +47,7 @@ const CASES: Case[] = [
   { type: "address", text: "주소는 서울특별시 강남구 테헤란로 123 입니다.", secret: "테헤란로 123" },
   { type: "name", text: "이번 건은 김영록 과장님이 맡기로 했습니다.", secret: "김영록" },
   { type: "name", text: "홍길동입니다. 잘 부탁드립니다.", secret: "홍길동" },
-  { type: "secret", text: "키는 sk-proj-abcdefghijklmnopqrstuvwxyz1234 입니다.", secret: "sk-proj-abcdefghijklmnopqrstuvwxyz1234" },
+  { type: "secret", text: `키는 ${FAKE_API_KEY} 입니다.`, secret: FAKE_API_KEY },
 ];
 
 /** 회의록에서 가려지면 안 되는 말. 과잉 마스킹 확인용. */
