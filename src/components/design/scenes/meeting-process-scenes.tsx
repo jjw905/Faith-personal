@@ -67,11 +67,13 @@ function DetailChrome({
   progressPercent,
   error,
   etaLabel,
+  stageLabel,
 }: {
   phase: MeetingProcessPhase;
   progressPercent?: number;
   error?: string | null;
   etaLabel?: string | null;
+  stageLabel?: string | null;
 }) {
   const meeting = FIXTURE_MEETING;
   const active = phase === "transcribing" || phase === "structuring";
@@ -140,11 +142,41 @@ function DetailChrome({
             progressPercent={progressPercent}
             error={error}
             etaLabel={etaLabel}
+            stageLabel={stageLabel}
           />
         </section>
       </div>
     </div>
   );
+}
+
+const TRANSCRIBE_STAGES = [
+  "파일을 살펴보는 중이에요",
+  "소리를 불러오는 중이에요",
+  "받아쓰는 중이에요",
+  "빠진 말을 다시 확인하는 중이에요",
+  "말한 위치를 정밀하게 맞추는 중이에요",
+] as const;
+
+const STRUCTURE_STAGES = [
+  "이야기의 흐름을 잡는 중이에요",
+  "같은 목소리를 모으는 중이에요",
+  "타임라인을 그리는 중이에요",
+  "누가 말했는지 맞추는 중이에요",
+  "표현을 다듬는 중이에요",
+] as const;
+
+function stageForPercent(phase: MeetingProcessPhase, percent: number) {
+  if (phase === "structuring") {
+    const t = Math.max(0, Math.min(1, (percent - 72) / 26));
+    return STRUCTURE_STAGES[
+      Math.min(STRUCTURE_STAGES.length - 1, Math.floor(t * STRUCTURE_STAGES.length))
+    ]!;
+  }
+  const t = Math.max(0, Math.min(1, percent / 72));
+  return TRANSCRIBE_STAGES[
+    Math.min(TRANSCRIBE_STAGES.length - 1, Math.floor(t * TRANSCRIBE_STAGES.length))
+  ]!;
 }
 
 function RisingDetailChrome({
@@ -172,6 +204,7 @@ function RisingDetailChrome({
       phase={phase}
       progressPercent={percent}
       etaLabel={etaLabel}
+      stageLabel={stageForPercent(phase, percent)}
     />
   );
 }

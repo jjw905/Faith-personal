@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { MEETING_PROCESS_LABEL } from "@/lib/meeting-process";
+import { MEETING_PROCESS_LABEL, friendlyProcessStageLabel } from "@/lib/meeting-process";
 import { useAppContext } from "@/context/app-context";
-import { cn } from "@/lib/utils";
 
 type ProcessingItem = {
   id: string;
@@ -13,7 +12,24 @@ type ProcessingItem = {
   status: string;
   workspace: string;
   progressPercent: number;
-  indeterminate?: boolean;
+  /** 파이프라인 세부 단계. 없으면 phase 기본 문구. */
+  stageLabel?: string | null;
+};
+
+const DEMO_STAGE_BY_PHASE: Record<string, string[]> = {
+  transcribing: [
+    "파일을 살펴보는 중이에요",
+    "소리를 불러오는 중이에요",
+    "받아쓰는 중이에요",
+    "빠진 말을 다시 확인하는 중이에요",
+  ],
+  structuring: [
+    "이야기의 흐름을 잡는 중이에요",
+    "같은 목소리를 모으는 중이에요",
+    "타임라인을 그리는 중이에요",
+    "누가 말했는지 맞추는 중이에요",
+    "표현을 다듬는 중이에요",
+  ],
 };
 
 function isActiveItem(phase?: string, status?: string) {
@@ -25,11 +41,11 @@ function isActiveItem(phase?: string, status?: string) {
   );
 }
 
-function phaseLabel(phase?: string) {
+function fallbackStageLabel(phase?: string) {
   if (phase === "structuring" || phase === "transcribing") {
     return MEETING_PROCESS_LABEL[phase];
   }
-  return "제작 중";
+  return "제작 중이에요";
 }
 
 function clampPercent(n: unknown, phase?: string): number {
@@ -45,9 +61,20 @@ function flipPhase(phase?: string): "transcribing" | "structuring" {
   return phase === "structuring" ? "transcribing" : "structuring";
 }
 
+function demoStageFor(phase: string | undefined, percent: number) {
+  const key = phase === "structuring" ? "structuring" : "transcribing";
+  const list = DEMO_STAGE_BY_PHASE[key]!;
+  if (key === "structuring") {
+    const t = Math.max(0, Math.min(1, (percent - 72) / 26));
+    return list[Math.min(list.length - 1, Math.floor(t * list.length))]!;
+  }
+  const t = Math.max(0, Math.min(1, percent / 72));
+  return list[Math.min(list.length - 1, Math.floor(t * list.length))]!;
+}
+
 /**
  * 실시간 기록 / 파일 올리기 바로 아래.
- * 제작 중이면 회의 제목(리스트와 동일) + 파이프라인 실제 진행률.
+ * 제작 중이면 회의 제목(리스트와 동일) + 파이프라인 실제 진행률·세부 문구.
  */
 export function ProcessingNowSection({
   demoItems,
@@ -63,9 +90,6 @@ export function ProcessingNowSection({
   const { workspaceId } = useAppContext();
   const [items, setItems] = useState<ProcessingItem[]>(demoItems ?? []);
   const lastActiveKeyRef = useRef<string | null>(null);
-  const lastProgressRef = useRef(
-    new Map<string, { percent: number; changedAt: number }>(),
-  );
   const onActiveChangeRef = useRef(onActiveChange);
   onActiveChangeRef.current = onActiveChange;
 
@@ -88,43 +112,29 @@ export function ProcessingNowSection({
           status: string;
           phase?: string;
           progressPercent?: number;
+          detail?: string | null;
           workspace: string;
         }>;
       };
       if (!data.ok || !Array.isArray(data.activity)) {
-        lastProgressRef.current.clear();
         setItems((prev) => (prev.length === 0 ? prev : []));
         return;
       }
-      const now = Date.now();
       const next = data.activity
         .filter(
           (a) =>
             a.workspace === workspaceId &&
             isActiveItem(a.phase, a.status),
         )
-        .map((a) => {
-          const progressPercent = clampPercent(a.progressPercent, a.phase);
-          const previous = lastProgressRef.current.get(a.id);
-          const progress =
-            previous && previous.percent === progressPercent
-              ? previous
-              : { percent: progressPercent, changedAt: now };
-          lastProgressRef.current.set(a.id, progress);
-          return {
-            id: a.id,
-            title: (a.title || a.fileName || "파일").trim() || "파일",
-            phase: a.phase,
-            status: a.status,
-            workspace: a.workspace,
-            progressPercent,
-            indeterminate: now - progress.changedAt >= 3_000,
-          };
-        });
-      const activeIds = new Set(next.map((item) => item.id));
-      for (const id of lastProgressRef.current.keys()) {
-        if (!activeIds.has(id)) lastProgressRef.current.delete(id);
-      }
+        .map((a) => ({
+          id: a.id,
+          title: (a.title || a.fileName || "파일").trim() || "파일",
+          phase: a.phase,
+          status: a.status,
+          workspace: a.workspace,
+          progressPercent: clampPercent(a.progressPercent, a.phase),
+          stageLabel: a.detail?.trim() || fallbackStageLabel(a.phase),
+        }));
       setItems((prev) => {
         if (
           prev.length === next.length &&
@@ -134,7 +144,7 @@ export function ProcessingNowSection({
               item.phase === next[i]?.phase &&
               item.status === next[i]?.status &&
               item.progressPercent === next[i]?.progressPercent &&
-              item.indeterminate === next[i]?.indeterminate &&
+              item.stageLabel === next[i]?.stageLabel &&
               item.title === next[i]?.title,
           )
         ) {
@@ -143,14 +153,12 @@ export function ProcessingNowSection({
         return next;
       });
     } catch {
-      lastProgressRef.current.clear();
       setItems((prev) => (prev.length === 0 ? prev : []));
     }
   }, [workspaceId, demoItems]);
 
   useEffect(() => {
     lastActiveKeyRef.current = null;
-    lastProgressRef.current.clear();
   }, [workspaceId]);
 
   useEffect(() => {
@@ -183,11 +191,15 @@ export function ProcessingNowSection({
   useEffect(() => {
     if (!animateDemo || !demoItems?.length) return;
     setItems(
-      demoItems.map((item) => ({
-        ...item,
-        progressPercent: clampPercent(item.progressPercent, item.phase),
-        indeterminate: false,
-      })),
+      demoItems.map((item) => {
+        const progressPercent = clampPercent(item.progressPercent, item.phase);
+        return {
+          ...item,
+          progressPercent,
+          stageLabel:
+            item.stageLabel ?? demoStageFor(item.phase, progressPercent),
+        };
+      }),
     );
     const id = window.setInterval(() => {
       setItems((prev) =>
@@ -197,18 +209,20 @@ export function ProcessingNowSection({
           const next = item.progressPercent + step;
           if (next >= 98) {
             const phase = flipPhase(item.phase);
+            const progressPercent = phase === "structuring" ? 72 : 1;
             return {
               ...item,
               phase,
               status: phase,
-              progressPercent: phase === "structuring" ? 72 : 1,
-              indeterminate: false,
+              progressPercent,
+              stageLabel: demoStageFor(phase, progressPercent),
             };
           }
+          const progressPercent = Math.round(next * 10) / 10;
           return {
             ...item,
-            progressPercent: Math.round(next * 10) / 10,
-            indeterminate: false,
+            progressPercent,
+            stageLabel: demoStageFor(item.phase, progressPercent),
           };
         }),
       );
@@ -247,7 +261,9 @@ export function ProcessingNowSection({
         <ul className="max-h-[min(32rem,60vh)] space-y-2 overflow-y-auto overscroll-contain pr-1">
           {items.map((item) => {
             const percent = item.progressPercent;
-            const indeterminate = item.indeterminate === true;
+            const stage = friendlyProcessStageLabel(
+              item.stageLabel?.trim() || fallbackStageLabel(item.phase),
+            );
 
             return (
               <li key={item.id}>
@@ -257,12 +273,14 @@ export function ProcessingNowSection({
                       <p className="truncate text-base font-semibold tracking-tight text-foreground">
                         {item.title}
                       </p>
-                      <p
-                        key={`${item.id}-${item.phase}`}
-                        className="mt-0.5 text-base text-muted animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]"
-                      >
-                        {phaseLabel(item.phase)}
-                      </p>
+                      <div className="relative mt-0.5 h-6 overflow-hidden">
+                        <p
+                          key={`${item.id}-${stage}`}
+                          className="truncate text-base text-muted motion-safe:animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both] motion-reduce:animate-none"
+                        >
+                          {stage}
+                        </p>
+                      </div>
                     </div>
                     <span
                       className="shrink-0 self-center tabular-nums text-base font-semibold tracking-tight text-primary"
@@ -272,15 +290,14 @@ export function ProcessingNowSection({
                     </span>
                   </div>
                   <div
-                    className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-surface-2"
-                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-surface-2"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={percent}
                   >
                     <div
-                      className={cn(
-                        "h-full rounded-full bg-primary/65",
-                        indeterminate &&
-                          "motion-safe:animate-pulse motion-reduce:animate-none",
-                      )}
+                      className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out motion-reduce:transition-none"
                       style={{ width: `${percent}%` }}
                     />
                   </div>

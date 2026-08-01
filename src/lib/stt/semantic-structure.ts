@@ -723,12 +723,24 @@ export async function buildSemanticStructure(
     parsed = calls[0]!.parsed;
   } else {
     parsed = concatRaw(calls.map((c) => c.parsed));
-    const summaries = calls
-      .map((c) => (c.parsed.overallSummary || "").trim())
-      .filter(Boolean);
+    /**
+     * 조각마다 전체 요약을 받는다. 비운 조각이 있으면 그 조각의 구간 요약으로
+     * 메운다.
+     *
+     * 예전에는 비운 조각을 그냥 버리고, 남은 게 하나면 병합을 건너뛰어
+     * 첫 조각 요약이 회의 전체 요약이 됐다. 한 시간짜리 회의인데 앞 15분만
+     * 요약된 것처럼 보이던 증상이다.
+     */
+    const summaries = calls.flatMap((call) => {
+      const own = (call.parsed.overallSummary || "").trim();
+      if (own) return [own];
+      const fromTimeline = (call.parsed.timeline ?? [])
+        .map((item) => (item?.summary || "").trim())
+        .filter(Boolean);
+      return fromTimeline.length > 0 ? [fromTimeline.join(" ")] : [];
+    });
     parsed.overallSummary = summaries[0] ?? "";
-    // 구간이 여러 개일 때만 전체 요약을 다시 만든다.
-    if (chunks.length > 1 && summaries.length > 1) {
+    if (summaries.length > 1) {
       const merge = await callSummaryMerge({ summaries, durationSec: dur });
       calls.push(merge);
       parsed.overallSummary = merge.parsed.overallSummary || summaries[0]!;
@@ -794,7 +806,7 @@ export async function buildSemanticStructure(
     : [];
 
   const structure: SemanticStructure = {
-    overallSummary: (parsed.overallSummary || "").trim() || "요약 없음",
+    overallSummary: (parsed.overallSummary || "").trim(),
     keywords: [],
     timeline: Array.isArray(parsed.timeline)
       ? parsed.timeline.map((t) => {
@@ -831,6 +843,19 @@ export async function buildSemanticStructure(
     dialogue,
     topicBucket: parseTopicBucket(parsed.topicBucket),
   };
+
+  /**
+   * 모델이 전체 요약을 빼먹어도 "요약 없음"을 그대로 내보내지 않는다.
+   * 구간 요약은 이미 회의 내용이라, 이어 붙이면 최소한 무슨 회의였는지는 남는다.
+   */
+  if (!structure.overallSummary) {
+    const fromTimeline = structure.timeline
+      .map((item) => item.summary.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(" ");
+    structure.overallSummary = fromTimeline || "요약 없음";
+  }
 
   const parsedKeywords = Array.isArray(
     (parsed as { keywords?: unknown }).keywords,

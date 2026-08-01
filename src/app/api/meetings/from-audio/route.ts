@@ -245,7 +245,7 @@ export async function POST(request: Request) {
   if (useAnalysisQueue) {
     try {
       await updateUserMeeting(meetingId, {
-        stageLabel: "분석 대기 중",
+        stageLabel: "잠시 기다리는 중이에요",
       });
       await enqueueAnalysisJob({
         meetingId,

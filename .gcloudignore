@@ -11,7 +11,11 @@
 /.venv/
 /.venv-*/
 **/.venv/**
-/ml/
+# 워커 이미지가 강제정렬·화자분리 스크립트를 담아야 해서 두 폴더만 올린다.
+# pii-ner는 별도 서비스로 뜨고 학습 산출물이 31MB라 제외한다.
+/ml/pii-ner/
+/ml/stt/
+**/__pycache__/
 /docs/
 /infra/
 /prototypes/

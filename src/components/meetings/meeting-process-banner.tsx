@@ -6,13 +6,14 @@ import { useEffect, useRef, useState } from "react";
 import { UsageLimitDialog } from "@/components/dashboard/usage-limit-dialog";
 import {
   MEETING_PROCESS_LABEL,
+  friendlyProcessStageLabel,
   type MeetingProcessPhase,
 } from "@/lib/meeting-process";
 import { nextDisplayPercent } from "@/lib/meeting-process-progress";
 import { cn } from "@/lib/utils";
 
 export type { MeetingProcessPhase };
-export { MEETING_PROCESS_LABEL };
+export { MEETING_PROCESS_LABEL, friendlyProcessStageLabel };
 export { displayCreepCeiling } from "@/lib/meeting-process-progress";
 
 function isQuotaBlockedMessage(message: string | null | undefined) {
@@ -51,28 +52,6 @@ function clampPercent(n: unknown, phase: MeetingProcessPhase): number {
 /** "받아쓰는 중 (2/5)" → 애니메이션 키는 괄호 앞부분만 본다. 카운트만 바뀌어도 다시 튀지 않게. */
 function stageAnimationKey(label: string) {
   return label.replace(/\s*\([^)]*\)\s*$/, "");
-}
-
-/** 진행 중 문구를 사용자용으로 부드럽게. 예전 딱딱한 표기도 흡수한다. */
-export function friendlyProcessStageLabel(raw: string): string {
-  const t = raw.trim();
-  if (!t) return t;
-  if (/보완/.test(t)) return "추가 보완 중입니다";
-  const stripped = t
-    .replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/, "")
-    .replace(/\s*\(\d+\)\s*$/, "")
-    .trim();
-  if (stripped === "분석하는 중" || stripped.startsWith("분석하는 중")) {
-    return "이야기의 흐름을 정리하는 중입니다";
-  }
-  if (stripped === "받아쓰는 중") return "받아쓰는 중입니다";
-  if (stripped === "정리하는 중") return "정리하는 중입니다";
-  if (stripped === "파일 확인하는 중") return "파일을 확인하는 중입니다";
-  if (stripped === "오디오 불러오는 중") return "오디오를 불러오는 중입니다";
-  if (stripped === "타임라인 작성하는 중") return "타임라인을 작성하는 중입니다";
-  if (stripped === "화자 확인하는 중") return "화자를 확인하는 중입니다";
-  if (stripped === "표현 다듬는 중") return "표현을 다듬는 중입니다";
-  return stripped;
 }
 
 /**
@@ -115,65 +94,35 @@ export function estimateRemainingSec(params: {
   return remaining;
 }
 
-/** M3 원형 진행. viewBox 고정으로 크기만 바꿔도 비율 유지. */
-function ProcessProgressRing({
+/** 채워지는 선형 게이지. 돌아가는 링은 쓰지 않는다. */
+function ProcessProgressBar({
   percent,
-  indeterminate = false,
   className,
 }: {
   percent: number;
-  indeterminate?: boolean;
   className?: string;
 }) {
-  const size = 120;
-  const stroke = 7;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const offset = c * (1 - Math.min(100, Math.max(0, percent)) / 100);
+  const clamped = Math.min(100, Math.max(0, percent));
+  const label = Math.round(clamped);
 
   return (
     <div
-      className={cn(
-        "relative aspect-square size-[min(7.5rem,42vw)] shrink-0 overflow-hidden",
-        className,
-      )}
-      aria-hidden
+      className={cn("w-full max-w-[min(20rem,86vw)]", className)}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={label}
     >
-      <svg
-        viewBox={`0 0 ${size} ${size}`}
-        className={cn(
-          "block h-full w-full -rotate-90",
-          indeterminate && "motion-safe:animate-spin motion-reduce:animate-none",
-        )}
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={stroke}
-          className="text-surface-2"
+      <p className="mb-3 tabular-nums text-[clamp(1.75rem,7vw,2.25rem)] font-semibold leading-none tracking-tight text-primary">
+        {label}
+        <span className="text-[0.55em] font-semibold">%</span>
+      </p>
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-2">
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-300 ease-out motion-reduce:transition-none"
+          style={{ width: `${clamped}%` }}
         />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={indeterminate ? `${c * 0.24} ${c * 0.76}` : c}
-          strokeDashoffset={indeterminate ? c * 0.08 : offset}
-          className="text-primary"
-        />
-      </svg>
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <span className="tabular-nums text-[clamp(1.25rem,5vw,1.75rem)] font-semibold tracking-tight text-primary">
-          {Math.round(percent)}
-          <span className="text-[0.55em] font-semibold">%</span>
-        </span>
-      </span>
+      </div>
     </div>
   );
 }
@@ -185,7 +134,6 @@ export function MeetingProcessLoader({
   progressPercent,
   stageLabel,
   etaLabel,
-  indeterminate = false,
   className,
 }: {
   phase: MeetingProcessPhase;
@@ -195,8 +143,6 @@ export function MeetingProcessLoader({
   stageLabel?: string | null;
   /** "5분 남음" 같은 남은 시간 문구. */
   etaLabel?: string | null;
-  /** 서버 진행률이 갱신되지 않을 때 링만 indeterminate로 움직인다. 숫자는 유지한다. */
-  indeterminate?: boolean;
   className?: string;
 }) {
   const active = phase === "transcribing" || phase === "structuring";
@@ -208,7 +154,6 @@ export function MeetingProcessLoader({
   const rawLabel =
     (active && stageLabel?.trim()) || MEETING_PROCESS_LABEL[phase];
   const label = friendlyProcessStageLabel(rawLabel);
-  const showIndeterminate = active && indeterminate;
 
   return (
     <div
@@ -224,19 +169,14 @@ export function MeetingProcessLoader({
           : label
       }
     >
-      {active ? (
-        <ProcessProgressRing
-          percent={percentRaw}
-          indeterminate={showIndeterminate}
-        />
-      ) : null}
+      {active ? <ProcessProgressBar percent={percentRaw} /> : null}
 
-      <div className="relative h-6 overflow-hidden md:h-5">
+      <div className="relative mx-auto flex h-7 w-full max-w-[min(22rem,90vw)] items-center justify-center overflow-hidden">
         <p
           key={stageAnimationKey(label)}
           className={cn(
-            "text-center text-base font-semibold tracking-tight text-foreground md:text-sm",
-            "animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both]",
+            "w-full truncate text-center text-base font-semibold tracking-tight text-foreground md:text-sm",
+            "motion-safe:animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both] motion-reduce:animate-none",
             phase === "error" && "text-masked",
           )}
         >
@@ -278,7 +218,6 @@ export function MeetingProcessBanner({
   const [stageLabel, setStageLabel] = useState<string | null>(
     initialStageLabel ?? null,
   );
-  const [indeterminate, setIndeterminate] = useState(false);
   const [etaLabel, setEtaLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(() =>
     initialPhase === "error" || initialPhase === "empty"
@@ -302,22 +241,7 @@ export function MeetingProcessBanner({
     remainingSec: number | null;
   }>({ lastSample: null, rate: null, remainingSec: null });
 
-  // 서버 값은 1초 폴링. 화면은 프레임마다 실측 target을 따라가며,
-  // target이 멈추면 숫자를 부풀리지 않고 indeterminate 상태로 전환한다.
-  useEffect(() => {
-    if (!active) return;
-    if (targetRaisedAtRef.current == null) {
-      targetRaisedAtRef.current = monotonicNow();
-    }
-    const id = window.setInterval(() => {
-      const now = monotonicNow();
-      const raisedAt = targetRaisedAtRef.current ?? now;
-      const stalled = now - raisedAt >= 3_000;
-      setIndeterminate((prev) => (prev === stalled ? prev : stalled));
-    }, 500);
-    return () => window.clearInterval(id);
-  }, [active]);
-
+  // 서버 값은 1초 폴링. 화면은 프레임마다 실측 target을 따라간다.
   useEffect(() => {
     if (!active) {
       return;
@@ -413,13 +337,11 @@ export function MeetingProcessBanner({
             remainingSec: null,
           };
           setEtaLabel(null);
-          setIndeterminate(false);
           return;
         }
         if (data.phase === "done") {
           setDisplayPercent(100);
           setEtaLabel(null);
-          setIndeterminate(false);
           router.refresh();
           return;
         }
@@ -496,7 +418,6 @@ export function MeetingProcessBanner({
         progressPercent={displayPercent}
         stageLabel={stageLabel}
         etaLabel={etaLabel}
-        indeterminate={indeterminate}
       />
       <UsageLimitDialog
         open={usageDialogOpen}

@@ -39,7 +39,10 @@ const VAULT_ALLOWED_EXT_SET = new Set<string>(VAULT_ALLOWED_EXTENSIONS);
  * 브라우저는 인덱스 없는 MP3에서 seek 위치를 바이트 비율로 추정한다.
  * 다시듣기에서 말풍선을 눌렀을 때 소리와 형광펜이 어긋나는 원인이라
  * 보관함에 넣기 전에 샘플 표가 있는 MP4로 바꾼다.
- * m4a는 이미 샘플 표가 있어 대상이 아니다.
+ *
+ * m4a도 대상이다. 휴대폰 녹음 m4a는 샘플 표(moov)가 파일 끝에 붙어 있어
+ * 전체를 받기 전에는 seek이 안 된다. 이쪽은 다시 인코딩하지 않고 표만
+ * 앞으로 옮긴다.
  */
 const PLAYBACK_NORMALIZE_EXT_SET = new Set<string>([
   ".mp3",
@@ -47,6 +50,7 @@ const PLAYBACK_NORMALIZE_EXT_SET = new Set<string>([
   ".ogg",
   ".flac",
   ".webm",
+  ".m4a",
 ]);
 
 export function needsPlaybackNormalize(name: string): boolean {

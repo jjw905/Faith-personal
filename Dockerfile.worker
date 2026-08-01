@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1.7
+
+# 분석 워커 이미지. 웹과 같은 런타임 위에 파이썬 도구만 얹는다.
+#
+# 웹 이미지에 torch와 정렬 모델을 넣으면 3GB 넘게 불어나 웹 콜드스타트가 같이
+# 느려진다. 워커 풀은 수동 스케일이라 콜드스타트가 없으므로 무거운 쪽을 여기로
+# 몰아 둔다.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS runtime
+
+WORKDIR /app
+
+# 파이썬 경로를 process.cwd()로 추측하지 않게 못 박는다.
+ENV FAITH_ROOT=/app
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       python3 python3-venv curl bzip2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# diarize.py와 whisperx는 PATH에서 ffmpeg를 찾는다. Node가 쓰는 것과 같은
+# 바이너리를 가리켜 두 경로가 같은 버전으로 디코딩하게 한다.
+RUN ln -s "$(node -p "require('ffmpeg-static')")" /usr/local/bin/ffmpeg
+
+COPY ml/alignment ./ml/alignment
+COPY ml/diarization ./ml/diarization
+
+# 강제정렬. torch는 CPU 전용 인덱스에서 받는다. 기본 PyPI 휠에는 CUDA가 들어
+# 있어 이미지가 몇 GB 더 커지는데, Cloud Run 워커에는 GPU가 없다.
+RUN python3 -m venv .venv-alignment \
+    && .venv-alignment/bin/pip install --upgrade pip \
+    && .venv-alignment/bin/pip install \
+       --index-url https://download.pytorch.org/whl/cpu \
+       torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 \
+    && .venv-alignment/bin/pip install whisperx==3.8.6
+
+# 화자분리. HF_TOKEN 없이는 sherpa-onnx 경로만 타므로 torch가 필요 없다.
+RUN python3 -m venv .venv-diarization \
+    && .venv-diarization/bin/pip install --upgrade pip \
+    && .venv-diarization/bin/pip install sherpa-onnx==1.13.4
+
+# 모델을 이미지에 굽는다. 실행 때 받게 두면 첫 회의가 몇 분 늦고, 배포처
+# 장애가 그대로 분석 실패가 된다.
+RUN .venv-alignment/bin/python3 -c \
+    "import whisperx; whisperx.load_align_model(language_code='ko', device='cpu', model_dir='/app/.data/models/alignment')"
+
+RUN set -eu; \
+    models=/app/.data/models/diarization; \
+    mkdir -p "$models"; \
+    curl -fL "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2" \
+      -o /tmp/segmentation.tar.bz2; \
+    tar -xjf /tmp/segmentation.tar.bz2 -C "$models"; \
+    rm /tmp/segmentation.tar.bz2; \
+    curl -fL "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" \
+      -o "$models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+
+# 실행 전에 두 경로가 실제로 뜨는지 확인한다. 여기서 걸리지 않으면 배포 후
+# 첫 회의가 조용히 강제정렬 없이 처리된다.
+RUN .venv-alignment/bin/python3 -c "import whisperx" \
+    && .venv-diarization/bin/python3 -c "import sherpa_onnx" \
+    && test -f /app/.data/models/diarization/sherpa-onnx-pyannote-segmentation-3-0/model.onnx
+
+CMD ["npm", "run", "analysis:workers"]

@@ -186,7 +186,7 @@ const PROCESSING: ProcessItem[] = [
     status: "transcribing",
     phase: "transcribing",
     progressPercent: 36,
-    detail: "받아쓰는 중",
+    detail: "받아쓰는 중이에요",
     time: "3분 전",
     href: "/meetings/mtg-003",
     workspace: "team",

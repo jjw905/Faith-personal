@@ -67,7 +67,7 @@ import {
   workDirForMeeting,
 } from "@/lib/user-meetings-store";
 import { createNotification } from "@/lib/notifications-store";
-import { structureProgressPercent } from "@/lib/meeting-process-progress";
+import { structureProgressPercent, softElapsedProgress } from "@/lib/meeting-process-progress";
 import { prisma } from "@/lib/prisma";
 import {
   appendPipelineAttempt,
@@ -85,11 +85,30 @@ const PROGRESS = {
   sttStart: 3,
   sttEnd: 72,
   structureStart: 72,
+  /** 전사 대조·강제정렬이 끝나는 지점. 이어서 화자묶음이 쓴다. */
+  postSttMid: 78,
+  /** STT 직후 강제정렬·화자묶음이 쓰는 소프트 상한 (구조화 전에 72 고정 방지) */
+  postSttSoftEnd: 82,
   structureDone: 90,
   aligned: 95,
   built: 98,
   done: 100,
 } as const;
+
+/**
+ * 단계에 걸리는 시간 어림. 오디오가 길수록 오래 걸리므로 길이에 비례해 잡는다.
+ *
+ * 고정값을 쓰면 짧은 회의에서는 막대가 먼저 도착해 멈춰 있고, 긴 회의에서는
+ * 한참 전에 상한에 붙어 버린다. 이용자가 본 "70%대에서 정체"가 이 경우다.
+ */
+function expectedStageMs(
+  durationSec: number,
+  ratio: number,
+  floorMs: number,
+): number {
+  const safe = Number.isFinite(durationSec) ? Math.max(0, durationSec) : 0;
+  return Math.max(floorMs, safe * ratio * 1_000);
+}
 
 function analysisGroupKey(meetingId: string) {
   return `analysis:${meetingId}`;
@@ -200,6 +219,47 @@ export async function processUploadedMeeting(params: {
     return progressQueue;
   };
 
+  /**
+   * fraction이 없는 긴 단계. 하트비트로 72에 멈춰 보이지 않게 한다.
+   * 실제 작업이 더 짧으면 finally에서 to 직전으로 한 번 올린다.
+   */
+  async function withSoftProgress<T>(opts: {
+    from: number;
+    to: number;
+    expectedMs: number;
+    stageLabel: string;
+    phase?: "transcribing" | "structuring";
+    run: () => Promise<T>;
+  }): Promise<T> {
+    const startedAt = Date.now();
+    const phase = opts.phase ?? "structuring";
+    const tick = () => {
+      const pct = softElapsedProgress({
+        from: opts.from,
+        to: opts.to,
+        waitedMs: Date.now() - startedAt,
+        expectedMs: opts.expectedMs,
+      });
+      progress(pct, { phase, stageLabel: opts.stageLabel });
+    };
+    tick();
+    const heartbeat = setInterval(tick, 1_500);
+    try {
+      return await opts.run();
+    } finally {
+      clearInterval(heartbeat);
+      progress(
+        softElapsedProgress({
+          from: opts.from,
+          to: opts.to,
+          waitedMs: Math.max(Date.now() - startedAt, opts.expectedMs * 0.35),
+          expectedMs: opts.expectedMs,
+        }),
+        { phase, stageLabel: opts.stageLabel },
+      );
+    }
+  }
+
   // 실패율 통계용. 내용은 담지 않고 어느 단계에서 멈췄는지만 남긴다.
   let currentStage: PipelineFailedStage = "stt";
   let moderationBlocked = false;
@@ -212,14 +272,14 @@ export async function processUploadedMeeting(params: {
   try {
     progress(PROGRESS.start, {
       phase: "transcribing",
-      stageLabel: "파일을 확인하는 중입니다",
+      stageLabel: "파일을 살펴보는 중이에요",
     });
 
     const file = await readUserFileBytes(params.userId, params.vaultFileId);
     if (!file) {
       throw new Error("보관함 파일을 찾을 수 없습니다.");
     }
-    progress(PROGRESS.fileLoaded, { stageLabel: "오디오를 불러오는 중입니다" });
+    progress(PROGRESS.fileLoaded, { stageLabel: "소리를 불러오는 중이에요" });
 
     const audioPath = writeSourceAudio({
       audioBytes: file.body,
@@ -271,7 +331,7 @@ export async function processUploadedMeeting(params: {
         wordTimestamps: true,
         onProgress: (p) => {
           progress(mapSttFraction(p.fraction), {
-            stageLabel: "받아쓰는 중입니다",
+            stageLabel: "받아쓰는 중이에요",
           });
         },
       }),
@@ -304,14 +364,17 @@ export async function processUploadedMeeting(params: {
     // 재작성 대조가 오히려 그 자기소개를 삭제했으므로 원문을 확정 본문으로 쓴다.
     if (model !== "gpt-transcribe") {
       try {
-        progress(PROGRESS.structureStart, {
-          phase: "structuring",
-          stageLabel: "빠진 말을 다시 확인하는 중입니다",
-        });
-        const reconciled = await reconcileTranscriptVariants({
-          parts: stt.parts,
-          partRanges: stt.partRanges,
-          timedSegments: stt.timedSegments,
+        const reconciled = await withSoftProgress({
+          from: PROGRESS.structureStart,
+          to: PROGRESS.postSttMid,
+          expectedMs: expectedStageMs(stt.durationSec, 0.025, 12_000),
+          stageLabel: "빠진 말을 다시 확인하는 중이에요",
+          run: () =>
+            reconcileTranscriptVariants({
+              parts: stt.parts,
+              partRanges: stt.partRanges,
+              timedSegments: stt.timedSegments,
+            }),
         });
         transcriptText = reconciled.text;
         transcriptParts = reconciled.parts;
@@ -339,18 +402,22 @@ export async function processUploadedMeeting(params: {
     // 강제 정렬기가 준비된 서버에서는 확정 전사 전체를 오디오에 다시 맞춘다.
     if (policy.forcedAlignment && forcedAlignmentAvailable()) {
       try {
-        progress(PROGRESS.structureStart, {
-          phase: "structuring",
-          stageLabel: "말한 위치를 정밀하게 맞추는 중입니다",
-        });
-        const aligned = await forceAlignTranscript({
-          audioPath,
-          text: transcriptText,
-          parts: transcriptParts,
-          partRanges: stt.partRanges,
-          timedSegments: stt.timedSegments,
-          durationSec: stt.durationSec,
-          workDir: join(workDir, "alignment"),
+        const aligned = await withSoftProgress({
+          from: PROGRESS.structureStart,
+          to: PROGRESS.postSttMid,
+          // KTV 11분 44초 실측 88초. 오디오 길이에 거의 비례한다.
+          expectedMs: expectedStageMs(stt.durationSec, 0.13, 20_000),
+          stageLabel: "말한 위치를 정밀하게 맞추는 중이에요",
+          run: () =>
+            forceAlignTranscript({
+              audioPath,
+              text: transcriptText,
+              parts: transcriptParts,
+              partRanges: stt.partRanges,
+              timedSegments: stt.timedSegments,
+              durationSec: stt.durationSec,
+              workDir: join(workDir, "alignment"),
+            }),
         });
         wordTimings = aligned.words;
       } catch (err) {
@@ -397,10 +464,10 @@ export async function processUploadedMeeting(params: {
     }
 
     currentStage = "structure";
-    progress(PROGRESS.structureStart, {
+    progress(PROGRESS.postSttSoftEnd, {
       phase: "structuring",
       rawText: transcriptText,
-      stageLabel: "이야기의 흐름을 정리하는 중입니다",
+      stageLabel: "이야기의 흐름을 잡는 중이에요",
     });
 
     // 화자를 붙여서 넘긴다. 구조화 모델이 대화기록을 나눌 때 누가 말했는지
@@ -428,11 +495,14 @@ export async function processUploadedMeeting(params: {
     // 정확도가 0.54에서 0.93으로 올라간다(블록 80 → 16, 약 7원, 16초).
     if (blocks.length > 0 && process.env.STT_SPEAKER_TURN_RECONCILE !== "0") {
       try {
-        progress(PROGRESS.structureStart, {
-          phase: "structuring",
-          stageLabel: "같은 화자의 발언을 모으는 중입니다",
+        const reconciled = await withSoftProgress({
+          from: PROGRESS.postSttMid,
+          to: PROGRESS.postSttSoftEnd,
+          // KTV 실측 16초. 블록 수가 많아지면 함께 는다.
+          expectedMs: expectedStageMs(stt.durationSec, 0.03, 12_000),
+          stageLabel: "같은 목소리를 모으는 중이에요",
+          run: () => reconcileSpeakerTurns(blocks),
         });
-        const reconciled = await reconcileSpeakerTurns(blocks);
         speakerBlocks = reconciled.blocks;
         statsSpeakerCount = new Set(
           speakerBlocks.map((block) => block.speaker),
@@ -473,26 +543,27 @@ export async function processUploadedMeeting(params: {
             attempt,
             depth,
             waitedMs,
-            structureStart: PROGRESS.structureStart,
+            // STT 직후 소프트 진행(강제정렬·화자묶음) 뒤에서 이어진다.
+            structureStart: PROGRESS.postSttSoftEnd,
             structureDone: PROGRESS.structureDone,
           });
-          let stageLabel = "이야기의 흐름을 정리하는 중입니다";
+          let stageLabel = "이야기의 흐름을 잡는 중이에요";
           if (depth > 0) {
-            stageLabel = "추가 보완 중입니다";
+            stageLabel = "추가 보완 중이에요";
           } else if (partCount > 1) {
             stageLabel =
               partIndex === 0
-                ? "긴 회의라 나누어 정리하는 중입니다"
-                : "이어서 정리하는 중입니다";
+                ? "긴 회의라 나눠서 정리 중이에요"
+                : "이어서 정리 중이에요";
           } else if (attempt > 1) {
-            stageLabel = "한 번 더 확인하는 중입니다";
+            stageLabel = "한 번 더 살펴보는 중이에요";
           }
           progress(pct, { phase: "structuring", stageLabel });
         },
       },
     );
     progress(PROGRESS.structureDone, {
-      stageLabel: "타임라인을 작성하는 중입니다",
+      stageLabel: "타임라인을 그리는 중이에요",
     });
     statsTopicBucket = structure.topicBucket;
     if (statsSpeakerCount === undefined && structure.speakers.length > 0) {
@@ -512,7 +583,7 @@ export async function processUploadedMeeting(params: {
             stt.durationSec,
           );
     progress(PROGRESS.aligned, {
-      stageLabel: "화자를 확인하는 중입니다",
+      stageLabel: "누가 말했는지 맞추는 중이에요",
     });
 
     if (structure.dialogue.length === 0) {
@@ -582,7 +653,7 @@ export async function processUploadedMeeting(params: {
       workspace: existing?.workspace,
       capture: existing?.meeting.capture ?? "upload",
     });
-    progress(PROGRESS.built, { stageLabel: "표현을 다듬는 중입니다" });
+    progress(PROGRESS.built, { stageLabel: "표현을 다듬는 중이에요" });
 
     // 오인식 보정 추천. 표시만 하고 본문은 그대로 둔다. 실패해도 회의는 완료.
     try {

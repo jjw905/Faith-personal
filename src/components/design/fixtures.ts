@@ -51,7 +51,7 @@ export const FIXTURE_ACTIVITY_ACTIVE: ProcessItem[] = [
     status: "structuring",
     phase: "structuring",
     progressPercent: 72,
-    detail: "정리하는 중",
+    detail: "정리하는 중이에요",
     time: "방금",
     href: "/meetings/design-act-active",
     workspace: "personal",

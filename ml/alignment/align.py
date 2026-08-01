@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -13,11 +14,18 @@ import whisperx
 # wav2vec2 정렬 비용은 창 길이에 비례하지 않고 더 가파르게 는다. 전사 청크
 # 그대로인 5분 창으로 KTV 11분 44초를 맞추면 244초가 걸리는데, 같은 오디오를
 # 문장 단위 창으로 자르면 97초로 준다. 창을 30초 안팎으로 유지한다.
-TARGET_WINDOW_SEC = 30.0
+TARGET_WINDOW_SEC = 12.0
+# 창 하나가 쓰는 메모리는 창 길이에 거의 비례한다(실측: 10초 2.2GB, 30초 3.4GB,
+# 60초 4.7GB). 문장 경계를 기다리다 보면 창이 50초를 넘기도 해서 상한을 둔다.
+MAX_WINDOW_SEC = 20.0
 # 창 경계 시각은 전사 세그먼트에서 옮겨온 추정치다. 앞뒤를 열어 경계에 걸친
 # 어절이 잘리지 않게 한다.
 WINDOW_PAD_SEC = 2.0
 SENTENCE_END = ".?!。"
+# 한 번에 정렬할 창 수. 전부 한 번에 넘기면 방출 행렬이 창 수만큼 쌓여
+# KTV 11분 44초에서 최대 상주 메모리가 6.3GB까지 올라갔다. 배치로 끊으면
+# 메모리가 배치 크기에 묶이고, 속도는 거의 그대로다.
+BATCH_WINDOWS = 8
 
 
 def _strip_spaces(text: str) -> tuple[str, list[int]]:
@@ -151,6 +159,52 @@ def split_part_into_windows(
     return windows if len(windows) > 1 else None
 
 
+def split_part_by_time(part: str, part_start: float, part_end: float) -> list[dict]:
+    """세그먼트 시각이 없을 때 쓰는 대비책. 시간을 균등하게 잘라 창을 만든다.
+
+    문장 경계를 못 찾으면 예전에는 덩어리 하나를 통째로 정렬했다. 11분 44초를
+    한 창으로 맞추면 최대 상주 메모리가 11.5GB까지 올라가 Worker가 죽는다.
+    글자 수 비율로 나눈 창은 경계가 조금 어긋나도, 메모리를 창 길이에 묶어 둔다.
+    """
+    span = part_end - part_start
+    if span <= TARGET_WINDOW_SEC * 1.5 or not part:
+        return [{"start": part_start, "end": part_end, "text": part}]
+
+    count = max(2, round(span / TARGET_WINDOW_SEC))
+    per = len(part) / count
+    windows: list[dict] = []
+    for index in range(count):
+        head = int(round(index * per))
+        tail = len(part) if index == count - 1 else int(round((index + 1) * per))
+        text = part[head:tail].strip()
+        if not text:
+            continue
+        windows.append(
+            {
+                "start": max(part_start, part_start + span * (head / len(part)) - WINDOW_PAD_SEC),
+                "end": min(part_end, part_start + span * (tail / len(part)) + WINDOW_PAD_SEC),
+                "text": text,
+            }
+        )
+    return windows or [{"start": part_start, "end": part_end, "text": part}]
+
+
+def cap_window_length(windows: list[dict]) -> list[dict]:
+    """상한을 넘는 창은 시간으로 다시 쪼갠다. 최대 메모리를 창 길이에 묶는다."""
+    out: list[dict] = []
+    for window in windows:
+        span = float(window["end"]) - float(window["start"])
+        if span <= MAX_WINDOW_SEC:
+            out.append(window)
+            continue
+        out.extend(
+            split_part_by_time(
+                str(window["text"]), float(window["start"]), float(window["end"])
+            )
+        )
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("audio")
@@ -182,10 +236,9 @@ def main() -> None:
             start = max(0.0, index * 300.0 - 30.0)
             end = min(duration, (index + 1) * 300.0 + 30.0)
         windows = split_part_into_windows(part, start, end, timed)
-        if windows:
-            segments.extend(windows)
-        else:
-            segments.append({"start": start, "end": end, "text": part})
+        segments.extend(
+            cap_window_length(windows or split_part_by_time(part, start, end))
+        )
 
     Path(args.model_dir).mkdir(parents=True, exist_ok=True)
     model, metadata = whisperx.load_align_model(
@@ -193,15 +246,32 @@ def main() -> None:
         device=args.device,
         model_dir=args.model_dir,
     )
-    aligned = whisperx.align(
-        segments,
-        model,
-        metadata,
-        args.audio,
-        args.device,
-        return_char_alignments=False,
-        print_progress=True,
-    )
+    # 오디오는 한 번만 읽는다. 배치마다 경로를 넘기면 whisperx가 그때마다
+    # 다시 디코딩해 같은 파형을 여러 벌 들고 있게 된다.
+    audio = whisperx.load_audio(args.audio)
+
+    aligned_words: list[dict] = []
+    for offset in range(0, len(segments), BATCH_WINDOWS):
+        batch = segments[offset : offset + BATCH_WINDOWS]
+        aligned = whisperx.align(
+            batch,
+            model,
+            metadata,
+            audio,
+            args.device,
+            return_char_alignments=False,
+            print_progress=False,
+        )
+        aligned_words.extend(aligned["word_segments"])
+        # 배치가 쓴 방출 행렬을 바로 놓아준다. 한 번에 다 맞추면 이 행렬이
+        # 창 수만큼 쌓여 최대 메모리가 창 하나짜리의 몇 배가 된다.
+        del aligned
+        gc.collect()
+        print(
+            f"Progress: {min(offset + BATCH_WINDOWS, len(segments)) / len(segments) * 100:.2f}%...",
+            flush=True,
+        )
+
     words = [
         {
             "text": str(word.get("word", "")).strip(),
@@ -209,7 +279,7 @@ def main() -> None:
             "endSec": float(word["end"]),
             "score": float(word.get("score", 0.0)),
         }
-        for word in aligned["word_segments"]
+        for word in aligned_words
         if str(word.get("word", "")).strip()
         and word.get("start") is not None
         and word.get("end") is not None

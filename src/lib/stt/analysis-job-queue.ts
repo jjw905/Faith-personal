@@ -4,7 +4,16 @@ import { prisma } from "@/lib/prisma";
 import type { AnalysisMode as ProductAnalysisMode } from "@/lib/stt/analysis-mode";
 
 export const ANALYSIS_JOB_MAX_ATTEMPTS = 3;
-const STALE_JOB_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * 심장박동이 이만큼 끊기면 Worker가 죽은 것으로 본다.
+ *
+ * 예전에는 6시간이었다. 배포 재시작으로 작업이 끊기면 이용자 화면은 여섯
+ * 시간 동안 "처리 중"에 멈춰 있었다. 실행 중에는 30초마다 lockedAt을 새로
+ * 찍으므로, 3분이면 살아 있는 긴 작업을 뺏지 않으면서 죽은 작업만 걷어낸다.
+ */
+const STALE_JOB_MS = 3 * 60 * 1000;
+export const ANALYSIS_JOB_HEARTBEAT_MS = 30 * 1000;
 
 export type EnqueueAnalysisJobParams = {
   meetingId: string;
@@ -85,6 +94,9 @@ export async function enqueueAnalysisJob(
 
 /**
  * 여러 Worker가 동시에 실행되어도 한 작업만 RUNNING으로 선점한다.
+ *
+ * 한 사람의 작업은 한 번에 하나만 돌린다. 여러 개를 한꺼번에 올려도 올린
+ * 순서대로 끝난다. 한 사람이 큐를 다 차지해 다른 사람이 밀리는 것도 막는다.
  */
 export async function claimNextAnalysisJob(workerId: string) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -92,10 +104,18 @@ export async function claimNextAnalysisJob(workerId: string) {
     try {
       return await prisma.$transaction(
         async (tx) => {
+          const busy = await tx.analysisJob.findMany({
+            where: { status: AnalysisJobStatus.RUNNING },
+            select: { userId: true },
+            distinct: ["userId"],
+          });
           const candidate = await tx.analysisJob.findFirst({
             where: {
               status: AnalysisJobStatus.QUEUED,
               availableAt: { lte: now },
+              ...(busy.length > 0
+                ? { userId: { notIn: busy.map((job) => job.userId) } }
+                : {}),
             },
             orderBy: [{ availableAt: "asc" }, { createdAt: "asc" }],
           });
@@ -129,6 +149,24 @@ export async function claimNextAnalysisJob(workerId: string) {
     }
   }
   return null;
+}
+
+/**
+ * 아직 살아 있다고 알린다. 이걸 멈추면 STALE_JOB_MS 뒤에 다른 Worker가
+ * 같은 작업을 다시 집는다.
+ */
+export async function heartbeatAnalysisJob(params: {
+  id: string;
+  workerId: string;
+}) {
+  return prisma.analysisJob.updateMany({
+    where: {
+      id: params.id,
+      status: AnalysisJobStatus.RUNNING,
+      lockedBy: params.workerId,
+    },
+    data: { lockedAt: new Date() },
+  });
 }
 
 export async function completeAnalysisJob(params: {

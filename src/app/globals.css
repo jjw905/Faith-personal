@@ -145,12 +145,14 @@ body {
     0 12px 28px -16px rgba(17, 22, 46, 0.2);
 }
 
-/* 회의 처리 단계 문구 */
+/* 회의 처리 단계 문구 — 아래에서 위로 올라오며 바뀜 */
 @keyframes process-rise {
   from {
+    transform: translateY(120%);
     opacity: 0;
   }
   to {
+    transform: translateY(0);
     opacity: 1;
   }
 }
@@ -158,9 +160,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   @keyframes process-rise {
     from {
+      transform: none;
       opacity: 1;
     }
     to {
+      transform: none;
       opacity: 1;
     }
   }

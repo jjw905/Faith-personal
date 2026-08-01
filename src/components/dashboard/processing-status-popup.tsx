@@ -15,6 +15,7 @@ import { useAppContext } from "@/context/app-context";
 import {
   isUploadQuotaErrorMessage,
   MEETING_PROCESS_LABEL,
+  friendlyProcessStageLabel,
 } from "@/lib/meeting-process";
 import {
   getProcessingByWorkspace,
@@ -88,7 +89,10 @@ function processSubtitle(item: ProcessItem, label: string) {
     typeof item.progressPercent === "number" &&
     Number.isFinite(item.progressPercent)
   ) {
-    const stageText = item.detail && item.detail !== label ? item.detail : label;
+    const stageText =
+      item.detail && item.detail !== label
+        ? friendlyProcessStageLabel(item.detail)
+        : label;
     return `${stageText}, ${Math.round(item.progressPercent)}%`;
   }
   if (item.detail && item.detail !== label) return item.detail;

@@ -84,6 +84,29 @@ export function nextDisplayPercent(input: DisplayPercentStepInput): number {
   return Math.min(ceiling, current + step);
 }
 
+/**
+ * 강제 정렬·화자 묶음처럼 서버 실측 fraction이 없는 긴 단계용.
+ * 초반 몇 초에 바로 1~2% 오르고, expectedMs 부근에서 to 직전에 점근한다.
+ */
+export function softElapsedProgress(params: {
+  from: number;
+  to: number;
+  waitedMs: number;
+  expectedMs: number;
+}): number {
+  const from = clamp(params.from, 0, 100);
+  const to = clamp(params.to, from, 100);
+  if (to <= from + 0.05) return from;
+  const waited = Math.max(0, params.waitedMs);
+  const expected = Math.max(1_000, params.expectedMs);
+  const ceiling = Math.max(from, Math.floor(to) - (to > from ? 1 : 0));
+  // 2.2초마다 최소 1%는 올라 대기열에서 72 고정처럼 보이지 않게 한다.
+  const stepped = from + Math.floor(waited / 2_200);
+  const t = 1 - Math.exp(-waited / expected);
+  const smooth = from + (ceiling - from) * 0.92 * t;
+  return clamp(Math.max(stepped, Math.round(smooth)), from, ceiling);
+}
+
 /** 구조화 한 파트(시도)가 차지하는 실측 구간 [lo, hi). */
 export function structurePartRange(params: {
   partIndex: number;

@@ -7,9 +7,11 @@ config();
 
 const { prisma } = await import("../src/lib/prisma");
 const {
+  ANALYSIS_JOB_HEARTBEAT_MS,
   claimNextAnalysisJob,
   completeAnalysisJob,
   failAnalysisJob,
+  heartbeatAnalysisJob,
   recoverStaleAnalysisJobs,
 } = await import("../src/lib/stt/analysis-job-queue");
 const { processUploadedMeeting } = await import("../src/lib/stt/process-upload");
@@ -38,6 +40,13 @@ function isPermanentUserError(message: string) {
 async function runJob(job: AnalysisJob) {
   const analysisMode =
     job.analysisMode === "PRECISION" ? ("precision" as const) : ("standard" as const);
+
+  // 처리 도중에도 살아 있다고 계속 알린다. 멈추면 다른 Worker가 이어받는다.
+  const heartbeat = setInterval(() => {
+    void heartbeatAnalysisJob({ id: job.id, workerId }).catch((error) => {
+      console.warn(`[analysis-worker:${workerId}] 심장박동 실패`, error);
+    });
+  }, ANALYSIS_JOB_HEARTBEAT_MS);
 
   try {
     console.log(
@@ -77,16 +86,30 @@ async function runJob(job: AnalysisJob) {
       error,
     });
     console.error(`[analysis-worker:${workerId}] 예외 meeting=${job.meetingId}`, error);
+  } finally {
+    clearInterval(heartbeat);
   }
 }
 
-async function main() {
+async function recover() {
   const recovered = await recoverStaleAnalysisJobs();
   if (recovered.retryable || recovered.exhausted) {
     console.log(
       `[analysis-worker:${workerId}] stale 복구 queued=${recovered.retryable} failed=${recovered.exhausted}`,
     );
   }
+}
+
+async function main() {
+  await recover();
+  // 시작할 때 한 번만 보면, 이 Worker가 도는 동안 죽은 다른 Worker의 작업이
+  // 영영 방치된다. 주기적으로 다시 확인한다.
+  const sweeper = setInterval(() => {
+    void recover().catch((error) => {
+      console.warn(`[analysis-worker:${workerId}] stale 복구 실패`, error);
+    });
+  }, ANALYSIS_JOB_HEARTBEAT_MS * 2);
+  sweeper.unref?.();
 
   while (!stopping) {
     try {
@@ -101,6 +124,7 @@ async function main() {
       await sleep(Math.max(pollMs, 2_000));
     }
   }
+  clearInterval(sweeper);
 }
 
 function requestStop(signal: string) {

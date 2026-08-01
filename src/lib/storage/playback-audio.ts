@@ -39,6 +39,16 @@ export type NormalizedAudio = {
 };
 
 /**
+ * MP4 샘플 표가 이미 파일 앞에 있는지.
+ * 앞에 있으면 손댈 이유가 없다.
+ */
+function hasFrontMoov(body: Buffer): boolean {
+  const moov = body.indexOf("moov", 0, "latin1");
+  const mdat = body.indexOf("mdat", 0, "latin1");
+  return moov >= 0 && (mdat < 0 || moov < mdat);
+}
+
+/**
  * 오디오를 재생·seek에 안전한 m4a로 바꾼다.
  * ffmpeg가 없거나 변환이 실패하면 null. 호출자는 원본을 그대로 올린다.
  */
@@ -46,12 +56,16 @@ export function normalizeAudioForPlayback(
   body: Buffer,
   fileName: string,
 ): NormalizedAudio | null {
+  const ext = vaultFileExtension(fileName);
   if (!needsPlaybackNormalize(fileName)) return null;
+  // 이미 MP4인 파일을 다시 인코딩하면 소리만 나빠진다. 표 위치만 본다.
+  const remuxOnly = ext === PLAYBACK_EXT;
+  if (remuxOnly && hasFrontMoov(body)) return null;
   const ffmpeg = audioToolPath("ffmpeg");
   if (!ffmpeg) return null;
 
   const dir = mkdtempSync(/* turbopackIgnore: true */ join(tmpdir(), "faith-playback-"));
-  const input = join(/* turbopackIgnore: true */ dir, `source${vaultFileExtension(fileName)}`);
+  const input = join(/* turbopackIgnore: true */ dir, `source${ext}`);
   const output = join(/* turbopackIgnore: true */ dir, `playback${PLAYBACK_EXT}`);
   try {
     writeFileSync(/* turbopackIgnore: true */ input, body);
@@ -65,14 +79,9 @@ export function normalizeAudioForPlayback(
         "-i",
         input,
         "-vn",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "32k",
-        "-ar",
-        "16000",
-        "-ac",
-        "1",
+        ...(remuxOnly
+          ? ["-c:a", "copy"]
+          : ["-c:a", "aac", "-b:a", "32k", "-ar", "16000", "-ac", "1"]),
         // moov를 앞으로 보내야 브라우저가 받자마자 seek할 수 있다.
         "-movflags",
         "+faststart",

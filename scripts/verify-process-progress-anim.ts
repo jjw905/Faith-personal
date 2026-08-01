@@ -7,6 +7,7 @@
 import {
   nextDisplayPercent,
   softCreepCeiling,
+  softElapsedProgress,
   structureProgressPercent,
   structurePartRange,
   simulateFollowTargets,
@@ -387,6 +388,34 @@ run("S12 heartbeat never leaves own part for partCount 1..5", () => {
       }
     }
   }
+});
+
+// ═══════════════════════════════════════════════════════════
+// S13. STT 직후 소프트 진행 — 2~3초 안에 72를 벗어나 대기열 고정 방지
+// ═══════════════════════════════════════════════════════════
+run("S13 softElapsedProgress leaves 72 within 3s", () => {
+  const at0 = softElapsedProgress({
+    from: 72,
+    to: 80,
+    waitedMs: 0,
+    expectedMs: 28_000,
+  });
+  const at3 = softElapsedProgress({
+    from: 72,
+    to: 80,
+    waitedMs: 3_000,
+    expectedMs: 28_000,
+  });
+  const at30 = softElapsedProgress({
+    from: 72,
+    to: 80,
+    waitedMs: 30_000,
+    expectedMs: 28_000,
+  });
+  assert(at0 === 72, `start ${at0}`);
+  assert(at3 >= 73, `moved by 3s ${at3}`);
+  assert(at30 >= at3, `monotonic ${at3}->${at30}`);
+  assert(at30 < 80, `never reach to ${at30}`);
 });
 
 // ═══════════════════════════════════════════════════════════
