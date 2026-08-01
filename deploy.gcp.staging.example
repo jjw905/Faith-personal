@@ -17,7 +17,7 @@ MAINTENANCE_CRON_AUDIENCE=https://your-staging-host.a.run.app/api/internal/maint
 MAINTENANCE_CRON_SERVICE_ACCOUNT=faith-scheduler@your-gcp-project-id.iam.gserviceaccount.com
 
 # Optional
-AUTH_EMAIL_FROM=Faith <onboarding@resend.dev>
+AUTH_EMAIL_FROM="Faith <onboarding@resend.dev>"
 LIVEKIT_ENABLED=0
 LIVEKIT_URL=
 AUTH_GOOGLE_ID=

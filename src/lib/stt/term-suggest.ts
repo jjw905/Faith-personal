@@ -410,6 +410,78 @@ export function attachCorrections(
 }
 
 /**
+ * 정해 둔 표기 몇 개는 추천으로 두지 않고 본문을 바로 고친다.
+ *
+ * 언론사 이름처럼 표기가 하나로 정해진 고유명사는 이용자가 고를 일이 없다.
+ * "유시스"를 남겨 두고 옆에 "뉴시스"를 띄우면 내려받은 회의록에는 여전히
+ * 틀린 이름이 남는다.
+ *
+ * 이용자 사전에서 나온 추천은 건드리지 않는다. 참석자 이름은 동명이인이나
+ * 표기 취향이 있어 사람이 골라야 한다.
+ *
+ * 단어 시각은 본문 안 위치(offset)로 잡혀 있어, 글자 수가 달라지면 뒤 단어가
+ * 통째로 밀린다. 바뀐 만큼 뒤 offset을 함께 옮긴다.
+ */
+export function applyFixedSpellings(
+  lines: TranscriptLine[],
+  suggestions: TermSuggestion[],
+  fixed: readonly string[],
+): TranscriptLine[] {
+  const allowed = new Set(fixed);
+  const byLine = new Map<number, TermSuggestion[]>();
+  for (const suggestion of suggestions) {
+    if (!allowed.has(suggestion.suggestion)) continue;
+    if (suggestion.startOffset == null || suggestion.endOffset == null) continue;
+    const list = byLine.get(suggestion.lineIndex) ?? [];
+    list.push(suggestion);
+    byLine.set(suggestion.lineIndex, list);
+  }
+  if (byLine.size === 0) return lines;
+
+  return lines.map((line, index) => {
+    const edits = byLine.get(index);
+    if (!edits || !line.text) return line;
+    // 뒤에서부터 고쳐야 앞쪽 offset이 그대로 유효하다.
+    const ordered = [...edits].sort((a, b) => b.startOffset - a.startOffset);
+
+    let text = line.text;
+    let words = line.words;
+    for (const edit of ordered) {
+      const { startOffset, endOffset } = edit;
+      if (text.slice(startOffset, endOffset) !== edit.wrong) continue;
+      text = text.slice(0, startOffset) + edit.suggestion + text.slice(endOffset);
+      const shift = edit.suggestion.length - edit.wrong.length;
+      let straddled = false;
+      words = words?.flatMap((word) => {
+        if (word.endOffset <= startOffset) return [word];
+        if (word.startOffset >= endOffset) {
+          return [
+            {
+              ...word,
+              startOffset: word.startOffset + shift,
+              endOffset: word.endOffset + shift,
+            },
+          ];
+        }
+        // 고친 자리에 여러 단어가 걸쳐 있으면 하나로 합친다. 그대로 두면 같은
+        // 표기가 여러 번 겹쳐 형광펜이 엉뚱한 자리에 붙는다.
+        if (straddled) return [];
+        straddled = true;
+        return [
+          {
+            ...word,
+            text: edit.suggestion,
+            startOffset,
+            endOffset: endOffset + shift,
+          },
+        ];
+      });
+    }
+    return { ...line, text, ...(words ? { words } : {}) };
+  });
+}
+
+/**
  * 조건부 재전사는 후보를 만들지 않는다. 두 번째 mini가 실제로 쓴 표기가
  * 제목, 참석자, 확인 용어에 있고 첫 결과와 발음이 가까울 때만 추천한다.
  */

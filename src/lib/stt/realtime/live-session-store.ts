@@ -15,6 +15,11 @@ import {
   identifySpeakerNames,
 } from "@/lib/stt/speaker-names";
 import {
+  isMediaOutletTerm,
+  MEDIA_OUTLET_TERMS,
+} from "@/lib/stt/media-outlets";
+import {
+  applyFixedSpellings,
   attachCorrections,
   suggestSecondPassCorrections,
   suggestTermCorrections,
@@ -719,7 +724,8 @@ async function finalizeRealtimeRun(params: {
     const suggested = await suggestTermCorrections(
       built.transcript.lines.map((line) => line.text ?? ""),
       {
-        glossary,
+        // 언론사 이름은 회의별 사전에 없다. 보정 대조에만 넣는다.
+        glossary: [...glossary, ...MEDIA_OUTLET_TERMS],
         keepTerms: rows.map((row) => row.speaker),
         genericDictionary: true,
       },
@@ -734,8 +740,15 @@ async function finalizeRealtimeRun(params: {
         lineIndex,
       }));
     });
+    built.transcript.lines = applyFixedSpellings(
+      built.transcript.lines,
+      suggested.suggestions,
+      MEDIA_OUTLET_TERMS,
+    );
     built.transcript.lines = attachCorrections(built.transcript.lines, [
-      ...suggested.suggestions,
+      ...suggested.suggestions.filter(
+        (suggestion) => !isMediaOutletTerm(suggestion.suggestion),
+      ),
       ...liveCorrections,
     ]);
 

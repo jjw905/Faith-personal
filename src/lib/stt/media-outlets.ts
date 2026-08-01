@@ -23,3 +23,9 @@ export const MEDIA_OUTLET_TERMS = [
   "아이뉴스24",
   "프레시안",
 ] as const satisfies readonly string[];
+
+const LOOKUP: ReadonlySet<string> = new Set(MEDIA_OUTLET_TERMS);
+
+export function isMediaOutletTerm(value: string): boolean {
+  return LOOKUP.has(value);
+}

@@ -13,7 +13,10 @@ import {
 } from "@/lib/stt/diarization";
 import { buildGlossary } from "@/lib/stt/glossary";
 import { hasAudioTools } from "@/lib/stt/local-tools";
-import { MEDIA_OUTLET_TERMS } from "@/lib/stt/media-outlets";
+import {
+  isMediaOutletTerm,
+  MEDIA_OUTLET_TERMS,
+} from "@/lib/stt/media-outlets";
 import {
   attachSpeakersToText,
   attachSpeakersToWordTimings,
@@ -27,6 +30,7 @@ import {
   identifySpeakerNames,
 } from "@/lib/stt/speaker-names";
 import {
+  applyFixedSpellings,
   attachCorrections,
   suggestTermCorrections,
 } from "@/lib/stt/term-suggest";
@@ -656,7 +660,8 @@ export async function processUploadedMeeting(params: {
     });
     progress(PROGRESS.built, { stageLabel: "표현을 다듬는 중이에요" });
 
-    // 오인식 보정 추천. 표시만 하고 본문은 그대로 둔다. 실패해도 회의는 완료.
+    // 오인식 보정. 언론사처럼 표기가 정해진 이름만 본문을 고치고, 나머지는
+    // 추천으로만 붙인다. 실패해도 회의는 완료.
     try {
       const suggested = await suggestTermCorrections(
         built.transcript.lines.map((line) => line.text ?? ""),
@@ -668,12 +673,19 @@ export async function processUploadedMeeting(params: {
           genericDictionary: true,
         },
       );
+      built.transcript.lines = applyFixedSpellings(
+        built.transcript.lines,
+        suggested.suggestions,
+        MEDIA_OUTLET_TERMS,
+      );
       built.transcript.lines = attachCorrections(
         built.transcript.lines,
-        suggested.suggestions.map((suggestion) => ({
-          ...suggestion,
-          sttLogprob: stt.meanLogprob,
-        })),
+        suggested.suggestions
+          .filter((suggestion) => !isMediaOutletTerm(suggestion.suggestion))
+          .map((suggestion) => ({
+            ...suggestion,
+            sttLogprob: stt.meanLogprob,
+          })),
       );
       if (suggested.usage.inputTokens > 0) {
         await appendAiUsage({

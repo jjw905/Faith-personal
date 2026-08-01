@@ -15,7 +15,7 @@ GCP_VERIFY_RUNTIME_SERVICE_ACCOUNT=faith-verify-runtime@your-gcp-project-id.iam.
 MAINTENANCE_CRON_AUDIENCE=https://your-production-host/api/internal/maintenance/team-retention
 MAINTENANCE_CRON_SERVICE_ACCOUNT=faith-scheduler@your-gcp-project-id.iam.gserviceaccount.com
 
-AUTH_EMAIL_FROM=Faith <onboarding@resend.dev>
+AUTH_EMAIL_FROM="Faith <onboarding@resend.dev>"
 LIVEKIT_ENABLED=0
 LIVEKIT_URL=
 AUTH_GOOGLE_ID=
