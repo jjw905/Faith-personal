@@ -13,6 +13,7 @@ import {
 } from "@/lib/stt/diarization";
 import { buildGlossary } from "@/lib/stt/glossary";
 import { hasAudioTools } from "@/lib/stt/local-tools";
+import { MEDIA_OUTLET_TERMS } from "@/lib/stt/media-outlets";
 import {
   attachSpeakersToText,
   attachSpeakersToWordTimings,
@@ -659,7 +660,13 @@ export async function processUploadedMeeting(params: {
     try {
       const suggested = await suggestTermCorrections(
         built.transcript.lines.map((line) => line.text ?? ""),
-        { glossary, keepTerms: confirmedNames, genericDictionary: true },
+        {
+          // 언론사 이름은 회의별 사전에 없다. 전사 프롬프트에 넣어도 소리가
+          // 이미 뭉개진 자리는 안 고쳐져서(KTV 실측), 보정 대조에만 쓴다.
+          glossary: [...glossary, ...MEDIA_OUTLET_TERMS],
+          keepTerms: confirmedNames,
+          genericDictionary: true,
+        },
       );
       built.transcript.lines = attachCorrections(
         built.transcript.lines,
