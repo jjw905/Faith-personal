@@ -36,6 +36,9 @@ backend/.env*
 *.env.example
 local.env.example
 
+# local GCP Docker deploy configs (secrets stay in Secret Manager)
+deploy.gcp.*.local
+
 # vercel
 .vercel
 

@@ -1,0 +1,37 @@
+# Faith GCP 로컬 Docker 배포 설정 (비밀값 금지 — Secret Manager만)
+# 복사: cp deploy.gcp.staging.example deploy.gcp.staging.local
+# 배포: ./scripts/deploy-gcp-docker.sh staging
+
+GCP_PROJECT_ID=your-gcp-project-id
+CLOUD_SQL_INSTANCE_CONNECTION_NAME=your-project:asia-northeast1:faith-staging
+GCS_BUCKET=your-staging-bucket
+FAITH_AUTH_URL=https://your-staging-host.a.run.app
+NEXT_SERVER_ACTION_ALLOWED_ORIGINS=your-staging-host.a.run.app
+NEXT_PUBLIC_RECAPTCHA_SITE_KEY=your-recaptcha-site-key
+
+GCP_WEB_RUNTIME_SERVICE_ACCOUNT=faith-web-runtime@your-gcp-project-id.iam.gserviceaccount.com
+GCP_WORKER_RUNTIME_SERVICE_ACCOUNT=faith-worker-runtime@your-gcp-project-id.iam.gserviceaccount.com
+GCP_VERIFY_RUNTIME_SERVICE_ACCOUNT=faith-verify-runtime@your-gcp-project-id.iam.gserviceaccount.com
+
+MAINTENANCE_CRON_AUDIENCE=https://your-staging-host.a.run.app/api/internal/maintenance/team-retention
+MAINTENANCE_CRON_SERVICE_ACCOUNT=faith-scheduler@your-gcp-project-id.iam.gserviceaccount.com
+
+# Optional
+AUTH_EMAIL_FROM=Faith <onboarding@resend.dev>
+LIVEKIT_ENABLED=0
+LIVEKIT_URL=
+AUTH_GOOGLE_ID=
+AUTH_TWITTER_ID=
+AUTH_NAVER_ID=
+NEXT_PUBLIC_TEAM_FEATURE_ENABLED=true
+NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY=true
+NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=false
+CLOUD_RUN_WEB_CPU=1
+CLOUD_RUN_WEB_MEMORY=1Gi
+CLOUD_RUN_WEB_MAX_INSTANCES=10
+CLOUD_RUN_WORKER_CPU=2
+CLOUD_RUN_WORKER_MEMORY=8Gi
+CLOUD_RUN_WORKER_INSTANCES=1
+ANALYSIS_WORKER_COUNT=1
+GCP_KMS_ENABLED=0
+REGION=asia-northeast1

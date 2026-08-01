@@ -58,4 +58,4 @@ Audio
 
 Faith는 AI 회의록 제품의 핵심 흐름을 검증하기 위한 지속 개발 프로젝트입니다. 현재는 회의 분석 파이프라인, 협업 기능, 개인정보 보호, 실시간 기록 흐름을 중심으로 안정화하고 있습니다.
 
-운영 배포는 GitHub Actions와 Cloud Run을 사용합니다. 환경별 설정·비밀값은 저장소에 두지 않습니다.
+운영 배포는 로컬 Docker(`./scripts/deploy-gcp-docker.sh`)로 Cloud Run에 올립니다. GitHub는 소스 백업용이며 Actions로 배포하지 않습니다. 환경별 설정·비밀값은 저장소에 두지 않습니다.
