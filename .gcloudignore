@@ -26,7 +26,7 @@
 *.pub
 .env
 .env.*
-!.env.example
-!.local.env.example
 gha-creds-*.json
+credentials*.json
+service-account*.json
 tsconfig.tsbuildinfo

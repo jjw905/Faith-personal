@@ -54,7 +54,7 @@ function localDevAdminPassword() {
   );
 }
 
-/** 비프로덕션에서 faith-admin@faith.local ADMIN 계정을 upsert. */
+/** 비프로덕션에서 로컬 개발용 ADMIN 계정을 upsert. */
 export async function ensureLocalDevAdmin() {
   if (process.env.NODE_ENV === "production") {
     return {
@@ -96,6 +96,5 @@ export async function ensureLocalDevAdmin() {
     ok: true as const,
     email: user.email,
     role: user.role,
-    password,
   };
 }

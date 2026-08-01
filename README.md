@@ -58,17 +58,4 @@ Audio
 
 Faith는 AI 회의록 제품의 핵심 흐름을 검증하기 위한 지속 개발 프로젝트입니다. 현재는 회의 분석 파이프라인, 협업 기능, 개인정보 보호, 실시간 기록 흐름을 중심으로 안정화하고 있습니다.
 
-## GCP 배포
-
-운영 배포는 GitHub Actions가 Dockerfile을 기준으로 Cloud Build에서 이미지를
-빌드·Artifact Registry에 저장한 뒤, `gcloud run deploy --image`로 Cloud Run에
-배포하는 방식이다. 웹 서비스, Prisma migration/검증 Job, 분석 Worker Pool은
-같은 이미지의 서로 다른 명령을 사용한다.
-
-- 설정 문서: `infra/gcp/README.md`
-- 배포 workflow: `.github/workflows/deploy-gcp.yml`
-- 배포 순서: 검증 → no-traffic 웹 revision → Prisma migration/런타임 검증 Job
-  → Worker Pool → traffic 전환
-- 로컬 상태 전환: `DURABLE_STATE_BACKEND=local`
-- GCP 상태 저장: `DURABLE_STATE_BACKEND=database`, Cloud SQL
-- GCP 파일 저장: `STORAGE_BACKEND=gcs`, Cloud Storage
+운영 배포는 GitHub Actions와 Cloud Run을 사용합니다. 환경별 설정·비밀값은 저장소에 두지 않습니다.

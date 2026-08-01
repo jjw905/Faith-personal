@@ -44,15 +44,27 @@ export function SocialSignupButtons({
   showTitleRule = true,
   /** 페이지에 이미 h1이 있으면 카드 안 제목 생략 (중복 크롬↓). */
   showHeading = true,
+  /** 서버에서 확인한 사용 가능 provider. 없으면 버튼 전체를 숨긴다. */
+  availableProviders,
 }: {
   title?: string;
   dense?: boolean;
   showPrivacyNote?: boolean;
   showTitleRule?: boolean;
   showHeading?: boolean;
+  availableProviders?: readonly (typeof PROVIDERS)[number]["id"][];
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
+
+  const providers =
+    availableProviders === undefined
+      ? PROVIDERS
+      : PROVIDERS.filter((p) => availableProviders.includes(p.id));
+
+  if (providers.length === 0) {
+    return null;
+  }
 
   function handleSocial(id: (typeof PROVIDERS)[number]["id"]) {
     setError("");
@@ -62,6 +74,12 @@ export function SocialSignupButtons({
         .then((res) => {
           if (res?.url) {
             window.location.assign(res.url);
+            return;
+          }
+          if (res?.error === "Configuration") {
+            setError(
+              "소셜 로그인 설정이 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+            );
             return;
           }
           if (id === "twitter") {
@@ -106,7 +124,7 @@ export function SocialSignupButtons({
               : "mt-5 flex w-full flex-col gap-3"
         }
       >
-        {PROVIDERS.map(({ id, label, className, Icon }) => (
+        {providers.map(({ id, label, className, Icon }) => (
           <button
             key={id}
             type="button"

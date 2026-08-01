@@ -84,14 +84,23 @@ async function confirmSignupOtp(email: string, code: string) {
 /** 회원가입 — 소셜 / 이메일 선택 (미리보기·플로우 공용). */
 export function SignupSocialStep({
   onEmailClick,
+  availableProviders,
 }: {
   onEmailClick?: () => void;
+  availableProviders?: readonly ("google" | "twitter")[];
 }) {
+  // undefined = 디자인 미리보기 등에서 전체 표시, [] = 서버에 OAuth 미설정
+  const hasSocial =
+    availableProviders === undefined || availableProviders.length > 0;
   return (
     <div className="w-full">
       <AuthFlowHeading
         title="회원가입"
-        subtitle="소셜 계정으로 빠르게 시작하세요"
+        subtitle={
+          hasSocial
+            ? "소셜 계정으로 빠르게 시작하세요"
+            : "이메일로 Faith 계정을 만드세요"
+        }
         backHref="/login"
         className={authEnter}
       />
@@ -99,16 +108,21 @@ export function SignupSocialStep({
       <AuthCard
         className={cn(AUTH_CARD_OFFSET, authEnter, authEnterDelay(2))}
       >
-        <SocialSignupButtons showHeading={false} />
+        <SocialSignupButtons
+          showHeading={false}
+          availableProviders={availableProviders}
+        />
 
-        <div className="mt-6">
-          <AuthOrDivider />
-        </div>
+        {hasSocial ? (
+          <div className="mt-6">
+            <AuthOrDivider />
+          </div>
+        ) : null}
 
         <button
           type="button"
           onClick={() => onEmailClick?.()}
-          className={cn("mt-6", AUTH_SECONDARY_BTN)}
+          className={cn(hasSocial ? "mt-6" : undefined, AUTH_SECONDARY_BTN)}
         >
           이메일로 가입
         </button>
@@ -118,7 +132,11 @@ export function SignupSocialStep({
 }
 
 /** 회원가입 플로우 — 소셜 / 이메일 인증 / 계정 정보. */
-export function SignupFlow() {
+export function SignupFlow({
+  availableProviders,
+}: {
+  availableProviders?: readonly ("google" | "twitter")[];
+} = {}) {
   const [step, setStep] = useState<Step>("social");
   const [verifiedEmail, setVerifiedEmail] = useState("");
   const [signupProof, setSignupProof] = useState("");
@@ -154,7 +172,12 @@ export function SignupFlow() {
     );
   }
 
-  return <SignupSocialStep onEmailClick={() => setStep("verify")} />;
+  return (
+    <SignupSocialStep
+      onEmailClick={() => setStep("verify")}
+      availableProviders={availableProviders}
+    />
+  );
 }
 
 export function EmailSignupForm({

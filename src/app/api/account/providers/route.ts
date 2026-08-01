@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { NAVER_LOGIN_ENABLED } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { configuredOAuthProviders } from "@/lib/oauth-providers";
 import { requireUser } from "@/lib/require-user";
 
 const LINKABLE = ["google", "naver", "twitter"] as const;
@@ -43,26 +43,7 @@ export async function GET() {
     linked,
     primary,
     hasPassword: Boolean(user?.passwordHash),
-    available: LINKABLE.filter((p) => {
-      if (p === "google") {
-        return Boolean(
-          process.env.AUTH_GOOGLE_ID?.trim() &&
-            process.env.AUTH_GOOGLE_SECRET?.trim(),
-        );
-      }
-      if (p === "naver") {
-        // 임시 중단: 새 연결은 막되, 이미 연동된 계정은 계속 보이고 해제도 된다.
-        return Boolean(
-          NAVER_LOGIN_ENABLED &&
-            process.env.AUTH_NAVER_ID?.trim() &&
-            process.env.AUTH_NAVER_SECRET?.trim(),
-        );
-      }
-      return Boolean(
-        process.env.AUTH_TWITTER_ID?.trim() &&
-          process.env.AUTH_TWITTER_SECRET?.trim(),
-      );
-    }),
+    available: configuredOAuthProviders(),
   });
 }
 

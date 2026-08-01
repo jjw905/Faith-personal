@@ -32,17 +32,17 @@ import { cn } from "@/lib/utils";
 const ERROR_MESSAGES: Record<string, string> = {
   CredentialsSignin: "이메일 또는 비밀번호가 올바르지 않습니다.",
   EmailConflict:
-    "이미 있는 계정이에요. 예전에 쓰던 방식으로 로그인한 뒤, 계정 설정에서 연결해 주세요.",
-  Disabled: "사용할 수 없는 계정이에요.",
-  Configuration: "로그인 준비가 아직 끝나지 않았어요. 잠시 후 다시 시도해 주세요.",
+    "이미 등록된 계정입니다. 기존 로그인 방식으로 로그인한 뒤 계정 설정에서 연결해 주세요.",
+  Disabled: "현재 사용할 수 없는 계정입니다.",
+  Configuration: "로그인 설정을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   OAuthAccountNotLinked:
-    "이미 있는 계정이에요. 예전에 쓰던 방식으로 로그인한 뒤, 계정 설정에서 연결해 주세요.",
-  AccessDenied: "로그인을 완료하지 못했어요.",
+    "이미 등록된 계정입니다. 기존 로그인 방식으로 로그인한 뒤 계정 설정에서 연결해 주세요.",
+  AccessDenied: "로그인을 완료하지 못했습니다.",
   MfaPasswordRequired:
     "MFA가 켜진 계정은 소셜 로그인을 사용할 수 없습니다. 이메일과 비밀번호로 로그인해 주세요.",
-  OAuthCallback: "소셜 로그인 중 문제가 생겼어요. 다시 시도해 주세요.",
-  Callback: "로그인 처리 중 문제가 생겼어요. 다시 시도해 주세요.",
-  Verification: "인증 링크가 만료되었거나 올바르지 않아요.",
+  OAuthCallback: "소셜 로그인 중 문제가 발생했습니다. 다시 시도해 주세요.",
+  Callback: "로그인 처리 중 문제가 발생했습니다. 다시 시도해 주세요.",
+  Verification: "인증 링크가 만료되었거나 올바르지 않습니다.",
 };
 
 const CODE_MESSAGES: Record<string, string> = {
@@ -65,6 +65,8 @@ export type LoginFormProps = {
   initialError?: string;
   initialInfo?: string;
   forcePending?: boolean;
+  /** 서버에서 확인한 OAuth provider. 빈 배열이면 소셜 버튼 숨김. */
+  availableProviders?: readonly ("google" | "twitter")[];
 };
 
 /** 로그인 패널 — Credentials + 소셜. */
@@ -75,6 +77,7 @@ export function LoginForm({
   initialError = "",
   initialInfo = "",
   forcePending = false,
+  availableProviders,
 }: LoginFormProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -150,11 +153,16 @@ export function LoginForm({
       router.replace("/dashboard");
       router.refresh();
     } catch {
-      setError("로그인 처리 중 문제가 생겼어요. 다시 시도해 주세요.");
+      setError("로그인 처리 중 문제가 발생했습니다. 다시 시도해 주세요.");
     } finally {
       setPending(false);
     }
   }
+
+  const showSocial =
+    preview ||
+    availableProviders === undefined ||
+    availableProviders.length > 0;
 
   return (
     <div className="w-full">
@@ -167,13 +175,21 @@ export function LoginForm({
           title="간편 소셜 로그인"
           showPrivacyNote={false}
           showTitleRule={false}
+          availableProviders={
+            preview ? ["google", "twitter"] : availableProviders
+          }
         />
 
-        <div className="mt-6">
-          <AuthOrDivider />
-        </div>
+        {showSocial && (
+          <div className="mt-6">
+            <AuthOrDivider />
+          </div>
+        )}
 
-        <form className="mt-6 space-y-5" onSubmit={handleSubmit}>
+        <form
+          className={showSocial ? "mt-6 space-y-5" : "space-y-5"}
+          onSubmit={handleSubmit}
+        >
           <AuthSectionHeader title="이메일 로그인" />
 
           {displayInfo ? (

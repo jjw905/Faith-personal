@@ -13,7 +13,6 @@ import {
 
 import {
   LOCAL_DEV_ADMIN_EMAIL,
-  LOCAL_DEV_ADMIN_PASSWORD,
 } from "../src/lib/ensure-admin";
 import { ensureLocalDevProductTeam } from "../src/lib/ensure-local-team";
 import { prisma } from "../src/lib/prisma";
@@ -146,10 +145,7 @@ async function main() {
   console.log(
     `[seed] ${team.teamName} 준비 (대표 ${team.ownerEmail}, 멤버 ${team.memberCount}명)`,
   );
-  console.warn(`[seed] 로그인 비밀번호: ${team.password}`);
-  if (team.password === LOCAL_DEV_ADMIN_PASSWORD) {
-    console.warn(`[seed] dev fallback password: ${LOCAL_DEV_ADMIN_PASSWORD}`);
-  }
+  console.warn("[seed] 로그인 비밀번호는 로그에 출력하지 않습니다.");
 
   for (const row of team.seeded) {
     const label =
@@ -188,9 +184,8 @@ async function main() {
     memberIds: members.map((row) => row.id),
   });
 
-  console.log(
-    `[seed] 어드민 로그인: ${LOCAL_DEV_ADMIN_EMAIL} / ${LOCAL_DEV_ADMIN_PASSWORD}`,
-  );
+  console.log(`[seed] 어드민 로그인 계정: ${LOCAL_DEV_ADMIN_EMAIL}`);
+  console.log("[seed] 비밀번호는 로그에 출력하지 않습니다.");
 }
 
 main()

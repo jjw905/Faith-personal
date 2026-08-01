@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { SignupFlow } from "@/components/auth/signup-flow";
+import { configuredOAuthProviders } from "@/lib/oauth-providers";
 
 export const metadata: Metadata = {
   title: "회원가입, Faith",
-  description: "Faith 계정을 만들어 AI 회의록을 시작하세요.",
+  description: "Faith 계정을 만들고 더 빠른 회의 정리를 시작하세요.",
 };
 
 export default async function SignupPage() {
@@ -17,10 +18,14 @@ export default async function SignupPage() {
     redirect("/dashboard");
   }
 
+  const availableProviders = configuredOAuthProviders().filter(
+    (p): p is "google" | "twitter" => p === "google" || p === "twitter",
+  );
+
   return (
     <AuthShell contentAlign="raised">
       <div className="flex w-full flex-col">
-        <SignupFlow />
+        <SignupFlow availableProviders={availableProviders} />
 
         <p className="mt-6 text-center text-base text-muted">
           이미 계정이 있으신가요?{" "}

@@ -2,7 +2,6 @@ import { config } from "dotenv";
 
 import {
   LOCAL_DEV_ADMIN_EMAIL,
-  LOCAL_DEV_ADMIN_PASSWORD,
   ensureAdminUser,
   ensureLocalDevAdmin,
 } from "../src/lib/ensure-admin";
@@ -21,14 +20,14 @@ async function main() {
   const fallback = await ensureLocalDevAdmin();
   if (fallback.ok) {
     console.log(`[seed] 로컬 ADMIN ready: ${fallback.email}`);
-    console.log(`[seed] 로컬 개발 로그인: ${fallback.email} / ${fallback.password}`);
+    console.log("[seed] 비밀번호는 로그에 출력하지 않습니다.");
     return;
   }
 
   console.warn(`[seed] ${primary.message}`);
   if (process.env.NODE_ENV !== "production") {
     console.warn(
-      `[seed] 로컬 기본값: ${LOCAL_DEV_ADMIN_EMAIL} / ${LOCAL_DEV_ADMIN_PASSWORD} (npm run db:admin)`,
+      `[seed] 로컬 기본 계정: ${LOCAL_DEV_ADMIN_EMAIL} (비밀번호는 로컬 설정 참고, npm run db:admin)`,
     );
   }
 }

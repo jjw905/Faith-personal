@@ -5,10 +5,11 @@ import { Suspense } from "react";
 import { auth } from "@/auth";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
+import { configuredOAuthProviders } from "@/lib/oauth-providers";
 
 export const metadata: Metadata = {
   title: "로그인, Faith",
-  description: "Faith 계정으로 로그인하고 AI 회의록을 이어가세요.",
+  description: "Faith에 로그인해 AI 회의록과 회의 기록을 이어가세요.",
 };
 
 export default async function LoginPage() {
@@ -21,10 +22,14 @@ export default async function LoginPage() {
     redirect("/dashboard");
   }
 
+  const availableProviders = configuredOAuthProviders().filter(
+    (p): p is "google" | "twitter" => p === "google" || p === "twitter",
+  );
+
   return (
     <AuthShell>
       <Suspense fallback={<p className="text-base text-muted">불러오는 중…</p>}>
-        <LoginForm />
+        <LoginForm availableProviders={availableProviders} />
       </Suspense>
     </AuthShell>
   );

@@ -304,7 +304,6 @@ export async function ensureLocalDevProductTeam() {
     teamId: team.id,
     teamName: team.name,
     ownerEmail: LOCAL_DEV_ADMIN_EMAIL,
-    password,
     memberCount,
     seeded,
   };
