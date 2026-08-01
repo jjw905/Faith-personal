@@ -1,11 +1,12 @@
 # Faith GCP 배포
 
 기준 리전은 `asia-northeast1`(도쿄)이다. Cloud Run 요금제 Tier 1이라 서울(Tier 2)보다
-저렴하고 한국에서의 지연도 실사용에 문제없는 수준이다. 이 경로는 Dockerfile을 직접 관리하지 않고
-GitHub Actions가 `gcloud run deploy --source .`와 Cloud Buildpacks를 호출하는 배포 방식이다.
-Cloud Run과 Worker Pool은 내부적으로 컨테이너를 실행하지만, 저장소에는 Dockerfile이나
-컨테이너 레지스트리 자격증명을 넣지 않는다.
-Node.js 런타임은 `package.json`의 `engines`에 맞춰 22.x로 고정한다.
+저렴하고 한국에서의 지연도 실사용에 문제없는 수준이다. GitHub Actions는 검증 후
+`gcloud builds submit --config cloudbuild.yaml`로 Dockerfile 이미지를 빌드해 Artifact
+Registry에 저장하고, `gcloud run deploy --image`로 Cloud Run에 배포한다.
+Cloud Run과 Worker Pool은 같은 버전의 Docker 이미지를 사용하며, 컨테이너 레지스트리
+자격증명은 저장소에 넣지 않는다. Node.js 런타임은 Dockerfile과
+`package.json`의 `engines`에 맞춰 22.x로 고정한다.
 
 ## 리소스 구성
 
@@ -15,7 +16,7 @@ Node.js 런타임은 `package.json`의 `engines`에 맞춰 22.x로 고정한다.
 - Cloud Run verification job: `faith-verify-staging`, `faith-verify-production`
 - Cloud SQL for PostgreSQL: 웹과 워커가 함께 사용하는 인스턴스
 - Cloud Storage: 업로드 원본과 내보내기 파일
-- Artifact Registry: Cloud Buildpacks가 생성한 워커 이미지
+- Artifact Registry: Dockerfile로 빌드한 웹·마이그레이션·검증·워커 이미지
 - Secret Manager: 앱 비밀값과 DB URL
 - Cloud KMS: 팀 콘텐츠·감사 키
 - Compute Engine: 선택형 LiveKit UDP/TURN 서버
@@ -107,13 +108,13 @@ Cloudflare 앞단에 연결하고, DNS·TLS가 확인된 뒤 `FAITH_AUTH_URL`,
 
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`
 - `GCP_DEPLOY_SERVICE_ACCOUNT`
-- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`
 
 장기 보관 JSON 서비스 계정 키를 GitHub에 업로드하지 않는다. GitHub Actions는
-Workload Identity Federation으로 짧은 수명의 Google 자격만 발급받는다.
-`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`는 빌드 시 필요한 안정적인 키이며,
-Secret Manager의 `faith-<environment>-server-actions-key`와 동일한 값을
-사용한다.
+Workload Identity Federation으로 짧은 수명의 Google 자격만 발급받는다. 앱
+비밀값은 GitHub에 저장하지 않고 Secret Manager에 둔다.
+`cloudbuild.yaml`이 빌드 시 `faith-<environment>-server-actions-key`를
+Secret Manager에서 일회성 secret mount로 읽고, Cloud Run은 같은 Secret
+Manager 값을 런타임에 주입한다.
 
 WIF provider를 만들 때 GitHub repository와 branch를 attribute condition으로
 제한한다. 예시는 실제 저장소 값으로 바꿔 실행한다.
@@ -170,7 +171,7 @@ gcloud services enable \
 gcloud artifacts repositories create "${REPOSITORY}" \
   --location="${REGION}" \
   --repository-format=docker \
-  --description="Faith Cloud Buildpacks images"
+  --description="Faith Docker images"
 
 gcloud iam service-accounts create faith-web-runtime \
   --display-name="Faith web runtime"
@@ -336,13 +337,10 @@ The account that provisions per-team keys also needs `roles/cloudkms.admin` on
 the `faith-teams` key ring. If keys are pre-provisioned by an operations job,
 remove that role from the web runtime account.
 
-The deploy account additionally needs Cloud Run deployment, Cloud Build, Artifact
-Registry, and Service Account User permissions. It is separate from both runtime
-accounts.
-
-For a source deploy, grant the deploy account and Cloud Build identity explicitly
-(the exact project-level policy should follow the organization's least-privilege
-review):
+The deploy account additionally needs Cloud Run deployment, Cloud Build submission,
+and Service Account User permissions. The Cloud Build identity needs permission to
+build and push the Docker image and to read the build-only Server Actions secret.
+These identities are separate from both runtime accounts.
 
 ```bash
 PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" \
@@ -350,15 +348,17 @@ PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" \
 BUILD_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 CLOUD_BUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
 
-for ROLE in roles/run.admin roles/run.sourceDeveloper \
+for ROLE in roles/run.admin \
   roles/serviceusage.serviceUsageConsumer roles/cloudbuild.builds.editor; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${DEPLOY_SA}" --role="${ROLE}"
 done
 
-gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${BUILD_SA}" --role=roles/run.builder
 for BUILD_IDENTITY in "${BUILD_SA}" "${CLOUD_BUILD_SA}"; do
+  for ROLE in roles/cloudbuild.builds.builder roles/logging.logWriter; do
+    gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+      --member="serviceAccount:${BUILD_IDENTITY}" --role="${ROLE}"
+  done
   gcloud artifacts repositories add-iam-policy-binding "${REPOSITORY}" \
     --location="${REGION}" --project="${PROJECT_ID}" \
     --member="serviceAccount:${BUILD_IDENTITY}" \
@@ -369,6 +369,12 @@ gcloud artifacts repositories add-iam-policy-binding "${REPOSITORY}" \
   --member="serviceAccount:${DEPLOY_SA}" \
   --role=roles/artifactregistry.reader
 
+RUN_SERVICE_AGENT="service-${PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
+gcloud artifacts repositories add-iam-policy-binding "${REPOSITORY}" \
+  --location="${REGION}" --project="${PROJECT_ID}" \
+  --member="serviceAccount:${RUN_SERVICE_AGENT}" \
+  --role=roles/artifactregistry.reader
+
 for RUNTIME_SA in "${WEB_SERVICE_ACCOUNT}" "${WORKER_SERVICE_ACCOUNT}"; do
   gcloud iam service-accounts add-iam-policy-binding "${RUNTIME_SA}" \
     --project="${PROJECT_ID}" \
@@ -376,15 +382,20 @@ for RUNTIME_SA in "${WEB_SERVICE_ACCOUNT}" "${WORKER_SERVICE_ACCOUNT}"; do
     --role=roles/iam.serviceAccountUser
 done
 
-# `gcloud run deploy --source` may use either the project-number Compute
-# Engine identity or the Cloud Build service identity, depending on the
-# project/build configuration. Both identities must be allowed to act as the
-# web runtime account.
-for BUILD_IDENTITY in "${BUILD_SA}" "${CLOUD_BUILD_SA}"; do
-  gcloud iam service-accounts add-iam-policy-binding "${WEB_SERVICE_ACCOUNT}" \
+# Run once for every environment whose build image is enabled. The build
+# service account reads this one secret through Cloud Build secretEnv; the
+# value is never written to the Docker image.
+for ENVIRONMENT in staging production; do
+  gcloud secrets add-iam-policy-binding \
+    "faith-${ENVIRONMENT}-server-actions-key" \
     --project="${PROJECT_ID}" \
-    --member="serviceAccount:${BUILD_IDENTITY}" \
-    --role=roles/iam.serviceAccountUser
+    --member="serviceAccount:${BUILD_SA}" \
+    --role=roles/secretmanager.secretAccessor
+  gcloud secrets add-iam-policy-binding \
+    "faith-${ENVIRONMENT}-server-actions-key" \
+    --project="${PROJECT_ID}" \
+    --member="serviceAccount:${CLOUD_BUILD_SA}" \
+    --role=roles/secretmanager.secretAccessor
 done
 ```
 
@@ -403,7 +414,7 @@ CryptoKey Encrypter/Decrypter와 Secret Manager Secret Accessor만 부여한다.
   객체 버전 관리·보존 기간·비용 알림을 조직 정책에 맞춰 설정한다.
 - Secret Manager 새 버전 발급 후에는 Cloud Run revision을 재배포해
   `:latest` 참조가 새 인스턴스에 반영됐는지 확인한다. Server Actions 키는
-  빌드용 GitHub secret과 런타임 Secret Manager 값을 함께 교체한다.
+  Cloud Build와 Cloud Run이 같은 Secret Manager 값을 사용한다.
 - Artifact Registry에는 오래된 worker 이미지 정리 정책을 두되, 현재
   revision과 롤백 대상 이미지는 보존한다.
 - Cloud Run, Cloud SQL, GCS, LiveKit VM에 오류율·CPU·메모리·디스크·DB

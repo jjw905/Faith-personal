@@ -60,9 +60,10 @@ Faith는 AI 회의록 제품의 핵심 흐름을 검증하기 위한 지속 개�
 
 ## GCP 배포
 
-운영 배포는 Dockerfile을 직접 실행하는 방식이 아니라 GitHub Actions에서
-`gcloud run deploy --source .`를 호출한다. Cloud Build/Buildpacks가 소스를
-빌드하고 Cloud Run이 웹 서비스와 분석 Worker Pool을 실행한다.
+운영 배포는 GitHub Actions가 Dockerfile을 기준으로 Cloud Build에서 이미지를
+빌드·Artifact Registry에 저장한 뒤, `gcloud run deploy --image`로 Cloud Run에
+배포하는 방식이다. 웹 서비스, Prisma migration/검증 Job, 분석 Worker Pool은
+같은 이미지의 서로 다른 명령을 사용한다.
 
 - 설정 문서: `infra/gcp/README.md`
 - 배포 workflow: `.github/workflows/deploy-gcp.yml`

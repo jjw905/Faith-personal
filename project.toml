@@ -1,5 +1,0 @@
-# Force the Node.js buildpack. Source also contains ml/*/requirements.txt,
-# which otherwise makes Google buildpacks prefer Python.
-[[build.env]]
-name = "GOOGLE_RUNTIME"
-value = "nodejs"

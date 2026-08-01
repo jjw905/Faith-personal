@@ -37,7 +37,6 @@ jobs:
     env:
       AUTH_URL: ${{ vars.FAITH_AUTH_URL || 'http://localhost:3000' }}
       NEXT_SERVER_ACTION_ALLOWED_ORIGINS: ${{ vars.NEXT_SERVER_ACTION_ALLOWED_ORIGINS || 'localhost:3000' }}
-      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY || 'ci-only-placeholder-change-me' }}
       NEXT_PUBLIC_TEAM_FEATURE_ENABLED: ${{ vars.NEXT_PUBLIC_TEAM_FEATURE_ENABLED || 'true' }}
       NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY: ${{ vars.NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY || 'true' }}
       NEXT_PUBLIC_REALTIME_FEATURE_ENABLED: ${{ vars.NEXT_PUBLIC_REALTIME_FEATURE_ENABLED || 'false' }}
@@ -71,6 +70,7 @@ jobs:
       - name: Build
         env:
           AUTH_SECRET: ci-only-placeholder-change-me
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ci-only-placeholder-change-me
           DATABASE_URL: postgresql://faith:faith@127.0.0.1:5432/faith?schema=public
           STORAGE_BACKEND: local
           DURABLE_STATE_BACKEND: local
@@ -101,7 +101,6 @@ jobs:
       AUTH_NAVER_ID: ${{ vars.AUTH_NAVER_ID || '' }}
       AUTH_TWITTER_ID: ${{ vars.AUTH_TWITTER_ID || '' }}
       NEXT_SERVER_ACTION_ALLOWED_ORIGINS: ${{ vars.NEXT_SERVER_ACTION_ALLOWED_ORIGINS }}
-      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
       NEXT_PUBLIC_TEAM_FEATURE_ENABLED: ${{ vars.NEXT_PUBLIC_TEAM_FEATURE_ENABLED || 'true' }}
       NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY: ${{ vars.NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY || 'true' }}
       NEXT_PUBLIC_REALTIME_FEATURE_ENABLED: ${{ vars.NEXT_PUBLIC_REALTIME_FEATURE_ENABLED || 'false' }}
@@ -134,6 +133,17 @@ jobs:
         with:
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      - name: Build and push Docker image
+        run: |
+          set -euo pipefail
+          IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/faith:${GITHUB_SHA}"
+          gcloud builds submit . \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${REGION}" \
+            --config=cloudbuild.yaml \
+            --substitutions="^@^_IMAGE=${IMAGE}@_SERVER_ACTIONS_SECRET=${SECRET_PREFIX}server-actions-key@_NEXT_SERVER_ACTION_ALLOWED_ORIGINS=${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}@_NEXT_PUBLIC_TEAM_FEATURE_ENABLED=${NEXT_PUBLIC_TEAM_FEATURE_ENABLED}@_NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY=${NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY}@_NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=${NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}@_NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}"
+          echo "IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+
       - name: Require an existing worker pool for web-only deploys
         if: ${{ !inputs.deploy_worker }}
         run: |
@@ -143,7 +153,7 @@ jobs:
             --region="${REGION}" >/dev/null
           echo "Existing worker pool found; confirm it has at least one active instance before promotion."
 
-      - name: Deploy web service from source
+      - name: Deploy web service image
         run: |
           set -euo pipefail
           test -n "${GCP_PROJECT_ID}"
@@ -152,7 +162,6 @@ jobs:
           test -n "${WEB_SERVICE_ACCOUNT}"
           test -n "${CLOUD_SQL_INSTANCE}"
           test -n "${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}"
-          test -n "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}"
           test -n "${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}"
           test -n "${MAINTENANCE_CRON_AUDIENCE}"
           test -n "${MAINTENANCE_CRON_SERVICE_ACCOUNT}"
@@ -186,7 +195,7 @@ jobs:
           gcloud run deploy "${WEB_SERVICE}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${REGION}" \
-            --source="." \
+            --image="${IMAGE}" \
             --cpu="${WEB_CPU}" \
             --memory="${WEB_MEMORY}" \
             --timeout=300 \
@@ -194,7 +203,6 @@ jobs:
             --min-instances=0 \
             --max-instances="${WEB_MAX_INSTANCES}" \
             --no-traffic \
-            --set-build-env-vars="^|^NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}|NEXT_SERVER_ACTION_ALLOWED_ORIGINS=${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}|NEXT_PUBLIC_TEAM_FEATURE_ENABLED=${NEXT_PUBLIC_TEAM_FEATURE_ENABLED}|NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY=${NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY}|NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=${NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}|NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}" \
             --allow-unauthenticated \
             --service-account="${WEB_SERVICE_ACCOUNT}" \
             --add-cloudsql-instances="${CLOUD_SQL_INSTANCE}" \
@@ -224,8 +232,8 @@ jobs:
             --tasks=1 \
             --max-retries=0 \
             --task-timeout=10m \
-            --command="/cnb/process/migrate" \
-            --args= \
+            --command="npm" \
+            --args="run,db:migrate" \
             --set-env-vars="NODE_ENV=production" \
             --set-secrets="DATABASE_URL=${SECRET_PREFIX}database-url:latest" \
             --execute-now \
@@ -249,35 +257,38 @@ jobs:
             --tasks=1 \
             --max-retries=0 \
             --task-timeout=10m \
-            --command="/cnb/process/verify" \
-            --args= \
+            --command="npm" \
+            --args="run,test:gcp-runtime" \
             --set-env-vars="^|^NODE_ENV=production|AUTH_URL=${AUTH_URL}|LIVEKIT_ENABLED=${LIVEKIT_ENABLED}|LIVEKIT_URL=${LIVEKIT_URL}|MAINTENANCE_CRON_AUDIENCE=${MAINTENANCE_CRON_AUDIENCE}|MAINTENANCE_CRON_SERVICE_ACCOUNT=${MAINTENANCE_CRON_SERVICE_ACCOUNT}|NEXT_SERVER_ACTION_ALLOWED_ORIGINS=${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}|NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}|NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=${NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}|STORAGE_BACKEND=gcs|DURABLE_STATE_BACKEND=database|GCP_PROJECT_ID=${GCP_PROJECT_ID}|GCS_BUCKET=${GCS_BUCKET}|GCP_KMS_ENABLED=${GCP_KMS_ENABLED}|GCP_KMS_RUNTIME_ENV=${GCP_KMS_RUNTIME_ENV}|GCP_KMS_LOCATION=${REGION}|GCP_KMS_KEY_RING=${GCP_KMS_KEY_RING}|GCP_KMS_CONTENT_KEY=${GCP_KMS_CONTENT_KEY}|GCP_KMS_AUDIT_KEY=${GCP_KMS_AUDIT_KEY}|GCP_KMS_TEAM_KEY_RING=${GCP_KMS_TEAM_KEY_RING}" \
             --set-secrets="${VERIFY_SECRETS}" \
             --execute-now \
             --wait
 
-      - name: Build worker image with Cloud Buildpacks
+      - name: Reuse Docker image for analysis worker pool
         if: ${{ inputs.deploy_worker }}
         run: |
           set -euo pipefail
-          IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/faith-worker:${GITHUB_SHA}"
-          gcloud builds submit \
-            --project="${GCP_PROJECT_ID}" \
-            --pack="image=${IMAGE}"
-          echo "WORKER_IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+          test -n "${SERVICE_IMAGE}"
+          echo "WORKER_IMAGE=${SERVICE_IMAGE}" >> "${GITHUB_ENV}"
 
       - name: Deploy analysis worker pool
         if: ${{ inputs.deploy_worker }}
         run: |
           set -euo pipefail
           test -n "${WORKER_SERVICE_ACCOUNT}"
+          PROJECT_NUMBER="$(gcloud projects describe "${GCP_PROJECT_ID}" \
+            --format='value(projectNumber)')"
           cat > worker-pool.yaml <<EOF
           apiVersion: run.googleapis.com/v1
           kind: WorkerPool
           metadata:
             name: ${WORKER_POOL}
+            namespace: "${PROJECT_NUMBER}"
+            labels:
+              cloud.googleapis.com/location: ${REGION}
             annotations:
               run.googleapis.com/manualInstanceCount: "${WORKER_INSTANCES}"
+              run.googleapis.com/scalingMode: manual
           spec:
             template:
               metadata:
@@ -289,7 +300,10 @@ jobs:
                 - name: analysis-worker
                   image: ${WORKER_IMAGE}
                   command:
-                  - /cnb/process/worker
+                  - npm
+                  args:
+                  - run
+                  - analysis:workers
                   env:
                   - name: NODE_ENV
                     value: "${NODE_ENV}"
@@ -342,8 +356,7 @@ jobs:
                       memory: "${WORKER_MEMORY}"
           EOF
           gcloud run worker-pools replace worker-pool.yaml \
-            --project="${GCP_PROJECT_ID}" \
-            --region="${REGION}"
+            --project="${GCP_PROJECT_ID}"
 
       - name: Promote web revision after migration
         run: |

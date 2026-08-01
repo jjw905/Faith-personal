@@ -1,0 +1,28 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    secretEnv:
+      - NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+    args:
+      - -ceu
+      - |
+        DOCKER_BUILDKIT=1 docker build \
+          --secret id=next_server_actions_encryption_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+          --build-arg NEXT_SERVER_ACTION_ALLOWED_ORIGINS="${_NEXT_SERVER_ACTION_ALLOWED_ORIGINS}" \
+          --build-arg NEXT_PUBLIC_TEAM_FEATURE_ENABLED="${_NEXT_PUBLIC_TEAM_FEATURE_ENABLED}" \
+          --build-arg NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY="${_NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY}" \
+          --build-arg NEXT_PUBLIC_REALTIME_FEATURE_ENABLED="${_NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}" \
+          --build-arg NEXT_PUBLIC_RECAPTCHA_SITE_KEY="${_NEXT_PUBLIC_RECAPTCHA_SITE_KEY}" \
+          -t "${_IMAGE}" \
+          .
+
+images:
+  - ${_IMAGE}
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/${_SERVER_ACTIONS_SECRET}/versions/latest
+      env: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+
+options:
+  logging: CLOUD_LOGGING_ONLY

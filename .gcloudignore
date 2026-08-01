@@ -1,5 +1,5 @@
-# Prefer an explicit upload set. When this file exists, Cloud Run source
-# deploy does NOT also apply .gitignore.
+# Prefer an explicit upload set for the Cloud Build Docker context. When this
+# file exists, gcloud does NOT also apply .gitignore.
 .gcloudignore
 .git
 .github
