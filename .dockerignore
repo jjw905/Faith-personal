@@ -11,9 +11,13 @@ coverage
 .cursor
 .local-wip
 .playwright-cli
+.venv
 .venv-*
+**/.venv/**
 ml
 docs
 infra
 prototypes
+ops
+gha-creds-*.json
 tsconfig.tsbuildinfo
