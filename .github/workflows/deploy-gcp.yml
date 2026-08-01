@@ -19,9 +19,10 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
-  group: faith-gcp-deploy-${{ github.event.inputs.environment || 'staging' }}
+  group: faith-gcp-deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
 env:
@@ -32,7 +33,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'staging' }}
+    environment: ${{ inputs.environment }}
     env:
       AUTH_URL: ${{ vars.FAITH_AUTH_URL || 'http://localhost:3000' }}
       NEXT_SERVER_ACTION_ALLOWED_ORIGINS: ${{ vars.NEXT_SERVER_ACTION_ALLOWED_ORIGINS || 'localhost:3000' }}
@@ -83,17 +84,14 @@ jobs:
   deploy:
     needs: validate
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    environment: ${{ github.event.inputs.environment || 'staging' }}
+    environment: ${{ inputs.environment }}
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      WEB_SERVICE: faith-web-${{ github.event.inputs.environment || 'staging' }}
-      WORKER_POOL: faith-analysis-${{ github.event.inputs.environment || 'staging' }}
-      MIGRATION_JOB: faith-migrate-${{ github.event.inputs.environment || 'staging' }}
-      VERIFY_JOB: faith-verify-${{ github.event.inputs.environment || 'staging' }}
-      SECRET_PREFIX: faith-${{ github.event.inputs.environment || 'staging' }}-
+      WEB_SERVICE: faith-web-${{ inputs.environment }}
+      WORKER_POOL: faith-analysis-${{ inputs.environment }}
+      MIGRATION_JOB: faith-migrate-${{ inputs.environment }}
+      VERIFY_JOB: faith-verify-${{ inputs.environment }}
+      SECRET_PREFIX: faith-${{ inputs.environment }}-
       CLOUD_SQL_INSTANCE: ${{ vars.CLOUD_SQL_INSTANCE_CONNECTION_NAME }}
       WEB_SERVICE_ACCOUNT: ${{ vars.GCP_WEB_RUNTIME_SERVICE_ACCOUNT }}
       WORKER_SERVICE_ACCOUNT: ${{ vars.GCP_WORKER_RUNTIME_SERVICE_ACCOUNT }}
@@ -121,16 +119,11 @@ jobs:
       WORKER_INSTANCES: ${{ vars.CLOUD_RUN_WORKER_INSTANCES || '1' }}
       ANALYSIS_WORKER_COUNT: ${{ vars.ANALYSIS_WORKER_COUNT || '2' }}
       GCP_KMS_ENABLED: ${{ vars.GCP_KMS_ENABLED || '0' }}
-      GCP_KMS_KEY_RING: ${{ vars.GCP_KMS_KEY_RING || format('faith-{0}', github.event.inputs.environment || 'staging') }}
-      GCP_KMS_CONTENT_KEY: ${{ vars.GCP_KMS_CONTENT_KEY || format('faith-{0}-content', github.event.inputs.environment || 'staging') }}
-      GCP_KMS_AUDIT_KEY: ${{ vars.GCP_KMS_AUDIT_KEY || format('faith-{0}-audit', github.event.inputs.environment || 'staging') }}
-      GCP_KMS_TEAM_KEY_RING: ${{ vars.GCP_KMS_TEAM_KEY_RING || format('faith-{0}-teams', github.event.inputs.environment || 'staging') }}
-      GCP_KMS_RUNTIME_ENV: ${{ github.event.inputs.environment || 'staging' }}
-      AWS_KMS_ENABLED: ${{ vars.AWS_KMS_ENABLED || '0' }}
-      AWS_KMS_RUNTIME_ENV: ${{ github.event.inputs.environment || 'staging' }}
-      AWS_REGION: ${{ vars.AWS_KMS_REGION || 'ap-southeast-1' }}
-      AWS_KMS_CONTENT_KEY_ARN: ${{ vars.AWS_KMS_CONTENT_KEY_ARN || '' }}
-      AWS_KMS_AUDIT_KEY_ARN: ${{ vars.AWS_KMS_AUDIT_KEY_ARN || '' }}
+      GCP_KMS_KEY_RING: ${{ vars.GCP_KMS_KEY_RING || format('faith-{0}', inputs.environment) }}
+      GCP_KMS_CONTENT_KEY: ${{ vars.GCP_KMS_CONTENT_KEY || format('faith-{0}-content', inputs.environment) }}
+      GCP_KMS_AUDIT_KEY: ${{ vars.GCP_KMS_AUDIT_KEY || format('faith-{0}-audit', inputs.environment) }}
+      GCP_KMS_TEAM_KEY_RING: ${{ vars.GCP_KMS_TEAM_KEY_RING || format('faith-{0}-teams', inputs.environment) }}
+      GCP_KMS_RUNTIME_ENV: ${{ inputs.environment }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -160,7 +153,7 @@ jobs:
           echo "IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
 
       - name: Require an existing worker pool for web-only deploys
-        if: ${{ github.event.inputs.deploy_worker == 'false' }}
+        if: ${{ !inputs.deploy_worker }}
         run: |
           set -euo pipefail
           gcloud run worker-pools describe "${WORKER_POOL}" \
@@ -191,18 +184,6 @@ jobs:
               ;;
             *) echo "LIVEKIT_ENABLED must be 0 or 1" >&2; exit 1 ;;
           esac
-          case "${AWS_KMS_ENABLED}" in
-            0) ;;
-            1)
-              test -n "${AWS_KMS_CONTENT_KEY_ARN}"
-              test -n "${AWS_KMS_AUDIT_KEY_ARN}"
-              if [[ "${GCP_KMS_ENABLED}" == "1" ]]; then
-                echo "AWS_KMS_ENABLED and GCP_KMS_ENABLED cannot both be 1" >&2
-                exit 1
-              fi
-              ;;
-            *) echo "AWS_KMS_ENABLED must be 0 or 1" >&2; exit 1 ;;
-          esac
           case "${AUTH_URL}" in
             https://*) ;;
             *) echo "FAITH_AUTH_URL must use https:// in GCP deployments" >&2; exit 1 ;;
@@ -217,9 +198,6 @@ jobs:
           fi
           if [[ -n "${AUTH_TWITTER_ID}" ]]; then
             RUNTIME_SECRETS+=",AUTH_TWITTER_SECRET=${SECRET_PREFIX}twitter-client-secret:latest"
-          fi
-          if [[ "${AWS_KMS_ENABLED}" == "1" ]]; then
-            RUNTIME_SECRETS+=",AWS_ACCESS_KEY_ID=${SECRET_PREFIX}aws-kms-access-key:latest,AWS_SECRET_ACCESS_KEY=${SECRET_PREFIX}aws-kms-secret-key:latest"
           fi
 
           gcloud run deploy "${WEB_SERVICE}" \
@@ -236,7 +214,7 @@ jobs:
             --allow-unauthenticated \
             --service-account="${WEB_SERVICE_ACCOUNT}" \
             --add-cloudsql-instances="${CLOUD_SQL_INSTANCE}" \
-            --set-env-vars="^|^NODE_ENV=${NODE_ENV}|AUTH_URL=${AUTH_URL}|NEXT_PUBLIC_APP_URL=${AUTH_URL}|AUTH_EMAIL_FROM=${AUTH_EMAIL_FROM}|AUTH_GOOGLE_ID=${AUTH_GOOGLE_ID}|AUTH_NAVER_ID=${AUTH_NAVER_ID}|AUTH_TWITTER_ID=${AUTH_TWITTER_ID}|LIVEKIT_ENABLED=${LIVEKIT_ENABLED}|LIVEKIT_URL=${LIVEKIT_URL}|MAINTENANCE_CRON_AUDIENCE=${MAINTENANCE_CRON_AUDIENCE}|MAINTENANCE_CRON_SERVICE_ACCOUNT=${MAINTENANCE_CRON_SERVICE_ACCOUNT}|NEXT_PUBLIC_TEAM_FEATURE_ENABLED=${NEXT_PUBLIC_TEAM_FEATURE_ENABLED}|NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY=${NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY}|NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=${NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}|NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}|STORAGE_BACKEND=gcs|DURABLE_STATE_BACKEND=database|GCP_PROJECT_ID=${GCP_PROJECT_ID}|GCS_BUCKET=${GCS_BUCKET}|GCS_SIGNED_URL_TTL_SECONDS=600|ANALYSIS_EXECUTION_MODE=queue|ANALYSIS_WORKER_COUNT=${ANALYSIS_WORKER_COUNT}|GCP_KMS_ENABLED=${GCP_KMS_ENABLED}|GCP_KMS_LOCATION=${REGION}|GCP_KMS_RUNTIME_ENV=${GCP_KMS_RUNTIME_ENV}|GCP_KMS_KEY_RING=${GCP_KMS_KEY_RING}|GCP_KMS_CONTENT_KEY=${GCP_KMS_CONTENT_KEY}|GCP_KMS_AUDIT_KEY=${GCP_KMS_AUDIT_KEY}|GCP_KMS_TEAM_KEY_RING=${GCP_KMS_TEAM_KEY_RING}|AWS_KMS_ENABLED=${AWS_KMS_ENABLED}|AWS_KMS_RUNTIME_ENV=${AWS_KMS_RUNTIME_ENV}|AWS_REGION=${AWS_REGION}|AWS_KMS_CONTENT_KEY_ARN=${AWS_KMS_CONTENT_KEY_ARN}|AWS_KMS_AUDIT_KEY_ARN=${AWS_KMS_AUDIT_KEY_ARN}|NEXT_SERVER_ACTION_ALLOWED_ORIGINS=${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}|TRUST_PROXY=1" \
+            --set-env-vars="^|^NODE_ENV=${NODE_ENV}|AUTH_URL=${AUTH_URL}|NEXT_PUBLIC_APP_URL=${AUTH_URL}|AUTH_EMAIL_FROM=${AUTH_EMAIL_FROM}|AUTH_GOOGLE_ID=${AUTH_GOOGLE_ID}|AUTH_NAVER_ID=${AUTH_NAVER_ID}|AUTH_TWITTER_ID=${AUTH_TWITTER_ID}|LIVEKIT_ENABLED=${LIVEKIT_ENABLED}|LIVEKIT_URL=${LIVEKIT_URL}|MAINTENANCE_CRON_AUDIENCE=${MAINTENANCE_CRON_AUDIENCE}|MAINTENANCE_CRON_SERVICE_ACCOUNT=${MAINTENANCE_CRON_SERVICE_ACCOUNT}|NEXT_PUBLIC_TEAM_FEATURE_ENABLED=${NEXT_PUBLIC_TEAM_FEATURE_ENABLED}|NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY=${NEXT_PUBLIC_TEAM_FEATURE_ADMIN_ONLY}|NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=${NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}|NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}|STORAGE_BACKEND=gcs|DURABLE_STATE_BACKEND=database|GCP_PROJECT_ID=${GCP_PROJECT_ID}|GCS_BUCKET=${GCS_BUCKET}|GCS_SIGNED_URL_TTL_SECONDS=600|ANALYSIS_EXECUTION_MODE=queue|ANALYSIS_WORKER_COUNT=${ANALYSIS_WORKER_COUNT}|GCP_KMS_ENABLED=${GCP_KMS_ENABLED}|GCP_KMS_LOCATION=${REGION}|GCP_KMS_RUNTIME_ENV=${GCP_KMS_RUNTIME_ENV}|GCP_KMS_KEY_RING=${GCP_KMS_KEY_RING}|GCP_KMS_CONTENT_KEY=${GCP_KMS_CONTENT_KEY}|GCP_KMS_AUDIT_KEY=${GCP_KMS_AUDIT_KEY}|GCP_KMS_TEAM_KEY_RING=${GCP_KMS_TEAM_KEY_RING}|NEXT_SERVER_ACTION_ALLOWED_ORIGINS=${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}|TRUST_PROXY=1" \
             --set-secrets="${RUNTIME_SECRETS}"
 
       - name: Apply Prisma migrations
@@ -272,14 +250,11 @@ jobs:
       - name: Verify GCP runtime configuration
         run: |
           set -euo pipefail
-          test -n "${VERIFY_SERVICE_ACCOUNT}"
           VERIFY_SECRETS="DATABASE_URL=${SECRET_PREFIX}database-url:latest,AUTH_SECRET=${SECRET_PREFIX}auth-secret:latest,SETUP_SECRET=${SECRET_PREFIX}setup-secret:latest,ADMIN_EMAILS=${SECRET_PREFIX}admin-emails:latest,NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${SECRET_PREFIX}server-actions-key:latest,OPENAI_API_KEY=${SECRET_PREFIX}openai-api-key:latest,AUTH_RESEND_KEY=${SECRET_PREFIX}resend-key:latest,RECAPTCHA_SECRET_KEY=${SECRET_PREFIX}recaptcha-secret:latest,NOTIFICATION_ENC_KEY=${SECRET_PREFIX}notification-key:latest"
           if [[ "${LIVEKIT_ENABLED}" == "1" ]]; then
             VERIFY_SECRETS+=",LIVEKIT_API_KEY=${SECRET_PREFIX}livekit-api-key:latest,LIVEKIT_API_SECRET=${SECRET_PREFIX}livekit-api-secret:latest"
           fi
-          if [[ "${AWS_KMS_ENABLED}" == "1" ]]; then
-            VERIFY_SECRETS+=",AWS_ACCESS_KEY_ID=${SECRET_PREFIX}aws-kms-access-key:latest,AWS_SECRET_ACCESS_KEY=${SECRET_PREFIX}aws-kms-secret-key:latest"
-          fi
+          test -n "${VERIFY_SERVICE_ACCOUNT}"
           gcloud run jobs deploy "${VERIFY_JOB}" \
             --project="${GCP_PROJECT_ID}" \
             --region="${REGION}" \
@@ -293,7 +268,7 @@ jobs:
             --task-timeout=10m \
             --command="npm" \
             --args="run,test:gcp-runtime" \
-            --set-env-vars="^|^NODE_ENV=production|AUTH_URL=${AUTH_URL}|LIVEKIT_ENABLED=${LIVEKIT_ENABLED}|LIVEKIT_URL=${LIVEKIT_URL}|MAINTENANCE_CRON_AUDIENCE=${MAINTENANCE_CRON_AUDIENCE}|MAINTENANCE_CRON_SERVICE_ACCOUNT=${MAINTENANCE_CRON_SERVICE_ACCOUNT}|NEXT_SERVER_ACTION_ALLOWED_ORIGINS=${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}|NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}|NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=${NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}|STORAGE_BACKEND=gcs|DURABLE_STATE_BACKEND=database|ANALYSIS_EXECUTION_MODE=queue|GCP_PROJECT_ID=${GCP_PROJECT_ID}|GCS_BUCKET=${GCS_BUCKET}|GCP_KMS_ENABLED=${GCP_KMS_ENABLED}|GCP_KMS_RUNTIME_ENV=${GCP_KMS_RUNTIME_ENV}|GCP_KMS_LOCATION=${REGION}|GCP_KMS_KEY_RING=${GCP_KMS_KEY_RING}|GCP_KMS_CONTENT_KEY=${GCP_KMS_CONTENT_KEY}|GCP_KMS_AUDIT_KEY=${GCP_KMS_AUDIT_KEY}|GCP_KMS_TEAM_KEY_RING=${GCP_KMS_TEAM_KEY_RING}|AWS_KMS_ENABLED=${AWS_KMS_ENABLED}|AWS_KMS_RUNTIME_ENV=${AWS_KMS_RUNTIME_ENV}|AWS_REGION=${AWS_REGION}|AWS_KMS_CONTENT_KEY_ARN=${AWS_KMS_CONTENT_KEY_ARN}|AWS_KMS_AUDIT_KEY_ARN=${AWS_KMS_AUDIT_KEY_ARN}" \
+            --set-env-vars="^|^NODE_ENV=production|AUTH_URL=${AUTH_URL}|LIVEKIT_ENABLED=${LIVEKIT_ENABLED}|LIVEKIT_URL=${LIVEKIT_URL}|MAINTENANCE_CRON_AUDIENCE=${MAINTENANCE_CRON_AUDIENCE}|MAINTENANCE_CRON_SERVICE_ACCOUNT=${MAINTENANCE_CRON_SERVICE_ACCOUNT}|NEXT_SERVER_ACTION_ALLOWED_ORIGINS=${NEXT_SERVER_ACTION_ALLOWED_ORIGINS}|NEXT_PUBLIC_RECAPTCHA_SITE_KEY=${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}|NEXT_PUBLIC_REALTIME_FEATURE_ENABLED=${NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}|STORAGE_BACKEND=gcs|DURABLE_STATE_BACKEND=database|GCP_PROJECT_ID=${GCP_PROJECT_ID}|GCS_BUCKET=${GCS_BUCKET}|GCP_KMS_ENABLED=${GCP_KMS_ENABLED}|GCP_KMS_RUNTIME_ENV=${GCP_KMS_RUNTIME_ENV}|GCP_KMS_LOCATION=${REGION}|GCP_KMS_KEY_RING=${GCP_KMS_KEY_RING}|GCP_KMS_CONTENT_KEY=${GCP_KMS_CONTENT_KEY}|GCP_KMS_AUDIT_KEY=${GCP_KMS_AUDIT_KEY}|GCP_KMS_TEAM_KEY_RING=${GCP_KMS_TEAM_KEY_RING}" \
             --set-secrets="${VERIFY_SECRETS}" \
             --execute-now \
             --wait
@@ -312,22 +287,6 @@ jobs:
           test -n "${WORKER_SERVICE_ACCOUNT}"
           PROJECT_NUMBER="$(gcloud projects describe "${GCP_PROJECT_ID}" \
             --format='value(projectNumber)')"
-          AWS_KMS_SECRET_ENV=""
-          if [[ "${AWS_KMS_ENABLED}" == "1" ]]; then
-            AWS_KMS_SECRET_ENV="$(cat <<AWS_KMS_ENV
-                  - name: AWS_ACCESS_KEY_ID
-                    valueFrom:
-                      secretKeyRef:
-                        name: ${SECRET_PREFIX}aws-kms-access-key
-                        key: latest
-                  - name: AWS_SECRET_ACCESS_KEY
-                    valueFrom:
-                      secretKeyRef:
-                        name: ${SECRET_PREFIX}aws-kms-secret-key
-                        key: latest
-          AWS_KMS_ENV
-            )"
-          fi
           cat > worker-pool.yaml <<EOF
           apiVersion: run.googleapis.com/v1
           kind: WorkerPool
@@ -385,17 +344,6 @@ jobs:
                     value: "${GCP_KMS_AUDIT_KEY}"
                   - name: GCP_KMS_TEAM_KEY_RING
                     value: "${GCP_KMS_TEAM_KEY_RING}"
-                  - name: AWS_KMS_ENABLED
-                    value: "${AWS_KMS_ENABLED}"
-                  - name: AWS_KMS_RUNTIME_ENV
-                    value: "${AWS_KMS_RUNTIME_ENV}"
-                  - name: AWS_REGION
-                    value: "${AWS_REGION}"
-                  - name: AWS_KMS_CONTENT_KEY_ARN
-                    value: "${AWS_KMS_CONTENT_KEY_ARN}"
-                  - name: AWS_KMS_AUDIT_KEY_ARN
-                    value: "${AWS_KMS_AUDIT_KEY_ARN}"
-${AWS_KMS_SECRET_ENV}
                   - name: DATABASE_URL
                     valueFrom:
                       secretKeyRef:
