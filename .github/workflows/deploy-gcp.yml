@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: faith-gcp-deploy-${{ inputs.environment }}
+  group: faith-gcp-deploy-${{ github.event.inputs.environment || 'staging' }}
   cancel-in-progress: false
 
 env:
@@ -32,7 +32,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment: ${{ github.event.inputs.environment || 'staging' }}
     env:
       AUTH_URL: ${{ vars.FAITH_AUTH_URL || 'http://localhost:3000' }}
       NEXT_SERVER_ACTION_ALLOWED_ORIGINS: ${{ vars.NEXT_SERVER_ACTION_ALLOWED_ORIGINS || 'localhost:3000' }}
@@ -86,14 +86,14 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    environment: ${{ inputs.environment }}
+    environment: ${{ github.event.inputs.environment || 'staging' }}
     env:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      WEB_SERVICE: faith-web-${{ inputs.environment }}
-      WORKER_POOL: faith-analysis-${{ inputs.environment }}
-      MIGRATION_JOB: faith-migrate-${{ inputs.environment }}
-      VERIFY_JOB: faith-verify-${{ inputs.environment }}
-      SECRET_PREFIX: faith-${{ inputs.environment }}-
+      WEB_SERVICE: faith-web-${{ github.event.inputs.environment || 'staging' }}
+      WORKER_POOL: faith-analysis-${{ github.event.inputs.environment || 'staging' }}
+      MIGRATION_JOB: faith-migrate-${{ github.event.inputs.environment || 'staging' }}
+      VERIFY_JOB: faith-verify-${{ github.event.inputs.environment || 'staging' }}
+      SECRET_PREFIX: faith-${{ github.event.inputs.environment || 'staging' }}-
       CLOUD_SQL_INSTANCE: ${{ vars.CLOUD_SQL_INSTANCE_CONNECTION_NAME }}
       WEB_SERVICE_ACCOUNT: ${{ vars.GCP_WEB_RUNTIME_SERVICE_ACCOUNT }}
       WORKER_SERVICE_ACCOUNT: ${{ vars.GCP_WORKER_RUNTIME_SERVICE_ACCOUNT }}
@@ -121,13 +121,13 @@ jobs:
       WORKER_INSTANCES: ${{ vars.CLOUD_RUN_WORKER_INSTANCES || '1' }}
       ANALYSIS_WORKER_COUNT: ${{ vars.ANALYSIS_WORKER_COUNT || '2' }}
       GCP_KMS_ENABLED: ${{ vars.GCP_KMS_ENABLED || '0' }}
-      GCP_KMS_KEY_RING: ${{ vars.GCP_KMS_KEY_RING || format('faith-{0}', inputs.environment) }}
-      GCP_KMS_CONTENT_KEY: ${{ vars.GCP_KMS_CONTENT_KEY || format('faith-{0}-content', inputs.environment) }}
-      GCP_KMS_AUDIT_KEY: ${{ vars.GCP_KMS_AUDIT_KEY || format('faith-{0}-audit', inputs.environment) }}
-      GCP_KMS_TEAM_KEY_RING: ${{ vars.GCP_KMS_TEAM_KEY_RING || format('faith-{0}-teams', inputs.environment) }}
-      GCP_KMS_RUNTIME_ENV: ${{ inputs.environment }}
+      GCP_KMS_KEY_RING: ${{ vars.GCP_KMS_KEY_RING || format('faith-{0}', github.event.inputs.environment || 'staging') }}
+      GCP_KMS_CONTENT_KEY: ${{ vars.GCP_KMS_CONTENT_KEY || format('faith-{0}-content', github.event.inputs.environment || 'staging') }}
+      GCP_KMS_AUDIT_KEY: ${{ vars.GCP_KMS_AUDIT_KEY || format('faith-{0}-audit', github.event.inputs.environment || 'staging') }}
+      GCP_KMS_TEAM_KEY_RING: ${{ vars.GCP_KMS_TEAM_KEY_RING || format('faith-{0}-teams', github.event.inputs.environment || 'staging') }}
+      GCP_KMS_RUNTIME_ENV: ${{ github.event.inputs.environment || 'staging' }}
       AWS_KMS_ENABLED: ${{ vars.AWS_KMS_ENABLED || '0' }}
-      AWS_KMS_RUNTIME_ENV: ${{ inputs.environment }}
+      AWS_KMS_RUNTIME_ENV: ${{ github.event.inputs.environment || 'staging' }}
       AWS_REGION: ${{ vars.AWS_KMS_REGION || 'ap-southeast-1' }}
       AWS_KMS_CONTENT_KEY_ARN: ${{ vars.AWS_KMS_CONTENT_KEY_ARN || '' }}
       AWS_KMS_AUDIT_KEY_ARN: ${{ vars.AWS_KMS_AUDIT_KEY_ARN || '' }}
@@ -160,7 +160,7 @@ jobs:
           echo "IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
 
       - name: Require an existing worker pool for web-only deploys
-        if: ${{ !inputs.deploy_worker }}
+        if: ${{ github.event.inputs.deploy_worker == 'false' }}
         run: |
           set -euo pipefail
           gcloud run worker-pools describe "${WORKER_POOL}" \
