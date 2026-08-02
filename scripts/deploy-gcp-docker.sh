@@ -63,6 +63,9 @@ source "$CONFIG_FILE"
 set +a
 
 REGION="${REGION:-asia-northeast1}"
+# 워커는 torch 때문에 E2_HIGHCPU가 필요한데 도쿄 쿼터가 막히는 경우가 있어
+# 빌드만 us-central1에서 돌리고 이미지는 도쿄 Artifact Registry에 푸시한다.
+WORKER_BUILD_REGION="${WORKER_BUILD_REGION:-us-central1}"
 ARTIFACT_REPOSITORY="${ARTIFACT_REPOSITORY:-faith}"
 NODE_ENV="${NODE_ENV:-production}"
 WEB_SERVICE="${WEB_SERVICE:-faith-web-${ENV_NAME}}"
@@ -260,10 +263,10 @@ gcloud run jobs deploy "$VERIFY_JOB" \
 
 if [[ "$DEPLOY_WORKER" == 1 ]]; then
   WORKER_IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/faith-worker:${IMAGE_TAG}"
-  echo "==> Build & push worker image"
+  echo "==> Build & push worker image (build region ${WORKER_BUILD_REGION})"
   gcloud builds submit . \
     --project="$GCP_PROJECT_ID" \
-    --region="$REGION" \
+    --region="$WORKER_BUILD_REGION" \
     --config=cloudbuild.worker.yaml \
     --substitutions="^@^_IMAGE=${WORKER_IMAGE}@_BASE_IMAGE=${SERVICE_IMAGE}"
 

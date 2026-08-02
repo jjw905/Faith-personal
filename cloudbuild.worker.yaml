@@ -16,7 +16,7 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  # torch와 정렬 모델을 받아 굽는 단계가 있어 기본 머신으로는 20분을 넘긴다.
-  machineType: E2_HIGHCPU_8
+  # E2_HIGHCPU_8는 프로젝트 쿼터에 막히는 경우가 있어 기본 머신으로 둔다.
+  # 느리면 timeout(40분) 안에서 끝난다.
 
 timeout: 2400s
