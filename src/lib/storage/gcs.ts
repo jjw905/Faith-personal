@@ -87,6 +87,11 @@ export async function getObjectBuffer(key: string) {
   return body;
 }
 
+export async function getObjectRange(key: string, start: number, end: number) {
+  const [body] = await bucket().file(key).download({ start, end });
+  return body;
+}
+
 /**
  * Signed URL만 발급되고 완료 메타데이터가 저장되지 않은 고아 객체 정리.
  * 참조된 DB 키는 절대 삭제하지 않고, 만료 grace period가 지난 users/ 아래

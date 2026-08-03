@@ -38,6 +38,44 @@ function denseLength(text: string): number {
   return text.replace(/[^\p{L}\p{N}]/gu, "").length;
 }
 
+/**
+ * 청크별 모델 검수는 TIMED의 앞뒤 여유 구간을 보고 이미 제거한 경계 문장을
+ * 다시 복원할 수 있다. 검수 결과를 합칠 때도 인접 suffix/prefix를 한 번 더
+ * 제거해 "...정보를 제공합니다.\n제공합니다." 같은 말풍선을 막는다.
+ */
+function removeBoundaryDuplicate(previous: string, current: string): string {
+  const prior = [...previous.matchAll(/[0-9A-Za-z가-힣]+/g)];
+  const next = [...current.matchAll(/[0-9A-Za-z가-힣]+/g)];
+  const max = Math.min(24, prior.length, next.length);
+  for (let count = max; count >= 1; count -= 1) {
+    const before = prior
+      .slice(-count)
+      .map((match) => match[0].toLowerCase())
+      .join("");
+    const after = next
+      .slice(0, count)
+      .map((match) => match[0].toLowerCase())
+      .join("");
+    // 한 단어 경계는 조사까지 포함해 네 글자 이상일 때만 안전하게 제거한다.
+    if (before !== after || (count === 1 && before.length < 4)) continue;
+    const last = next[count - 1]!;
+    return current.slice((last.index ?? 0) + last[0].length).trimStart();
+  }
+  return current;
+}
+
+export function mergeReconciledTranscriptParts(parts: string[]): string[] {
+  const merged: string[] = [];
+  for (const part of parts) {
+    const clean =
+      merged.length > 0
+        ? removeBoundaryDuplicate(merged[merged.length - 1]!, part)
+        : part;
+    if (clean.trim()) merged.push(clean.trim());
+  }
+  return merged;
+}
+
 async function reconcilePart(params: {
   primary: string;
   timed: string;
@@ -143,7 +181,7 @@ export async function reconcileTranscriptVariants(params: {
     );
   }
 
-  const parts = calls.map((call) => call.text);
+  const parts = mergeReconciledTranscriptParts(calls.map((call) => call.text));
   const inputTokens = calls.reduce((sum, call) => sum + call.inputTokens, 0);
   const outputTokens = calls.reduce((sum, call) => sum + call.outputTokens, 0);
   return {

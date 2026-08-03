@@ -278,10 +278,15 @@ function extractAudioFromSec(sourcePath: string, startSec: number, outPath: stri
       String(startSec),
       "-i",
       sourcePath,
+      "-vn",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
       "-c:a",
-      "libmp3lame",
-      "-q:a",
-      "4",
+      "flac",
+      "-compression_level",
+      "5",
       outPath,
     ],
     {
@@ -337,7 +342,7 @@ function prepareChunks(
 ): AudioChunk[] {
   mkdirSync(/* turbopackIgnore: true */ workDir, { recursive: true });
   for (const f of readdirSync(/* turbopackIgnore: true */ workDir)) {
-    if (f.endsWith(".mp3")) {
+    if (f.endsWith(".mp3") || f.endsWith(".flac")) {
       rmSync(/* turbopackIgnore: true */ join(workDir, f), { force: true });
     }
   }
@@ -368,7 +373,7 @@ function prepareChunks(
     );
     const path = join(
       /* turbopackIgnore: true */ workDir,
-      `part_${String(index).padStart(3, "0")}.mp3`,
+      `part_${String(index).padStart(3, "0")}.flac`,
     );
     execFileSync(
       requireAudioToolPath("ffmpeg"),
@@ -382,10 +387,15 @@ function prepareChunks(
         String(startSec),
         "-t",
         String(endSec - startSec),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
         "-c:a",
-        "libmp3lame",
-        "-q:a",
-        "4",
+        "flac",
+        "-compression_level",
+        "5",
         path,
       ],
       { stdio: "pipe", timeout: CHUNK_ENCODE_TIMEOUT_MS, killSignal: "SIGKILL" },
@@ -521,7 +531,11 @@ async function transcribeChunkText(
   bytes: Buffer,
   filename: string,
   prompt: string | undefined,
-  options?: { wordTimestamps?: boolean; keywords?: string[] },
+  options?: {
+    wordTimestamps?: boolean;
+    keywords?: string[];
+    signal?: AbortSignal;
+  },
 ): Promise<{
   text: string;
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
@@ -539,13 +553,16 @@ async function transcribeChunkText(
     const granularities: ("segment" | "word")[] = options?.wordTimestamps
       ? ["segment", "word"]
       : ["segment"];
-    const res = await client.audio.transcriptions.create({
-      model: "whisper-1",
-      file,
-      response_format: "verbose_json",
-      timestamp_granularities: granularities,
-      ...(prompt ? { prompt } : {}),
-    });
+    const res = await client.audio.transcriptions.create(
+      {
+        model: "whisper-1",
+        file,
+        response_format: "verbose_json",
+        timestamp_granularities: granularities,
+        ...(prompt ? { prompt } : {}),
+      },
+      { signal: options?.signal },
+    );
     return {
       text: (res.text || "").trim(),
       usage: parseTranscriptionUsage(res),
@@ -557,17 +574,20 @@ async function transcribeChunkText(
   }
 
   if (model === "gpt-transcribe") {
-    const response = await client.audio.transcriptions.create({
-      model,
-      file,
-      languages: ["ko"],
-      ...(options?.keywords?.length
-        ? { keywords: options.keywords.slice(0, 100) }
-        : {}),
-      ...(prompt ? { prompt } : {}),
-    } as unknown as Parameters<
-      typeof client.audio.transcriptions.create
-    >[0]);
+    const response = await client.audio.transcriptions.create(
+      {
+        model,
+        file,
+        languages: ["ko"],
+        ...(options?.keywords?.length
+          ? { keywords: options.keywords.slice(0, 100) }
+          : {}),
+        ...(prompt ? { prompt } : {}),
+      } as unknown as Parameters<
+        typeof client.audio.transcriptions.create
+      >[0],
+      { signal: options?.signal },
+    );
     const res = response as unknown as { text?: string; usage?: unknown };
     return {
       text: (res.text || "").trim(),
@@ -579,12 +599,15 @@ async function transcribeChunkText(
     };
   }
 
-  const res = await client.audio.transcriptions.create({
-    model,
-    file,
-    include: ["logprobs"],
-    ...(prompt ? { prompt } : {}),
-  });
+  const res = await client.audio.transcriptions.create(
+    {
+      model,
+      file,
+      include: ["logprobs"],
+      ...(prompt ? { prompt } : {}),
+    },
+    { signal: options?.signal },
+  );
   const confidence = parseMeanLogprob(res);
   return {
     text: (res.text || "").trim(),
@@ -642,11 +665,13 @@ export async function transcribeAudioOnce(params: {
  */
 async function timeChunkWithRealtimeMini(
   audioPath: string,
+  signal?: AbortSignal,
 ): Promise<{ timed: TimedSegment[]; durationBillSec: number }> {
   try {
     const res = await realtimeTranscribeFile(audioPath, {
       model: REALTIME_STT_MINI,
       language: "ko",
+      signal,
     });
     const durationBillSec = res.billedAudioSec || res.durationSec;
     const timed = res.utterances.map((utterance, index) => ({
@@ -726,6 +751,7 @@ export async function whisperWordTimingsForBytes(params: {
 async function timeChunkWithWhisperWords(
   audioPath: string,
   glossary?: string[],
+  signal?: AbortSignal,
 ): Promise<{ timed: TimedSegment[]; words: WordTiming[]; durationBillSec: number }> {
   const leadSec = leadingSilenceTrimSec(audioPath);
   let pathForWhisper = audioPath;
@@ -735,7 +761,7 @@ async function timeChunkWithWhisperWords(
     if (leadSec > 0) {
       const candidate = join(
         /* turbopackIgnore: true */ tmpdir(),
-        `faith-whisper-lead-${randomBytes(8).toString("hex")}.mp3`,
+        `faith-whisper-lead-${randomBytes(8).toString("hex")}.flac`,
       );
       try {
         extractAudioFromSec(audioPath, leadSec, candidate);
@@ -755,7 +781,7 @@ async function timeChunkWithWhisperWords(
       bytes,
       name,
       firstPrompt(glossary),
-      { wordTimestamps: true },
+      { wordTimestamps: true, signal },
     );
     if (res.timed.length === 0) {
       throw new Error(
@@ -872,6 +898,7 @@ async function transcribeWholeFile(params: {
   glossary?: string[];
   wordTimestamps?: boolean;
   report: StepReporter;
+  signal?: AbortSignal;
 }): Promise<ChunkedTranscribeResult> {
   const bytes = readFileSync(/* turbopackIgnore: true */ params.audioPath);
   assertUploadAudioBytes(bytes.length);
@@ -888,8 +915,12 @@ async function transcribeWholeFile(params: {
   // REST 4o 계열은 시각을 주지 않으므로 mini(또는 단어 시각이 필요하면 whisper-1)에서 발화 시각을 받는다.
   const timingPass = needsTiming
     ? params.wordTimestamps
-      ? await timeChunkWithWhisperWords(params.audioPath, params.glossary)
-      : await timeChunkWithRealtimeMini(params.audioPath)
+      ? await timeChunkWithWhisperWords(
+          params.audioPath,
+          params.glossary,
+          params.signal,
+        )
+      : await timeChunkWithRealtimeMini(params.audioPath, params.signal)
     : null;
   if (timingPass) params.report(0.5, "timing");
 
@@ -901,6 +932,7 @@ async function transcribeWholeFile(params: {
     {
       keywords: params.glossary,
       wordTimestamps: !needsTiming && params.wordTimestamps,
+      signal: params.signal,
     },
   );
 
@@ -922,7 +954,10 @@ async function transcribeWholeFile(params: {
       bytes,
       name,
       firstPrompt(),
-      { wordTimestamps: !needsTiming && params.wordTimestamps },
+      {
+        wordTimestamps: !needsTiming && params.wordTimestamps,
+        signal: params.signal,
+      },
     );
     if (retry.text.length > raw.text.length) raw = retry;
   }
@@ -985,6 +1020,7 @@ export async function chunkedTranscribe(params: {
   /** 켜면 단어 단위 실측 시각도 함께 받는다 (재생 중 단어 하이라이트용). */
   wordTimestamps?: boolean;
   onProgress?: (p: ChunkedTranscribeProgress) => void;
+  signal?: AbortSignal;
 }): Promise<ChunkedTranscribeResult> {
   const chunkSec = params.chunkSec ?? CHUNK_SEC;
   const boundaryMode = params.boundaryMode ?? "silence";
@@ -1026,6 +1062,7 @@ export async function chunkedTranscribe(params: {
       glossary: params.glossary,
       wordTimestamps: params.wordTimestamps,
       report: (fraction, step) => report({ fraction, step }),
+      signal: params.signal,
     });
   }
 
@@ -1079,16 +1116,56 @@ export async function chunkedTranscribe(params: {
         ? firstPrompt(params.glossary)
         : continuePrompt(prev, i, chunks.length, params.glossary);
 
-    let raw = await transcribeChunkText(
+    // 본문 전사와 단어 시각은 같은 청크를 독립적으로 읽는다. 직렬 실행하면
+    // 11분 파일에서 긴 API 대기 6회가 그대로 더해지므로 둘을 함께 시작한다.
+    const textPromise = transcribeChunkText(
       params.model,
       bytes,
-      `part_${i}.mp3`,
+      `part_${i}.flac`,
       prompt,
       {
         keywords: params.glossary,
         wordTimestamps: !needsTiming && params.wordTimestamps,
+        signal: params.signal,
       },
-    );
+    ).then((result) => {
+      completedUnits += 1;
+      report({
+        fraction: sttFraction(completedUnits),
+        step: "transcribe",
+        chunkIndex: i,
+        chunkCount: chunks.length,
+        completedUnits,
+        totalUnits,
+      });
+      return result;
+    });
+    const timingPromise = needsTiming
+      ? (params.wordTimestamps
+          ? timeChunkWithWhisperWords(
+              chunk.path,
+              params.glossary,
+              params.signal,
+            )
+          : timeChunkWithRealtimeMini(chunk.path, params.signal)
+        ).then((result) => {
+          completedUnits += 1;
+          report({
+            fraction: sttFraction(completedUnits),
+            step: "timing",
+            chunkIndex: i,
+            chunkCount: chunks.length,
+            completedUnits,
+            totalUnits,
+          });
+          return result;
+        })
+      : Promise.resolve(null);
+    const [initialRaw, timedPass] = await Promise.all([
+      textPromise,
+      timingPromise,
+    ]);
+    let raw = initialRaw;
 
     /**
      * 용어를 붙이면 가끔 전사를 통째로 포기한다.
@@ -1104,11 +1181,14 @@ export async function chunkedTranscribe(params: {
       const retry = await transcribeChunkText(
         params.model,
         bytes,
-        `part_${i}.mp3`,
+        `part_${i}.flac`,
         i === 0 || !contextualPrompt
           ? firstPrompt()
           : continuePrompt(prev, i, chunks.length),
-        { wordTimestamps: !needsTiming && params.wordTimestamps },
+        {
+          wordTimestamps: !needsTiming && params.wordTimestamps,
+          signal: params.signal,
+        },
       );
       if (retry.text.length > raw.text.length) raw = retry;
     }
@@ -1151,16 +1231,6 @@ export async function chunkedTranscribe(params: {
       logprobCount += raw.logprobCount;
     }
 
-    completedUnits += 1;
-    report({
-      fraction: sttFraction(completedUnits),
-      step: "transcribe",
-      chunkIndex: i,
-      chunkCount: chunks.length,
-      completedUnits,
-      totalUnits,
-    });
-
     let chunkTimed = timed.map((s) => ({
       ...s,
       startSec: s.startSec + offsetSec,
@@ -1173,9 +1243,9 @@ export async function chunkedTranscribe(params: {
     }));
 
     if (needsTiming) {
-      const timedPass = params.wordTimestamps
-        ? await timeChunkWithWhisperWords(chunk.path, params.glossary)
-        : await timeChunkWithRealtimeMini(chunk.path);
+      if (!timedPass) {
+        throw new Error("실측 시각(타이밍) 결과가 비어 있습니다.");
+      }
       timingAudioSec += timedPass.durationBillSec || chunkDur;
       chunkTimed = timedPass.timed.map((s) => ({
         ...s,
@@ -1189,15 +1259,6 @@ export async function chunkedTranscribe(params: {
           endSec: w.endSec + offsetSec,
         }),
       );
-      completedUnits += 1;
-      report({
-        fraction: sttFraction(completedUnits),
-        step: "timing",
-        chunkIndex: i,
-        chunkCount: chunks.length,
-        completedUnits,
-        totalUnits,
-      });
     }
 
     const inCore = (startSec: number, endSec: number) => {

@@ -34,7 +34,7 @@ export function serializeMeetingTxt(model: MeetingExportModel): string {
   if (model.lines.length) {
     lines.push("대화기록");
     for (const l of model.lines) {
-      lines.push(`${l.time} ${l.speaker}: ${l.text}`);
+      lines.push(`[${l.time}] ${l.speaker}`, l.text, "");
     }
   }
   return lines.join("\n");

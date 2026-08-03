@@ -33,6 +33,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-seconds", type=float)
     parser.add_argument("--min-speakers", type=int)
     parser.add_argument("--max-speakers", type=int)
+    parser.add_argument(
+        "--embedding-only",
+        action="store_true",
+        help="Emit one normalized speaker embedding for the supplied speech clip.",
+    )
     return parser.parse_args()
 
 
@@ -121,6 +126,40 @@ def read_wave(prepared: Path) -> np.ndarray:
     return samples.astype(np.float32) / 32768.0
 
 
+def run_embedding(prepared: Path) -> tuple[list[float], str]:
+    """Extract a voiceprint for session-local clustering.
+
+    The vector is never written by this process. The caller encrypts it before
+    persistence and deletes it after the reconnect retention window.
+    """
+    import sherpa_onnx
+
+    embedding_path = Path(
+        os.getenv("SHERPA_EMBEDDING_MODEL", str(DEFAULT_EMBEDDING_MODEL))
+    )
+    if not embedding_path.is_file():
+        raise RuntimeError("공개 화자 임베딩 모델이 없습니다.")
+    config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+        model=str(embedding_path),
+        num_threads=max(1, min(4, os.cpu_count() or 1)),
+        debug=0,
+    )
+    if not config.validate():
+        raise RuntimeError("화자 임베딩 설정이 올바르지 않습니다.")
+    extractor = sherpa_onnx.SpeakerEmbeddingExtractor(config)
+    samples = read_wave(prepared)
+    stream = extractor.create_stream()
+    stream.accept_waveform(sample_rate=16000, waveform=samples)
+    stream.input_finished()
+    if not extractor.is_ready(stream):
+        raise RuntimeError("화자 임베딩을 만들기에 음성이 너무 짧습니다.")
+    vector = np.asarray(extractor.compute(stream), dtype=np.float32)
+    norm = float(np.linalg.norm(vector))
+    if not np.isfinite(norm) or norm <= 1e-8:
+        raise RuntimeError("유효한 화자 임베딩을 만들지 못했습니다.")
+    return (vector / norm).astype(float).tolist(), embedding_path.stem
+
+
 def run_sherpa(
     prepared: Path,
     min_speakers: int | None,
@@ -196,6 +235,20 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="faith-diarize-") as tmp:
         prepared = Path(tmp) / "audio.wav"
         duration_sec = prepare_audio(args.audio, prepared, args.max_seconds)
+        if args.embedding_only:
+            embedding, model = run_embedding(prepared)
+            json.dump(
+                {
+                    "model": model,
+                    "durationSec": round(duration_sec, 3),
+                    "wallMs": round((time.monotonic() - started) * 1000),
+                    "embedding": embedding,
+                },
+                sys.stdout,
+                ensure_ascii=False,
+            )
+            sys.stdout.write("\n")
+            return 0
         use_community = bool(
             os.getenv("PYANNOTE_MODEL_PATH", "").strip()
             or os.getenv("HF_TOKEN", "").strip()

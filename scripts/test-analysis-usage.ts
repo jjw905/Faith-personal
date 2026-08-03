@@ -24,9 +24,9 @@ async function main() {
   if (
     ANALYSIS_MODE_POLICY.precision.model !== "gpt-transcribe" ||
     !ANALYSIS_MODE_POLICY.precision.speakerSplit ||
-    !ANALYSIS_MODE_POLICY.precision.forcedAlignment
+    ANALYSIS_MODE_POLICY.precision.forcedAlignment
   ) {
-    throw new Error("정밀 분석 모델 경로가 정밀 정책과 다릅니다.");
+    throw new Error("화자 구분 경로가 API 단어 시각 재사용 정책과 다릅니다.");
   }
   const token = randomUUID().slice(0, 10);
   const user = await prisma.user.create({
@@ -62,8 +62,8 @@ async function main() {
       newDurationSec: 600,
       analysisMode: "precision",
     });
-    if (precision.chargedSec !== 900) {
-      throw new Error("정밀 분석이 1.5배로 차감되지 않았습니다.");
+    if (precision.chargedSec !== 1_200) {
+      throw new Error("정밀 분석이 2배로 차감되지 않았습니다.");
     }
     await precision.finalize();
 
@@ -94,8 +94,8 @@ async function main() {
       reference: `usage-pack-${token}`,
     });
     const final = await getUploadQuotaStatus(user.id);
-    if (final.usedSec !== 1_500) {
-      throw new Error(`예상 사용량 1500초, 실제 ${final.usedSec}초`);
+    if (final.usedSec !== 1_800) {
+      throw new Error(`예상 사용량 1800초, 실제 ${final.usedSec}초`);
     }
     if (final.creditRemainingSec !== 30 * 60) {
       throw new Error("분 팩 충전이 멱등하게 한 번만 반영되지 않았습니다.");

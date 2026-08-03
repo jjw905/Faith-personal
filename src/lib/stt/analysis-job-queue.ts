@@ -5,6 +5,13 @@ import type { AnalysisMode as ProductAnalysisMode } from "@/lib/stt/analysis-mod
 
 export const ANALYSIS_JOB_MAX_ATTEMPTS = 3;
 
+export class AnalysisJobCanceledError extends Error {
+  constructor(message = "사용자가 분석을 취소했습니다.") {
+    super(message);
+    this.name = "AnalysisJobCanceledError";
+  }
+}
+
 /**
  * 심장박동이 이만큼 끊기면 Worker가 죽은 것으로 본다.
  *
@@ -60,6 +67,7 @@ export async function enqueueAnalysisJob(
         availableAt: new Date(),
         lockedAt: null,
         lockedBy: null,
+        cancelRequestedAt: null,
         startedAt: null,
         finishedAt: null,
         lastError: null,
@@ -133,6 +141,7 @@ export async function claimNextAnalysisJob(workerId: string) {
               lockedBy: workerId,
               startedAt: candidate.startedAt ?? now,
               lastError: null,
+              cancelRequestedAt: null,
             },
           });
           if (claimed.count !== 1) return null;
@@ -166,6 +175,87 @@ export async function heartbeatAnalysisJob(params: {
       lockedBy: params.workerId,
     },
     data: { lockedAt: new Date() },
+  });
+}
+
+export async function analysisJobForMeeting(meetingId: string) {
+  return prisma.analysisJob.findUnique({ where: { meetingId } });
+}
+
+export async function isAnalysisCancellationRequested(params: {
+  id: string;
+  workerId: string;
+}) {
+  const job = await prisma.analysisJob.findFirst({
+    where: {
+      id: params.id,
+      status: AnalysisJobStatus.RUNNING,
+      lockedBy: params.workerId,
+    },
+    select: { cancelRequestedAt: true },
+  });
+  return Boolean(job?.cancelRequestedAt);
+}
+
+/**
+ * 대기 작업은 즉시 취소하고, 실행 작업은 Worker가 현재 네트워크 호출을
+ * 중단하도록 표시한다. 다른 사용자의 회의는 갱신하지 않는다.
+ */
+export async function requestAnalysisCancellation(params: {
+  meetingId: string;
+  userId: string;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const job = await tx.analysisJob.findFirst({
+      where: { meetingId: params.meetingId, userId: params.userId },
+    });
+    if (!job) return null;
+    if (
+      job.status === AnalysisJobStatus.SUCCEEDED ||
+      job.status === AnalysisJobStatus.FAILED ||
+      job.status === AnalysisJobStatus.CANCELED
+    ) {
+      return job;
+    }
+    const now = new Date();
+    return tx.analysisJob.update({
+      where: { id: job.id },
+      data:
+        job.status === AnalysisJobStatus.QUEUED
+          ? {
+              status: AnalysisJobStatus.CANCELED,
+              cancelRequestedAt: now,
+              finishedAt: now,
+              lockedAt: null,
+              lockedBy: null,
+              lastError: "사용자가 시작 전에 분석을 취소했습니다.",
+            }
+          : { cancelRequestedAt: now },
+    });
+  });
+}
+
+export async function cancelAnalysisJob(params: {
+  id: string;
+  workerId: string;
+  error?: unknown;
+}) {
+  return prisma.analysisJob.updateMany({
+    where: {
+      id: params.id,
+      status: AnalysisJobStatus.RUNNING,
+      lockedBy: params.workerId,
+    },
+    data: {
+      status: AnalysisJobStatus.CANCELED,
+      cancelRequestedAt: new Date(),
+      finishedAt: new Date(),
+      lockedAt: null,
+      lockedBy: null,
+      lastError: errorText(
+        params.error ?? new AnalysisJobCanceledError(),
+      ),
+    },
   });
 }
 
@@ -221,10 +311,25 @@ export async function failAnalysisJob(params: {
 /** 서버 재시작으로 잠긴 작업을 다시 대기열에 넣는다. */
 export async function recoverStaleAnalysisJobs() {
   const cutoff = new Date(Date.now() - STALE_JOB_MS);
+  const canceled = await prisma.analysisJob.updateMany({
+    where: {
+      status: AnalysisJobStatus.RUNNING,
+      lockedAt: { lte: cutoff },
+      cancelRequestedAt: { not: null },
+    },
+    data: {
+      status: AnalysisJobStatus.CANCELED,
+      finishedAt: new Date(),
+      lockedAt: null,
+      lockedBy: null,
+      lastError: "사용자 취소 요청을 확인했습니다.",
+    },
+  });
   const retryable = await prisma.analysisJob.updateMany({
     where: {
       status: AnalysisJobStatus.RUNNING,
       lockedAt: { lte: cutoff },
+      cancelRequestedAt: null,
       attempts: { lt: ANALYSIS_JOB_MAX_ATTEMPTS },
     },
     data: {
@@ -239,6 +344,7 @@ export async function recoverStaleAnalysisJobs() {
     where: {
       status: AnalysisJobStatus.RUNNING,
       lockedAt: { lte: cutoff },
+      cancelRequestedAt: null,
       attempts: { gte: ANALYSIS_JOB_MAX_ATTEMPTS },
     },
     data: {
@@ -249,5 +355,9 @@ export async function recoverStaleAnalysisJobs() {
       lastError: "최대 재시도 횟수 이후 Worker가 응답하지 않았습니다.",
     },
   });
-  return { retryable: retryable.count, exhausted: exhausted.count };
+  return {
+    canceled: canceled.count,
+    retryable: retryable.count,
+    exhausted: exhausted.count,
+  };
 }

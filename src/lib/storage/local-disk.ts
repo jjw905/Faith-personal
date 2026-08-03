@@ -1,4 +1,4 @@
-import { mkdir, readFile, unlink, writeFile } from "fs/promises";
+import { mkdir, open, readFile, unlink, writeFile } from "fs/promises";
 import path from "node:path";
 
 import { faithDataPath } from "@/lib/faith-data-root";
@@ -27,6 +27,27 @@ export async function localPutObject(key: string, data: Buffer) {
 export async function localReadObject(key: string) {
   const full = resolveKey(key);
   return readFile(full);
+}
+
+export async function localReadObjectRange(
+  key: string,
+  start: number,
+  end: number,
+) {
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start) {
+    throw new Error("잘못된 저장 범위입니다.");
+  }
+  const handle = await open(resolveKey(key), "r");
+  try {
+    const body = Buffer.allocUnsafe(end - start + 1);
+    const { bytesRead } = await handle.read(body, 0, body.length, start);
+    if (bytesRead !== body.length) {
+      throw new Error("저장 파일 범위를 끝까지 읽지 못했습니다.");
+    }
+    return body;
+  } finally {
+    await handle.close();
+  }
 }
 
 export async function localHeadObject(key: string) {

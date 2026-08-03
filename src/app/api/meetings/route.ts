@@ -1,3 +1,4 @@
+import { AnalysisJobStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 import { requireUser } from "@/lib/require-user";
@@ -21,6 +22,12 @@ import {
 
 const DONE_ACTIVITY_LIMIT = 12;
 
+type QueueJobMeta = {
+  jobStatus: "queued" | "running" | null;
+  /** 같은 사용자 대기열에서 앞에 남은 건수(본인 제외). 0이면 다음 차례. */
+  queueAhead: number | null;
+};
+
 function relativeTimeLabel(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.max(0, Math.round(diffMs / 60000));
@@ -38,6 +45,7 @@ function isActivePhase(phase: UserMeetingRecord["phase"]) {
 function toActivityItem(
   row: UserMeetingRecord,
   vaultNames: Map<string, string>,
+  queueMeta?: QueueJobMeta,
 ) {
   const active = isActivePhase(row.phase);
   const status =
@@ -56,8 +64,19 @@ function toActivityItem(
       ? vaultNames.get(row.vaultFileId)
       : undefined,
   });
+  const waiting =
+    active &&
+    (queueMeta?.jobStatus === "queued" ||
+      /기다리/.test(row.stageLabel ?? "") ||
+      (typeof row.progressPercent === "number" &&
+        row.progressPercent <= 1 &&
+        row.phase === "transcribing" &&
+        queueMeta?.jobStatus !== "running"));
   const detail = active
-    ? row.stageLabel?.trim() || meetingProcessDetail(row.phase, row.errorMessage)
+    ? waiting
+      ? row.stageLabel?.trim() || "잠시 기다리는 중이에요"
+      : row.stageLabel?.trim() ||
+        meetingProcessDetail(row.phase, row.errorMessage)
     : meetingProcessDetail(row.phase, row.errorMessage);
   return {
     id: row.id,
@@ -69,9 +88,11 @@ function toActivityItem(
       typeof row.progressPercent === "number"
         ? row.progressPercent
         : active
-          ? row.phase === "structuring"
-            ? 72
-            : 4
+          ? waiting
+              ? 1
+            : row.phase === "structuring"
+              ? 72
+              : 1
           : row.phase === "error" || row.phase === "empty"
             ? 0
             : 100,
@@ -79,6 +100,9 @@ function toActivityItem(
     time: relativeTimeLabel(row.updatedAt || row.createdAt),
     href: `/meetings/${row.id}`,
     workspace: row.workspace,
+    jobStatus: queueMeta?.jobStatus ?? null,
+    queueAhead: waiting ? (queueMeta?.queueAhead ?? null) : null,
+    waiting: Boolean(waiting),
   };
 }
 
@@ -171,7 +195,53 @@ export async function GET(request: Request) {
     for (const f of files) vaultNames.set(f.id, f.name);
   }
 
-  const activity = rows.map((row) => toActivityItem(row, vaultNames));
+  /** 활성 회의의 잡 상태·대기 순위 (같은 사용자 순차 처리 기준). */
+  const queueMetaByMeeting = new Map<string, QueueJobMeta>();
+  if (activeRows.length > 0) {
+    const openJobs = await prisma.analysisJob.findMany({
+      where: {
+        userId: session.user.id,
+        status: {
+          in: [AnalysisJobStatus.QUEUED, AnalysisJobStatus.RUNNING],
+        },
+      },
+      select: {
+        meetingId: true,
+        status: true,
+        availableAt: true,
+        createdAt: true,
+      },
+      orderBy: [{ availableAt: "asc" }, { createdAt: "asc" }],
+    });
+    const activeIdSet = new Set(activeRows.map((row) => row.id));
+    const runningCount = openJobs.filter(
+      (job) => job.status === AnalysisJobStatus.RUNNING,
+    ).length;
+    let queuedBefore = 0;
+    for (const job of openJobs) {
+      if (job.status === AnalysisJobStatus.RUNNING) {
+        if (activeIdSet.has(job.meetingId)) {
+          queueMetaByMeeting.set(job.meetingId, {
+            jobStatus: "running",
+            queueAhead: null,
+          });
+        }
+        continue;
+      }
+      const ahead = runningCount + queuedBefore;
+      if (activeIdSet.has(job.meetingId)) {
+        queueMetaByMeeting.set(job.meetingId, {
+          jobStatus: "queued",
+          queueAhead: ahead,
+        });
+      }
+      queuedBefore += 1;
+    }
+  }
+
+  const activity = rows.map((row) =>
+    toActivityItem(row, vaultNames, queueMetaByMeeting.get(row.id)),
+  );
 
   return NextResponse.json({ ok: true, meetings, activity, purgedCount });
 }

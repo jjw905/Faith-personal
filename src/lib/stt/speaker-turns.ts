@@ -366,6 +366,276 @@ function applyPeopleConsensus(
   return merged;
 }
 
+function strongTurnBoundary(left: SpeakerBlock, right: SpeakerBlock): boolean {
+  const leftText = left.text.trim();
+  const rightText = right.text.trim();
+  const hostCall = /기자님[.!?…]*$/u.test(leftText);
+  const selfIntroduction =
+    /^(?:예|네)?[,.\s]*(?:저는\s+)?[^.!?]{0,50}(?:기자입니다|입니다)[.!?]?$/u.test(
+      rightText,
+    );
+  if (hostCall && selfIntroduction) return true;
+
+  const questionEnd =
+    /(?:궁금합니다|알려\s*주십시오|말씀해\s*주십시오|설명해\s*주십시오|여쭙고\s*싶습니다|여쭙습니다|여쭤봅니다|여쭤보겠습니다|질문\s*드립니다)[.!?…]*$/u.test(
+      leftText,
+    );
+  const answerStart =
+    /^(?:네|예|아니요|저희|제가|그건|그러면|뭐)(?:[,.\s]|$)/u.test(
+      rightText,
+    );
+  return questionEnd && answerStart;
+}
+
+function clearSamePersonContinuation(
+  left: SpeakerBlock,
+  right: SpeakerBlock,
+): boolean {
+  if (right.startSec - left.endSec > 3 || strongTurnBoundary(left, right)) {
+    return false;
+  }
+  const leftText = left.text.trim();
+  const reporterIntroduction =
+    /(?:기자입니다|(?:일보|뉴스|방송|YTN|SBS|KBS|MBC|CBS|JTBC)[^.!?]{0,30}입니다)[.!?…]*$/iu.test(
+      leftText,
+    );
+  const unfinishedQuestion =
+    /(?:여쭙고\s*싶은데요|여쭤보도록\s*하겠습니다|궁금하고요|들어\s*주시고요)[.!?…]*$/u.test(
+      leftText,
+    );
+  return reporterIntroduction || unfinishedQuestion;
+}
+
+const STANDALONE_AFFIRMATIVE = /^(?:네|예)[,.!?\s]*$/u;
+const SHORT_THANKS = /^(?:(?:네|예)[,.\s]*)?감사합니다[.!?\s]*$/u;
+const COURTESY_TO_HOST = /(?:한동안|오랫동안|그동안|수고|고생).{0,12}(?:많으셨|하셨|하셨어)/u;
+const REPORTER_INTRO =
+  /(?:수석님|안녕|기자|일보|뉴스|방송|YTN|SBS|KBS|MBC|CBS|JTBC|헤럴드)[^.!?]{0,60}(?:입니다|이라고\s*합니다)/iu;
+const STARTS_WITH_AFFIRMATIVE = /^(?:네|예)[,.\s]+/u;
+
+/**
+ * 짧은 맞장구는 음성 임베딩과 LLM이 모두 가장 흔들리는 구간이다. 하지만
+ * 회의 진행 문법에는 결정적인 단서가 있다.
+ *
+ * - 질문자의 덕담 → 진행자의 "네, 감사합니다" → 같은 질문자의 질문
+ * - 진행자의 "네." → 질문자의 "네, 수석님 ...입니다"
+ * - 질문자가 곧바로 "네. 수석님 안녕하십니까 ...입니다"
+ *
+ * 세 패턴을 구분하지 않으면 모든 "네"를 앞 또는 뒤 화자로 보내는 임계값
+ * 조정은 반드시 다른 경계를 망가뜨린다. 텍스트를 고치지 않고 화자만 보정한다.
+ */
+export function repairShortTurnProtocols<T extends SpeakerBlock>(
+  rows: T[],
+): T[] {
+  if (rows.length === 0) return rows;
+  const out = rows.map((row) => ({ ...row })) as T[];
+  const host =
+    out.find(
+      (row) =>
+        row.text.replace(/\s/g, "").length >= 40 &&
+        !/(?:궁금|여쭙|질문|알려\s*주)/u.test(row.text),
+    )?.speaker ?? out[0]!.speaker;
+
+  for (let index = 0; index < out.length; index += 1) {
+    const current = out[index]!;
+    const text = current.text.trim();
+    const previous = out[index - 1];
+    const next = out[index + 1];
+
+    if (SHORT_THANKS.test(text)) {
+      current.speaker = host;
+      // "고생 많으셨습니다 / 네, 감사합니다 / 질문" 샌드위치의 양쪽은
+      // 같은 질문자다. 짧은 감사만 진행자에게 되돌린다.
+      if (
+        previous &&
+        next &&
+        COURTESY_TO_HOST.test(previous.text) &&
+        /(?:궁금|여쭙|여쭤|질문|설명해\s*주)/u.test(next.text)
+      ) {
+        previous.speaker = next.speaker;
+      }
+      continue;
+    }
+
+    if (!STANDALONE_AFFIRMATIVE.test(text) || !next) continue;
+    const afterNext = out[index + 2];
+    const intro = REPORTER_INTRO.test(next.text)
+      ? next
+      : afterNext &&
+          /(?:안녕하|수석님)/u.test(next.text) &&
+          REPORTER_INTRO.test(afterNext.text)
+        ? afterNext
+        : null;
+    if (!intro) continue;
+
+    if (STARTS_WITH_AFFIRMATIVE.test(next.text.trim())) {
+      // "네. 네, 수석님 ...입니다": 첫 네는 진행자, 둘째부터 질문자.
+      current.speaker = host;
+    } else {
+      // "네. 수석님 안녕하십니까 ...입니다": 네는 자기소개 일부다.
+      current.speaker = intro.speaker;
+    }
+  }
+  return out;
+}
+
+function semanticSpeakerForBlock(
+  block: SpeakerBlock,
+  semantic: SpeakerBlock[],
+): string {
+  let best = semantic[0];
+  let bestOverlap = -1;
+  for (const candidate of semantic) {
+    const overlap = Math.max(
+      0,
+      Math.min(block.endSec, candidate.endSec) -
+        Math.max(block.startSec, candidate.startSec),
+    );
+    if (overlap > bestOverlap) {
+      best = candidate;
+      bestOverlap = overlap;
+    }
+  }
+  if (best) return best.speaker;
+  return block.speaker;
+}
+
+/**
+ * 의미 모델이 한 음성 cluster의 마지막 한 블록만 다른 사람으로 보내는 흔들림을
+ * 막는다. KTV에서 기자 질문의 마지막 문장만 진행자에게 붙던 원인이었다.
+ *
+ * 인접한 동일 cluster는 블록 수 다수결로 안정화하되, 진행자 호명→기자
+ * 자기소개와 질문→답변처럼 문맥상 강한 경계에서는 cluster가 같아도 나눈다.
+ * 멀리 떨어진 같은 cluster는 묶지 않으므로 label 재사용도 전체로 전파되지 않는다.
+ */
+export function stabilizeSpeakerTurnsWithAcoustics(
+  acoustic: SpeakerBlock[],
+  semantic: SpeakerBlock[],
+): SpeakerBlock[] {
+  if (acoustic.length === 0 || semantic.length === 0) return semantic;
+  const labeled = acoustic.map((block) => ({
+    ...block,
+    speaker: semanticSpeakerForBlock(block, semantic),
+  }));
+
+  // 질문→답변에서 의미 모델이 둘을 합쳤다면, 다음 음성 cluster가 회의 전체에서
+  // 주로 어떤 최종 화자로 쓰였는지 복구 후보로 삼는다. 이 전역표는 강한
+  // 문맥 경계에서만 사용해 cluster 재사용을 함부로 한 사람으로 고정하지 않는다.
+  const acousticVotes = new Map<
+    string,
+    Map<string, { count: number; duration: number }>
+  >();
+  acoustic.forEach((block, index) => {
+    const bySpeaker = acousticVotes.get(block.speaker) ?? new Map();
+    const semanticSpeaker = labeled[index]!.speaker;
+    const vote = bySpeaker.get(semanticSpeaker) ?? { count: 0, duration: 0 };
+    vote.count += 1;
+    vote.duration += Math.max(0.01, block.endSec - block.startSec);
+    bySpeaker.set(semanticSpeaker, vote);
+    acousticVotes.set(block.speaker, bySpeaker);
+  });
+  const dominantSemantic = new Map<string, string>();
+  for (const [acousticSpeaker, votes] of acousticVotes) {
+    const winner = [...votes.entries()].sort(
+      (left, right) =>
+        right[1].count - left[1].count ||
+        right[1].duration - left[1].duration,
+    )[0]?.[0];
+    if (winner) dominantSemantic.set(acousticSpeaker, winner);
+  }
+
+  let from = 0;
+  while (from < acoustic.length) {
+    let to = from;
+    while (
+      to + 1 < acoustic.length &&
+      acoustic[to + 1]!.speaker === acoustic[from]!.speaker &&
+      acoustic[to + 1]!.startSec - acoustic[to]!.endSec <= 3 &&
+      !strongTurnBoundary(acoustic[to]!, acoustic[to + 1]!)
+    ) {
+      to += 1;
+    }
+
+    if (to > from) {
+      const votes = new Map<string, { count: number; duration: number }>();
+      for (let index = from; index <= to; index += 1) {
+        const block = labeled[index]!;
+        const vote = votes.get(block.speaker) ?? { count: 0, duration: 0 };
+        vote.count += 1;
+        vote.duration += Math.max(0.01, block.endSec - block.startSec);
+        votes.set(block.speaker, vote);
+      }
+      const winner = [...votes.entries()].sort(
+        (left, right) =>
+          right[1].count - left[1].count ||
+          right[1].duration - left[1].duration,
+      )[0]?.[0];
+      if (winner) {
+        for (let index = from; index <= to; index += 1) {
+          labeled[index]!.speaker = winner;
+        }
+      }
+    }
+    from = to + 1;
+  }
+
+
+  for (let index = 0; index + 1 < acoustic.length; index += 1) {
+    const leftRaw = acoustic[index]!;
+    const rightRaw = acoustic[index + 1]!;
+    const left = labeled[index]!;
+    const right = labeled[index + 1]!;
+
+    // 자기소개·미완성 질문 뒤의 본문은 음성 cluster가 잠깐 바뀌었더라도 같은
+    // 질문자다. 의미 모델의 과분리를 이 국소 경계에서만 되돌린다.
+    if (clearSamePersonContinuation(leftRaw, rightRaw)) {
+      right.speaker = left.speaker;
+      continue;
+    }
+
+    // 질문이 끝나고 답변 음성이 시작됐는데 의미 결과가 같은 화자라면, 다음
+    // cluster의 회의 내 주된 의미 화자를 사용해 붙어 버린 답변을 떼어낸다.
+    if (
+      leftRaw.speaker !== rightRaw.speaker &&
+      strongTurnBoundary(leftRaw, rightRaw)
+    ) {
+      const candidate = dominantSemantic.get(rightRaw.speaker);
+      if (candidate) {
+        right.speaker = candidate;
+        // 답변 첫 블록만 고치면 바로 다음의 같은 음성이 다시 이전 의미 라벨로
+        // 튄다. 강한 경계 뒤의 연속 acoustic run 전체를 함께 고정한다.
+        let runIndex = index + 1;
+        while (
+          runIndex + 1 < acoustic.length &&
+          acoustic[runIndex + 1]!.speaker === rightRaw.speaker &&
+          acoustic[runIndex + 1]!.startSec -
+            acoustic[runIndex]!.endSec <=
+            3 &&
+          !strongTurnBoundary(
+            acoustic[runIndex]!,
+            acoustic[runIndex + 1]!,
+          )
+        ) {
+          runIndex += 1;
+          labeled[runIndex]!.speaker = candidate;
+        }
+      }
+    }
+  }
+
+  const merged: SpeakerBlock[] = [];
+  for (const block of repairShortTurnProtocols(labeled)) {
+    const previous = merged[merged.length - 1];
+    if (previous && previous.speaker === block.speaker) {
+      previous.text = `${previous.text} ${block.text}`.trim();
+      previous.endSec = block.endSec;
+    } else {
+      merged.push({ ...block });
+    }
+  }
+  return merged;
+}
+
 /**
  * 1차 OpenAI 호출은 화자 전환, 2차 호출은 떨어진 턴의 동일 인물 여부만 푼다.
  * 두 문제를 분리해 음성 cluster의 과분리와 과병합이 서로 증폭되지 않게 한다.
@@ -393,7 +663,10 @@ export async function reconcileSpeakerTurns(
   const inputTokens = calls.reduce((sum, call) => sum + call.inputTokens, 0);
   const outputTokens = calls.reduce((sum, call) => sum + call.outputTokens, 0);
   return {
-    blocks: applyPeopleConsensus(turns, peopleCalls),
+    blocks: stabilizeSpeakerTurnsWithAcoustics(
+      blocks,
+      applyPeopleConsensus(turns, peopleCalls),
+    ),
     usage: usage(inputTokens, outputTokens),
   };
 }

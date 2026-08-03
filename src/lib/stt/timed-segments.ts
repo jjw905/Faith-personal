@@ -711,6 +711,19 @@ function matchWordTimingsToTexts(
   fillUnmatchedTokenTimings(texts, assigned);
   assigned.forEach((line) => {
     line.sort((left, right) => left.startOffset - right.startOffset);
+    // 텍스트 순서로 붙인 미매칭 토큰이 다음 실측 앵커 바로 앞에 보간될 때,
+    // 20~80ms 정도 앞 토큰보다 이른 시각을 받을 수 있다. UI는 배열 순서대로
+    // 현재 단어를 찾으므로 이 작은 역전도 엉뚱한 단어 점등을 만든다.
+    for (let index = 0; index < line.length; index += 1) {
+      const word = line[index]!;
+      const previous = line[index - 1];
+      const floor = previous ? previous.startSec + 0.02 : 0;
+      word.startSec = Math.max(floor, word.startSec);
+      word.endSec = Math.max(word.startSec + 0.02, word.endSec);
+      if (previous && previous.endSec > word.startSec) {
+        previous.endSec = Math.max(previous.startSec + 0.02, word.startSec);
+      }
+    }
   });
   return assigned;
 }
@@ -812,9 +825,74 @@ export function assignWordTimingsToLines(
     durationSec,
   );
 
+  /**
+   * 전체 정렬에서 통째로 탈락한 줄만, 이미 정해진 이웃 줄 사이의 좁은 시간창에서
+   * 한 번 더 복구한다. 구조화 단계가 "코리아헤드"를 "코리아헤럴드"로 다듬는
+   * 것처럼 일부 단어를 바꾸면 전역 최적화가 그 줄 전체를 건너뛸 수 있었다.
+   * 그 상태에서는 말풍선 시작을 앞뒤 글자량으로 보간해 직전 화자의 끝말부터
+   * 재생하고, 단어 클릭/하이라이트도 전부 사라진다.
+   *
+   * 두 개 이상의 어휘 앵커가 같은 좁은 창에서 순서대로 맞을 때만 채택한다.
+   * 따라서 흔한 "네" 하나만 우연히 맞아 엉뚱한 시각으로 점프하지 않는다.
+   */
+  const recoveredStarts = new Array<number | null>(lines.length).fill(null);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (matched[index]!.length > 0) continue;
+    const text = texts[index]!;
+    const targetTokens = lexicalTokens(text);
+    if (targetTokens.length < 2) continue;
+
+    const estimatedStart = aligned[index]?.startSec ?? lineStartSec(lines[index]!);
+    const nextStart =
+      aligned[index + 1]?.startSec ?? Math.min(durationSec, estimatedStart + 30);
+    const windowStart = Math.max(0, estimatedStart - 1.5);
+    const windowEnd = Math.min(
+      durationSec,
+      Math.max(windowStart + 0.1, nextStart + 0.35),
+    );
+    const candidates = words.filter(
+      (word) => word.endSec > windowStart && word.startSec < windowEnd,
+    );
+    if (candidates.length < 2) continue;
+
+    const sourceTokens: TimedLexicalToken[] = [];
+    sanitizeAssignedSourceWords(candidates).forEach((word, sourceIndex) => {
+      for (const token of lexicalTokens(word.text)) {
+        sourceTokens.push({
+          ...token,
+          sourceIndex,
+          startSec: word.startSec,
+          endSec: word.endSec,
+        });
+      }
+    });
+    const localTarget = targetTokens.map((token) => ({ ...token, lineIndex: 0 }));
+    const anchors = alignTokenSequences(localTarget, sourceTokens);
+    const anchoredChars = anchors.reduce(
+      (sum, [targetIndex]) =>
+        sum +
+        Math.max(
+          1,
+          localTarget[targetIndex]!.endOffset -
+            localTarget[targetIndex]!.startOffset,
+        ),
+      0,
+    );
+    if (anchors.length < 2 || anchoredChars < 4) continue;
+
+    const local = matchWordTimingsToTexts([text], candidates)[0] ?? [];
+    if (local.length === 0) continue;
+    matched[index] = local;
+    recoveredStarts[index] = local[0]!.startSec;
+  }
+
+  let previousStart = -MIN_LINE_GAP;
   return lines.map((line, index) => {
-    const startSec = aligned[index]?.startSec ?? lineStartSec(line);
     const lineWords = matched[index]!;
+    const proposedStart =
+      recoveredStarts[index] ?? aligned[index]?.startSec ?? lineStartSec(line);
+    const startSec = Math.max(previousStart + MIN_LINE_GAP, proposedStart);
+    previousStart = startSec;
     return {
       ...line,
       startSec: Math.round(startSec * 100) / 100,
@@ -1082,5 +1160,3 @@ export function mapTimelineByTimedSegments(params: {
     } satisfies TimelineSegment;
   });
 }
-
-

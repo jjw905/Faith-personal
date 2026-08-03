@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     teamMeetingId?: string;
     personalMeetingId?: string;
     reconnectSessionId?: string;
+    singleMicrophoneSpeakerTracking?: boolean;
   };
   try {
     body = await request.json();
@@ -451,6 +452,12 @@ export async function POST(request: Request) {
         teamMeetingId: teamMeetingId || null,
         personalMeetingId: personalMeetingId || null,
         title,
+        // 참가자별 트랙인 온라인 회의에는 절대 적용하지 않는다. 기기 한 대를
+        // 함께 쓰는 단독 회의만 기본 활성화한다.
+        speakerTrackingEnabled:
+          !teamMeetingId &&
+          !personalMeetingId &&
+          (body.singleMicrophoneSpeakerTracking ?? true),
       },
     });
     liveSessionId = liveSession.id;

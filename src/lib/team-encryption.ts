@@ -4,9 +4,14 @@ import type { Prisma } from "@prisma/client";
 
 import { evaluateKmsProvisioningRuntime } from "@/lib/kms-runtime-policy";
 import {
+  decryptTeamChunkWithDataKey,
+  decryptTeamChunkedRangeWithDataKey,
   decryptTeamBufferWithDataKey,
+  encryptTeamChunkedBufferWithDataKey,
   encryptTeamBufferWithDataKey,
+  isTeamChunkedEncryptedEnvelope,
   isTeamEncryptedEnvelope,
+  type TeamChunkedEncryptedEnvelope,
   type TeamEncryptedEnvelope,
   type TeamKeyPurpose,
 } from "@/lib/team-encryption-core";
@@ -15,11 +20,16 @@ import {
 } from "@/lib/team-kms";
 
 export {
+  decryptTeamChunkWithDataKey,
+  decryptTeamChunkedRangeWithDataKey,
   decryptTeamBufferWithDataKey,
+  encryptTeamChunkedBufferWithDataKey,
   encryptTeamBufferWithDataKey,
+  isTeamChunkedEncryptedEnvelope,
   isTeamEncryptedEnvelope,
 } from "@/lib/team-encryption-core";
 export type {
+  TeamChunkedEncryptedEnvelope,
   TeamEncryptedEnvelope,
   TeamKeyPurpose,
 } from "@/lib/team-encryption-core";
@@ -54,6 +64,23 @@ export async function encryptTeamBuffer(params: {
   });
 }
 
+/** 신규 대용량 팀 파일은 청크별 인증 태그를 사용해 Range 복호화를 지원한다. */
+export async function encryptTeamChunkedBuffer(params: {
+  teamId: string;
+  purpose: TeamKeyPurpose;
+  plaintext: Buffer;
+}) {
+  if (!teamEncryptionRequired()) {
+    return {
+      encrypted: false as const,
+      body: Buffer.from(params.plaintext),
+      envelope: null,
+    };
+  }
+  const dataKey = await getTeamDataKey(params.teamId, params.purpose);
+  return encryptTeamChunkedBufferWithDataKey({ ...params, dataKey });
+}
+
 export async function decryptTeamBuffer(params: {
   teamId: string;
   purpose: TeamKeyPurpose;
@@ -72,6 +99,50 @@ export async function decryptTeamBuffer(params: {
     ...params,
     dataKey,
   });
+}
+
+export async function decryptTeamChunkedRange(params: {
+  teamId: string;
+  purpose: TeamKeyPurpose;
+  body: Buffer;
+  ciphertextStart: number;
+  start: number;
+  end: number;
+  envelope: TeamChunkedEncryptedEnvelope;
+}) {
+  if (
+    !isTeamChunkedEncryptedEnvelope(params.envelope) ||
+    params.envelope.purpose !== params.purpose
+  ) {
+    throw new Error("팀 청크 암호화 envelope이 올바르지 않습니다.");
+  }
+  const dataKey = await getTeamDataKey(params.teamId, params.purpose);
+  return decryptTeamChunkedRangeWithDataKey({
+    ...params,
+    dataKey,
+    ciphertext: params.body,
+  });
+}
+
+export async function createTeamChunkDecryptor(params: {
+  teamId: string;
+  purpose: TeamKeyPurpose;
+  envelope: TeamChunkedEncryptedEnvelope;
+}) {
+  if (
+    !isTeamChunkedEncryptedEnvelope(params.envelope) ||
+    params.envelope.purpose !== params.purpose
+  ) {
+    throw new Error("팀 청크 암호화 envelope이 올바르지 않습니다.");
+  }
+  const dataKey = await getTeamDataKey(params.teamId, params.purpose);
+  return (chunkIndex: number, ciphertext: Buffer) =>
+    decryptTeamChunkWithDataKey({
+      ...params,
+      dataKey,
+      chunkIndex,
+      ciphertext,
+    });
 }
 
 export async function sealTeamJson(

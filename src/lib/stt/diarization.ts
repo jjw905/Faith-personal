@@ -180,9 +180,15 @@ export async function diarizeAudio(params: {
   }
 }
 
-/** 사람 하나로 볼 최소 발언량. 이보다 짧은 무리는 잡음이나 겹쳐 말한 조각이다. */
-const MIN_SPEAKER_SEC = 5;
-const MIN_SPEAKER_SHARE = 0.01;
+/**
+ * 단 한 번 등장한 실제 화자도 살리는 하한.
+ *
+ * KTV에서 진행자가 "네, 이성택 기자님"이라고 말한 1.47초 클러스터는 실제
+ * 화자였지만 기존 5초/1% 기준에서 삭제돼 다음 기자에게 합쳐졌다. 1초 안팎이고
+ * 전체에서 차지하는 비중도 극히 작은 클러스터만 유령 후보로 본다.
+ */
+const MIN_SPEAKER_SEC = 1.2;
+const MIN_SPEAKER_SHARE = 0.002;
 
 /**
  * 0.5초짜리 무리까지 화자로 세면 참석자 목록에 유령이 생긴다.
@@ -203,7 +209,7 @@ export function prunePhantomSpeakers(
   const keep = new Set(
     [...bySpeaker]
       .filter(
-        ([, sec]) => sec >= MIN_SPEAKER_SEC && sec / total >= MIN_SPEAKER_SHARE,
+        ([, sec]) => sec >= MIN_SPEAKER_SEC || sec / total >= MIN_SPEAKER_SHARE,
       )
       .map(([name]) => name),
   );
@@ -299,7 +305,6 @@ export function glueBoundaryFragmentSpeakers(
 
   const fragmentSpeakers = new Set<string>();
   for (const [speaker, segs] of bySpeaker) {
-    if (segs.length < FRAGMENT_MIN_OCCURRENCES) continue;
     const maxDur = Math.max(...segs.map((s) => s.endSec - s.startSec));
     const totalDur = segs.reduce((sum, s) => sum + (s.endSec - s.startSec), 0);
     if (maxDur > FRAGMENT_MAX_SEGMENT_SEC || totalDur > FRAGMENT_MAX_TOTAL_SEC) {
@@ -307,6 +312,9 @@ export function glueBoundaryFragmentSpeakers(
     }
     const isSelf = (sp: string) => sp === speaker;
     const occurrences = mergeIntoOccurrences(segs);
+    // 모델이 한 발화를 여러 인접 조각으로 잘랐다고 반복 등장한 유령 화자가
+    // 되는 것은 아니다. 서로 떨어진 전환부에 되풀이된 경우만 glue한다.
+    if (occurrences.length < FRAGMENT_MIN_OCCURRENCES) continue;
     const allBoundaryAdjacent = occurrences.every((occ) => {
       const before = nearestBefore(occ, isSelf);
       const after = nearestAfter(occ, isSelf);

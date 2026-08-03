@@ -82,7 +82,8 @@ export async function serializeMeetingDocx(
   if (model.lines.length) {
     children.push(headingPara("대화기록", HeadingLevel.HEADING_1));
     for (const l of model.lines) {
-      children.push(bodyPara(`${l.time} ${l.speaker}: ${l.text}`));
+      children.push(bodyPara(`[${l.time}] ${l.speaker}`, { bold: true }));
+      children.push(bodyPara(l.text));
     }
   }
 

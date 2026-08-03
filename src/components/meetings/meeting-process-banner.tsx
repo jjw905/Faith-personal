@@ -7,6 +7,7 @@ import { UsageLimitDialog } from "@/components/dashboard/usage-limit-dialog";
 import {
   MEETING_PROCESS_LABEL,
   friendlyProcessStageLabel,
+  userFacingAnalysisError,
   type MeetingProcessPhase,
 } from "@/lib/meeting-process";
 import { nextDisplayPercent } from "@/lib/meeting-process-progress";
@@ -26,14 +27,7 @@ function isQuotaBlockedMessage(message: string | null | undefined) {
   );
 }
 
-/** ETA 계산용 최소 신호. 너무 이르면 튀는 추정치라 숨긴다. (MS Progress Bars) */
-const ETA_MIN_ELAPSED_SEC = 3;
-const ETA_MIN_PERCENT_GAIN = 1.5;
-const ETA_MAX_REMAINING_SEC = 60 * 60;
-/** tqdm 기본과 같이 최근 속도에 가중. 0=전체평균, 1=순간속도 */
-const ETA_RATE_SMOOTH = 0.3;
-/** 남은 시간이 갑자기 늘지 않게 상한 배율 */
-const ETA_UPWARD_CAP = 1.25;
+const MIN_VISIBLE_PROGRESS = 1;
 
 function monotonicNow() {
   return typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -41,10 +35,13 @@ function monotonicNow() {
 
 function clampPercent(n: unknown, phase: MeetingProcessPhase): number {
   if (typeof n === "number" && Number.isFinite(n)) {
-    return Math.max(0, Math.min(100, Math.round(n)));
+    const minimum = phase === "transcribing" || phase === "structuring"
+      ? MIN_VISIBLE_PROGRESS
+      : 0;
+    return Math.max(minimum, Math.min(100, Math.round(n)));
   }
   if (phase === "structuring") return 72;
-  if (phase === "transcribing") return 0;
+  if (phase === "transcribing") return MIN_VISIBLE_PROGRESS;
   if (phase === "done") return 100;
   return 0;
 }
@@ -54,44 +51,21 @@ function stageAnimationKey(label: string) {
   return label.replace(/\s*\([^)]*\)\s*$/, "");
 }
 
-/**
- * 남은 시간축 문구. 절대 시각(18:53)이 아니라 상대 잔여.
- * MS Progress Bars: 가장 큰 단위 위주, 거짓 정밀도(초 나열) 금지.
- */
-export function formatEtaLabel(remainingSec: number): string | null {
-  if (!Number.isFinite(remainingSec) || remainingSec <= 0) return null;
-  if (remainingSec > ETA_MAX_REMAINING_SEC) return null;
-
-  if (remainingSec < 45) return "잠시 후 완료";
-
-  const minutes = Math.max(1, Math.round(remainingSec / 60));
-  if (minutes < 60) return `${minutes}분 남음`;
-
-  const hours = Math.floor(minutes / 60);
-  const remMin = minutes % 60;
-  if (remMin === 0) return `${hours}시간 남음`;
-  return `${hours}시간 ${remMin}분 남음`;
-}
-
-/** 단위 테스트·검증용: 진행률 속도로 남은 초 추정. */
-export function estimateRemainingSec(params: {
-  percent: number;
-  percentPerSec: number;
-}): number | null {
-  const { percent, percentPerSec } = params;
-  if (
-    !Number.isFinite(percent) ||
-    !Number.isFinite(percentPerSec) ||
-    percentPerSec <= 0 ||
-    percent >= 100
-  ) {
-    return null;
+export function formatElapsedStatus(
+  elapsedSec: number,
+  activityState?: "waiting" | "active" | "checking" | "idle" | null,
+): string | null {
+  if (!Number.isFinite(elapsedSec) || elapsedSec < 0) return null;
+  if (activityState === "waiting") return "잠시 준비하고 있어요";
+  const minutes = Math.max(1, Math.floor(elapsedSec / 60));
+  if (elapsedSec < 60) return "처리를 시작했어요";
+  if (activityState === "checking") {
+    return `${minutes}분째 진행 중 · 다음 단계로 넘어갈 준비를 하고 있어요`;
   }
-  const remaining = Math.max(0, 100 - percent) / percentPerSec;
-  if (!Number.isFinite(remaining) || remaining > ETA_MAX_REMAINING_SEC) {
-    return null;
+  if (minutes >= 10 && activityState === "active") {
+    return `${minutes}분째 진행 중 · 조금만 더 기다려 주세요`;
   }
-  return remaining;
+  return `${minutes}분째 처리 중`;
 }
 
 /** 채워지는 선형 게이지. 돌아가는 링은 쓰지 않는다. */
@@ -113,9 +87,10 @@ function ProcessProgressBar({
       aria-valuemax={100}
       aria-valuenow={label}
     >
-      <p className="mb-3 tabular-nums text-[clamp(1.75rem,7vw,2.25rem)] font-semibold leading-none tracking-tight text-primary">
-        {label}
-        <span className="text-[0.55em] font-semibold">%</span>
+      {/* 숫자+%를 한 덩어리로 가운데 — 막대 왼쪽 붙음(좌측 치우침) 방지 */}
+      <p className="mb-3 flex w-full items-baseline justify-center gap-0.5 tabular-nums text-[clamp(1.75rem,7vw,2.25rem)] font-semibold leading-none tracking-tight text-primary">
+        <span className="inline-block min-w-[2.5ch] text-center">{label}</span>
+        <span className="text-[0.55em] font-semibold leading-none">%</span>
       </p>
       <div className="h-2.5 w-full overflow-hidden rounded-full bg-surface-2">
         <div
@@ -134,6 +109,8 @@ export function MeetingProcessLoader({
   progressPercent,
   stageLabel,
   etaLabel,
+  onCancel,
+  cancelPending,
   className,
 }: {
   phase: MeetingProcessPhase;
@@ -141,14 +118,16 @@ export function MeetingProcessLoader({
   progressPercent?: number;
   /** "받아쓰는 중", "분석하는 중" 등 세부 단계. 없으면 phase 기본 문구. */
   stageLabel?: string | null;
-  /** "5분 남음" 같은 남은 시간 문구. */
+  /** 실제 경과 상태를 보조하는 문구. 예측 완료 시각은 표시하지 않는다. */
   etaLabel?: string | null;
+  onCancel?: () => void;
+  cancelPending?: boolean;
   className?: string;
 }) {
   const active = phase === "transcribing" || phase === "structuring";
   const percentRaw =
     typeof progressPercent === "number" && Number.isFinite(progressPercent)
-      ? Math.max(0, Math.min(100, progressPercent))
+      ? Math.max(active ? MIN_VISIBLE_PROGRESS : 0, Math.min(100, progressPercent))
       : clampPercent(progressPercent, phase);
   const percentLabel = Math.round(percentRaw);
   const rawLabel =
@@ -169,13 +148,27 @@ export function MeetingProcessLoader({
           : label
       }
     >
-      {active ? <ProcessProgressBar percent={percentRaw} /> : null}
+      {active ? (
+        <div className="flex flex-col items-center gap-4">
+          <div
+            className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center"
+            aria-hidden="true"
+          >
+            <span className="absolute inset-0 rounded-full bg-primary/10 motion-safe:animate-[process-breathe_2.4s_ease-in-out_infinite] motion-reduce:animate-none" />
+            <span className="absolute inset-2 rounded-full border-2 border-primary/20 border-t-primary motion-safe:animate-[spin_1.8s_linear_infinite] motion-reduce:animate-none" />
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-card text-xs font-bold tracking-tight text-primary shadow-soft">
+              {phase === "transcribing" ? "음성" : "정리"}
+            </span>
+          </div>
+          <ProcessProgressBar percent={percentRaw} />
+        </div>
+      ) : null}
 
       <div className="relative mx-auto flex h-7 w-full max-w-[min(22rem,90vw)] items-center justify-center overflow-hidden">
         <p
           key={stageAnimationKey(label)}
           className={cn(
-            "w-full truncate text-center text-base font-semibold tracking-tight text-foreground md:text-sm",
+            "w-full truncate text-center text-base font-semibold tracking-tight text-foreground",
             "motion-safe:animate-[process-rise_0.55s_cubic-bezier(0.22,1,0.36,1)_both] motion-reduce:animate-none",
             phase === "error" && "text-masked",
           )}
@@ -185,13 +178,22 @@ export function MeetingProcessLoader({
       </div>
 
       {active && etaLabel ? (
-        <p className="text-center text-base text-muted md:text-sm">
-          {etaLabel}
-        </p>
+        <p className="text-center text-base text-muted">{etaLabel}</p>
+      ) : null}
+
+      {active && onCancel ? (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={cancelPending}
+          className="min-h-11 rounded-xl px-4 text-base font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-wait disabled:opacity-60"
+        >
+          {cancelPending ? "취소하는 중이에요" : "분석 취소"}
+        </button>
       ) : null}
 
       {(phase === "error" || phase === "empty") && error ? (
-        <p className="max-w-xs text-center text-base leading-relaxed text-muted md:text-sm">
+        <p className="max-w-xs text-center text-base leading-relaxed text-muted">
           {error}
         </p>
       ) : null}
@@ -219,9 +221,11 @@ export function MeetingProcessBanner({
     initialStageLabel ?? null,
   );
   const [etaLabel, setEtaLabel] = useState<string | null>(null);
+  const [canCancel, setCanCancel] = useState(false);
+  const [cancelPending, setCancelPending] = useState(false);
   const [error, setError] = useState<string | null>(() =>
     initialPhase === "error" || initialPhase === "empty"
-      ? (initialErrorMessage?.trim() || MEETING_PROCESS_LABEL[initialPhase])
+      ? (userFacingAnalysisError(initialErrorMessage) || MEETING_PROCESS_LABEL[initialPhase])
       : null,
   );
   const [usageDialogOpen, setUsageDialogOpen] = useState(() =>
@@ -235,11 +239,6 @@ export function MeetingProcessBanner({
   const targetPercentRef = useRef(initialPercent);
   const targetRaisedAtRef = useRef<number | null>(null);
   const lastFrameAtRef = useRef(0);
-  const etaRef = useRef<{
-    lastSample: { time: number; percent: number } | null;
-    rate: number | null;
-    remainingSec: number | null;
-  }>({ lastSample: null, rate: null, remainingSec: null });
 
   // 서버 값은 1초 폴링. 화면은 프레임마다 실측 target을 따라간다.
   useEffect(() => {
@@ -283,19 +282,6 @@ export function MeetingProcessBanner({
     return () => window.cancelAnimationFrame(raf);
   }, [active]);
 
-  // 남은 시간축: 추정값을 초 단위로 줄여 "N분 남음"이 시계처럼 흐르게.
-  useEffect(() => {
-    if (!active) return;
-    const id = window.setInterval(() => {
-      const cur = etaRef.current.remainingSec;
-      if (cur == null || cur <= 0) return;
-      const next = Math.max(0, cur - 1);
-      etaRef.current.remainingSec = next;
-      setEtaLabel(formatEtaLabel(next));
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, [active]);
-
   useEffect(() => {
     if (phase === "done") return;
     if (phase === "error" || phase === "empty") return;
@@ -312,12 +298,24 @@ export function MeetingProcessBanner({
           progressPercent?: number;
           errorMessage?: string | null;
           stageLabel?: string | null;
+          elapsedSec?: number;
+          activityState?: "waiting" | "active" | "checking" | "idle";
+          canCancel?: boolean;
+          cancelPending?: boolean;
         };
         if (cancelled || !data.ok || !data.phase) return;
 
         const nextPercent = clampPercent(data.progressPercent, data.phase);
         setPhase(data.phase);
         setStageLabel(data.stageLabel ?? null);
+        setCanCancel(Boolean(data.canCancel));
+        setCancelPending(Boolean(data.cancelPending));
+        setEtaLabel(
+          formatElapsedStatus(
+            typeof data.elapsedSec === "number" ? data.elapsedSec : 0,
+            data.activityState,
+          ),
+        );
         if (nextPercent > targetPercentRef.current + 0.05) {
           targetRaisedAtRef.current = monotonicNow();
         }
@@ -327,15 +325,11 @@ export function MeetingProcessBanner({
         );
 
         if (data.phase === "error" || data.phase === "empty") {
-          const nextError =
-            data.errorMessage ?? MEETING_PROCESS_LABEL[data.phase];
+          const nextError = userFacingAnalysisError(
+            data.errorMessage ?? MEETING_PROCESS_LABEL[data.phase],
+          );
           setError(nextError);
           if (isQuotaBlockedMessage(nextError)) setUsageDialogOpen(true);
-          etaRef.current = {
-            lastSample: null,
-            rate: null,
-            remainingSec: null,
-          };
           setEtaLabel(null);
           return;
         }
@@ -346,50 +340,6 @@ export function MeetingProcessBanner({
           return;
         }
 
-        // ETA는 실제(서버) 값 흐름만 본다. 화면 전용 자체 전진은 추정에서 뺀다.
-        // 속도는 EMA로 부드럽게(tqdm/progressbar AdaptiveETA).
-        const now = Date.now();
-        const prev = etaRef.current.lastSample;
-        if (!prev) {
-          etaRef.current.lastSample = { time: now, percent: nextPercent };
-        } else {
-          const elapsedSec = (now - prev.time) / 1000;
-          const percentGain = nextPercent - prev.percent;
-          if (
-            elapsedSec >= ETA_MIN_ELAPSED_SEC &&
-            percentGain >= ETA_MIN_PERCENT_GAIN
-          ) {
-            const instantRate = percentGain / elapsedSec;
-            const prevRate = etaRef.current.rate;
-            const rate =
-              prevRate == null
-                ? instantRate
-                : ETA_RATE_SMOOTH * instantRate +
-                  (1 - ETA_RATE_SMOOTH) * prevRate;
-            etaRef.current.rate = rate;
-            etaRef.current.lastSample = { time: now, percent: nextPercent };
-
-            let remaining = estimateRemainingSec({
-              percent: nextPercent,
-              percentPerSec: rate,
-            });
-            if (remaining != null) {
-              const prevRemain = etaRef.current.remainingSec;
-              if (
-                prevRemain != null &&
-                remaining > prevRemain * ETA_UPWARD_CAP
-              ) {
-                remaining = prevRemain * ETA_UPWARD_CAP;
-              }
-              etaRef.current.remainingSec = remaining;
-              setEtaLabel(formatEtaLabel(remaining));
-            }
-          } else if (percentGain < 0) {
-            // 진행이 뒤로 가지 않는 한 lastSample만 시간을 갱신하지 않는다.
-            etaRef.current.lastSample = { time: now, percent: nextPercent };
-            etaRef.current.rate = null;
-          }
-        }
       } catch {
         // retry next interval
       }
@@ -405,6 +355,38 @@ export function MeetingProcessBanner({
 
   if (phase === "done") return null;
 
+  const cancel = async () => {
+    if (!canCancel || cancelPending) return;
+    if (!window.confirm("분석을 취소할까요? 이미 시작된 분석은 사용 시간이 차감될 수 있습니다.")) {
+      return;
+    }
+    setCancelPending(true);
+    try {
+      const response = await fetch(`/api/meetings/${meetingId}/analysis-cancel`, {
+        method: "POST",
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        cancelPending?: boolean;
+        message?: string;
+      };
+      if (!response.ok || !data.ok) {
+        setCancelPending(false);
+        setError(data.message ?? "취소 요청을 처리하지 못했습니다.");
+        return;
+      }
+      setCancelPending(Boolean(data.cancelPending));
+      setStageLabel(
+        data.cancelPending
+          ? "취소하는 중이에요"
+          : "분석을 취소했습니다",
+      );
+    } catch {
+      setCancelPending(false);
+      setError("취소 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  };
+
   return (
     <section
       className={cn(
@@ -418,6 +400,8 @@ export function MeetingProcessBanner({
         progressPercent={displayPercent}
         stageLabel={stageLabel}
         etaLabel={etaLabel}
+        onCancel={canCancel ? () => void cancel() : undefined}
+        cancelPending={cancelPending}
       />
       <UsageLimitDialog
         open={usageDialogOpen}

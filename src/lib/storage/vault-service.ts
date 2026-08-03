@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { Prisma, type VaultPurpose } from "@prisma/client";
 
@@ -8,6 +8,7 @@ import {
   localHeadObject,
   localPutObject,
   localReadObject,
+  localReadObjectRange,
 } from "@/lib/storage/local-disk";
 import {
   STORAGE_MAX_FILE_BYTES,
@@ -23,6 +24,7 @@ import {
   deleteObject,
   getDownloadUrl,
   getObjectBuffer,
+  getObjectRange,
   getUploadUrl,
   headObject,
   localVaultAllowed,
@@ -31,8 +33,11 @@ import {
   storageBackend,
 } from "@/lib/storage/object-store";
 import {
+  createTeamChunkDecryptor,
+  decryptTeamChunkedRange,
   decryptTeamBuffer,
-  encryptTeamBuffer,
+  encryptTeamChunkedBuffer,
+  isTeamChunkedEncryptedEnvelope,
   isTeamEncryptedEnvelope,
   teamEncryptionRequired,
 } from "@/lib/team-encryption";
@@ -47,6 +52,11 @@ function teamObjectKey(teamId: string, fileId: string) {
 async function readStoredObject(key: string) {
   if (objectStorageConfigured()) return getObjectBuffer(key);
   return localReadObject(key);
+}
+
+async function readStoredObjectRange(key: string, start: number, end: number) {
+  if (objectStorageConfigured()) return getObjectRange(key, start, end);
+  return localReadObjectRange(key, start, end);
 }
 
 async function writeStoredObject(params: {
@@ -408,7 +418,11 @@ export async function protectUserFileForTeam(params: {
   if (row.teamId && row.teamId !== params.teamId) {
     throw new Error("원본 파일이 다른 팀에 연결되어 있습니다.");
   }
-  if (row.teamId === params.teamId && isTeamEncryptedEnvelope(row.contentEncryption)) {
+  if (
+    row.teamId === params.teamId &&
+    (isTeamEncryptedEnvelope(row.contentEncryption) ||
+      isTeamChunkedEncryptedEnvelope(row.contentEncryption))
+  ) {
     return row;
   }
 
@@ -420,7 +434,7 @@ export async function protectUserFileForTeam(params: {
   }
 
   const plaintext = await readStoredObject(row.key);
-  const encrypted = await encryptTeamBuffer({
+  const encrypted = await encryptTeamChunkedBuffer({
     teamId: params.teamId,
     purpose: "content",
     plaintext,
@@ -453,6 +467,171 @@ export async function protectUserFileForTeam(params: {
     return updated;
   } catch (error) {
     await deleteStoredObject(encryptedKey).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function getTeamEncryptionInventory() {
+  const rows = await prisma.vaultFile.findMany({
+    where: { teamId: { not: null }, contentEncryption: { not: Prisma.JsonNull } },
+    select: {
+      id: true,
+      teamId: true,
+      key: true,
+      name: true,
+      size: true,
+      contentEncryption: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const files = rows.map((row) => ({
+    ...row,
+    version: isTeamChunkedEncryptedEnvelope(row.contentEncryption)
+      ? 2
+      : isTeamEncryptedEnvelope(row.contentEncryption)
+        ? 1
+        : 0,
+  }));
+  return {
+    total: files.length,
+    v1: files.filter((row) => row.version === 1).length,
+    v2: files.filter((row) => row.version === 2).length,
+    invalid: files.filter((row) => row.version === 0).length,
+    v1Bytes: files
+      .filter((row) => row.version === 1)
+      .reduce((sum, row) => sum + row.size, 0),
+    files,
+  };
+}
+
+/**
+ * v1 객체를 별도 키에 v2로 쓰고, 전체 평문 hash 검증 뒤 DB 포인터만 바꾼다.
+ * 원본 객체는 절대 삭제하지 않는다. 삭제는 원장 확인 후 별도 승인 작업이다.
+ */
+export async function rotateTeamFileV1ToV2(fileId: string) {
+  assertObjectStorageReady();
+  const row = await prisma.vaultFile.findUnique({ where: { id: fileId } });
+  if (!row || !row.teamId) throw new Error("회전할 팀 파일을 찾을 수 없습니다.");
+  if (isTeamChunkedEncryptedEnvelope(row.contentEncryption)) {
+    return { status: "already-v2" as const, fileId: row.id, key: row.key };
+  }
+  if (!isTeamEncryptedEnvelope(row.contentEncryption)) {
+    throw new Error("v1 팀 암호화 파일이 아닙니다.");
+  }
+
+  const originalKey = row.key;
+  const targetKey = `${teamObjectKey(row.teamId, row.id)}.v2-rotation`;
+  await prisma.encryptionRotation.upsert({
+    where: { vaultFileId: row.id },
+    create: {
+      vaultFileId: row.id,
+      teamId: row.teamId,
+      originalKey,
+      targetKey,
+      originalSize: row.size,
+      status: "RUNNING",
+      attemptCount: 1,
+      startedAt: new Date(),
+    },
+    update: {
+      status: "RUNNING",
+      errorMessage: null,
+      startedAt: new Date(),
+      attemptCount: { increment: 1 },
+    },
+  });
+
+  try {
+    // v1 AES-GCM은 인증 특성상 전체 암호문/평문을 한 번에 열어야 한다.
+    const ciphertext = await readStoredObject(originalKey);
+    const plaintext = await decryptTeamBuffer({
+      teamId: row.teamId,
+      purpose: "content",
+      body: ciphertext,
+      envelope: row.contentEncryption,
+    });
+    if (plaintext.length !== row.size) {
+      throw new Error("v1 복호화 크기와 VaultFile.size가 다릅니다.");
+    }
+    const plaintextSha256 = createHash("sha256").update(plaintext).digest("hex");
+    const encrypted = await encryptTeamChunkedBuffer({
+      teamId: row.teamId,
+      purpose: "content",
+      plaintext,
+    });
+    if (!encrypted.encrypted || !encrypted.envelope) {
+      throw new Error("KMS v2 envelope을 만들지 못했습니다.");
+    }
+    await writeStoredObject({
+      key: targetKey,
+      body: encrypted.body,
+      contentType: row.mime,
+    });
+
+    const stored = await readStoredObject(targetKey);
+    const verifiedPlaintext =
+      plaintext.length === 0
+        ? Buffer.alloc(0)
+        : await decryptTeamChunkedRange({
+            teamId: row.teamId,
+            purpose: "content",
+            body: stored,
+            ciphertextStart: 0,
+            start: 0,
+            end: plaintext.length - 1,
+            envelope: encrypted.envelope,
+          });
+    const verifiedSha256 = createHash("sha256")
+      .update(verifiedPlaintext)
+      .digest("hex");
+    if (
+      verifiedPlaintext.length !== plaintext.length ||
+      verifiedSha256 !== plaintextSha256
+    ) {
+      throw new Error("v2 전체 복호화 hash 검증에 실패했습니다.");
+    }
+
+    const now = new Date();
+    await prisma.$transaction(async (tx) => {
+      const swapped = await tx.vaultFile.updateMany({
+        where: { id: row.id, key: originalKey },
+        data: {
+          key: targetKey,
+          contentEncryption: encrypted.envelope as unknown as Prisma.InputJsonValue,
+        },
+      });
+      if (swapped.count !== 1) {
+        throw new Error("회전 중 VaultFile 포인터가 바뀌어 교체를 중단했습니다.");
+      }
+      await tx.encryptionRotation.update({
+        where: { vaultFileId: row.id },
+        data: {
+          status: "SWAPPED",
+          targetSize: encrypted.body.length,
+          plaintextSha256,
+          verifiedAt: now,
+          swappedAt: now,
+          errorMessage: null,
+        },
+      });
+    });
+    return {
+      status: "swapped" as const,
+      fileId: row.id,
+      originalKey,
+      targetKey,
+      bytes: plaintext.length,
+      plaintextSha256,
+      originalPreserved: true,
+    };
+  } catch (error) {
+    await prisma.encryptionRotation.update({
+      where: { vaultFileId: row.id },
+      data: {
+        status: "FAILED",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      },
+    });
     throw error;
   }
 }
@@ -500,7 +679,27 @@ export async function readUserFileBytes(userId: string, fileId: string) {
   if (objectStorageConfigured()) {
     const body = await getObjectBuffer(row.key);
     if (!row.contentEncryption) return { row, body };
-    if (!row.teamId || !isTeamEncryptedEnvelope(row.contentEncryption)) {
+    if (!row.teamId) {
+      throw new Error("팀 파일 암호화 메타데이터가 올바르지 않습니다.");
+    }
+    if (isTeamChunkedEncryptedEnvelope(row.contentEncryption)) {
+      return {
+        row,
+        body:
+          row.contentEncryption.plaintextSize === 0
+            ? Buffer.alloc(0)
+            : await decryptTeamChunkedRange({
+                teamId: row.teamId,
+                purpose: "content",
+                body,
+                ciphertextStart: 0,
+                start: 0,
+                end: row.contentEncryption.plaintextSize - 1,
+                envelope: row.contentEncryption,
+              }),
+      };
+    }
+    if (!isTeamEncryptedEnvelope(row.contentEncryption)) {
       throw new Error("팀 파일 암호화 메타데이터가 올바르지 않습니다.");
     }
     return {
@@ -519,7 +718,27 @@ export async function readUserFileBytes(userId: string, fileId: string) {
   }
   const body = await localReadObject(row.key);
   if (!row.contentEncryption) return { row, body };
-  if (!row.teamId || !isTeamEncryptedEnvelope(row.contentEncryption)) {
+  if (!row.teamId) {
+    throw new Error("팀 파일 암호화 메타데이터가 올바르지 않습니다.");
+  }
+  if (isTeamChunkedEncryptedEnvelope(row.contentEncryption)) {
+    return {
+      row,
+      body:
+        row.contentEncryption.plaintextSize === 0
+          ? Buffer.alloc(0)
+          : await decryptTeamChunkedRange({
+              teamId: row.teamId,
+              purpose: "content",
+              body,
+              ciphertextStart: 0,
+              start: 0,
+              end: row.contentEncryption.plaintextSize - 1,
+              envelope: row.contentEncryption,
+            }),
+    };
+  }
+  if (!isTeamEncryptedEnvelope(row.contentEncryption)) {
     throw new Error("팀 파일 암호화 메타데이터가 올바르지 않습니다.");
   }
   return {
@@ -531,6 +750,132 @@ export async function readUserFileBytes(userId: string, fileId: string) {
       envelope: row.contentEncryption,
     }),
   };
+}
+
+/**
+ * 신규 v2 팀 암호문은 요청 범위와 겹치는 인증 청크만 저장소에서 읽는다.
+ * v1 전체-file GCM은 인증 태그 특성상 전체 복호화가 필요해 호환 경로로 남긴다.
+ */
+export async function readUserFileRange(params: {
+  userId: string;
+  fileId: string;
+  start: number;
+  end: number;
+}) {
+  assertObjectStorageReady();
+  const row = await prisma.vaultFile.findFirst({
+    where: { id: params.fileId, userId: params.userId },
+  });
+  if (!row) return null;
+  if (
+    !Number.isSafeInteger(params.start) ||
+    !Number.isSafeInteger(params.end) ||
+    params.start < 0 ||
+    params.end < params.start ||
+    params.end >= row.size
+  ) {
+    throw new Error("파일 읽기 범위가 올바르지 않습니다.");
+  }
+
+  if (!row.contentEncryption) {
+    return {
+      row,
+      body: await readStoredObjectRange(row.key, params.start, params.end),
+      total: row.size,
+      rangeOptimized: true,
+    };
+  }
+  if (!row.teamId) {
+    throw new Error("팀 파일 암호화 메타데이터가 올바르지 않습니다.");
+  }
+  if (!isTeamChunkedEncryptedEnvelope(row.contentEncryption)) {
+    const full = await readUserFileBytes(params.userId, params.fileId);
+    if (!full) return null;
+    return {
+      row: full.row,
+      body: full.body.subarray(params.start, params.end + 1),
+      total: full.body.length,
+      rangeOptimized: false,
+    };
+  }
+
+  const envelope = row.contentEncryption;
+  if (params.end >= envelope.plaintextSize || envelope.plaintextSize !== row.size) {
+    throw new Error("팀 파일 크기와 암호화 메타데이터가 일치하지 않습니다.");
+  }
+  const firstChunk = Math.floor(params.start / envelope.chunkSize);
+  const lastChunk = Math.floor(params.end / envelope.chunkSize);
+  const ciphertextStart = firstChunk * envelope.chunkSize;
+  const ciphertextEnd = Math.min(
+    envelope.plaintextSize - 1,
+    (lastChunk + 1) * envelope.chunkSize - 1,
+  );
+  const ciphertext = await readStoredObjectRange(
+    row.key,
+    ciphertextStart,
+    ciphertextEnd,
+  );
+  return {
+    row,
+    body: await decryptTeamChunkedRange({
+      teamId: row.teamId,
+      purpose: "content",
+      body: ciphertext,
+      ciphertextStart,
+      start: params.start,
+      end: params.end,
+      envelope,
+    }),
+    total: envelope.plaintextSize,
+    rangeOptimized: true,
+  };
+}
+
+/** Range 없는 전체 응답도 1MiB 단위로 읽고 인증·복호화해 메모리를 제한한다. */
+export async function streamUserChunkedFile(userId: string, fileId: string) {
+  assertObjectStorageReady();
+  const row = await prisma.vaultFile.findFirst({
+    where: { id: fileId, userId },
+  });
+  if (
+    !row ||
+    !row.teamId ||
+    !isTeamChunkedEncryptedEnvelope(row.contentEncryption)
+  ) {
+    return null;
+  }
+  const envelope = row.contentEncryption;
+  if (envelope.plaintextSize !== row.size) {
+    throw new Error("팀 파일 크기와 암호화 메타데이터가 일치하지 않습니다.");
+  }
+  const decryptChunk = await createTeamChunkDecryptor({
+    teamId: row.teamId,
+    purpose: "content",
+    envelope,
+  });
+  let chunkIndex = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (chunkIndex >= envelope.tags.length) {
+        controller.close();
+        return;
+      }
+      try {
+        const start = chunkIndex * envelope.chunkSize;
+        const end = Math.min(
+          envelope.plaintextSize - 1,
+          start + envelope.chunkSize - 1,
+        );
+        const ciphertext = await readStoredObjectRange(row.key, start, end);
+        const plaintext = decryptChunk(chunkIndex, ciphertext);
+        chunkIndex += 1;
+        controller.enqueue(plaintext);
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+  return { row, stream, total: envelope.plaintextSize };
 }
 
 export async function deleteUserFile(userId: string, fileId: string) {

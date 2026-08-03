@@ -6,6 +6,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { activeWordFocusAt } from "../src/lib/transcript-time";
+
 let failed = 0;
 function assert(cond: unknown, msg: string) {
   if (!cond) {
@@ -64,6 +66,32 @@ assert(withPad > noPad, "padded mark widens text (why shake happened)");
 assert(
   Math.abs(layoutWidth(sample, 0) - noPad) < 0.001,
   "zero padding keeps width stable",
+);
+
+const words = [
+  { text: "강", startSec: 1, endSec: 1.35 },
+  { text: "약", startSec: 3, endSec: 3.35 },
+];
+assert(activeWordFocusAt(words, 0.9) === null, "word does not light before speech");
+assert(
+  activeWordFocusAt(words, 1.1)?.word.text === "강" &&
+    activeWordFocusAt(words, 1.1)?.strength === 1,
+  "speaking word has full-strength highlight",
+);
+const fading = activeWordFocusAt(words, 1.5);
+assert(
+  fading?.word.text === "강" && fading.strength > 0 && fading.strength < 1,
+  "word fades immediately after speech",
+);
+assert(
+  activeWordFocusAt(words, 2.5) === null,
+  "previous word is cleared during a long pause",
+);
+
+const stretched = [{ text: "이상입니다", startSec: 108.87, endSec: 115.27 }];
+assert(
+  activeWordFocusAt(stretched, 114) === null,
+  "implausibly stretched forced-alignment word does not cover silence",
 );
 
 if (failed) {

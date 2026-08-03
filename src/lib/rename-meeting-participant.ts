@@ -35,6 +35,7 @@ export function renameInMeeting(
         ...p,
         name: to,
         initials: initialsFromParticipantName(to),
+        recognitionNote: "사용자가 확인한 이름",
       };
     }),
   };

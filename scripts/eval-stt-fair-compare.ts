@@ -6,8 +6,8 @@
  * MERGE_PRIOR=1(기본): 미실행 샘플은 기존 fair-compare/summary.json과 병합.
  * 결과: .data/stt-bench/fair-compare/summary.json
  *       .data/stt-bench/fair-compare/summary-extra.json (추가샘플 시)
- *       Faith-office/Faith_STT공정비교_whisper_vs_4o_2026-07-23.txt
- *       Faith-office/Faith_STT공정비교_추가샘플_2026-07-23.txt
+ *       Faith-office/stt-term-runs/reports/Faith_STT공정비교_whisper_vs_4o.txt
+ *       Faith-office/stt-term-runs/reports/Faith_STT공정비교_추가샘플.txt
  */
 import { config } from "dotenv";
 import {
@@ -27,13 +27,14 @@ config({ path: ".env.local", override: true });
 const ROOT = process.cwd();
 const OUT = join(ROOT, ".data/stt-bench");
 const FAIR_DIR = join(OUT, "fair-compare");
+const REPORT_DIR = join(ROOT, "Faith-office/stt-term-runs/reports");
 const REPORT_PATH = join(
-  ROOT,
-  "Faith-office/Faith_STT공정비교_whisper_vs_4o_2026-07-23.txt",
+  REPORT_DIR,
+  "Faith_STT공정비교_whisper_vs_4o.txt",
 );
 const EXTRA_REPORT_PATH = join(
-  ROOT,
-  "Faith-office/Faith_STT공정비교_추가샘플_2026-07-23.txt",
+  REPORT_DIR,
+  "Faith_STT공정비교_추가샘플.txt",
 );
 
 const SAMPLE_ONLY = (process.env.SAMPLE_ONLY || "").trim();
@@ -306,7 +307,7 @@ function loadPriorFairRows(): Row[] {
 
 async function main() {
   mkdirSync(FAIR_DIR, { recursive: true });
-  mkdirSync(join(ROOT, "Faith-office"), { recursive: true });
+  mkdirSync(REPORT_DIR, { recursive: true });
 
   const onlyIds = SAMPLE_ONLY
     ? SAMPLE_ONLY.split(",").map((s) => s.trim()).filter(Boolean)

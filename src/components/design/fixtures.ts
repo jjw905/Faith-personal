@@ -11,6 +11,8 @@ export const FIXTURE_PROCESSING_TRANSCRIBING = [
     phase: "transcribing",
     progressPercent: 36,
     workspace: "personal",
+    waiting: false,
+    jobStatus: "running" as const,
   },
 ];
 
@@ -22,25 +24,61 @@ export const FIXTURE_PROCESSING_STRUCTURING = [
     phase: "structuring",
     progressPercent: 72,
     workspace: "personal",
+    waiting: false,
+    jobStatus: "running" as const,
+  },
+];
+
+/** 워커 시작 전 대기 */
+export const FIXTURE_PROCESSING_WAITING = [
+  {
+    id: "design-mtg-waiting",
+    title: "brief-ailab (1)",
+    status: "transcribing",
+    phase: "transcribing",
+    progressPercent: 0,
+    workspace: "personal",
+    stageLabel: "잠시 기다리는 중이에요",
+    waiting: true,
+    jobStatus: "queued" as const,
+    queueAhead: 0,
   },
 ];
 
 export const FIXTURE_PROCESSING_MULTI = [
   {
-    id: "design-mtg-transcribing",
-    title: "assembly2-envlabor-20250704",
-    status: "transcribing",
-    phase: "transcribing",
-    progressPercent: 36,
-    workspace: "personal",
-  },
-  {
     id: "design-mtg-structuring",
     title: "주간-보안-싱크",
     status: "structuring",
     phase: "structuring",
-    progressPercent: 72,
+    progressPercent: 78,
     workspace: "personal",
+    waiting: false,
+    jobStatus: "running" as const,
+  },
+  {
+    id: "design-mtg-transcribing",
+    title: "assembly2-envlabor-20250704",
+    status: "transcribing",
+    phase: "transcribing",
+    progressPercent: 0,
+    workspace: "personal",
+    stageLabel: "잠시 기다리는 중이에요",
+    waiting: true,
+    jobStatus: "queued" as const,
+    queueAhead: 1,
+  },
+  {
+    id: "design-mtg-waiting-2",
+    title: "brief-ailab (1)",
+    status: "transcribing",
+    phase: "transcribing",
+    progressPercent: 0,
+    workspace: "personal",
+    stageLabel: "잠시 기다리는 중이에요",
+    waiting: true,
+    jobStatus: "queued" as const,
+    queueAhead: 2,
   },
 ];
 

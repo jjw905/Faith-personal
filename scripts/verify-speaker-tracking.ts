@@ -3,7 +3,13 @@ import {
   assignWordTimingsToLines,
   type WordTiming,
 } from "../src/lib/stt/timed-segments";
+import {
+  glueBoundaryFragmentSpeakers,
+  prunePhantomSpeakers,
+  type DiarizationResult,
+} from "../src/lib/stt/diarization";
 import { activeLineIndexAt } from "../src/lib/transcript-time";
+import { stabilizeSpeakerTurnsWithAcoustics } from "../src/lib/stt/speaker-turns";
 import type { TranscriptLine } from "../src/types/transcript";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -99,6 +105,106 @@ assert(
 assert(
   activeLineIndexAt(starts, 424.2) === 2,
   "다음 질문 말풍선 추적 실패",
+);
+
+/**
+ * KTV 01:55 재현: 진행자 호명은 1.47초뿐이고 한 번의 발화가 두 조각으로
+ * 나뉘지만, 다음 기자와 다른 실제 목소리이므로 제거하거나 glue하면 안 된다.
+ */
+const diarization: DiarizationResult = {
+  model: "pyannote-segmentation-3.0+3D-Speaker(sherpa-onnx)",
+  device: "cpu",
+  durationSec: 704,
+  wallMs: 0,
+  speakerCount: 3,
+  segments: [
+    { startSec: 104.1, endSec: 109.45, speaker: "HOST" },
+    { startSec: 115.27, endSec: 115.59, speaker: "CALLER" },
+    { startSec: 117.23, endSec: 118.38, speaker: "CALLER" },
+    { startSec: 119.02, endSec: 137.26, speaker: "REPORTER" },
+  ],
+};
+const cleaned = glueBoundaryFragmentSpeakers(
+  prunePhantomSpeakers(diarization),
+);
+assert(
+  cleaned.segments.some((segment) => segment.speaker === "CALLER"),
+  "짧지만 독립된 진행자 호명 화자를 보존하지 못함",
+);
+assert(
+  cleaned.speakerCount === 3,
+  `진행자 호명과 다음 기자가 합쳐짐: 화자 ${cleaned.speakerCount}명`,
+);
+
+// 의미 모델이 질문의 마지막 블록만 진행자로 보낸 경우, 같은 음성 cluster의
+// 앞 두 블록을 따라 기자로 복구한다. 다음 답변은 cluster가 바뀌어 유지된다.
+const stabilized = stabilizeSpeakerTurnsWithAcoustics(
+  [
+    { startSec: 118.9, endSec: 121.6, speaker: "C", text: "예, 한국일보 이성택입니다." },
+    { startSec: 122.4, endSec: 131.9, speaker: "C", text: "예시를 몇 개 들어주시고요." },
+    { startSec: 132.8, endSec: 137.2, speaker: "C", text: "1호를 알려 주십시오." },
+    { startSec: 137.4, endSec: 144.4, speaker: "A", text: "각 부처에서 신청할 겁니다." },
+  ],
+  [
+    { startSec: 118.9, endSec: 132.7, speaker: "기자", text: "기자 질문" },
+    { startSec: 132.8, endSec: 144.4, speaker: "진행자", text: "질문 끝과 답변" },
+  ],
+);
+assert(
+  stabilized[0]?.speaker === "기자" &&
+    stabilized[0]?.text.includes("1호를 알려 주십시오"),
+  "동일 음성 cluster의 질문 마지막 문장을 기자에게 복구하지 못함",
+);
+assert(
+  stabilized[1]?.speaker === "진행자" &&
+    stabilized[1]?.text.includes("각 부처에서 신청"),
+  "다른 음성 cluster의 답변까지 기자에게 합침",
+);
+
+// 음성 cluster가 우연히 같아도 호명과 자기소개는 강한 문맥 경계로 보존한다.
+const sameClusterBoundary = stabilizeSpeakerTurnsWithAcoustics(
+  [
+    { startSec: 115.7, endSec: 118.9, speaker: "X", text: "네, 이성택 기자님." },
+    { startSec: 118.9, endSec: 121.6, speaker: "X", text: "예, 한국일보 이성택입니다." },
+  ],
+  [
+    { startSec: 115.7, endSec: 118.9, speaker: "진행자", text: "호명" },
+    { startSec: 118.9, endSec: 121.6, speaker: "기자", text: "자기소개" },
+  ],
+);
+assert(
+  sameClusterBoundary.length === 2 &&
+    sameClusterBoundary[0]?.speaker === "진행자" &&
+    sameClusterBoundary[1]?.speaker === "기자",
+  "같은 cluster의 진행자 호명과 기자 자기소개 경계를 보존하지 못함",
+);
+
+const splitReporter = stabilizeSpeakerTurnsWithAcoustics(
+  [
+    { startSec: 419, endSec: 424, speaker: "E", text: "YTN 홍민기입니다. 인사 관련해서 여쭙고 싶은데요." },
+    { startSec: 424.1, endSec: 438, speaker: "F", text: "최근 인사를 기대해도 되는지 여쭤봅니다." },
+    { startSec: 438.1, endSec: 449, speaker: "A", text: "네, 대통령의 인사 철학은 이렇습니다." },
+    { startSec: 449.2, endSec: 458, speaker: "A", text: "같은 진행자의 이어지는 답변입니다." },
+    { startSec: 500, endSec: 510, speaker: "A", text: "기존 진행자 답변입니다." },
+    { startSec: 520, endSec: 530, speaker: "A", text: "다른 진행자 답변입니다." },
+  ],
+  [
+    { startSec: 419, endSec: 424, speaker: "기자-1", text: "자기소개" },
+    { startSec: 424.1, endSec: 449, speaker: "기자-2", text: "질문과 답변이 잘못 합쳐짐" },
+    { startSec: 449.2, endSec: 458, speaker: "기자-2", text: "이어지는 답변도 잘못 분리됨" },
+    { startSec: 500, endSec: 510, speaker: "진행자", text: "진행자" },
+    { startSec: 520, endSec: 530, speaker: "진행자", text: "진행자" },
+  ],
+);
+assert(
+  splitReporter[0]?.speaker === "기자-1" &&
+    splitReporter[0]?.text.includes("최근 인사"),
+  "자기소개 뒤 이어지는 질문의 음성 과분리를 합치지 못함",
+);
+assert(
+  splitReporter[1]?.speaker === "진행자" &&
+    splitReporter[1]?.text.includes("대통령의 인사 철학"),
+  "질문 종결 뒤 다른 음성 cluster의 답변을 분리하지 못함",
 );
 
 console.log(

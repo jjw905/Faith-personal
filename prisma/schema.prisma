@@ -105,6 +105,7 @@ enum AnalysisUsageStatus {
 enum AnalysisJobStatus {
   QUEUED
   RUNNING
+  CANCELED
   SUCCEEDED
   FAILED
 }
@@ -235,6 +236,7 @@ model AnalysisJob {
   availableAt       DateTime         @default(now()) @map("available_at")
   lockedAt          DateTime?        @map("locked_at")
   lockedBy          String?          @map("locked_by")
+  cancelRequestedAt DateTime?        @map("cancel_requested_at")
   startedAt         DateTime?        @map("started_at")
   finishedAt        DateTime?        @map("finished_at")
   lastError         String?          @map("last_error") @db.Text
@@ -568,7 +570,10 @@ model RealtimeSttSession {
   billedAudioSeconds Int                      @default(0) @map("billed_audio_seconds")
   secondPassSeconds  Int                      @default(0) @map("second_pass_seconds")
   estimatedUsd       Decimal                  @default(0) @map("estimated_usd") @db.Decimal(12, 6)
+  /** 한 기기 마이크에 여러 사람이 말하는 세션에서만 켠다. */
+  speakerTrackingEnabled Boolean              @default(false) @map("speaker_tracking_enabled")
   utterances         RealtimeSttUtterance[]
+  speakerClusters    RealtimeSpeakerCluster[]
   createdAt          DateTime                 @default(now()) @map("created_at")
   updatedAt          DateTime                 @updatedAt @map("updated_at")
 
@@ -635,12 +640,41 @@ model RealtimeSttUtterance {
   corrections Json?
   /** 단어 단위 실측 시각. [{ text, startSec, endSec }] */
   words       Json?
+  /** 단일 마이크 세션에서 고정된 A/B/C 라벨. 임베딩 만료 후에도 보존한다. */
+  speakerLabel     String?                 @map("speaker_label")
+  speakerClusterId String?                 @map("speaker_cluster_id")
+  speakerCluster   RealtimeSpeakerCluster? @relation(fields: [speakerClusterId], references: [id], onDelete: SetNull)
   createdAt   DateTime           @default(now()) @map("created_at")
   updatedAt   DateTime           @updatedAt @map("updated_at")
 
   @@unique([sessionId, itemId])
   @@index([sessionId, sequence])
+  @@index([speakerClusterId])
   @@map("realtime_stt_utterances")
+}
+
+model RealtimeSpeakerCluster {
+  id            String             @id @default(cuid())
+  sessionId     String             @map("session_id")
+  session       RealtimeSttSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  /** 사용자에게 보이는 세션 고정 라벨(A, B, C...). */
+  label         String
+  displayName   String?            @map("display_name")
+  /** AES-GCM 또는 팀 KMS envelope로 암호화한 정규화 centroid. */
+  centroid      Json
+  model         String
+  sampleCount   Int                @default(1) @map("sample_count")
+  totalAudioSec Float              @default(0) @map("total_audio_sec")
+  lastSeenAt    DateTime           @default(now()) @map("last_seen_at")
+  /** 재연결 유예 뒤 centroid를 지우기 위한 만료 시각. */
+  expiresAt     DateTime           @map("expires_at")
+  utterances    RealtimeSttUtterance[]
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  @@unique([sessionId, label])
+  @@index([expiresAt])
+  @@map("realtime_speaker_clusters")
 }
 
 model KoreanDictionaryCache {
@@ -789,6 +823,37 @@ model VaultFile {
   @@index([userId, createdAt])
   @@index([teamId, createdAt])
   @@map("vault_files")
+}
+
+/**
+ * 팀 파일 envelope v1 -> v2 회전 원장.
+ * VaultFile이 나중에 삭제돼도 원본/대상 키와 검증 결과는 감사 근거로 남긴다.
+ */
+model EncryptionRotation {
+  id                String    @id @default(cuid())
+  vaultFileId       String    @unique @map("vault_file_id")
+  teamId            String    @map("team_id")
+  originalKey       String    @map("original_key")
+  targetKey         String    @map("target_key")
+  sourceVersion     Int       @default(1) @map("source_version")
+  targetVersion     Int       @default(2) @map("target_version")
+  status            String    @default("PENDING") @db.VarChar(16)
+  attemptCount      Int       @default(0) @map("attempt_count")
+  originalSize      Int       @map("original_size")
+  targetSize        Int?      @map("target_size")
+  plaintextSha256   String?   @map("plaintext_sha256") @db.VarChar(64)
+  errorMessage      String?   @map("error_message") @db.Text
+  startedAt         DateTime? @map("started_at")
+  verifiedAt        DateTime? @map("verified_at")
+  swappedAt         DateTime? @map("swapped_at")
+  /** 원본 객체 삭제는 별도 승인 작업에서만 기록한다. rotation은 채우지 않는다. */
+  originalDeletedAt DateTime? @map("original_deleted_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, updatedAt])
+  @@index([teamId, createdAt])
+  @@map("encryption_rotations")
 }
 
 model Account {

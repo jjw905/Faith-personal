@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        error: "분석 서버 설정이 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+        error: "분석을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.",
       },
       { status: 503 },
     );
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
   await updateUserMeeting(meetingId, {
     phase: "transcribing",
-    progressPercent: 0,
+    progressPercent: 1,
     stageLabel: "이의제기 재처리 대기 중",
     errorMessage: undefined,
   });

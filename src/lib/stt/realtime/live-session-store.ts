@@ -42,6 +42,7 @@ import {
 } from "@/lib/user-meetings-store";
 import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
 import type { WorkspaceId } from "@/lib/workspaces";
+import { assignRealtimeSpeakerCluster } from "@/lib/stt/realtime/speaker-clusters";
 
 const MINI_USD_PER_MINUTE = 0.003;
 const TEAM_SETTLE_TIMEOUT_MS = 6_000;
@@ -177,6 +178,7 @@ export async function persistRealtimeUtterance(params: {
       id: true,
       title: true,
       meetingId: true,
+      speakerTrackingEnabled: true,
       user: { select: { name: true } },
       teamMeeting: {
         select: {
@@ -200,11 +202,12 @@ export async function persistRealtimeUtterance(params: {
         itemId: params.itemId,
       },
     },
-    select: { corrections: true },
+    select: { corrections: true, speakerLabel: true },
   });
   if (existing) {
     return {
       corrections: existing.corrections ?? [],
+      speakerLabel: existing.speakerLabel ?? undefined,
       dictionaryUsage: {
         model: "ourmalsam",
         inputTokens: 0,
@@ -251,10 +254,11 @@ export async function persistRealtimeUtterance(params: {
           itemId: params.itemId,
         },
       },
-      select: { corrections: true },
+      select: { corrections: true, speakerLabel: true },
     });
     return {
       corrections: duplicate?.corrections ?? [],
+      speakerLabel: duplicate?.speakerLabel ?? undefined,
       dictionaryUsage: {
         model: "ourmalsam",
         inputTokens: 0,
@@ -267,6 +271,19 @@ export async function persistRealtimeUtterance(params: {
     };
   }
 
+  const speakerAssignmentPromise =
+    session.speakerTrackingEnabled && params.audioBytes
+      ? assignRealtimeSpeakerCluster({
+          sessionId: params.sessionId,
+          itemId: params.itemId,
+          audioBytes: params.audioBytes,
+          filename: params.audioFilename || "utterance.wav",
+        }).catch((error) => {
+          console.warn("[realtime] 세션 화자 클러스터링 건너뜀", error);
+          return null;
+        })
+      : Promise.resolve(null);
+
   const participantNames = [
     session.user.name?.trim(),
     ...(session.teamMeeting?.access.map((access) => access.user.name?.trim()) ??
@@ -278,7 +295,9 @@ export async function persistRealtimeUtterance(params: {
   });
   const suggested = await suggestTermCorrections([text], {
     glossary,
-    genericDictionary: true,
+    // 일반 사전 후보는 김영록 같은 정상 고유명사를 엉뚱한 이름으로 바꾼다.
+    // 현재 회의에서 확인된 이름만 후보로 쓰고, 나머지는 재전사 일치가 필요하다.
+    genericDictionary: false,
   });
 
   let sourceMissing = false;
@@ -383,6 +402,7 @@ export async function persistRealtimeUtterance(params: {
         ),
       )
     : 0;
+  const speakerAssignment = await speakerAssignmentPromise;
   await prisma.$transaction([
     prisma.realtimeSttUtterance.update({
       where: {
@@ -395,6 +415,8 @@ export async function persistRealtimeUtterance(params: {
         corrections,
         secondPass: secondPassUsed,
         words: wordTimings,
+        speakerLabel: speakerAssignment?.label ?? null,
+        speakerClusterId: speakerAssignment?.clusterId ?? null,
       },
     }),
     ...(secondPassSeconds > 0
@@ -409,7 +431,11 @@ export async function persistRealtimeUtterance(params: {
       : []),
   ]);
 
-  return { corrections, dictionaryUsage: suggested.usage };
+  return {
+    corrections,
+    speakerLabel: speakerAssignment?.label,
+    dictionaryUsage: suggested.usage,
+  };
 }
 
 export async function completeRealtimeSession(params: {
@@ -611,7 +637,7 @@ async function finalizeRealtimeRun(params: {
           0,
           (session.startedAt.getTime() - earliestMs) / 1000,
         );
-        const speaker =
+        const participantSpeaker =
           session.user.name?.trim() ||
           session.user.email?.split("@")[0] ||
           "참석자";
@@ -622,7 +648,10 @@ async function finalizeRealtimeRun(params: {
             endSec: offsetSec + word.endSec,
           }));
           return {
-            speaker,
+            speaker:
+              session.speakerTrackingEnabled && utterance.speakerLabel
+                ? `화자 ${utterance.speakerLabel}`
+                : participantSpeaker,
             text: utterance.text.trim(),
             startSec: offsetSec + utterance.startSec,
             endSec:
@@ -727,7 +756,7 @@ async function finalizeRealtimeRun(params: {
         // 언론사 이름은 회의별 사전에 없다. 보정 대조에만 넣는다.
         glossary: [...glossary, ...MEDIA_OUTLET_TERMS],
         keepTerms: rows.map((row) => row.speaker),
-        genericDictionary: true,
+        genericDictionary: false,
       },
     );
     const liveCorrections = rows.flatMap((row) => {

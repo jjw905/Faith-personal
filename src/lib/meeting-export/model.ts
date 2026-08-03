@@ -50,6 +50,36 @@ function buildCues(lines: MeetingExportLine[]): MeetingExportCue[] {
   });
 }
 
+const EXPORT_TURN_MAX_CHARS = 260;
+const EXPORT_TURN_MAX_SPAN_SEC = 30;
+
+/** 기존의 문장별 기록도 내보낼 때는 같은 화자의 한 호흡 단위로 읽히게 한다. */
+function groupLinesForReading(lines: MeetingExportLine[]): MeetingExportLine[] {
+  const grouped: MeetingExportLine[] = [];
+  for (const line of lines) {
+    const previous = grouped[grouped.length - 1];
+    const combined = previous
+      ? `${previous.text.trim()} ${line.text.trim()}`.trim()
+      : line.text;
+    const previousStart = previous?.startSec ?? parseClockToSec(previous?.time ?? "");
+    const currentStart = line.startSec ?? parseClockToSec(line.time);
+    if (
+      previous &&
+      previous.speaker === line.speaker &&
+      combined.length <= EXPORT_TURN_MAX_CHARS &&
+      previousStart != null &&
+      currentStart != null &&
+      currentStart - previousStart <= EXPORT_TURN_MAX_SPAN_SEC
+    ) {
+      previous.text = combined;
+      previous.endSec = line.endSec ?? previous.endSec;
+      continue;
+    }
+    grouped.push({ ...line });
+  }
+  return grouped;
+}
+
 /** 회의 데이터 → 포맷 공통 모델. 섹션 순서는 TXT와 동일. */
 export function buildMeetingExportModel(payload: {
   meeting: Meeting;
@@ -58,7 +88,7 @@ export function buildMeetingExportModel(payload: {
   summary?: string;
 }): MeetingExportModel {
   const { meeting, timeline, transcript, summary } = payload;
-  const lines: MeetingExportLine[] = (transcript?.lines ?? []).map((l) => ({
+  const sourceLines: MeetingExportLine[] = (transcript?.lines ?? []).map((l) => ({
     time: l.time,
     speaker: l.speaker,
     text: (l.text ?? "").trim(),
@@ -67,6 +97,7 @@ export function buildMeetingExportModel(payload: {
       ? Math.max(...l.words.map((w) => w.endSec))
       : undefined,
   }));
+  const lines = groupLinesForReading(sourceLines);
 
   return {
     meetingId: meeting.id,
@@ -87,7 +118,8 @@ export function buildMeetingExportModel(payload: {
       summary: s.summary ?? "",
     })),
     lines,
-    cues: buildCues(lines),
+    // 자막은 원래의 세밀한 문장 경계를 유지하고, 읽기 문서만 묶는다.
+    cues: buildCues(sourceLines),
   };
 }
 

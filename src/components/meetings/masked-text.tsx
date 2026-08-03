@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import type { PiiMatch } from "@/lib/masking";
 import { cn } from "@/lib/utils";
+import type { TranscriptWordTiming } from "@/types/transcript";
 
 function matchKey(m: PiiMatch) {
   return `${m.start}:${m.end}:${m.type}`;
@@ -19,6 +26,9 @@ export function MaskedText({
   matches,
   onPrimary = false,
   activeWordRange,
+  activeWordStrength = 1,
+  words,
+  onWordSeek,
 }: {
   original: string;
   matches: PiiMatch[];
@@ -26,6 +36,11 @@ export function MaskedText({
   onPrimary?: boolean;
   /** 재생 중인 단어의 원문 offset. 형광펜처럼 그 구간만 강조한다. */
   activeWordRange?: { startOffset: number; endOffset: number } | null;
+  /** 발화 중 1, 발화가 끊긴 직후 0까지 감쇠한다. */
+  activeWordStrength?: number;
+  /** 본문 단어별 실측 시각. 있으면 각 단어를 정확한 시각의 탐색점으로 만든다. */
+  words?: TranscriptWordTiming[];
+  onWordSeek?: (word: TranscriptWordTiming) => void;
 }) {
   /**
    * 가린 항목이 바뀔 때만 열어 둔 것을 닫는다.
@@ -100,36 +115,107 @@ export function MaskedText({
   const markClass = onPrimary
     ? "word-play-mark word-play-mark-on-primary"
     : "word-play-mark";
+  const markStyle = {
+    "--word-focus-strength": Math.min(1, Math.max(0, activeWordStrength)),
+  } as CSSProperties;
+
+  const renderTextRange = (start: number, end: number, key: string) => {
+    const inRange = (words ?? [])
+      .filter((word) => overlaps(start, end, word.startOffset, word.endOffset))
+      .sort((left, right) => left.startOffset - right.startOffset);
+
+    // 단어 시각이 없는 예전 기록도 기존 하이라이트 표시는 그대로 유지한다.
+    if (inRange.length === 0) {
+      if (
+        !activeWordRange ||
+        !overlaps(start, end, activeWordRange.startOffset, activeWordRange.endOffset)
+      ) {
+        return <span key={key}>{original.slice(start, end)}</span>;
+      }
+      const hiStart = Math.max(start, activeWordRange.startOffset);
+      const hiEnd = Math.min(end, activeWordRange.endOffset);
+      return (
+        <span key={key}>
+          {original.slice(start, hiStart)}
+          <mark data-word-play-mark className={markClass} style={markStyle}>
+            {original.slice(hiStart, hiEnd)}
+          </mark>
+          {original.slice(hiEnd, end)}
+        </span>
+      );
+    }
+
+    const nodes: ReactNode[] = [];
+    let cursor = start;
+    for (const word of inRange) {
+      const wordStart = Math.max(start, word.startOffset, cursor);
+      const wordEnd = Math.min(end, word.endOffset);
+      if (wordEnd <= wordStart) continue;
+      if (wordStart > cursor) {
+        nodes.push(
+          <span key={`${key}-plain-${cursor}`}>
+            {original.slice(cursor, wordStart)}
+          </span>,
+        );
+      }
+      const isActive =
+        activeWordRange &&
+        overlaps(
+          wordStart,
+          wordEnd,
+          activeWordRange.startOffset,
+          activeWordRange.endOffset,
+        );
+      const content = isActive ? (
+        <mark data-word-play-mark className={markClass} style={markStyle}>
+          {original.slice(wordStart, wordEnd)}
+        </mark>
+      ) : (
+        original.slice(wordStart, wordEnd)
+      );
+      nodes.push(
+        onWordSeek ? (
+          <span
+            key={`${key}-word-${word.startOffset}`}
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              onWordSeek(word);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              event.stopPropagation();
+              onWordSeek(word);
+            }}
+            title={`${word.startSec.toFixed(2)}초부터 재생`}
+            className={cn(
+              "cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              onPrimary ? "hover:bg-white/15" : "hover:bg-foreground/10",
+            )}
+          >
+            {content}
+          </span>
+        ) : (
+          <span key={`${key}-word-${word.startOffset}`}>{content}</span>
+        ),
+      );
+      cursor = wordEnd;
+    }
+    if (cursor < end) {
+      nodes.push(
+        <span key={`${key}-tail-${cursor}`}>{original.slice(cursor, end)}</span>,
+      );
+    }
+    return <span key={key}>{nodes}</span>;
+  };
 
   return (
     <>
       {segments.map((seg) => {
         if (seg.kind === "text") {
-          if (
-            !activeWordRange ||
-            !overlaps(
-              seg.start,
-              seg.end,
-              activeWordRange.startOffset,
-              activeWordRange.endOffset,
-            )
-          ) {
-            return <span key={seg.key}>{seg.text}</span>;
-          }
-          const hiStart = Math.max(seg.start, activeWordRange.startOffset);
-          const hiEnd = Math.min(seg.end, activeWordRange.endOffset);
-          const before = original.slice(seg.start, hiStart);
-          const active = original.slice(hiStart, hiEnd);
-          const after = original.slice(hiEnd, seg.end);
-          return (
-            <span key={seg.key}>
-              {before}
-              <mark data-word-play-mark className={markClass}>
-                {active}
-              </mark>
-              {after}
-            </span>
-          );
+          return renderTextRange(seg.start, seg.end, seg.key);
         }
         const open = revealed.has(seg.key);
         const isActive =
@@ -161,6 +247,7 @@ export function MaskedText({
                   : "animate-[mask-chip-in_220ms_ease-out] motion-reduce:animate-none cursor-pointer bg-masked-soft text-masked hover:brightness-95",
               isActive && markClass,
             )}
+            style={isActive ? markStyle : undefined}
           >
             {open ? seg.match.value : seg.match.replacement}
           </button>

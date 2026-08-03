@@ -21,6 +21,7 @@ export type BrowserRealtimeUtterance = {
   endSec?: number;
   confidence?: number;
   meanLogprob?: number;
+  speakerLabel?: string;
   corrections?: TranscriptCorrection[];
 };
 
@@ -34,6 +35,8 @@ type StartOptions = {
    * 우리가 만든 합성 마이크(보관함 파일)는 false.
    */
   cloneMediaTrack?: boolean;
+  /** 기기 한 대의 마이크를 여러 사람이 함께 쓸 때만 활성화한다. */
+  singleMicrophoneSpeakerTracking?: boolean;
 };
 
 type CompleteResult = {
@@ -144,6 +147,7 @@ export function useRealtimeTranscription() {
             ok?: boolean;
             code?: string;
             corrections?: TranscriptCorrection[];
+            speakerLabel?: string;
             message?: string;
           };
           if (!response.ok || !body.ok) {
@@ -152,11 +156,15 @@ export function useRealtimeTranscription() {
             }
             throw new Error(body.message ?? "실시간 발화를 저장하지 못했습니다.");
           }
-          if (body.corrections?.length) {
+          if (body.corrections?.length || body.speakerLabel) {
             setUtterances((current) =>
               current.map((row) =>
                 row.itemId === utterance.itemId
-                  ? { ...row, corrections: body.corrections }
+                  ? {
+                      ...row,
+                      corrections: body.corrections,
+                      speakerLabel: body.speakerLabel,
+                    }
                   : row,
               ),
             );
@@ -393,6 +401,8 @@ export function useRealtimeTranscription() {
             title: options.title,
             teamMeetingId: options.teamMeetingId,
             personalMeetingId: options.personalMeetingId,
+            singleMicrophoneSpeakerTracking:
+              options.singleMicrophoneSpeakerTracking,
           }),
         });
         const tokenBody = (await tokenResponse.json()) as {

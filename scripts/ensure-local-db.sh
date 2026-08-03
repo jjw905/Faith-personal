@@ -93,7 +93,7 @@ if [ $? -ne 0 ]; then
 fi
 
 log "관리자 계정 확인"
-bash "$ROOT/scripts/ensure-local-admin.sh"
+npx tsx "$ROOT/scripts/ensure-local-admin.ts"
 
 log "준비 완료 (localhost:5432)"
 exit 0

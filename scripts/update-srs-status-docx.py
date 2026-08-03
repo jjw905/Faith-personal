@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Faith_요구사항명세서.docx 상태·하늘색(완료) 반영. 최종: Faith-office/"""
+"""SRS 상태·하늘색(완료) 반영.
+
+입력은 SRS_SOURCE로 명시하고, 결과는 Faith-office/05_제출_보고서/에 새 파일로 저장한다.
+"""
 
 from __future__ import annotations
 
 from copy import deepcopy
+import os
 from pathlib import Path
 
 from docx import Document
@@ -13,8 +17,10 @@ from docx.shared import Pt, RGBColor
 from docx.table import Table, _Cell
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "Faith-office" / "Faith_요구사항명세서.docx"
-OUT = ROOT / "Faith-office" / "Faith_요구사항명세서.docx"
+REPORT_DIR = ROOT / "Faith-office" / "05_제출_보고서"
+source_value = os.environ.get("SRS_SOURCE")
+SRC = Path(source_value).expanduser() if source_value else None
+OUT = REPORT_DIR / "Faith_요구사항명세서_상태갱신.docx"
 
 # 기존 문서와 동일
 HEADER_FILL = "EEF3F8"
@@ -120,6 +126,13 @@ def find_history_table(doc: Document) -> Table | None:
 
 
 def main():
+    if SRC is None:
+        raise SystemExit(
+            "SRS_SOURCE=<원본 DOCX 경로>를 지정하세요. 결과는 Faith-office/05_제출_보고서/에 저장됩니다."
+        )
+    if not SRC.is_file():
+        raise SystemExit(f"SRS_SOURCE 파일을 찾을 수 없습니다: {SRC}")
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
     doc = Document(str(SRC))
 
     meta = find_meta_table(doc)

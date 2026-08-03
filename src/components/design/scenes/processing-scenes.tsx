@@ -15,6 +15,7 @@ import {
   FIXTURE_PROCESSING_MULTI,
   FIXTURE_PROCESSING_STRUCTURING,
   FIXTURE_PROCESSING_TRANSCRIBING,
+  FIXTURE_PROCESSING_WAITING,
 } from "@/components/design/fixtures";
 import { ReplayStage } from "@/components/design/preview-stage";
 
@@ -170,6 +171,19 @@ export function SceneProcessingTranscribing() {
   );
 }
 
+/** 처리중 카드: 워커 대기 */
+export function SceneProcessingWaiting() {
+  return (
+    <ReplayStage hint="대시보드 전체, 분석 대기(곧 시작)." fill>
+      {() => (
+        <DashboardChrome>
+          <ProcessingNowSection demoItems={FIXTURE_PROCESSING_WAITING} />
+        </DashboardChrome>
+      )}
+    </ReplayStage>
+  );
+}
+
 /** 처리중 카드: 정리하는 중 */
 export function SceneProcessingStructuring() {
   return (
@@ -190,11 +204,11 @@ export function SceneProcessingStructuring() {
   );
 }
 
-/** 처리중 카드: 여러 건 */
+/** 처리중 카드: 진행 1 + 대기 여러 건 */
 export function SceneProcessingMulti() {
   return (
     <ReplayStage
-      hint="대시보드 전체, 여러 건 동시 진행."
+      hint="대시보드 전체, 진행·대기 혼재."
       fill
       autoReplayMs={5600}
     >

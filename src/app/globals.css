@@ -157,6 +157,29 @@ body {
   }
 }
 
+/* 분석 진행 중 — 정적인 스피너 대신 호흡하는 중심과 얇은 회전 링을 사용한다. */
+@keyframes process-breathe {
+  0%,
+  100% {
+    transform: scale(0.88);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+/* 분석 대기열 — 대기(indeterminate) 막대 */
+@keyframes process-queue-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes process-rise {
     from {
@@ -166,6 +189,15 @@ body {
     to {
       transform: none;
       opacity: 1;
+    }
+  }
+
+  @keyframes process-queue-indeterminate {
+    from {
+      transform: none;
+    }
+    to {
+      transform: none;
     }
   }
 }
@@ -215,23 +247,25 @@ body {
  * padding/margin은 인라인 폭을 바꿔 단어 전환마다 줄이 흔들린다.
  * 배경 + box-shadow spread만 써서 글리프 메트릭은 유지한다. */
 .word-play-mark {
-  background-color: #ffe566;
+  background-color: rgb(255 229 102 / var(--word-focus-strength, 1));
   color: inherit;
   border-radius: 0.12em;
   padding: 0;
   margin: 0;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  box-shadow: 0 0 0 0.1em #ffe566;
+  box-shadow: 0 0 0 0.1em
+    rgb(255 229 102 / var(--word-focus-strength, 1));
   font-weight: inherit;
   font-style: normal;
   text-decoration: none;
 }
 
 .word-play-mark-on-primary {
-  background-color: #ffe566;
+  background-color: rgb(255 229 102 / var(--word-focus-strength, 1));
   color: #11162e;
-  box-shadow: 0 0 0 0.1em #ffe566;
+  box-shadow: 0 0 0 0.1em
+    rgb(255 229 102 / var(--word-focus-strength, 1));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -702,4 +736,3 @@ body {
     animation: none;
   }
 }
-

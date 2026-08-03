@@ -84,16 +84,29 @@ function statusVisual(item: ProcessItem) {
 }
 
 function processSubtitle(item: ProcessItem, label: string) {
-  if (
-    isActiveProcess(item) &&
-    typeof item.progressPercent === "number" &&
-    Number.isFinite(item.progressPercent)
-  ) {
-    const stageText =
-      item.detail && item.detail !== label
-        ? friendlyProcessStageLabel(item.detail)
-        : label;
-    return `${stageText}, ${Math.round(item.progressPercent)}%`;
+  if (isActiveProcess(item)) {
+    if (item.waiting || item.jobStatus === "queued" || /기다리/.test(item.detail)) {
+      const ahead =
+        item.queueAhead == null
+          ? null
+          : item.queueAhead === 0
+            ? "곧 시작"
+            : `앞 ${item.queueAhead}건`;
+      const stage = friendlyProcessStageLabel(
+        item.detail || "잠시 기다리는 중이에요",
+      );
+      return ahead ? `${stage}, ${ahead}` : stage;
+    }
+    if (
+      typeof item.progressPercent === "number" &&
+      Number.isFinite(item.progressPercent)
+    ) {
+      const stageText =
+        item.detail && item.detail !== label
+          ? friendlyProcessStageLabel(item.detail)
+          : label;
+      return `${stageText}, ${Math.max(1, Math.round(item.progressPercent))}%`;
+    }
   }
   if (item.detail && item.detail !== label) return item.detail;
   return label;
@@ -110,9 +123,10 @@ function ProcessRow({
   const subtitle = processSubtitle(item, visual.label);
   const percent =
     isActiveProcess(item) &&
+    !(item.waiting || item.jobStatus === "queued" || /기다리/.test(item.detail)) &&
     typeof item.progressPercent === "number" &&
     Number.isFinite(item.progressPercent)
-      ? Math.round(item.progressPercent)
+      ? Math.max(1, Math.round(item.progressPercent))
       : null;
 
   return (

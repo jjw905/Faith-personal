@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { getMeetingById } from "@/lib/meetings-data";
+import { prisma } from "@/lib/prisma";
 import { getUserMeeting } from "@/lib/user-meetings-store";
 import type { Meeting } from "@/types/meeting";
 import type { MeetingTranscript } from "@/types/transcript";
@@ -63,10 +64,18 @@ export async function resolveMeetingReplayAudio(input: {
   const { meeting } = input;
   const row = await getUserMeeting(meeting.id);
   if (row?.vaultFileId) {
-    return {
-      src: `/api/vault/${row.vaultFileId}/content`,
-      label: "다시듣기",
-    };
+    const file = await prisma.vaultFile.findFirst({
+      where: { id: row.vaultFileId, userId: row.userId },
+      select: { id: true },
+    });
+    if (file) {
+      return {
+        // 보관함 API는 업로더 본인만 읽을 수 있다. 팀원 재생은 이미 확인한
+        // 회의 열람 권한으로 원본을 중계하는 회의 API를 사용한다.
+        src: `/api/meetings/${meeting.id}/replay-audio`,
+        label: "다시듣기",
+      };
+    }
   }
 
   const replay = meeting.replayAudio?.trim();

@@ -217,7 +217,7 @@ async function main() {
 
   writeFileSync(join(OUT, "summary.json"), JSON.stringify(results, null, 2));
 
-  // 중간 산출물. 확정 내용은 Faith-office/Faith_STT_사양 문서에 합친다.
+  // 중간 산출물. 확정 내용은 Faith-office/03_STT_품질_재생/Faith_STT_품질_재생_통합_2026-08-03.md에 합친다.
   const reportDir = join(process.cwd(), ".data/stt-bench/report");
   mkdirSync(reportDir, { recursive: true });
   const lines = [

@@ -10,6 +10,9 @@ if ! [[ "$COUNT" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
+# Next.js의 server-only 경계를 독립 Worker에서도 동일하게 해석한다.
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=react-server"
+
 pids=()
 
 cleanup() {

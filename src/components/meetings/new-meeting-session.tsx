@@ -766,6 +766,11 @@ function ScenarioPanel({
                   {formatUtteranceTime(utterance.startSec)}
                 </span>
                 <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
+                  {utterance.speakerLabel ? (
+                    <span className="mr-2 inline-flex rounded-full bg-brand-soft px-2 py-0.5 text-sm font-semibold text-brand">
+                      화자 {utterance.speakerLabel}
+                    </span>
+                  ) : null}
                   <MaskedText original={utterance.text} matches={matches} />
                 </p>
               </li>
@@ -1119,8 +1124,10 @@ export function NewMeetingSession() {
         (utterance): ChatMessage => ({
           id: `live-${utterance.itemId}`,
           side: "left",
-          name: "나",
-          initial: "나",
+          name: utterance.speakerLabel
+            ? `화자 ${utterance.speakerLabel}`
+            : "나",
+          initial: utterance.speakerLabel ?? "나",
           content: utterance.text,
           corrections: utterance.corrections,
         }),
@@ -1318,7 +1325,10 @@ export function NewMeetingSession() {
     if (autoOpenTimelineOnStart) {
       setTimelineOpen(true);
     }
-    const started = await startRealtime({ title: meetingTitle });
+    const started = await startRealtime({
+      title: meetingTitle,
+      singleMicrophoneSpeakerTracking: true,
+    });
     if (!started) setInMeeting(false);
   }
 

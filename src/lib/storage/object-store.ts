@@ -4,6 +4,7 @@ import {
   deleteObject as deleteSpacesObject,
   getDownloadUrl as getSpacesDownloadUrl,
   getObjectBuffer as getSpacesObjectBuffer,
+  getObjectRange as getSpacesObjectRange,
   getUploadUrl as getSpacesUploadUrl,
   headObject as headSpacesObject,
   putObject as putSpacesObject,
@@ -13,6 +14,7 @@ import {
   deleteObject as deleteGcsObject,
   getDownloadUrl as getGcsDownloadUrl,
   getObjectBuffer as getGcsObjectBuffer,
+  getObjectRange as getGcsObjectRange,
   getUploadUrl as getGcsUploadUrl,
   gcsConfigured,
   headObject as headGcsObject,
@@ -83,6 +85,11 @@ export async function headObject(key: string) {
 export async function getObjectBuffer(key: string) {
   if (storageBackend() === "gcs") return getGcsObjectBuffer(key);
   return getSpacesObjectBuffer(key);
+}
+
+export async function getObjectRange(key: string, start: number, end: number) {
+  if (storageBackend() === "gcs") return getGcsObjectRange(key, start, end);
+  return getSpacesObjectRange(key, start, end);
 }
 
 export async function purgeUntrackedObjects(params: {

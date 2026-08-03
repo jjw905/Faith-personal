@@ -125,6 +125,23 @@ function collectSpeakerNames(sem: SemanticStructure): string[] {
   return order;
 }
 
+/**
+ * 사용자에게 보여 줄 화자 수는 최종 evidence dialogue에 실제로 붙은 라벨만
+ * 근거로 삼는다. 요약 모델의 speakers/timeline/actions는 화자분리 결과가
+ * 아니므로, 그 값만으로 참석자를 만들면 화자분리를 끈 빠른 모드도 2명으로
+ * 보이는 거짓 양성이 생긴다.
+ */
+function collectGroundedSpeakerNames(sem: SemanticStructure): string[] {
+  const names = [
+    ...new Set(
+      sem.dialogue
+        .map((line) => line.speaker?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ];
+  return names.length > 0 ? names : collectSpeakerNames(sem);
+}
+
 function contributionByName(
   sem: SemanticStructure,
 ): Map<string, SemanticSpeakerContribution> {
@@ -145,7 +162,7 @@ function actionHints(sem: SemanticStructure, name: string): string[] {
 export function buildParticipantsFromSemantic(
   sem: SemanticStructure,
 ): Participant[] {
-  const names = collectSpeakerNames(sem);
+  const names = collectGroundedSpeakerNames(sem);
   const contrib = contributionByName(sem);
 
   return names.map((name, i) => {
@@ -214,7 +231,8 @@ function buildTranscriptFromSemantic(
     return [];
   }
 
-  const single = collectSpeakerNames(sem).length <= 1;
+  const groundedSpeakers = collectGroundedSpeakerNames(sem);
+  const single = groundedSpeakers.length <= 1;
 
   return dialogue.map((d, i) => {
     const startSec = Math.max(
@@ -224,7 +242,7 @@ function buildTranscriptFromSemantic(
     const segmentId = segmentIdForTime(startSec, timelineSegments);
     const speaker =
       d.speaker ||
-      (single ? collectSpeakerNames(sem)[0] || "발화" : "발화");
+      (single ? groundedSpeakers[0] || "발화" : "발화");
     return {
       id: `l${i + 1}`,
       time: formatClock(startSec),

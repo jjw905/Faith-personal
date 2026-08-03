@@ -5,17 +5,46 @@ import type { AnalysisJob } from "@prisma/client";
 config({ path: ".env.local" });
 config();
 
-const { prisma } = await import("../src/lib/prisma");
-const {
-  ANALYSIS_JOB_HEARTBEAT_MS,
-  claimNextAnalysisJob,
-  completeAnalysisJob,
-  failAnalysisJob,
-  heartbeatAnalysisJob,
-  recoverStaleAnalysisJobs,
-} = await import("../src/lib/stt/analysis-job-queue");
-const { processUploadedMeeting } = await import("../src/lib/stt/process-upload");
-const { getUserMeeting } = await import("../src/lib/user-meetings-store");
+type PrismaModule = typeof import("../src/lib/prisma");
+type QueueModule = typeof import("../src/lib/stt/analysis-job-queue");
+type ProcessModule = typeof import("../src/lib/stt/process-upload");
+type MeetingStoreModule = typeof import("../src/lib/user-meetings-store");
+
+let prisma: PrismaModule["prisma"];
+let ANALYSIS_JOB_HEARTBEAT_MS: QueueModule["ANALYSIS_JOB_HEARTBEAT_MS"];
+let AnalysisJobCanceledError: QueueModule["AnalysisJobCanceledError"];
+let cancelAnalysisJob: QueueModule["cancelAnalysisJob"];
+let claimNextAnalysisJob: QueueModule["claimNextAnalysisJob"];
+let completeAnalysisJob: QueueModule["completeAnalysisJob"];
+let failAnalysisJob: QueueModule["failAnalysisJob"];
+let heartbeatAnalysisJob: QueueModule["heartbeatAnalysisJob"];
+let isAnalysisCancellationRequested: QueueModule["isAnalysisCancellationRequested"];
+let recoverStaleAnalysisJobs: QueueModule["recoverStaleAnalysisJobs"];
+let processUploadedMeeting: ProcessModule["processUploadedMeeting"];
+let getUserMeeting: MeetingStoreModule["getUserMeeting"];
+
+/** dotenv 적용 후 서버 전용 모듈을 읽되, CommonJS에서도 최상위 await를 만들지 않는다. */
+async function loadDependencies() {
+  const [prismaModule, queueModule, processModule, meetingStoreModule] =
+    await Promise.all([
+      import("../src/lib/prisma"),
+      import("../src/lib/stt/analysis-job-queue"),
+      import("../src/lib/stt/process-upload"),
+      import("../src/lib/user-meetings-store"),
+    ]);
+  prisma = prismaModule.prisma;
+  ANALYSIS_JOB_HEARTBEAT_MS = queueModule.ANALYSIS_JOB_HEARTBEAT_MS;
+  AnalysisJobCanceledError = queueModule.AnalysisJobCanceledError;
+  cancelAnalysisJob = queueModule.cancelAnalysisJob;
+  claimNextAnalysisJob = queueModule.claimNextAnalysisJob;
+  completeAnalysisJob = queueModule.completeAnalysisJob;
+  failAnalysisJob = queueModule.failAnalysisJob;
+  heartbeatAnalysisJob = queueModule.heartbeatAnalysisJob;
+  isAnalysisCancellationRequested = queueModule.isAnalysisCancellationRequested;
+  recoverStaleAnalysisJobs = queueModule.recoverStaleAnalysisJobs;
+  processUploadedMeeting = processModule.processUploadedMeeting;
+  getUserMeeting = meetingStoreModule.getUserMeeting;
+}
 
 const workerPrefix =
   process.env.ANALYSIS_WORKER_ID?.trim() || "analysis-worker";
@@ -47,6 +76,25 @@ async function runJob(job: AnalysisJob) {
       console.warn(`[analysis-worker:${workerId}] 심장박동 실패`, error);
     });
   }, ANALYSIS_JOB_HEARTBEAT_MS);
+  const controller = new AbortController();
+  let checkingCancellation = false;
+  const checkCancellation = async () => {
+    if (checkingCancellation || controller.signal.aborted) return;
+    checkingCancellation = true;
+    try {
+      if (await isAnalysisCancellationRequested({ id: job.id, workerId })) {
+        controller.abort(new AnalysisJobCanceledError());
+      }
+    } finally {
+      checkingCancellation = false;
+    }
+  };
+  await checkCancellation();
+  const cancellationPoll = setInterval(() => {
+    void checkCancellation().catch((error) => {
+      console.warn(`[analysis-worker:${workerId}] 취소 상태 확인 실패`, error);
+    });
+  }, 1_000);
 
   try {
     console.log(
@@ -59,6 +107,7 @@ async function runJob(job: AnalysisJob) {
       analysisMode,
       title: job.title,
       bypassModeration: job.bypassModeration,
+      signal: controller.signal,
     });
 
     const record = await getUserMeeting(job.meetingId);
@@ -79,6 +128,15 @@ async function runJob(job: AnalysisJob) {
     });
     console.error(`[analysis-worker:${workerId}] 실패 meeting=${job.meetingId}: ${message}`);
   } catch (error) {
+    if (
+      controller.signal.aborted ||
+      error instanceof AnalysisJobCanceledError ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      await cancelAnalysisJob({ id: job.id, workerId, error });
+      console.log(`[analysis-worker:${workerId}] 취소 meeting=${job.meetingId}`);
+      return;
+    }
     await failAnalysisJob({
       id: job.id,
       workerId,
@@ -88,19 +146,21 @@ async function runJob(job: AnalysisJob) {
     console.error(`[analysis-worker:${workerId}] 예외 meeting=${job.meetingId}`, error);
   } finally {
     clearInterval(heartbeat);
+    clearInterval(cancellationPoll);
   }
 }
 
 async function recover() {
   const recovered = await recoverStaleAnalysisJobs();
-  if (recovered.retryable || recovered.exhausted) {
+  if (recovered.canceled || recovered.retryable || recovered.exhausted) {
     console.log(
-      `[analysis-worker:${workerId}] stale 복구 queued=${recovered.retryable} failed=${recovered.exhausted}`,
+      `[analysis-worker:${workerId}] stale 복구 canceled=${recovered.canceled} queued=${recovered.retryable} failed=${recovered.exhausted}`,
     );
   }
 }
 
 async function main() {
+  await loadDependencies();
   await recover();
   // 시작할 때 한 번만 보면, 이 Worker가 도는 동안 죽은 다른 Worker의 작업이
   // 영영 방치된다. 주기적으로 다시 확인한다.
@@ -141,5 +201,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    if (prisma) await prisma.$disconnect();
   });

@@ -5,6 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Real local secrets are kept outside the Codex workspace.
+# shellcheck source=/dev/null
+source "$ROOT/scripts/load-local-secrets.sh"
+
 export NODE_ENV=development
 export PORT="${PORT:-3001}"
 export LOCAL_COMPOSE_FILE="${LOCAL_COMPOSE_FILE:-docker-compose.local.yml}"

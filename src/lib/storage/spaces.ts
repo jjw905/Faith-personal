@@ -176,3 +176,20 @@ export async function getObjectBuffer(key: string): Promise<Buffer> {
   const bytes = await body.transformToByteArray();
   return Buffer.from(bytes);
 }
+
+export async function getObjectRange(
+  key: string,
+  start: number,
+  end: number,
+): Promise<Buffer> {
+  const res = await client().send(
+    new GetObjectCommand({
+      Bucket: bucket(),
+      Key: key,
+      Range: `bytes=${start}-${end}`,
+    }),
+  );
+  const body = res.Body;
+  if (!body) throw new Error("파일 본문이 비어 있습니다.");
+  return Buffer.from(await body.transformToByteArray());
+}

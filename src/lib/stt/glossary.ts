@@ -96,6 +96,11 @@ async function fromPastMeetings(
   const out: string[] = [];
   for (const row of rows) {
     for (const p of row.meeting?.participants ?? []) {
+      // 업로드 분석이 음성에서 추정한 이름은 오인식일 수 있다. 이를 다음
+      // 회의 사전에 넣으면 잘못된 이름이 추천과 STT 프롬프트로 자기증폭된다.
+      // 계정/입장명 또는 사용자가 직접 고친 이름만 재사용한다.
+      const userConfirmed = p.recognitionNote === "사용자가 확인한 이름";
+      if (p.recognition === "voice" && !userConfirmed) continue;
       const name = clean(p.name ?? "");
       if (usable(name)) out.push(name);
     }

@@ -23,6 +23,7 @@ import { prisma } from "@/lib/prisma";
  */
 export type PipelineOutcome =
   | "done"
+  | "canceled"
   | "error"
   | "moderation_blocked"
   | "quota_blocked";

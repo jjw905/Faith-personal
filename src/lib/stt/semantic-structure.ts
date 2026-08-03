@@ -308,6 +308,7 @@ async function callStructureModel(params: {
   durationSec: number;
   partIndex?: number;
   partCount?: number;
+  signal?: AbortSignal;
 }): Promise<StructureCall> {
   const client = getOpenAIClient();
   const partNote =
@@ -316,21 +317,24 @@ async function callStructureModel(params: {
         `이 구간에 실제로 나온 내용만 담아라. 앞뒤 구간을 추측해 채우지 마라.\n`
       : "";
 
-  const res = await client.chat.completions.create({
-    model: STRUCTURE_MODEL,
-    response_format: { type: "json_object" },
-    temperature: 0.2,
-    messages: [
-      { role: "system", content: STRUCTURE_SYSTEM },
-      {
-        role: "user",
-        content:
-          `녹음 길이: ${Math.max(1, Math.round(params.durationSec))}초\n` +
-          partNote +
-          `다음 받아쓰기 원문으로 회의록 상품 JSON을 완성하라.\n\n${params.sttText}`,
-      },
-    ],
-  });
+  const res = await client.chat.completions.create(
+    {
+      model: STRUCTURE_MODEL,
+      response_format: { type: "json_object" },
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: STRUCTURE_SYSTEM },
+        {
+          role: "user",
+          content:
+            `녹음 길이: ${Math.max(1, Math.round(params.durationSec))}초\n` +
+            partNote +
+            `다음 받아쓰기 원문으로 회의록 상품 JSON을 완성하라.\n\n${params.sttText}`,
+        },
+      ],
+    },
+    { signal: params.signal },
+  );
 
   const choice = res.choices[0];
   const raw = choice?.message?.content || "{}";
@@ -356,6 +360,7 @@ async function callStructureModel(params: {
 async function callSummaryMerge(params: {
   summaries: string[];
   durationSec: number;
+  signal?: AbortSignal;
 }): Promise<StructureCall> {
   const client = getOpenAIClient();
   const res = await client.chat.completions.create({
@@ -379,7 +384,7 @@ async function callSummaryMerge(params: {
           `구간 요약:\n${params.summaries.map((s, i) => `${i + 1}. ${s}`).join("\n")}`,
       },
     ],
-  });
+  }, { signal: params.signal });
 
   const raw = res.choices[0]?.message?.content || "{}";
   let parsed: RawStructure;
@@ -574,6 +579,7 @@ async function callStructureCovered(params: {
   depth?: number;
   attemptRef?: { n: number };
   onProgress?: StructureProgressFn;
+  signal?: AbortSignal;
 }): Promise<StructureCall[]> {
   const depth = params.depth ?? 0;
   const attemptRef = params.attemptRef ?? { n: 0 };
@@ -625,6 +631,7 @@ async function callStructureCovered(params: {
         depth: depth + 1,
         attemptRef,
         onProgress: params.onProgress,
+        signal: params.signal,
       })),
     );
   }
@@ -689,6 +696,7 @@ export async function buildSemanticStructure(
     onProgress?: StructureProgressFn;
     /** @deprecated onProgress 사용 */
     onPart?: (info: { partIndex: number; partCount: number }) => void;
+    signal?: AbortSignal;
   },
 ): Promise<SemanticStructureResult> {
   const dur = Math.max(1, Math.round(durationSec));
@@ -714,6 +722,7 @@ export async function buildSemanticStructure(
         partCount: chunks.length,
         attemptRef,
         onProgress,
+        signal: options?.signal,
       })),
     );
   }
@@ -741,7 +750,11 @@ export async function buildSemanticStructure(
     });
     parsed.overallSummary = summaries[0] ?? "";
     if (summaries.length > 1) {
-      const merge = await callSummaryMerge({ summaries, durationSec: dur });
+      const merge = await callSummaryMerge({
+        summaries,
+        durationSec: dur,
+        signal: options?.signal,
+      });
       calls.push(merge);
       parsed.overallSummary = merge.parsed.overallSummary || summaries[0]!;
       if (Array.isArray(merge.parsed.keywords)) {

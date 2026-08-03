@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Faith STT 사양 통합 DOCX. 최종 저장: Faith-office/
+"""Faith STT 사양 통합 DOCX. 최종 저장: Faith-office/05_제출_보고서/
 
 통합 대상 (생성 후 폐기):
 - Faith_STT_기능요구사항명세서_v1.0.docx
@@ -19,7 +19,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "Faith-office" / "Faith_STT_사양_2026-07-27.docx"
+OUT = ROOT / "Faith-office" / "05_제출_보고서" / "Faith_STT_사양_통합본.docx"
 
 FONT = "Apple SD Gothic Neo"
 

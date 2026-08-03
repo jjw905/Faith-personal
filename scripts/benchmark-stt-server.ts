@@ -32,9 +32,10 @@ const AUDIO =
   process.env.AUDIO ||
   join(ROOT, ".data/stt-bench/fixtures/brief-envwork.mp3");
 const WORK = join(ROOT, ".data/stt-server-bench");
+const REPORT_DIR = join(ROOT, "Faith-office/stt-term-runs/reports");
 const REPORT = join(
-  ROOT,
-  "Faith-office/Faith_STT_서버사양_검증_2026-07-28.md",
+  REPORT_DIR,
+  "Faith_STT_서버사양_검증.md",
 );
 
 function cgroupValue(path: string): string | null {
@@ -55,7 +56,7 @@ function commandVersion(command: "ffmpeg" | "ffprobe"): string {
 async function main() {
   if (!existsSync(AUDIO)) throw new Error(`오디오 없음: ${AUDIO}`);
   mkdirSync(WORK, { recursive: true });
-  mkdirSync(join(ROOT, "Faith-office"), { recursive: true });
+  mkdirSync(REPORT_DIR, { recursive: true });
 
   const sample = join(WORK, "sample-180.mp3");
   execFileSync(

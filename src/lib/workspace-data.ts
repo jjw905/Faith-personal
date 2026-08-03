@@ -37,6 +37,9 @@ export type ProcessItem = {
   time: string;
   href: string;
   workspace: WorkspaceId;
+  waiting?: boolean;
+  jobStatus?: "queued" | "running" | null;
+  queueAhead?: number | null;
 };
 
 const UPCOMING: UpcomingItem[] = [

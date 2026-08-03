@@ -8,8 +8,6 @@ import { FIXTURE_MEETING } from "@/components/design/fixtures";
 import { ReplayStage } from "@/components/design/preview-stage";
 import {
   MeetingProcessLoader,
-  formatEtaLabel,
-  estimateRemainingSec,
   type MeetingProcessPhase,
 } from "@/components/meetings/meeting-process-banner";
 import {
@@ -193,17 +191,12 @@ function RisingDetailChrome({
   durationMs: number;
 }) {
   const percent = useRisingPercent(play, from, to, durationMs);
-  const rate = Math.max(0.01, (to - from) / (durationMs / 1000));
-  const remaining = estimateRemainingSec({
-    percent,
-    percentPerSec: rate,
-  });
-  const etaLabel = remaining != null ? formatEtaLabel(remaining) : null;
   return (
     <DetailChrome
       phase={phase}
       progressPercent={percent}
-      etaLabel={etaLabel}
+      // 예측 ETA는 긴 분석에서 오차가 커 불안을 키우므로, 실제 경과 상태만 표시한다.
+      etaLabel={null}
       stageLabel={stageForPercent(phase, percent)}
     />
   );

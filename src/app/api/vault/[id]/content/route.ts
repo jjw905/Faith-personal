@@ -12,7 +12,11 @@ import {
   localVaultAllowed,
   objectStorageConfigured,
 } from "@/lib/storage/object-store";
-import { readUserFileBytes } from "@/lib/storage/vault-service";
+import {
+  readUserFileBytes,
+  readUserFileRange,
+  streamUserChunkedFile,
+} from "@/lib/storage/vault-service";
 import { safeVaultMime, vaultContentDisposition } from "@/lib/vault";
 
 type Params = { params: Promise<{ id: string }> };
@@ -67,7 +71,45 @@ export async function GET(request: Request, { params }: Params) {
     }
 
     if (row.contentEncryption) {
-      const file = await readUserFileBytes(session.user.id, id);
+      let mime = "application/octet-stream";
+      try {
+        mime = safeVaultMime(row.name, row.mime);
+      } catch {
+        mime = "application/octet-stream";
+      }
+      const disposition = vaultContentDisposition(row.name, mime);
+      const rangeHeader = request.headers.get("range");
+      const range = parseRange(rangeHeader, row.size);
+      if (rangeHeader && !range) {
+        return new NextResponse(null, {
+          status: 416,
+          headers: { "Content-Range": `bytes */${row.size}` },
+        });
+      }
+      if (!range) {
+        const chunked = await streamUserChunkedFile(session.user.id, id);
+        if (chunked) {
+          return new NextResponse(chunked.stream, {
+            status: 200,
+            headers: {
+              "Content-Type": mime,
+              "Content-Length": String(chunked.total),
+              "Accept-Ranges": "bytes",
+              "Cache-Control": "private, no-store",
+              "X-Content-Type-Options": "nosniff",
+              "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(row.name)}`,
+            },
+          });
+        }
+      }
+      const file = range
+        ? await readUserFileRange({
+            userId: session.user.id,
+            fileId: id,
+            start: range.start,
+            end: range.end,
+          })
+        : await readUserFileBytes(session.user.id, id);
       if (!file) {
         return NextResponse.json(
           { ok: false, message: "파일 없음" },
@@ -75,29 +117,20 @@ export async function GET(request: Request, { params }: Params) {
         );
       }
       const body = file.body;
-      const range = parseRange(request.headers.get("range"), body.length);
       const start = range?.start ?? 0;
       const end = range?.end ?? body.length - 1;
-      const chunk = body.subarray(start, end + 1);
-      let mime = "application/octet-stream";
-      try {
-        mime = safeVaultMime(file.row.name, file.row.mime);
-      } catch {
-        mime = "application/octet-stream";
-      }
-      const disposition = vaultContentDisposition(file.row.name, mime);
       const headers: Record<string, string> = {
         "Content-Type": mime,
-        "Content-Length": String(chunk.length),
+        "Content-Length": String(body.length),
         "Accept-Ranges": "bytes",
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
-        "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(file.row.name)}`,
+        "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(row.name)}`,
       };
       if (range) {
-        headers["Content-Range"] = `bytes ${start}-${end}/${body.length}`;
+        headers["Content-Range"] = `bytes ${start}-${end}/${row.size}`;
       }
-      return new NextResponse(chunk as unknown as BodyInit, {
+      return new NextResponse(body as unknown as BodyInit, {
         status: range ? 206 : 200,
         headers,
       });

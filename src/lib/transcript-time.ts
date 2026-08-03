@@ -88,51 +88,91 @@ export function readMediaDurationSec(el: HTMLMediaElement): number {
   return Number.isFinite(d) && d > 0 ? d : 0;
 }
 
-/**
- * 말하기 바로 전에 다음 단어로 포커스가 넘어가게 하는 선행 시간(초).
- * 클로바노트처럼 발화 직전에 형광펜이 먼저 붙는 느낌을 낸다.
- *
- * KTV 실측에서 단어 시각 자체는 오디오 온셋과 0.1초 안쪽으로 맞는데도
- * 형광펜이 늦게 느껴졌다. 어절 사이 공백에서 직전 단어를 계속 붙잡기
- * 때문이다. 한국어 어절 간격(0.2~0.3초)만큼 미리 넘긴다.
- */
-export const WORD_FOCUS_LOOKAHEAD_SEC = 0.25;
+/** 발화가 끝난 뒤 형광펜이 완전히 사라지는 데 걸리는 시간. */
+export const WORD_FOCUS_FADE_SEC = 0.28;
 
 /**
- * 현재 재생 시각에 맞는 단어 하나.
- * 1) 지금 말하는 중이면 그 단어
- * 2) 곧(lookahead) 시작할 다음 단어가 있으면 그 단어(발화 직전 포커스)
- * 3) 아니면 직전에 말했던 단어를 유지(단어 사이 공백에서 깜빡임 방지)
+ * 강제정렬이 침묵까지 한 단어의 endSec으로 삼는 오류를 UI에서 제한한다.
+ * 글자 수가 긴 실제 어절은 허용하되 한 단어가 수 초간 켜져 있지는 않게 한다.
  */
-export function activeWordAt<
-  T extends { startSec: number; endSec: number },
+const MAX_WORD_DURATION_BASE_SEC = 0.35;
+const MAX_WORD_DURATION_PER_CHAR_SEC = 0.32;
+const MAX_WORD_DURATION_SEC = 2.4;
+
+export type ActiveWordFocus<T> = {
+  word: T;
+  /** 0~1. 발화 중에는 1, 발화 직후에는 서서히 0으로 내려간다. */
+  strength: number;
+};
+
+function effectiveWordEndSec(word: {
+  startSec: number;
+  endSec: number;
+  text?: string;
+}): number {
+  const textLength = Math.max(1, [...(word.text ?? "")].length);
+  const plausibleDuration = Math.min(
+    MAX_WORD_DURATION_SEC,
+    MAX_WORD_DURATION_BASE_SEC + textLength * MAX_WORD_DURATION_PER_CHAR_SEC,
+  );
+  const reportedEnd = Number.isFinite(word.endSec)
+    ? word.endSec
+    : word.startSec;
+  return Math.max(
+    word.startSec,
+    Math.min(reportedEnd, word.startSec + plausibleDuration),
+  );
+}
+
+/**
+ * 현재 재생 시각에 맞는 단어와 형광펜 강도.
+ *
+ * 다음 단어를 미리 켜거나 직전 단어를 무기한 유지하지 않는다. 두 동작 모두
+ * 실제 발화보다 형광펜이 앞서거나, 침묵 중에도 켜져 있는 직접 원인이었다.
+ * 발화가 끝난 직후만 짧게 감쇠시켜 음절 사이의 시각적 깜빡임을 줄인다.
+ */
+export function activeWordFocusAt<
+  T extends { startSec: number; endSec: number; text?: string },
 >(
   words: T[] | undefined,
   currentSec: number,
-  lookaheadSec: number = WORD_FOCUS_LOOKAHEAD_SEC,
-): T | null {
+  fadeSec: number = WORD_FOCUS_FADE_SEC,
+): ActiveWordFocus<T> | null {
   if (!words || words.length === 0) return null;
-  const lookahead = Math.max(0, lookaheadSec);
+  const fade = Math.max(0, fadeSec);
 
+  // 잔상보다 지금 실제로 발화 중인 단어를 먼저 찾는다. 한 단어의 fade 구간은
+  // 흔히 다음 단어 시작과 겹친다. 배열 앞에서부터 fade까지 함께 반환하면
+  // "직접"의 잔상이 이미 말하고 있는 "작동"을 약 0.28초 가리는 식으로
+  // 하이라이트가 늘 한 단어 늦어 보인다.
   for (const word of words) {
-    if (currentSec >= word.startSec && currentSec < word.endSec) {
-      return word;
+    const endSec = effectiveWordEndSec(word);
+    if (currentSec >= word.startSec && currentSec < endSec) {
+      return { word, strength: 1 };
     }
   }
 
+  // 현재 발화 중인 단어가 없을 때만 가장 최근 단어의 잔상을 보여준다.
+  // 역전되거나 겹친 외부 timestamp가 와도 오래된 단어가 이기지 않게 한다.
+  let fading: ActiveWordFocus<T> | null = null;
   for (const word of words) {
-    if (
-      word.startSec > currentSec &&
-      word.startSec <= currentSec + lookahead
-    ) {
-      return word;
+    const endSec = effectiveWordEndSec(word);
+    if (fade > 0 && currentSec >= endSec && currentSec < endSec + fade) {
+      const candidate = {
+        word,
+        strength: Math.max(0, 1 - (currentSec - endSec) / fade),
+      };
+      if (!fading || endSec > effectiveWordEndSec(fading.word)) {
+        fading = candidate;
+      }
     }
   }
+  return fading;
+}
 
-  let prev: T | null = null;
-  for (const word of words) {
-    if (word.startSec <= currentSec) prev = word;
-    else break;
-  }
-  return prev;
+/** 기존 호출부 호환용. 강도 없이 활성 단어만 필요할 때 쓴다. */
+export function activeWordAt<
+  T extends { startSec: number; endSec: number; text?: string },
+>(words: T[] | undefined, currentSec: number): T | null {
+  return activeWordFocusAt(words, currentSec)?.word ?? null;
 }

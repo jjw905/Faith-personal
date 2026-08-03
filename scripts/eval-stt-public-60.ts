@@ -35,9 +35,10 @@ import { judgeChange, type Verdict } from "./lib/change-verdict";
 const ROOT = process.cwd();
 const FIXTURE_DIR = join(ROOT, ".data/stt-bench/fixtures");
 const OUT_DIR = join(ROOT, ".data/stt-bench/public-60");
+const REPORT_DIR = join(ROOT, "Faith-office/stt-term-runs/reports");
 const REPORT_PATH = join(
-  ROOT,
-  "Faith-office/Faith_STT_공공영상60분_평가_2026-07-28.md",
+  REPORT_DIR,
+  "Faith_STT_공공영상60분_평가.md",
 );
 const MODEL = "gpt-4o-mini-transcribe" as const;
 const ROLE_TAG = /^\[[^\]]{1,6}\]\s*/;
@@ -266,7 +267,7 @@ async function main() {
   }
 
   mkdirSync(OUT_DIR, { recursive: true });
-  mkdirSync(join(ROOT, "Faith-office"), { recursive: true });
+  mkdirSync(REPORT_DIR, { recursive: true });
   const selected = FIXTURES.filter(
     (fixture) => split === "all" || fixture.split === split,
   );

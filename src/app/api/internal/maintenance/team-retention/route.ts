@@ -12,6 +12,7 @@ import {
   purgeExpiredTeamAuditLogs,
   purgeExpiredTeamMeetings,
 } from "@/lib/team/retention";
+import { purgeExpiredRealtimeSpeakerClusters } from "@/lib/stt/realtime/speaker-clusters";
 
 type MaintenanceBody = {
   dryRun?: boolean;
@@ -196,13 +197,18 @@ export async function POST(request: Request) {
     }
   }
   let deletedAuditLogs = 0;
+  let deletedSpeakerClusters = 0;
   if (!body.dryRun) {
     const purgedAudit = await purgeExpiredTeamAuditLogs({ teamId, now });
     deletedAuditLogs = purgedAudit.deleted;
+    deletedSpeakerClusters = (
+      await purgeExpiredRealtimeSpeakerClusters(now)
+    ).deleted;
   }
   const retention = {
     ...result,
     deletedAuditLogs,
+    deletedSpeakerClusters,
   };
 
   if (gate.kind === "admin") {

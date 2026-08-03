@@ -119,3 +119,25 @@ export function isUploadQuotaErrorMessage(message: string): boolean {
     t.includes("모두 사용")
   );
 }
+
+/** 내부 API·저장소·Worker 오류가 사용자 화면에 그대로 노출되지 않게 한다. */
+export function userFacingAnalysisError(message?: string | null): string {
+  const raw = message?.trim() ?? "";
+  if (!raw) return "분석을 끝내지 못했어요. 잠시 후 다시 시도해 주세요.";
+  if (isUploadQuotaErrorMessage(raw)) return raw;
+  if (/취소/.test(raw)) return raw;
+  if (/정책|유해|민감한 내용|검토/.test(raw)) return raw;
+  if (/지원하지 않는|빈 파일|비어 있습니다|다른 파일|파일은 .*이하/.test(raw)) {
+    return raw;
+  }
+  if (
+    /API|OpenAI|fetch|ECONN|ETIMEDOUT|timeout|server|서버|Worker|worker|heartbeat|KMS|GCS|S3|Prisma|database|DB|저장소|오디오 도구|실측 시각|타이밍/i.test(
+      raw,
+    )
+  ) {
+    return "분석을 끝내지 못했어요. 잠시 후 다시 시도해 주세요.";
+  }
+  return raw.length <= 120
+    ? raw
+    : "분석을 끝내지 못했어요. 잠시 후 다시 시도해 주세요.";
+}

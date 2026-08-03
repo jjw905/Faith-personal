@@ -23,6 +23,7 @@ type SessionOpts = {
   onProgress?: (p: RealtimeTranscribeProgress) => void;
   /** 평가용: 앞에서 N초만. */
   maxAudioSec?: number;
+  signal?: AbortSignal;
 };
 
 /** 오디오 전송 후 남은 전사를 기다리는 최대 시간. */
@@ -113,6 +114,7 @@ export async function realtimeTranscribeFile(
     const fail = (err: unknown) => {
       if (closed) return;
       closed = true;
+      opts.signal?.removeEventListener("abort", abort);
       try {
         ws.close();
       } catch {
@@ -122,9 +124,23 @@ export async function realtimeTranscribeFile(
       reject(err instanceof Error ? err : new Error(String(err)));
     };
 
+    const abort = () => {
+      fail(
+        opts.signal?.reason instanceof Error
+          ? opts.signal.reason
+          : new DOMException("분석 취소", "AbortError"),
+      );
+    };
+    if (opts.signal?.aborted) {
+      abort();
+      return;
+    }
+    opts.signal?.addEventListener("abort", abort, { once: true });
+
     const finish = () => {
       if (closed) return;
       closed = true;
+      opts.signal?.removeEventListener("abort", abort);
       try {
         ws.close();
       } catch {

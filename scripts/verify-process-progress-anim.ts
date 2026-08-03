@@ -47,7 +47,7 @@ function run(name: string, fn: () => void) {
   }
 }
 
-/** STT fraction 0→1 → 3~72 (process-upload mapSttFraction) */
+/** STT fraction 0→1 → 1~72 (process-upload mapSttFraction) */
 function mapStt(fraction: number) {
   return 3 + Math.max(0, Math.min(1, fraction)) * (72 - 3);
 }

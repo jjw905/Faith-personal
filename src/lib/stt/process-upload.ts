@@ -45,10 +45,6 @@ import {
   alignDialogueToWordTimings,
 } from "@/lib/stt/timed-segments";
 import { runSelectiveSecondPass } from "@/lib/stt/second-pass-review";
-import {
-  forceAlignTranscript,
-  forcedAlignmentAvailable,
-} from "@/lib/stt/forced-alignment";
 import { reconcileTranscriptVariants } from "@/lib/stt/transcript-reconcile";
 import { activeLineIndexAt, lineStartSec } from "@/lib/transcript-time";
 import {
@@ -78,21 +74,25 @@ import {
   appendPipelineAttempt,
   type PipelineFailedStage,
 } from "@/lib/stt/pipeline-stats-store";
+import { AnalysisJobCanceledError } from "@/lib/stt/analysis-job-queue";
+import { buildEvidenceDialogue } from "@/lib/stt/transcript-evidence";
+import { userFacingAnalysisError } from "@/lib/meeting-process";
 
 /**
  * 전체 파이프라인 진행률 구간 (실제 작업량 비중).
  * STT(청크 API)가 대부분, 구조화·정렬·조립이 후반.
  */
 const PROGRESS = {
-  start: 0,
-  fileLoaded: 3,
+  /** 화면에서 분석이 시작되었음을 바로 보여 주되, 0%에 멈추지 않는다. */
+  start: 1,
+  fileLoaded: 2,
   /** STT fraction 0→1 을 이 구간에 매핑 */
-  sttStart: 3,
+  sttStart: 1,
   sttEnd: 72,
   structureStart: 72,
-  /** 전사 대조·강제정렬이 끝나는 지점. 이어서 화자묶음이 쓴다. */
+  /** 전사 대조가 끝나는 지점. 이어서 화자묶음이 쓴다. */
   postSttMid: 78,
-  /** STT 직후 강제정렬·화자묶음이 쓰는 소프트 상한 (구조화 전에 72 고정 방지) */
+  /** STT 직후 전사 대조·화자묶음이 쓰는 소프트 상한 (구조화 전에 72 고정 방지) */
   postSttSoftEnd: 82,
   structureDone: 90,
   aligned: 95,
@@ -160,8 +160,17 @@ async function notifyAnalysisResult(params: {
   }
 }
 
-function mapSttFraction(fraction: number): number {
-  const f = Math.max(0, Math.min(1, fraction));
+function mapSttFraction(
+  fraction: number,
+  step?: "probe" | "prepare" | "transcribe" | "timing" | "done",
+): number {
+  // chunkedTranscribe가 준비 단계에서 0.08을 보고하던 값을 그대로
+  // 선형 변환하면 첫 화면이 9%로 점프한다. 준비 중에는 의도적으로 1%에
+  // 머물고, 실제 전사/시간 측정이 끝난 뒤부터만 분석 구간을 채운다.
+  if (step === "probe" || step === "prepare" || fraction <= 0.08) {
+    return PROGRESS.start;
+  }
+  const f = Math.max(0, Math.min(1, (fraction - 0.08) / 0.92));
   return PROGRESS.sttStart + f * (PROGRESS.sttEnd - PROGRESS.sttStart);
 }
 
@@ -203,6 +212,8 @@ export async function processUploadedMeeting(params: {
    * 되어야 하며, 회의 처리 자체는 여전히 자동(모델 파이프라인)으로 끝난다.
    */
   bypassModeration?: boolean;
+  /** Worker 취소 요청. 이미 시작한 유료 호출에도 전달해 가능한 즉시 중단한다. */
+  signal?: AbortSignal;
 }) {
   const analysisMode = params.analysisMode ?? DEFAULT_ANALYSIS_MODE;
   const policy = ANALYSIS_MODE_POLICY[analysisMode];
@@ -274,7 +285,16 @@ export async function processUploadedMeeting(params: {
   let statsTopicBucket: TopicBucket | undefined;
   let quotaReservation: QuotaReservation | null = null;
 
+  const throwIfCanceled = () => {
+    if (!params.signal?.aborted) return;
+    const reason = params.signal.reason;
+    throw reason instanceof AnalysisJobCanceledError
+      ? reason
+      : new AnalysisJobCanceledError();
+  };
+
   try {
+    throwIfCanceled();
     progress(PROGRESS.start, {
       phase: "transcribing",
       stageLabel: "파일을 살펴보는 중이에요",
@@ -284,6 +304,7 @@ export async function processUploadedMeeting(params: {
     if (!file) {
       throw new Error("보관함 파일을 찾을 수 없습니다.");
     }
+    throwIfCanceled();
     progress(PROGRESS.fileLoaded, { stageLabel: "소리를 불러오는 중이에요" });
 
     const audioPath = writeSourceAudio({
@@ -333,15 +354,17 @@ export async function processUploadedMeeting(params: {
         workDir: join(workDir, "chunks"),
         model,
         glossary,
-        wordTimestamps: true,
+        wordTimestamps: policy.wordTimestamps,
+        signal: params.signal,
         onProgress: (p) => {
-          progress(mapSttFraction(p.fraction), {
+          progress(mapSttFraction(p.fraction, p.step), {
             stageLabel: "받아쓰는 중이에요",
           });
         },
       }),
       diarizeUpload(audioPath, speakerSplitEnabled),
     ]);
+    throwIfCanceled();
 
     if (!stt.text.trim()) {
       console.error("[stt] 전사 텍스트가 비어 있음", {
@@ -361,8 +384,7 @@ export async function processUploadedMeeting(params: {
       );
     }
     let transcriptText = stt.text;
-    let transcriptParts = stt.parts;
-    let wordTimings = stt.wordTimings;
+    const wordTimings = stt.wordTimings;
 
     // 기존 mini 본문은 독립 타이밍 전사와 대조해 누락을 복원한다.
     // gpt-transcribe는 KTV 검증에서 짧은 호명과 기자 자기소개를 이미 보존했고,
@@ -382,7 +404,6 @@ export async function processUploadedMeeting(params: {
             }),
         });
         transcriptText = reconciled.text;
-        transcriptParts = reconciled.parts;
         if (reconciled.usage.inputTokens > 0) {
           await appendAiUsage({
             meetingId: params.meetingId,
@@ -400,33 +421,6 @@ export async function processUploadedMeeting(params: {
         }
       } catch (err) {
         console.warn("[stt] 독립 전사 대조 실패, 본전사를 유지합니다", err);
-      }
-    }
-
-    // Whisper 단어 시각은 긴 발화를 통째로 누락할 수 있다. 로컬 한국어
-    // 강제 정렬기가 준비된 서버에서는 확정 전사 전체를 오디오에 다시 맞춘다.
-    if (policy.forcedAlignment && forcedAlignmentAvailable()) {
-      try {
-        const aligned = await withSoftProgress({
-          from: PROGRESS.structureStart,
-          to: PROGRESS.postSttMid,
-          // KTV 11분 44초 실측 88초. 오디오 길이에 거의 비례한다.
-          expectedMs: expectedStageMs(stt.durationSec, 0.13, 20_000),
-          stageLabel: "말한 위치를 정밀하게 맞추는 중이에요",
-          run: () =>
-            forceAlignTranscript({
-              audioPath,
-              text: transcriptText,
-              parts: transcriptParts,
-              partRanges: stt.partRanges,
-              timedSegments: stt.timedSegments,
-              durationSec: stt.durationSec,
-              workDir: join(workDir, "alignment"),
-            }),
-        });
-        wordTimings = aligned.words;
-      } catch (err) {
-        console.warn("[stt] 강제 정렬 실패, OpenAI 단어 시각을 유지합니다", err);
       }
     }
 
@@ -448,6 +442,7 @@ export async function processUploadedMeeting(params: {
     statsSpeakerCount = diarization?.speakerCount;
 
     currentStage = "moderation";
+    throwIfCanceled();
     // 운영진은 회의 본문에 접근하지 않는다. 사람이 읽고 판단하는 대신 자동
     // 검열로 명백한 위반(아동 성적 콘텐츠·불법행위 실행 안내 등)만 업로드
     // 단계에서 차단한다. 본문은 저장하지 않고 카테고리만 남긴다.
@@ -469,6 +464,7 @@ export async function processUploadedMeeting(params: {
     }
 
     currentStage = "structure";
+    throwIfCanceled();
     progress(PROGRESS.postSttSoftEnd, {
       phase: "structuring",
       rawText: transcriptText,
@@ -541,6 +537,7 @@ export async function processUploadedMeeting(params: {
       structureInput,
       stt.durationSec,
       {
+        signal: params.signal,
         onProgress: ({ partIndex, partCount, attempt, depth, waitedMs }) => {
           const pct = structureProgressPercent({
             partIndex,
@@ -567,6 +564,7 @@ export async function processUploadedMeeting(params: {
         },
       },
     );
+    throwIfCanceled();
     progress(PROGRESS.structureDone, {
       stageLabel: "타임라인을 그리는 중이에요",
     });
@@ -575,6 +573,15 @@ export async function processUploadedMeeting(params: {
       statsSpeakerCount = structure.speakers.length;
     }
 
+    // 요약 모델은 주제와 구간만 제안한다. 화면 대화 원문은 PRIMARY STT의
+    // 불변 근거에서 다시 만들고, 음향 화자/시간만 붙인다. 모델이 대본을
+    // 의역하거나 누락해도 원문·단어 시간·화자 근거가 갈라지지 않는다.
+    structure.dialogue = buildEvidenceDialogue({
+      text: transcriptText,
+      timedSegments: stt.timedSegments,
+      durationSec: stt.durationSec,
+      speakerBlocks,
+    });
     structure.dialogue =
       wordTimings.length > 0
         ? alignDialogueToWordTimings(
@@ -670,7 +677,9 @@ export async function processUploadedMeeting(params: {
           // 이미 뭉개진 자리는 안 고쳐져서(KTV 실측), 보정 대조에만 쓴다.
           glossary: [...glossary, ...MEDIA_OUTLET_TERMS],
           keepTerms: confirmedNames,
-          genericDictionary: true,
+          // 사전 전체 후보 추천은 홀드아웃 정밀도가 낮고 정상 고유명사까지
+          // 바꿨다. 회의에 실제로 주어진 용어와 고정 언론사만 대조한다.
+          genericDictionary: false,
         },
       );
       built.transcript.lines = applyFixedSpellings(
@@ -792,9 +801,20 @@ export async function processUploadedMeeting(params: {
       console.warn("[stats] 파이프라인 통계 기록 실패", err);
     }
   } catch (err) {
+    const canceled =
+      err instanceof AnalysisJobCanceledError || params.signal?.aborted === true;
     quotaBlocked = err instanceof UploadQuotaExceededError;
-    const message =
-      err instanceof Error ? err.message : "회의 정리에 실패했습니다.";
+    const message = canceled
+      ? "분석을 취소했습니다. 이미 분석이 시작된 경우 사용한 시간은 차감됩니다."
+      : userFacingAnalysisError(
+          err instanceof Error ? err.message : "회의 정리에 실패했습니다.",
+        );
+    // 사용자가 실행 중 취소했거나 정책 위반으로 차단된 경우 이미 모델 비용이
+    // 발생했다. 서버·모델·운영 오류만 finally에서 예약을 복구한다.
+    if ((canceled || moderationBlocked) && quotaReservation) {
+      await quotaReservation.finalize();
+      quotaReservation = null;
+    }
     await progressQueue;
     try {
       await appendPipelineAttempt({
@@ -804,7 +824,9 @@ export async function processUploadedMeeting(params: {
         analysisMode,
         durationSec: statsDurationSec,
         speakerCount: statsSpeakerCount,
-        outcome: quotaBlocked
+        outcome: canceled
+          ? "canceled"
+          : quotaBlocked
           ? "quota_blocked"
           : moderationBlocked
             ? "moderation_blocked"
@@ -837,7 +859,7 @@ export async function processUploadedMeeting(params: {
     });
     await prisma.teamMeeting.updateMany({
       where: { legacyMeetingId: params.meetingId },
-      data: { state: "FAILED" },
+      data: { state: canceled ? "CANCELED" : "FAILED" },
     });
     await notifyAnalysisResult({
       userId: params.userId,
@@ -846,6 +868,11 @@ export async function processUploadedMeeting(params: {
       kind: "analysis_failed",
       errorMessage: message,
     });
+    if (canceled) {
+      throw err instanceof AnalysisJobCanceledError
+        ? err
+        : new AnalysisJobCanceledError();
+    }
   } finally {
     await quotaReservation?.release();
     try {

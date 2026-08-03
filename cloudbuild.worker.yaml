@@ -5,14 +5,19 @@ steps:
       - -ceu
       - |
         docker pull "${_BASE_IMAGE}"
+        docker pull "${_CACHE_IMAGE}" || true
         DOCKER_BUILDKIT=1 docker build \
+          --cache-from "${_CACHE_IMAGE}" \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
           --build-arg BASE_IMAGE="${_BASE_IMAGE}" \
           -f Dockerfile.worker \
           -t "${_IMAGE}" \
+          -t "${_CACHE_IMAGE}" \
           .
 
 images:
   - ${_IMAGE}
+  - ${_CACHE_IMAGE}
 
 options:
   logging: CLOUD_LOGGING_ONLY

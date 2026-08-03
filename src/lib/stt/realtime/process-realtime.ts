@@ -286,7 +286,7 @@ export async function processRealtimeMeeting(params: {
         // 언론사 이름은 회의별 사전에 없다. 보정 대조에만 넣는다.
         glossary: [...fullGlossary, ...MEDIA_OUTLET_TERMS],
         keepTerms: confirmedNames,
-        genericDictionary: true,
+        genericDictionary: false,
       },
     );
     built.transcript.lines = applyFixedSpellings(

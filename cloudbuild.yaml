@@ -6,7 +6,12 @@ steps:
     args:
       - -ceu
       - |
+        # Pull the last environment cache when available. A cache miss is valid
+        # on first deploy, so it must not fail the build.
+        docker pull "${_CACHE_IMAGE}" || true
         DOCKER_BUILDKIT=1 docker build \
+          --cache-from "${_CACHE_IMAGE}" \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
           --secret id=next_server_actions_encryption_key,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
           --build-arg NEXT_SERVER_ACTION_ALLOWED_ORIGINS="${_NEXT_SERVER_ACTION_ALLOWED_ORIGINS}" \
           --build-arg NEXT_PUBLIC_TEAM_FEATURE_ENABLED="${_NEXT_PUBLIC_TEAM_FEATURE_ENABLED}" \
@@ -14,10 +19,12 @@ steps:
           --build-arg NEXT_PUBLIC_REALTIME_FEATURE_ENABLED="${_NEXT_PUBLIC_REALTIME_FEATURE_ENABLED}" \
           --build-arg NEXT_PUBLIC_RECAPTCHA_SITE_KEY="${_NEXT_PUBLIC_RECAPTCHA_SITE_KEY}" \
           -t "${_IMAGE}" \
+          -t "${_CACHE_IMAGE}" \
           .
 
 images:
   - ${_IMAGE}
+  - ${_CACHE_IMAGE}
 
 availableSecrets:
   secretManager:

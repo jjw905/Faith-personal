@@ -68,6 +68,7 @@ import {
   SceneProcessingMulti,
   SceneProcessingStructuring,
   SceneProcessingTranscribing,
+  SceneProcessingWaiting,
   SceneUploadPanel,
   SceneUploadStartError,
   SceneUploadStartFlow,
@@ -269,6 +270,14 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         Preview: SceneProcessingTranscribing,
       },
       {
+        id: "waiting",
+        label: "분석 대기",
+        route: "/dashboard",
+        kind: "animation",
+        trigger: "ProcessingNowSection waiting",
+        Preview: SceneProcessingWaiting,
+      },
+      {
         id: "structuring",
         label: "정리하는 중",
         route: "/dashboard",
@@ -278,7 +287,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
       },
       {
         id: "multi",
-        label: "여러 건 동시",
+        label: "진행·대기 혼재",
         route: "/dashboard",
         kind: "animation",
         trigger: "ProcessingNowSection animateDemo",

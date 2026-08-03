@@ -21,7 +21,7 @@ import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { useAppContext } from "@/context/app-context";
 import { useAccountDisplayPrefs } from "@/hooks/use-account-display-prefs";
 import { maskPii, type MaskStyle } from "@/lib/masking";
-import { activeLineIndexAt, activeWordAt, lineStartSec, estimateTranscriptDurationSec, parseDurationLabelToSec, readMediaDurationSec } from "@/lib/transcript-time";
+import { activeLineIndexAt, activeWordFocusAt, lineStartSec, estimateTranscriptDurationSec, parseDurationLabelToSec, readMediaDurationSec } from "@/lib/transcript-time";
 import type { Meeting, Participant } from "@/types/meeting";
 import type {
   MeetingTranscript,
@@ -115,7 +115,7 @@ function ReplayBubble({
   /** 이 말풍선이 active일 때만 의미 있는 재생 시각(초). 단어 하이라이트용. */
   currentSec: number;
   wordFocus?: boolean;
-  onSeek?: (line: TranscriptLine) => void;
+  onSeek?: (line: TranscriptLine, atSec?: number) => void;
   onMemoChange: (lineId: string, next: string) => void;
   onApplyCorrection: (
     lineId: string,
@@ -126,10 +126,13 @@ function ReplayBubble({
   const text = line.text ?? "";
   const matches = text ? maskPii(text, { style: maskStyle }).matches : [];
   const corrections = line.corrections ?? [];
-  const activeWord =
-    active && wordFocus ? activeWordAt(line.words, currentSec) : null;
-  const activeWordRange = activeWord
-    ? { startOffset: activeWord.startOffset, endOffset: activeWord.endOffset }
+  const activeWordFocus =
+    active && wordFocus ? activeWordFocusAt(line.words, currentSec) : null;
+  const activeWordRange = activeWordFocus
+    ? {
+        startOffset: activeWordFocus.word.startOffset,
+        endOffset: activeWordFocus.word.endOffset,
+      }
     : null;
   const memo = line.memo;
   const [editing, setEditing] = useState(false);
@@ -248,6 +251,9 @@ function ReplayBubble({
                     matches={matches}
                     onPrimary={meta.mine}
                     activeWordRange={activeWordRange}
+                    activeWordStrength={activeWordFocus?.strength}
+                    words={line.words}
+                    onWordSeek={(word) => onSeek(line, word.startSec)}
                   />
                 </div>
               ) : (
@@ -264,6 +270,7 @@ function ReplayBubble({
                     matches={matches}
                     onPrimary={meta.mine}
                     activeWordRange={activeWordRange}
+                    activeWordStrength={activeWordFocus?.strength}
                   />
                 </div>
               )}
@@ -657,13 +664,16 @@ export function MeetingChatReplay({
   }
 
   const seekToLine = useCallback(
-    (line: TranscriptLine) => {
+    (line: TranscriptLine, atSec?: number) => {
       const a = audioRef.current;
       if (!a || !hasAudio) {
         setActiveId(line.id);
         return;
       }
-      const lineSec = lineStartSec(line);
+      const lineSec =
+        typeof atSec === "number" && Number.isFinite(atSec)
+          ? Math.max(0, atSec)
+          : lineStartSec(line);
       const dur =
         readMediaDurationSec(a) || durationSec || fallbackDurationSec;
       if (dur > 0 && lineSec > dur + 0.5) {

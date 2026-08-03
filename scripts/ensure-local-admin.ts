@@ -6,8 +6,6 @@
  *   npm run db:admin
  *   npx tsx scripts/ensure-local-admin.ts
  */
-import { config } from "dotenv";
-
 import {
   LOCAL_DEV_ADMIN_EMAIL,
   ensureAdminUser,
@@ -15,9 +13,6 @@ import {
 } from "../src/lib/ensure-admin";
 import { ensureLocalDevProductTeam } from "../src/lib/ensure-local-team";
 import { prisma } from "../src/lib/prisma";
-
-config({ path: ".env.local" });
-config();
 
 async function main() {
   const primary = await ensureAdminUser();
