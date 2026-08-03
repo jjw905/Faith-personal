@@ -201,7 +201,50 @@ export async function GET(request: Request, { params }: Params) {
           });
         }
         if (objectStorageConfigured()) {
-          return NextResponse.redirect(await getDownloadUrl(row.key));
+          // 오디오를 객체 저장소 URL로 redirect하면 브라우저의 media-src
+          // 정책(`'self' blob:`)에 걸린다. URL을 브라우저에 노출하는 대신
+          // 서버가 Range를 그대로 전달해 같은 출처의 200/206 응답으로
+          // 중계한다. upstream body는 버퍼로 모으지 않고 그대로 전달해
+          // 100MB 업로드도 재생 요청마다 메모리에 올리지 않는다.
+          const rangeHeader = request.headers.get("range");
+          const range = parseRange(rangeHeader, row.size);
+          if (rangeHeader && !range) {
+            return new NextResponse(null, {
+              status: 416,
+              headers: { "Content-Range": `bytes */${row.size}` },
+            });
+          }
+          const url = await getDownloadUrl(row.key, undefined, {
+            contentType: mime,
+            contentDisposition: "inline",
+          });
+          const upstream = await fetch(url, {
+            cache: "no-store",
+            headers: range
+              ? { Range: `bytes=${range.start}-${range.end}` }
+              : undefined,
+          });
+          if (!upstream.ok || !upstream.body) {
+            throw new Error(`객체 저장소 오디오 응답 오류(${upstream.status})`);
+          }
+          const upstreamLength = Number(
+            upstream.headers.get("content-length") ?? "",
+          );
+          const length = Number.isFinite(upstreamLength) && upstreamLength > 0
+            ? upstreamLength
+            : range
+              ? range.end - range.start + 1
+              : row.size;
+          return new NextResponse(upstream.body, {
+            status: range ? 206 : 200,
+            headers: audioHeaders({
+              id,
+              mime,
+              length,
+              range,
+              total: row.size,
+            }),
+          });
         }
         assertObjectStorageReady();
         return fileResponse({

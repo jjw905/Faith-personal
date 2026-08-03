@@ -123,12 +123,25 @@ export async function deleteObject(key: string) {
   );
 }
 
-export async function getDownloadUrl(key: string, expiresIn = 60 * 10) {
+export async function getDownloadUrl(
+  key: string,
+  expiresIn = 60 * 10,
+  options?: {
+    contentType?: string;
+    contentDisposition?: string;
+  },
+) {
   return getSignedUrl(
     client(),
     new GetObjectCommand({
       Bucket: bucket(),
       Key: key,
+      ...(options?.contentType
+        ? { ResponseContentType: options.contentType }
+        : {}),
+      ...(options?.contentDisposition
+        ? { ResponseContentDisposition: options.contentDisposition }
+        : {}),
     }),
     { expiresIn },
   );

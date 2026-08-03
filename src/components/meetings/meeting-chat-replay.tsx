@@ -438,6 +438,7 @@ export function MeetingChatReplay({
   const [playing, setPlaying] = useState(false);
   const [currentSec, setCurrentSec] = useState(0);
   const [durationSec, setDurationSec] = useState(0);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ChatReplaySettings>(() =>
     readChatReplaySettings(),
   );
@@ -611,6 +612,23 @@ export function MeetingChatReplay({
     };
   }, [hasAudio, lineStarts, settings.muted, settings.rate, settings.volume, transcript.lines]);
 
+  const tryPlay = useCallback((a: HTMLAudioElement) => {
+    setAudioError(null);
+    try {
+      const result = a.play();
+      if (result && typeof result.catch === "function") {
+        void result.catch(() => {
+          if (audioRef.current !== a) return;
+          setPlaying(false);
+          setAudioError("음성 파일을 재생하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        });
+      }
+    } catch {
+      setPlaying(false);
+      setAudioError("음성 파일을 재생하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+  }, []);
+
   useEffect(() => {
     if (!followChat || !activeId) return;
     document
@@ -659,7 +677,7 @@ export function MeetingChatReplay({
   function togglePlay() {
     const a = audioRef.current;
     if (!a) return;
-    if (a.paused) void a.play();
+    if (a.paused) tryPlay(a);
     else a.pause();
   }
 
@@ -687,9 +705,9 @@ export function MeetingChatReplay({
       a.currentTime = media;
       setCurrentSec(media);
       setActiveId(line.id);
-      void a.play();
+      tryPlay(a);
     },
-    [hasAudio, durationSec, fallbackDurationSec],
+    [hasAudio, durationSec, fallbackDurationSec, tryPlay],
   );
 
   function seekRatio(ratio: number) {
@@ -723,17 +741,32 @@ export function MeetingChatReplay({
           muted={settings.muted}
           onLoadedMetadata={(e) => {
             const el = e.currentTarget;
+            setAudioError(null);
             el.volume = settings.muted
               ? 0
               : Math.min(1, Math.max(0, settings.volume));
             const mediaDur = readMediaDurationSec(el);
             setDurationSec(mediaDur > 0 ? mediaDur : fallbackDurationSec);
           }}
+          onCanPlay={() => setAudioError(null)}
+          onError={() => {
+            setPlaying(false);
+            setAudioError("음성 파일을 불러오지 못했습니다. 다시 시도해 주세요.");
+          }}
           onDurationChange={(e) => {
             const mediaDur = readMediaDurationSec(e.currentTarget);
             if (mediaDur > 0) setDurationSec(mediaDur);
           }}
         />
+      ) : null}
+
+      {audioError ? (
+        <p
+          role="alert"
+          className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-red-200/80"
+        >
+          {audioError}
+        </p>
       ) : null}
 
       <div className="grid min-w-0 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 py-2 sm:gap-2 sm:py-2.5 md:py-3">

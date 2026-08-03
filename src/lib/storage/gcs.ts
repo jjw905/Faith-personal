@@ -22,8 +22,8 @@ function bucket() {
   return storage().bucket(required("GCS_BUCKET"));
 }
 
-function signedUrlTtlSeconds() {
-  const parsed = Number(process.env.GCS_SIGNED_URL_TTL_SECONDS ?? 600);
+function signedUrlTtlSeconds(override?: number) {
+  const parsed = Number(override ?? process.env.GCS_SIGNED_URL_TTL_SECONDS ?? 600);
   if (!Number.isFinite(parsed)) return 600;
   return Math.max(60, Math.min(3_600, Math.floor(parsed)));
 }
@@ -47,11 +47,22 @@ export async function deleteObject(key: string) {
   await bucket().file(key).delete({ ignoreNotFound: true });
 }
 
-export async function getDownloadUrl(key: string) {
+export async function getDownloadUrl(
+  key: string,
+  expiresIn?: number,
+  options?: {
+    contentType?: string;
+    contentDisposition?: string;
+  },
+) {
   const [url] = await bucket().file(key).getSignedUrl({
     version: "v4",
     action: "read",
-    expires: Date.now() + signedUrlTtlSeconds() * 1_000,
+    expires: Date.now() + signedUrlTtlSeconds(expiresIn) * 1_000,
+    ...(options?.contentType ? { responseType: options.contentType } : {}),
+    ...(options?.contentDisposition
+      ? { responseDisposition: options.contentDisposition }
+      : {}),
   });
   return url;
 }

@@ -63,9 +63,18 @@ export async function deleteObject(key: string) {
   return deleteSpacesObject(key);
 }
 
-export async function getDownloadUrl(key: string, expiresIn?: number) {
-  if (storageBackend() === "gcs") return getGcsDownloadUrl(key);
-  return getSpacesDownloadUrl(key, expiresIn);
+export async function getDownloadUrl(
+  key: string,
+  expiresIn?: number,
+  options?: {
+    contentType?: string;
+    contentDisposition?: string;
+  },
+) {
+  if (storageBackend() === "gcs") {
+    return getGcsDownloadUrl(key, expiresIn, options);
+  }
+  return getSpacesDownloadUrl(key, expiresIn, options);
 }
 
 export async function getUploadUrl(params: {
