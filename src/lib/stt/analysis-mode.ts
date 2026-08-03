@@ -5,10 +5,11 @@ export type AnalysisMode = (typeof ANALYSIS_MODES)[number];
 
 export const DEFAULT_ANALYSIS_MODE: AnalysisMode = "standard";
 /**
- * 정밀 모드는 본 전사+단어 시각+화자 분리를 함께 쓴다. KTV 실측 원가
- * $0.01317/오디오분과 연간 플랜의 최저 분당 매출을 함께 감안해 2배 차감한다.
+ * 정밀 모드는 본 전사+단어 시각+화자 분리를 함께 쓴다. Pro 이상은 이
+ * 기능을 자동 적용하지만, 사용자 quota는 실제 오디오 길이와 동일하게
+ * 1배 차감한다. 기능 entitlement와 원가 회수(가격/포함분)는 분리한다.
  */
-export const PRECISION_USAGE_MULTIPLIER = 2;
+export const PRECISION_USAGE_MULTIPLIER = 1;
 
 export type AnalysisModePolicy = {
   model: SttModel;
@@ -72,7 +73,7 @@ export const ANALYSIS_MODE_COPY: Record<
   },
   precision: {
     label: "화자 구분",
-    costHint: "1분 → 2분",
+    costHint: "1분 → 1분",
     benefit: "누가 말했는지 나눠 말풍선처럼 기록합니다.",
   },
 };

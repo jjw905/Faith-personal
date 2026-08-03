@@ -62,8 +62,8 @@ async function main() {
       newDurationSec: 600,
       analysisMode: "precision",
     });
-    if (precision.chargedSec !== 1_200) {
-      throw new Error("정밀 분석이 2배로 차감되지 않았습니다.");
+    if (precision.chargedSec !== 600) {
+      throw new Error("정밀 분석이 실제 오디오 길이와 다르게 차감됩니다.");
     }
     await precision.finalize();
 
@@ -94,8 +94,8 @@ async function main() {
       reference: `usage-pack-${token}`,
     });
     const final = await getUploadQuotaStatus(user.id);
-    if (final.usedSec !== 1_800) {
-      throw new Error(`예상 사용량 1800초, 실제 ${final.usedSec}초`);
+    if (final.usedSec !== 1_200) {
+      throw new Error(`예상 사용량 1200초, 실제 ${final.usedSec}초`);
     }
     if (final.creditRemainingSec !== 30 * 60) {
       throw new Error("분 팩 충전이 멱등하게 한 번만 반영되지 않았습니다.");
