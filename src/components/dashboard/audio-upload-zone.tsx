@@ -30,17 +30,15 @@ import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { formatBytes } from "@/lib/storage/quota";
 import { stripFileExtension } from "@/lib/meeting-process";
-import { planIncludesSpeakerSplit } from "@/lib/plans";
+import { resolveAnalysisModeForEntitlement } from "@/lib/plans";
 import {
   MAX_UPLOAD_AUDIO_MINUTES,
 } from "@/lib/stt/upload-limits";
 import { cn } from "@/lib/utils";
 import { UploadQuotaBanner } from "@/components/dashboard/upload-quota-banner";
 import {
-  ANALYSIS_MODE_ARIA_LABEL,
   ANALYSIS_MODE_COPY,
   PRECISION_USAGE_MULTIPLIER,
-  type AnalysisMode,
 } from "@/lib/stt/analysis-mode";
 import {
   UsageLimitDialog,
@@ -118,18 +116,12 @@ export const AudioUploadZone = forwardRef<
     null,
   );
   const [usageDialogOpen, setUsageDialogOpen] = useState(false);
-  const [analysisMode, setAnalysisMode] =
-    useState<AnalysisMode>("standard");
-  const speakerSplitAllowed = planIncludesSpeakerSplit(
+  const automaticAnalysisMode = resolveAnalysisModeForEntitlement(
     session?.user?.plan,
     session?.user?.role,
+    workspaceId,
   );
-
-  useEffect(() => {
-    if (!speakerSplitAllowed && analysisMode === "precision") {
-      setAnalysisMode("standard");
-    }
-  }, [speakerSplitAllowed, analysisMode]);
+  const speakerSplitAutomatic = automaticAnalysisMode === "precision";
 
   function applyQuotaPayload(
     data: { ok?: boolean } & Partial<UsageLimitTimeStatus>,
@@ -369,7 +361,7 @@ export const AudioUploadZone = forwardRef<
                 ? null
                 : Math.ceil(
                     durationSec *
-                      (analysisMode === "precision"
+                      (automaticAnalysisMode === "precision"
                         ? PRECISION_USAGE_MULTIPLIER
                         : 1),
                   );
@@ -401,7 +393,7 @@ export const AudioUploadZone = forwardRef<
             ? stripFileExtension(selectedFile.name)
             : undefined,
           workspace: workspaceId,
-          analysisMode,
+          analysisMode: automaticAnalysisMode,
           ...(workspaceId === "team" && activeTeamId
             ? { teamId: activeTeamId }
             : {}),
@@ -476,7 +468,7 @@ export const AudioUploadZone = forwardRef<
       ? null
       : Math.ceil(
           (selectedDurationSec *
-            (analysisMode === "precision"
+            (automaticAnalysisMode === "precision"
               ? PRECISION_USAGE_MULTIPLIER
               : 1)) /
             60,
@@ -589,54 +581,38 @@ export const AudioUploadZone = forwardRef<
                 </Button>
               </div>
 
-              {speakerSplitAllowed ? (
-                <div
-                  className="grid grid-cols-1 gap-2 sm:grid-cols-2"
-                  role="radiogroup"
-                  aria-label={ANALYSIS_MODE_ARIA_LABEL}
-                >
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={analysisMode === "standard"}
-                    disabled={showStarting}
-                    onClick={() => setAnalysisMode("standard")}
-                    className={cn(
-                      "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
-                      analysisMode === "standard"
-                        ? "bg-primary-soft ring-primary"
-                        : "bg-surface ring-border hover:bg-surface-2",
-                    )}
-                  >
-                    <AudioLines className="mt-0.5 h-5 w-5 shrink-0" />
-                    <span className="min-w-0">
-                      <span className="block truncate whitespace-nowrap text-base font-semibold">
-                        {ANALYSIS_MODE_COPY.standard.label}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={analysisMode === "precision"}
-                    disabled={showStarting}
-                    onClick={() => setAnalysisMode("precision")}
-                    className={cn(
-                      "flex min-h-16 items-start gap-3 rounded-2xl px-4 py-3 text-left ring-1 transition-colors",
-                      analysisMode === "precision"
-                        ? "bg-primary-soft ring-primary"
-                        : "bg-surface ring-border hover:bg-surface-2",
-                    )}
-                  >
-                    <Users className="mt-0.5 h-5 w-5 shrink-0" />
-                    <span className="min-w-0">
-                      <span className="block truncate whitespace-nowrap text-base font-semibold">
-                        {ANALYSIS_MODE_COPY.precision.label}
-                      </span>
-                    </span>
-                  </button>
-                </div>
-              ) : null}
+              <div
+                className={cn(
+                  "flex items-start gap-3 rounded-2xl px-3.5 py-3 sm:px-4",
+                  speakerSplitAutomatic
+                    ? "bg-primary-soft text-foreground"
+                    : "bg-surface text-muted",
+                )}
+                role="status"
+              >
+                {speakerSplitAutomatic ? (
+                  <Users className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                ) : (
+                  <AudioLines className="mt-0.5 h-5 w-5 shrink-0" />
+                )}
+                <span className="min-w-0">
+                  <span className="block text-base font-semibold text-foreground">
+                    {speakerSplitAutomatic
+                      ? "화자 구분 자동"
+                      : ANALYSIS_MODE_COPY.standard.label}
+                  </span>
+                  <span className="mt-0.5 block text-base leading-snug text-muted">
+                    {speakerSplitAutomatic
+                      ? "프로·팀 플랜과 어드민은 빠른 정리 없이 누가 말했는지 자동으로 나눠 기록합니다."
+                      : ANALYSIS_MODE_COPY.standard.benefit}
+                  </span>
+                  <span className="mt-1 block text-base font-medium tabular-nums text-muted">
+                    {speakerSplitAutomatic
+                      ? ANALYSIS_MODE_COPY.precision.costHint
+                      : ANALYSIS_MODE_COPY.standard.costHint}
+                  </span>
+                </span>
+              </div>
 
               {actualMinutes != null && expectedChargedMinutes != null ? (
                 <p className="text-base font-medium text-muted">
@@ -644,7 +620,7 @@ export const AudioUploadZone = forwardRef<
                 </p>
               ) : (
                 <p className="text-base font-medium text-muted">
-                  {ANALYSIS_MODE_COPY[analysisMode].benefit}
+                  {ANALYSIS_MODE_COPY[automaticAnalysisMode].benefit}
                 </p>
               )}
 

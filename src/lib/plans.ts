@@ -134,11 +134,32 @@ export function planMonthlyFeeLabel(entry: PlanCatalogEntry) {
   return `월 ${formatPlanWon(entry.monthlyPrice)}`;
 }
 
-/** Free는 빠른 정리만. 화자 구분은 Pro(및 Admin)부터. */
+/** 제품 분석 모드의 서버·클라이언트 공통 판정 결과. */
+export type EntitledAnalysisMode = "standard" | "precision";
+
+/**
+ * Free는 빠른 정리가 기본이고, Pro/Team/Admin과 팀 워크스페이스는
+ * 빠른 정리 선택 없이 화자 구분을 자동 적용한다.
+ *
+ * `TEAM`은 현재 User.plan enum에 없는 카탈로그/이전 데이터 값도 안전하게
+ * 처리하기 위해 문자열로 비교한다. 팀 워크스페이스는 계정 플랜과 별도로
+ * 팀 권한을 부여받은 경우를 포함한다.
+ */
 export function planIncludesSpeakerSplit(
   plan?: string | null,
   role?: string | null,
+  workspace?: string | null,
 ) {
   if (role === "ADMIN") return true;
-  return plan === "PRO";
+  return plan === "PRO" || plan === "TEAM" || workspace === "team";
+}
+
+export function resolveAnalysisModeForEntitlement(
+  plan?: string | null,
+  role?: string | null,
+  workspace?: string | null,
+): EntitledAnalysisMode {
+  return planIncludesSpeakerSplit(plan, role, workspace)
+    ? "precision"
+    : "standard";
 }

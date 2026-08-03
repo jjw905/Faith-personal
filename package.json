@@ -49,6 +49,7 @@
     "test:process-progress": "npx tsx --tsconfig tsconfig.json scripts/verify-process-progress-anim.ts",
     "test:meeting-export": "npx tsx --tsconfig tsconfig.json scripts/verify-meeting-export.ts",
     "test:analysis-usage": "npx tsx --tsconfig tsconfig.json scripts/test-analysis-usage.ts",
+    "test:analysis-policy": "npx tsx --tsconfig tsconfig.json scripts/test-analysis-policy.ts",
     "test:analysis-lifecycle": "npx tsx --tsconfig tsconfig.json scripts/test-analysis-lifecycle.ts",
     "test:realtime-speaker-clusters": "NODE_OPTIONS=--conditions=react-server npx tsx --tsconfig tsconfig.json scripts/test-realtime-speaker-clusters.ts",
     "test:transcript-evidence": "npx tsx --tsconfig tsconfig.json scripts/test-transcript-evidence.ts",

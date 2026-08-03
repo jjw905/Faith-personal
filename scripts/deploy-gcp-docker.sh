@@ -268,6 +268,7 @@ if [[ "$SKIP_VALIDATE" != 1 && ( "$WANT_WEB" == 1 || "$VALIDATE_ONLY" == 1 ) ]];
   npm run test:team
   npm run test:meeting-export
   npm run test:process-progress
+  npm run test:analysis-policy
   AUTH_SECRET=ci-only-placeholder-change-me \
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=ci-only-placeholder-change-me \
   DATABASE_URL='postgresql://faith:faith@127.0.0.1:5432/faith?schema=public' \

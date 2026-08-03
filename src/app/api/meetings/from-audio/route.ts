@@ -5,13 +5,11 @@ import { requireUser } from "@/lib/require-user";
 import { enqueueAnalysisJob } from "@/lib/stt/analysis-job-queue";
 import {
   ANALYSIS_MODE_POLICY,
-  DEFAULT_ANALYSIS_MODE,
-  parseAnalysisMode,
 } from "@/lib/stt/analysis-mode";
 import { processUploadedMeeting } from "@/lib/stt/process-upload";
 import { placeholderMeeting } from "@/lib/stt/to-meeting";
 import { stripFileExtension } from "@/lib/meeting-process";
-import { planIncludesSpeakerSplit } from "@/lib/plans";
+import { resolveAnalysisModeForEntitlement } from "@/lib/plans";
 import { prisma } from "@/lib/prisma";
 import { clientIp, rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import { protectUserFileForTeam } from "@/lib/storage/vault-service";
@@ -90,18 +88,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // 클라이언트는 공개된 분석 모드만 고른다. 실제 모델과 비용 경로는 서버가
-  // 고정해 임의의 비싼 모델명 주입이나 차감 우회를 막는다.
-  // Free는 화자 구분을 쓸 수 없어 precision 요청도 빠른 정리로 내린다.
-  const requestedMode = parseAnalysisMode(body.analysisMode);
-  const analysisMode =
-    requestedMode === "precision" &&
-    !planIncludesSpeakerSplit(session.user.plan, session.user.role)
-      ? DEFAULT_ANALYSIS_MODE
-      : requestedMode;
-  const policy = ANALYSIS_MODE_POLICY[analysisMode];
-  const model = policy.model;
-
   const file = await prisma.vaultFile.findFirst({
     where: { id: vaultFileId, userId: session.user.id },
   });
@@ -141,6 +127,16 @@ export async function POST(request: Request) {
     "업로드 회의";
   const workspace: WorkspaceId =
     body.workspace === "team" ? "team" : "personal";
+  // 요금제 정책은 클라이언트 선택값을 신뢰하지 않는다. Pro/Team/Admin과
+  // 팀 워크스페이스는 항상 precision(화자 구분)으로 고정하고, Free만
+  // standard(빠른 정리)를 사용한다.
+  const analysisMode = resolveAnalysisModeForEntitlement(
+    session.user.plan,
+    session.user.role,
+    workspace,
+  );
+  const policy = ANALYSIS_MODE_POLICY[analysisMode];
+  const model = policy.model;
   const teamId = body.teamId?.trim();
   if (workspace === "team") {
     const teamFeature = await getTeamFeatureAccess(session.user.id);
