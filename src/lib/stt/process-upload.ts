@@ -13,10 +13,7 @@ import {
 } from "@/lib/stt/diarization";
 import { buildGlossary } from "@/lib/stt/glossary";
 import { hasAudioTools } from "@/lib/stt/local-tools";
-import {
-  isMediaOutletTerm,
-  MEDIA_OUTLET_TERMS,
-} from "@/lib/stt/media-outlets";
+import { isMediaOutletTerm, MEDIA_OUTLET_TERMS } from "@/lib/stt/media-outlets";
 import {
   attachSpeakersToText,
   attachSpeakersToWordTimings,
@@ -70,7 +67,10 @@ import {
   workDirForMeeting,
 } from "@/lib/user-meetings-store";
 import { createNotification } from "@/lib/notifications-store";
-import { structureProgressPercent, softElapsedProgress } from "@/lib/meeting-process-progress";
+import {
+  structureProgressPercent,
+  softElapsedProgress,
+} from "@/lib/meeting-process-progress";
 import { prisma } from "@/lib/prisma";
 import {
   appendPipelineAttempt,
@@ -80,6 +80,7 @@ import { AnalysisJobCanceledError } from "@/lib/stt/analysis-job-queue";
 import { buildEvidenceDialogue } from "@/lib/stt/transcript-evidence";
 import { userFacingAnalysisError } from "@/lib/meeting-process";
 import { buildAnalysisDiagnostics } from "@/lib/stt/analysis-diagnostics";
+import { suggestConsensusSurfaceCorrections } from "@/lib/stt/surface-accuracy";
 
 /**
  * 전체 파이프라인 진행률 구간 (실제 작업량 비중).
@@ -152,9 +153,7 @@ async function notifyAnalysisResult(params: {
       data: {
         meetingId: params.meetingId,
         href: `/meetings/${params.meetingId}`,
-        ...(params.errorMessage
-          ? { errorMessage: params.errorMessage }
-          : {}),
+        ...(params.errorMessage ? { errorMessage: params.errorMessage } : {}),
       },
       groupKey,
     });
@@ -374,7 +373,9 @@ export async function processUploadedMeeting(params: {
         meetingId: params.meetingId,
         model,
       });
-      throw new Error("받아쓰기 결과가 비어 있습니다. 다른 파일로 다시 시도해 주세요.");
+      throw new Error(
+        "받아쓰기 결과가 비어 있습니다. 다른 파일로 다시 시도해 주세요.",
+      );
     }
     if (!stt.timedSegments.length) {
       console.error("[stt] 실측 시각(타이밍) 구간이 비어 있음", {
@@ -510,9 +511,8 @@ export async function processUploadedMeeting(params: {
           run: () => reconcileSpeakerTurns(blocks),
         });
         speakerBlocks = reconciled.blocks;
-        statsSpeakerCount = new Set(
-          speakerBlocks.map((block) => block.speaker),
-        ).size;
+        statsSpeakerCount = new Set(speakerBlocks.map((block) => block.speaker))
+          .size;
         if (reconciled.usage.inputTokens > 0) {
           await appendAiUsage({
             meetingId: params.meetingId,
@@ -728,6 +728,37 @@ export async function processUploadedMeeting(params: {
       console.warn("[stt] 보정 추천 실패", err);
     }
 
+    // PRIMARY와 독립 Whisper 타이밍이 회의 안에서 같은 기관 표기를 반복해
+    // 지지할 때만, 한 번 나온 발음상 근접 오표기를 자동 보정한다. 인명처럼
+    // 두 전사가 함께 틀렸거나 외부 근거가 없는 말은 이 단계에서 건드리지 않는다.
+    try {
+      const consensus = suggestConsensusSurfaceCorrections({
+        lines: built.transcript.lines.map((line) => line.text ?? ""),
+        timingTexts: stt.timedSegments.map((segment) => segment.text),
+      });
+      const suggestions: TermSuggestion[] = consensus.map((correction) => ({
+        lineIndex: correction.lineIndex,
+        startOffset: correction.startOffset,
+        endOffset: correction.endOffset,
+        wrong: correction.wrong,
+        suggestion: correction.suggestion,
+        reason: "PRIMARY와 독립 타이밍 전사의 반복 표기 합의",
+        similarity: correction.similarity,
+        dictionaryVerified: true,
+        source: "glossary",
+      }));
+      if (suggestions.length > 0) {
+        built.transcript.lines = applyFixedSpellings(
+          built.transcript.lines,
+          suggestions,
+          suggestions.map((suggestion) => suggestion.suggestion),
+        );
+        fixedSpellingCorrections.push(...suggestions);
+      }
+    } catch (err) {
+      console.warn("[stt] 독립 전사 표기 합의 실패", err);
+    }
+
     // 신뢰도 하위 구간만 골라 mini로 한 번 더 확인. 60분을 다 다시 돌리지
     // 않고, 겹쳐 말하기·잡음으로 알아듣기 어려웠던 부분만 짧게 재확인한다.
     if (hasAudioTools()) {
@@ -803,6 +834,7 @@ export async function processUploadedMeeting(params: {
         reconciledBlocks: speakerBlocks,
         nameGuesses: speakerNameGuesses,
         fixedSpellings: fixedSpellingCorrections,
+        chunkBoundaryRepairs: stt.surfaceRepairs ?? [],
         finalLines: built.transcript.lines,
       }),
       errorMessage: undefined,
@@ -834,7 +866,8 @@ export async function processUploadedMeeting(params: {
     }
   } catch (err) {
     const canceled =
-      err instanceof AnalysisJobCanceledError || params.signal?.aborted === true;
+      err instanceof AnalysisJobCanceledError ||
+      params.signal?.aborted === true;
     quotaBlocked = err instanceof UploadQuotaExceededError;
     const message = canceled
       ? "분석을 취소했습니다. 이미 분석이 시작된 경우 사용한 시간은 차감됩니다."
@@ -859,10 +892,10 @@ export async function processUploadedMeeting(params: {
         outcome: canceled
           ? "canceled"
           : quotaBlocked
-          ? "quota_blocked"
-          : moderationBlocked
-            ? "moderation_blocked"
-            : "error",
+            ? "quota_blocked"
+            : moderationBlocked
+              ? "moderation_blocked"
+              : "error",
         failedStage: currentStage,
         topicBucket: statsTopicBucket,
       });

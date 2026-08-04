@@ -13,10 +13,7 @@ import { basename, join } from "node:path";
 import { toFile } from "openai/uploads";
 
 import { stripHallucination } from "@/lib/stt/hallucination-guard";
-import {
-  hasAudioTools,
-  requireAudioToolPath,
-} from "@/lib/stt/local-tools";
+import { hasAudioTools, requireAudioToolPath } from "@/lib/stt/local-tools";
 import {
   assertUploadAudioBytes,
   assertUploadAudioDuration,
@@ -30,6 +27,10 @@ import {
   estimateSttUsdFromTokens,
 } from "@/lib/stt/pricing";
 import type { TimedSegment, WordTiming } from "@/lib/stt/timed-segments";
+import {
+  repairChunkBoundarySurface,
+  type ChunkBoundarySurfaceRepair,
+} from "@/lib/stt/surface-accuracy";
 
 export const CHUNK_SEC = 300;
 export const CHUNK_OVERLAP_SEC = 1.2;
@@ -103,8 +104,7 @@ function parseMeanLogprob(res: unknown): {
     .filter(Number.isFinite);
   if (values.length === 0) return { logprobCount: 0 };
   return {
-    meanLogprob:
-      values.reduce((sum, value) => sum + value, 0) / values.length,
+    meanLogprob: values.reduce((sum, value) => sum + value, 0) / values.length,
     logprobCount: values.length,
   };
 }
@@ -267,7 +267,11 @@ function leadingSilenceTrimSec(audioPath: string): number {
   return Math.max(0, first.endSec - LEADING_SPEECH_PAD_SEC);
 }
 
-function extractAudioFromSec(sourcePath: string, startSec: number, outPath: string) {
+function extractAudioFromSec(
+  sourcePath: string,
+  startSec: number,
+  outPath: string,
+) {
   execFileSync(
     requireAudioToolPath("ffmpeg"),
     [
@@ -368,8 +372,7 @@ function prepareChunks(
     );
     const endSec = Math.min(
       durationSec,
-      coreEndSec +
-        (index < boundaries.length - 2 ? options.overlapSec : 0),
+      coreEndSec + (index < boundaries.length - 2 ? options.overlapSec : 0),
     );
     const path = join(
       /* turbopackIgnore: true */ workDir,
@@ -398,7 +401,11 @@ function prepareChunks(
         "5",
         path,
       ],
-      { stdio: "pipe", timeout: CHUNK_ENCODE_TIMEOUT_MS, killSignal: "SIGKILL" },
+      {
+        stdio: "pipe",
+        timeout: CHUNK_ENCODE_TIMEOUT_MS,
+        killSignal: "SIGKILL",
+      },
     );
     if (existsSync(/* turbopackIgnore: true */ path)) {
       chunks.push({
@@ -440,10 +447,7 @@ function parseVerboseDuration(res: unknown): number {
     : 0;
 }
 
-function parseVerboseSegments(
-  res: unknown,
-  offsetSec: number,
-): TimedSegment[] {
+function parseVerboseSegments(res: unknown, offsetSec: number): TimedSegment[] {
   const segments = (res as { segments?: unknown })?.segments;
   if (!Array.isArray(segments)) return [];
   const out: TimedSegment[] = [];
@@ -538,7 +542,11 @@ async function transcribeChunkText(
   },
 ): Promise<{
   text: string;
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  } | null;
   timed: TimedSegment[];
   words: WordTiming[];
   /** verbose 응답이 알려 준 길이. 아니면 0. */
@@ -583,9 +591,7 @@ async function transcribeChunkText(
           ? { keywords: options.keywords.slice(0, 100) }
           : {}),
         ...(prompt ? { prompt } : {}),
-      } as unknown as Parameters<
-        typeof client.audio.transcriptions.create
-      >[0],
+      } as unknown as Parameters<typeof client.audio.transcriptions.create>[0],
       { signal: options?.signal },
     );
     const res = response as unknown as { text?: string; usage?: unknown };
@@ -647,7 +653,11 @@ export async function transcribeAudioOnce(params: {
 }): Promise<{
   text: string;
   meanLogprob?: number;
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  } | null;
 }> {
   const result = await transcribeChunkText(
     params.model ?? "gpt-4o-mini-transcribe",
@@ -656,7 +666,11 @@ export async function transcribeAudioOnce(params: {
     firstPrompt(params.glossary),
     { keywords: params.glossary },
   );
-  return { text: result.text, meanLogprob: result.meanLogprob, usage: result.usage };
+  return {
+    text: result.text,
+    meanLogprob: result.meanLogprob,
+    usage: result.usage,
+  };
 }
 
 /**
@@ -692,17 +706,12 @@ async function timeChunkWithRealtimeMini(
     }
     return { timed, durationBillSec };
   } catch (err) {
-    if (
-      err instanceof Error &&
-      err.message.includes("실측 시각(타이밍)")
-    ) {
+    if (err instanceof Error && err.message.includes("실측 시각(타이밍)")) {
       throw err;
     }
     const detail = err instanceof Error ? err.message : String(err);
     console.error("[stt] mini Realtime 타이밍 패스 실패", detail);
-    throw new Error(
-      `실측 시각(타이밍) 받아쓰기에 실패했습니다. ${detail}`,
-    );
+    throw new Error(`실측 시각(타이밍) 받아쓰기에 실패했습니다. ${detail}`);
   }
 }
 
@@ -714,7 +723,11 @@ async function timeChunkWithRealtimeMini(
 export async function whisperWordTimingsForFile(
   audioPath: string,
   glossary?: string[],
-): Promise<{ timed: TimedSegment[]; words: WordTiming[]; durationBillSec: number }> {
+): Promise<{
+  timed: TimedSegment[];
+  words: WordTiming[];
+  durationBillSec: number;
+}> {
   return timeChunkWithWhisperWords(audioPath, glossary);
 }
 
@@ -752,7 +765,11 @@ async function timeChunkWithWhisperWords(
   audioPath: string,
   glossary?: string[],
   signal?: AbortSignal,
-): Promise<{ timed: TimedSegment[]; words: WordTiming[]; durationBillSec: number }> {
+): Promise<{
+  timed: TimedSegment[];
+  words: WordTiming[];
+  durationBillSec: number;
+}> {
   const leadSec = leadingSilenceTrimSec(audioPath);
   let pathForWhisper = audioPath;
   let trimSec = 0;
@@ -832,7 +849,9 @@ function usageTotals(params: {
       ? 0
       : estimateSttUsdFromMinutes(
           params.timingModel ?? "gpt-4o-mini-transcribe",
-          params.timingAudioSec > 0 ? params.timingAudioSec : params.durationSec,
+          params.timingAudioSec > 0
+            ? params.timingAudioSec
+            : params.durationSec,
         );
 
   const estimatedUsd =
@@ -867,6 +886,8 @@ export type ChunkedTranscribeResult = {
   wordTimings: WordTiming[];
   /** 본문 전사 토큰 logprob 평균. API가 주지 않으면 없음. */
   meanLogprob?: number;
+  /** 독립 단어 시각 합의로 제거한 overlap 경계 되감기. */
+  surfaceRepairs?: ChunkBoundarySurfaceRepair[];
 };
 
 /** STT 구간 내부 진행 (0–1). 청크 API 완료마다 갱신. */
@@ -939,10 +960,7 @@ async function transcribeWholeFile(params: {
   const durationSec =
     raw.durationSec ||
     timingPass?.durationBillSec ||
-    Math.max(
-      0,
-      ...(timingPass?.timed ?? raw.timed).map((s) => s.endSec),
-    );
+    Math.max(0, ...(timingPass?.timed ?? raw.timed).map((s) => s.endSec));
 
   // 용어를 붙이면 전사를 포기하는 일이 있다. 무너졌으면 용어 없이 다시 받는다.
   if (params.glossary?.length && isTooShort(raw.text, durationSec)) {
@@ -973,7 +991,7 @@ async function transcribeWholeFile(params: {
   const timed = timingPass ? timingPass.timed : raw.timed;
   const words =
     timingPass && "words" in timingPass
-      ? ((timingPass as { words: WordTiming[] }).words)
+      ? (timingPass as { words: WordTiming[] }).words
       : raw.words;
   return {
     text: guard.text,
@@ -988,7 +1006,9 @@ async function transcribeWholeFile(params: {
       model: params.model,
       durationSec,
       timingAudioSec: timingPass?.durationBillSec ?? 0,
-      timingModel: params.wordTimestamps ? "whisper-1" : "gpt-4o-mini-transcribe",
+      timingModel: params.wordTimestamps
+        ? "whisper-1"
+        : "gpt-4o-mini-transcribe",
       hadTokenUsage: Boolean(raw.usage),
       inputTokens: raw.usage?.inputTokens ?? 0,
       outputTokens: raw.usage?.outputTokens ?? 0,
@@ -1252,13 +1272,13 @@ export async function chunkedTranscribe(params: {
         startSec: s.startSec + offsetSec,
         endSec: s.endSec + offsetSec,
       }));
-      chunkWords = (("words" in timedPass ? timedPass.words : []) as WordTiming[]).map(
-        (w) => ({
-          ...w,
-          startSec: w.startSec + offsetSec,
-          endSec: w.endSec + offsetSec,
-        }),
-      );
+      chunkWords = (
+        ("words" in timedPass ? timedPass.words : []) as WordTiming[]
+      ).map((w) => ({
+        ...w,
+        startSec: w.startSec + offsetSec,
+        endSec: w.endSec + offsetSec,
+      }));
     }
 
     const inCore = (startSec: number, endSec: number) => {
@@ -1272,9 +1292,7 @@ export async function chunkedTranscribe(params: {
     timedSegments.push(
       ...chunkTimed.filter((s) => inCore(s.startSec, s.endSec)),
     );
-    wordTimings.push(
-      ...chunkWords.filter((w) => inCore(w.startSec, w.endSec)),
-    );
+    wordTimings.push(...chunkWords.filter((w) => inCore(w.startSec, w.endSec)));
   }
 
   report({
@@ -1286,26 +1304,33 @@ export async function chunkedTranscribe(params: {
     totalUnits,
   });
 
+  const partRanges = chunks.map((chunk) => ({
+    startSec: chunk.coreStartSec,
+    endSec: chunk.coreEndSec,
+  }));
+  const surface = repairChunkBoundarySurface({
+    parts,
+    partRanges,
+    wordTimings,
+  });
 
   return {
-    text: parts.filter(Boolean).join("\n"),
-    parts,
-    partRanges: chunks.map((chunk) => ({
-      startSec: chunk.coreStartSec,
-      endSec: chunk.coreEndSec,
-    })),
+    text: surface.parts.filter(Boolean).join("\n"),
+    parts: surface.parts,
+    partRanges,
     durationSec,
     chunkCount: chunks.length,
     timedSegments,
     wordTimings,
-    ...(logprobCount > 0
-      ? { meanLogprob: logprobTotal / logprobCount }
-      : {}),
+    ...(surface.repairs.length > 0 ? { surfaceRepairs: surface.repairs } : {}),
+    ...(logprobCount > 0 ? { meanLogprob: logprobTotal / logprobCount } : {}),
     usage: usageTotals({
       model: params.model,
       durationSec,
       timingAudioSec,
-      timingModel: params.wordTimestamps ? "whisper-1" : "gpt-4o-mini-transcribe",
+      timingModel: params.wordTimestamps
+        ? "whisper-1"
+        : "gpt-4o-mini-transcribe",
       hadTokenUsage,
       inputTokens,
       outputTokens,
@@ -1327,7 +1352,10 @@ export function writeSourceAudio(params: {
   const ext = params.filename.includes(".")
     ? params.filename.slice(params.filename.lastIndexOf("."))
     : ".bin";
-  const audioPath = join(/* turbopackIgnore: true */ params.workDir, `source${ext}`);
+  const audioPath = join(
+    /* turbopackIgnore: true */ params.workDir,
+    `source${ext}`,
+  );
   writeFileSync(/* turbopackIgnore: true */ audioPath, params.audioBytes);
   return audioPath;
 }

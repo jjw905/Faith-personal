@@ -5,6 +5,7 @@ import type { SpeakerBlock } from "@/lib/stt/speaker-attach";
 import type { SpeakerNameGuess } from "@/lib/stt/speaker-names";
 import type { TermSuggestion } from "@/lib/stt/term-suggest";
 import type { TranscriptLine } from "@/types/transcript";
+import type { ChunkBoundarySurfaceRepair } from "@/lib/stt/surface-accuracy";
 
 type SpeakerStageSegment = {
   startSec: number;
@@ -59,6 +60,12 @@ export type AnalysisDiagnostics = {
       suggestion: string;
       source: TermSuggestion["source"];
     }>;
+    chunkBoundaryRepairs?: Array<
+      Pick<
+        ChunkBoundarySurfaceRepair,
+        "boundarySec" | "removedPrevious" | "removedCurrent"
+      >
+    >;
   };
   final: {
     lineCount: number;
@@ -115,13 +122,15 @@ export function buildAnalysisDiagnostics(params: {
   reconciledBlocks: SpeakerBlock[];
   nameGuesses: SpeakerNameGuess[];
   fixedSpellings: TermSuggestion[];
+  chunkBoundaryRepairs?: ChunkBoundarySurfaceRepair[];
   finalLines: TranscriptLine[];
 }): AnalysisDiagnostics {
   const textLines = params.finalLines.filter(
     (line) => (line.text?.trim().length ?? 0) > 0,
   );
-  const linesWithWords = textLines.filter((line) => (line.words?.length ?? 0) > 0)
-    .length;
+  const linesWithWords = textLines.filter(
+    (line) => (line.words?.length ?? 0) > 0,
+  ).length;
   return {
     schemaVersion: 1,
     stt: {
@@ -155,6 +164,15 @@ export function buildAnalysisDiagnostics(params: {
         suggestion: suggestion.suggestion,
         source: suggestion.source,
       })),
+      ...(params.chunkBoundaryRepairs?.length
+        ? {
+            chunkBoundaryRepairs: params.chunkBoundaryRepairs.map((repair) => ({
+              boundarySec: repair.boundarySec,
+              removedPrevious: repair.removedPrevious,
+              removedCurrent: repair.removedCurrent,
+            })),
+          }
+        : {}),
     },
     final: {
       lineCount: textLines.length,
