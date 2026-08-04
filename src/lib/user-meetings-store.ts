@@ -17,6 +17,8 @@ import type { SemanticStructure } from "@/lib/stt/semantic-structure";
 import type { SttModel } from "@/lib/stt/models";
 import type { WorkspaceId } from "@/lib/workspaces";
 import type { AnalysisMode } from "@/lib/stt/analysis-mode";
+import type { AnalysisDiagnostics } from "@/lib/stt/analysis-diagnostics";
+import { normalizeSingleSpeakerMeetingPresentation } from "@/lib/stt/to-meeting";
 import { faithDataPath } from "@/lib/faith-data-root";
 import { prisma } from "@/lib/prisma";
 import { deleteAiUsageForMeeting } from "@/lib/stt/usage-store";
@@ -57,7 +59,23 @@ export type UserMeetingRecord = {
   timeline: MeetingTimeline;
   rawText?: string;
   semantic?: SemanticStructure;
+  /** 새 분석부터 남는 단계별 품질 진단. 회의 본문은 중복 저장하지 않는다. */
+  analysisDiagnostics?: AnalysisDiagnostics;
 };
+
+/** 저장 당시의 표시 버그를 읽는 시점에만 안전하게 보정한다. */
+function normalizeSpeakerPresentation(
+  record: UserMeetingRecord | null,
+): UserMeetingRecord | null {
+  if (!record) return record;
+  const presentation = normalizeSingleSpeakerMeetingPresentation({
+    semantic: record.semantic,
+    meeting: record.meeting,
+    transcript: record.transcript,
+    timeline: record.timeline,
+  });
+  return { ...record, ...presentation };
+}
 
 const ROOT = faithDataPath("user-meetings");
 const WORK_ROOT = faithDataPath("stt-work");
@@ -214,8 +232,8 @@ export async function getUserMeeting(id: string): Promise<UserMeetingRecord | nu
   if (!safeMeetingId(id)) return null;
   if (USE_DATABASE) {
     const row = await prisma.userMeetingRecord.findUnique({ where: { id } });
-    return row
-      ? recordFromStoredPayload({
+    const record = row
+      ? await recordFromStoredPayload({
           id: row.id,
           userId: row.userId,
           workspace: row.workspace,
@@ -224,6 +242,7 @@ export async function getUserMeeting(id: string): Promise<UserMeetingRecord | nu
           payload: row.payload,
         })
       : null;
+    return normalizeSpeakerPresentation(record);
   }
   const p = pathFor(id);
   if (!existsSync(p)) return null;
@@ -243,9 +262,9 @@ export async function getUserMeeting(id: string): Promise<UserMeetingRecord | nu
         progressPercent: number | null;
         payload: Prisma.JsonValue;
       };
-      return await recordFromStoredPayload(wrapper);
+      return normalizeSpeakerPresentation(await recordFromStoredPayload(wrapper));
     }
-    return stored as UserMeetingRecord;
+    return normalizeSpeakerPresentation(stored as UserMeetingRecord);
   } catch {
     return null;
   }
@@ -272,7 +291,8 @@ export async function listUserMeetings(
           }),
         ),
       ))
-      .filter((row): row is UserMeetingRecord => Boolean(row));
+      .filter((row): row is UserMeetingRecord => Boolean(row))
+      .map((row) => normalizeSpeakerPresentation(row)!)
   }
   ensureRoot();
   const files = readdirSync(ROOT).filter((f) => f.endsWith(".json"));
@@ -300,7 +320,7 @@ export async function listUserMeetings(
           : (stored as UserMeetingRecord);
       if (!row) continue;
       if (userId && row.userId !== userId) continue;
-      rows.push(row);
+      rows.push(normalizeSpeakerPresentation(row)!);
     } catch {
       // skip corrupt
     }

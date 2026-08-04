@@ -22,7 +22,12 @@ export function parseTranscriptTimeToSec(time: string): number {
 export function lineStartSec(line: {
   time: string;
   startSec?: number;
+  words?: Array<{ startSec: number }>;
 }): number {
+  const firstMeasuredWord = line.words?.find(
+    (word) => Number.isFinite(word.startSec) && word.startSec >= 0,
+  );
+  if (firstMeasuredWord) return firstMeasuredWord.startSec;
   return typeof line.startSec === "number" && Number.isFinite(line.startSec)
     ? Math.max(0, line.startSec)
     : parseTranscriptTimeToSec(line.time);
@@ -30,7 +35,11 @@ export function lineStartSec(line: {
 
 /** 미디어 duration이 아직 없을 때 대화기록 마지막 줄 기준 추정. */
 export function estimateTranscriptDurationSec(
-  lines: Array<{ time: string; startSec?: number }>,
+  lines: Array<{
+    time: string;
+    startSec?: number;
+    words?: Array<{ startSec: number }>;
+  }>,
 ): number {
   if (lines.length === 0) return 0;
   let max = 0;

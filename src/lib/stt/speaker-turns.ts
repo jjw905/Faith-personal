@@ -412,6 +412,8 @@ const COURTESY_TO_HOST = /(?:한동안|오랫동안|그동안|수고|고생).{0,
 const REPORTER_INTRO =
   /(?:수석님|안녕|기자|일보|뉴스|방송|YTN|SBS|KBS|MBC|CBS|JTBC|헤럴드)[^.!?]{0,60}(?:입니다|이라고\s*합니다)/iu;
 const STARTS_WITH_AFFIRMATIVE = /^(?:네|예)[,.\s]+/u;
+const HOST_CALL_TO_REPORTER =
+  /^(?:(?:네|예)[,.\s]*)?.{1,30}기자님[.!?…\s]*$/u;
 
 /**
  * 짧은 맞장구는 음성 임베딩과 LLM이 모두 가장 흔들리는 구간이다. 하지만
@@ -441,6 +443,18 @@ export function repairShortTurnProtocols<T extends SpeakerBlock>(
     const text = current.text.trim();
     const previous = out[index - 1];
     const next = out[index + 1];
+
+    // "네, 이성택 기자님"은 이름을 말한 사람이 아니라 진행자가 발언권을
+    // 넘기는 호명이다. 바로 다음 줄에 언론사/기자 자기소개가 있을 때만
+    // 적용해, 본문에서 기자를 언급한 일반 문장을 진행자로 바꾸지 않는다.
+    if (
+      next &&
+      HOST_CALL_TO_REPORTER.test(text) &&
+      REPORTER_INTRO.test(next.text.trim())
+    ) {
+      current.speaker = host;
+      continue;
+    }
 
     if (SHORT_THANKS.test(text)) {
       current.speaker = host;

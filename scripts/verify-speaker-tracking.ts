@@ -8,8 +8,14 @@ import {
   prunePhantomSpeakers,
   type DiarizationResult,
 } from "../src/lib/stt/diarization";
-import { activeLineIndexAt } from "../src/lib/transcript-time";
-import { stabilizeSpeakerTurnsWithAcoustics } from "../src/lib/stt/speaker-turns";
+import {
+  activeLineIndexAt,
+  lineStartSec,
+} from "../src/lib/transcript-time";
+import {
+  repairShortTurnProtocols,
+  stabilizeSpeakerTurnsWithAcoustics,
+} from "../src/lib/stt/speaker-turns";
 import type { TranscriptLine } from "../src/types/transcript";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -91,6 +97,17 @@ assert(
 assert(
   assigned[1]!.startSec === 420.28,
   `말풍선 시작이 첫 단어와 다름: ${assigned[1]!.startSec}`,
+);
+
+// 2026-07-30 KTV 저장본 재현: 줄 시작값은 109.27초였지만 실제 첫 단어는
+// 119.58초였다. 오래된 분석도 단어 실측값이 있으면 약 10초 먼저 재생하지 않는다.
+assert(
+  lineStartSec({
+    time: "01:49",
+    startSec: 109.27,
+    words: [{ startSec: 119.58 }],
+  }) === 119.58,
+  "저장된 줄 시작보다 실제 첫 단어 시각을 우선하지 않음",
 );
 
 const starts = assigned.map((line) => line.startSec ?? 0);
@@ -177,6 +194,33 @@ assert(
     sameClusterBoundary[0]?.speaker === "진행자" &&
     sameClusterBoundary[1]?.speaker === "기자",
   "같은 cluster의 진행자 호명과 기자 자기소개 경계를 보존하지 못함",
+);
+
+const repairedHostCall = repairShortTurnProtocols([
+  {
+    startSec: 0,
+    endSec: 100,
+    speaker: "진행자",
+    text: "정부 정책과 운영 방침을 충분히 길게 설명하는 진행자의 본 발언입니다.",
+  },
+  {
+    startSec: 115.7,
+    endSec: 118.9,
+    // 음향 임시 cluster를 자기소개 이름으로 잘못 붙인 회귀를 재현한다.
+    speaker: "이성택",
+    text: "네, 이성택 기자님.",
+  },
+  {
+    startSec: 118.9,
+    endSec: 121.6,
+    speaker: "이성택",
+    text: "예, 한국일보 이성택입니다.",
+  },
+]);
+assert(
+  repairedHostCall[1]?.speaker === "진행자" &&
+    repairedHostCall[2]?.speaker === "이성택",
+  "기자 호명 줄을 진행자에게 되돌리지 못함",
 );
 
 const splitReporter = stabilizeSpeakerTurnsWithAcoustics(

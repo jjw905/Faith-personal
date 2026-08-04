@@ -28,11 +28,13 @@ import type { TopicBucket } from "@/lib/stt/semantic-structure";
 import {
   applySpeakerNames,
   identifySpeakerNames,
+  type SpeakerNameGuess,
 } from "@/lib/stt/speaker-names";
 import {
   applyFixedSpellings,
   attachCorrections,
   suggestTermCorrections,
+  type TermSuggestion,
 } from "@/lib/stt/term-suggest";
 import {
   checkTranscriptModeration,
@@ -77,6 +79,7 @@ import {
 import { AnalysisJobCanceledError } from "@/lib/stt/analysis-job-queue";
 import { buildEvidenceDialogue } from "@/lib/stt/transcript-evidence";
 import { userFacingAnalysisError } from "@/lib/meeting-process";
+import { buildAnalysisDiagnostics } from "@/lib/stt/analysis-diagnostics";
 
 /**
  * 전체 파이프라인 진행률 구간 (실제 작업량 비중).
@@ -491,6 +494,8 @@ export async function processUploadedMeeting(params: {
       });
     }
     let speakerBlocks = blocks;
+    let speakerNameGuesses: SpeakerNameGuess[] = [];
+    let fixedSpellingCorrections: TermSuggestion[] = [];
     // 목소리로만 나눈 블록은 짧은 맞장구가 옆 화자에 붙어 잘게 쪼개진다.
     // 대화 맥락으로 같은 사람의 발언을 다시 묶으면 KTV 기준 화자 묶음
     // 정확도가 0.54에서 0.93으로 올라간다(블록 80 → 16, 약 7원, 16초).
@@ -538,6 +543,9 @@ export async function processUploadedMeeting(params: {
       stt.durationSec,
       {
         signal: params.signal,
+        // 업로드 화면의 대화 원문은 아래에서 PRIMARY STT와 실측 시각으로
+        // 재구성한다. 모델에게 같은 원문 전체를 다시 출력시키지 않는다.
+        includeDialogue: false,
         onProgress: ({ partIndex, partCount, attempt, depth, waitedMs }) => {
           const pct = structureProgressPercent({
             partIndex,
@@ -612,6 +620,7 @@ export async function processUploadedMeeting(params: {
             (participant) => participant.name,
           ) ?? [],
       });
+      speakerNameGuesses = named.guesses;
       applySpeakerNames(structure, named.guesses);
       confirmedNames.push(...named.guesses.map((g) => g.name));
       if (named.usage.inputTokens > 0) {
@@ -681,6 +690,9 @@ export async function processUploadedMeeting(params: {
           // 바꿨다. 회의에 실제로 주어진 용어와 고정 언론사만 대조한다.
           genericDictionary: false,
         },
+      );
+      fixedSpellingCorrections = suggested.suggestions.filter((suggestion) =>
+        isMediaOutletTerm(suggestion.suggestion),
       );
       built.transcript.lines = applyFixedSpellings(
         built.transcript.lines,
@@ -773,6 +785,26 @@ export async function processUploadedMeeting(params: {
       timeline: built.timeline,
       rawText: transcriptText,
       semantic: structure,
+      analysisDiagnostics: buildAnalysisDiagnostics({
+        analysisMode,
+        primaryModel: model,
+        timingModel: policy.wordTimestamps
+          ? "whisper-1"
+          : "gpt-4o-mini-transcribe-realtime",
+        durationSec: stt.durationSec,
+        chunkCount: stt.chunkCount,
+        glossaryTermCount: glossary.length,
+        primaryText: transcriptText,
+        timedSegmentCount: stt.timedSegments.length,
+        wordTimingCount: wordTimings.length,
+        speakerSplitRequested: speakerSplitEnabled,
+        diarization,
+        attachedBlocks: blocks,
+        reconciledBlocks: speakerBlocks,
+        nameGuesses: speakerNameGuesses,
+        fixedSpellings: fixedSpellingCorrections,
+        finalLines: built.transcript.lines,
+      }),
       errorMessage: undefined,
     });
     await prisma.teamMeeting.updateMany({

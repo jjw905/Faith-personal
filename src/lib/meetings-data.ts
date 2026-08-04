@@ -13,6 +13,7 @@ import {
   getRecentMeetings as getMockRecentMeetings,
 } from "@/lib/meetings-mock";
 import { keywordsFromSemantic } from "@/lib/stt/semantic-structure";
+import { normalizeSingleSpeakerMeetingPresentation } from "@/lib/stt/to-meeting";
 import {
   getUserMeeting,
   listUserMeetings,
@@ -130,7 +131,13 @@ export async function getMeetingTimeline(
       };
     }
     const structured = withStructuredTimeline(row.timeline, row.semantic);
-    return enrichSegmentSpeakers(structured, row.transcript);
+    const normalized = normalizeSingleSpeakerMeetingPresentation({
+      semantic: row.semantic,
+      meeting: row.meeting,
+      transcript: row.transcript,
+      timeline: structured,
+    });
+    return enrichSegmentSpeakers(normalized.timeline, normalized.transcript);
   }
   return getMockTimeline(meetingId);
 }

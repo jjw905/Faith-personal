@@ -1,6 +1,10 @@
 import { buildEvidenceDialogue } from "../src/lib/stt/transcript-evidence";
 import { mergeReconciledTranscriptParts } from "../src/lib/stt/transcript-reconcile";
-import { buildParticipantsFromSemantic } from "../src/lib/stt/to-meeting";
+import {
+  buildMeetingFromStt,
+  buildParticipantsFromSemantic,
+  normalizeSingleSpeakerMeetingPresentation,
+} from "../src/lib/stt/to-meeting";
 import { activeWordFocusAt } from "../src/lib/transcript-time";
 import { repairShortTurnProtocols } from "../src/lib/stt/speaker-turns";
 import type { SemanticStructure } from "../src/lib/stt/semantic-structure";
@@ -83,6 +87,155 @@ if (participants.length !== 1 || participants[0]?.name !== "발화") {
   throw new Error("요약 모델의 근거 없는 화자가 참석자 목록에 노출됩니다.");
 }
 
+// diarization의 기본 "발화"는 다른 사람이 아니라 화자 라벨을 붙이지 못한
+// 구간이다. 실제 라벨이 한 명뿐이면 참석자·대화·타임라인 모두 그 한 사람으로
+// 보여야 한다.
+const singleSpeakerWithGenericFallback = {
+  overallSummary: "한 사람이 발표한 내용입니다.",
+  keywords: [],
+  timeline: [
+    {
+      title: "발표",
+      summary: "화자 A가 처음부터 끝까지 설명했습니다.",
+      speakers: ["화자 A", "발화"],
+      kind: "discussion",
+      points: [],
+      speakerNotes: [{ name: "발화", said: "계속 설명" }],
+    },
+  ],
+  decisions: [],
+  actions: [{ owner: "발화", task: "자료를 공유한다", due: "" }],
+  speakers: [
+    { name: "화자 A", summary: "발표를 진행", tags: [] },
+    { name: "발화", summary: "기본값 구간", tags: ["공유"] },
+  ],
+  dialogue: [
+    { startSec: 0, speaker: "화자 A", text: "첫 번째 설명입니다." },
+    { startSec: 4, speaker: "발화", text: "이어서 설명합니다." },
+    { startSec: 8, text: "마무리 설명입니다." },
+  ],
+  topicBucket: "other",
+} satisfies SemanticStructure;
+const singleSpeakerMeeting = buildMeetingFromStt({
+  meetingId: "single-speaker-generic-fallback",
+  title: "한 명 발표",
+  durationSec: 12,
+  rawText: "첫 번째 설명입니다. 이어서 설명합니다. 마무리 설명입니다.",
+  semantic: singleSpeakerWithGenericFallback,
+});
+if (
+  singleSpeakerMeeting.meeting.participants.length !== 1 ||
+  singleSpeakerMeeting.meeting.participants[0]?.name !== "화자 A"
+) {
+  throw new Error("한 명 화자 회의가 참석자 목록에서 둘로 나뉩니다.");
+}
+if (singleSpeakerMeeting.transcript.lines.some((line) => line.speaker !== "화자 A")) {
+  throw new Error("한 명 화자 회의의 대화 줄에 기본 발화 라벨이 남습니다.");
+}
+if (
+  singleSpeakerMeeting.timeline.segments.some((segment) =>
+    segment.speakers?.includes("발화"),
+  )
+) {
+  throw new Error("한 명 화자 회의의 타임라인에 기본 발화 라벨이 남습니다.");
+}
+if (singleSpeakerMeeting.timeline.actions?.[0]?.owner !== "화자 A") {
+  throw new Error("한 명 화자 회의의 액션 담당자에 기본 발화 라벨이 남습니다.");
+}
+
+const legacySingleSpeakerPresentation = normalizeSingleSpeakerMeetingPresentation({
+  semantic: singleSpeakerWithGenericFallback,
+  meeting: {
+    ...singleSpeakerMeeting.meeting,
+    participants: [
+      ...singleSpeakerMeeting.meeting.participants,
+      {
+        id: "spk-voice",
+        name: "발화",
+        initials: "발",
+        color: "bg-slate-500",
+        recognition: "voice",
+        recognitionNote: "화자 분리 없음",
+      },
+    ],
+  },
+  transcript: {
+    ...singleSpeakerMeeting.transcript,
+    lines: singleSpeakerMeeting.transcript.lines.map((line, index) =>
+      index === 1 ? { ...line, speaker: "발화" } : line,
+    ),
+  },
+  timeline: {
+    ...singleSpeakerMeeting.timeline,
+    actions: [{ owner: "발화", task: "자료를 공유한다" }],
+    segments: singleSpeakerMeeting.timeline.segments.map((segment) => ({
+      ...segment,
+      speakers: ["화자 A", "발화"],
+      speakerNotes: [{ name: "발화", said: "계속 설명" }],
+    })),
+  },
+});
+if (
+  legacySingleSpeakerPresentation.meeting.participants.length !== 1 ||
+  legacySingleSpeakerPresentation.transcript.lines.some(
+    (line) => line.speaker === "발화",
+  ) ||
+  legacySingleSpeakerPresentation.timeline.segments.some((segment) =>
+    segment.speakers?.includes("발화"),
+  ) ||
+  legacySingleSpeakerPresentation.timeline.actions?.[0]?.owner === "발화"
+) {
+  throw new Error("기존 한 명 화자 회의의 기본 발화 라벨을 표시 단계에서 보정하지 못합니다.");
+}
+
+const legacyWithoutSemantic = normalizeSingleSpeakerMeetingPresentation({
+  meeting: legacySingleSpeakerPresentation.meeting,
+  transcript: {
+    ...legacySingleSpeakerPresentation.transcript,
+    lines: legacySingleSpeakerPresentation.transcript.lines.map((line, index) =>
+      index === 1 ? { ...line, speaker: "발화" } : line,
+    ),
+  },
+  timeline: {
+    ...legacySingleSpeakerPresentation.timeline,
+    segments: legacySingleSpeakerPresentation.timeline.segments.map((segment) => ({
+      ...segment,
+      speakers: ["화자 A", "발화"],
+    })),
+  },
+});
+if (
+  legacyWithoutSemantic.transcript.lines.some((line) => line.speaker === "발화") ||
+  legacyWithoutSemantic.timeline.segments.some((segment) =>
+    segment.speakers?.includes("발화"),
+  )
+) {
+  throw new Error("semantic이 없는 기존 회의의 기본 발화 라벨을 보정하지 못합니다.");
+}
+
+const multiSpeakerWithGenericFallback = {
+  ...singleSpeakerWithGenericFallback,
+  speakers: [
+    { name: "화자 A", summary: "첫 번째 발표", tags: [] },
+    { name: "화자 B", summary: "두 번째 발표", tags: [] },
+    { name: "발화", summary: "라벨 없음", tags: [] },
+  ],
+  dialogue: [
+    { startSec: 0, speaker: "화자 A", text: "첫 번째 화자입니다." },
+    { startSec: 4, speaker: "화자 B", text: "두 번째 화자입니다." },
+    { startSec: 8, speaker: "발화", text: "라벨 없는 구간입니다." },
+  ],
+} satisfies SemanticStructure;
+const multiSpeakerParticipants = buildParticipantsFromSemantic(
+  multiSpeakerWithGenericFallback,
+);
+if (
+  multiSpeakerParticipants.map((participant) => participant.name).join("|") !==
+  "화자 A|화자 B|발화"
+) {
+  throw new Error("둘 이상의 실제 화자가 있는 경우 기본 발화 라벨을 억지로 합쳤습니다.");
+}
+
 const merged = mergeReconciledTranscriptParts([
   "대시보드는 현황 정보를 제공합니다.",
   "제공합니다. 현재 38개의 과제가 등록되어 있습니다.",
@@ -130,6 +283,16 @@ console.log(
     evidenceLines: dialogue.length,
     speakerLines: speakerDialogue.length,
     groundedParticipants: participants.map((participant) => participant.name),
+    singleSpeakerFallback: singleSpeakerMeeting.meeting.participants.map(
+      (participant) => participant.name,
+    ),
+    legacySingleSpeakerFallback:
+      legacySingleSpeakerPresentation.meeting.participants.map(
+        (participant) => participant.name,
+      ),
+    preservedMultiSpeakerFallback: multiSpeakerParticipants.map(
+      (participant) => participant.name,
+    ),
     reconciledParts: merged.length,
   }),
 );
