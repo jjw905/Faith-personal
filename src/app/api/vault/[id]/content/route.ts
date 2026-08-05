@@ -61,7 +61,18 @@ export async function GET(request: Request, { params }: Params) {
   const { id } = await params;
   try {
     const row = await prisma.vaultFile.findFirst({
-      where: { id, userId: session.user.id },
+      where: {
+        id,
+        OR: [
+          { userId: session.user.id },
+          {
+            teamId: { not: null },
+            team: {
+              members: { some: { userId: session.user.id } },
+            },
+          },
+        ],
+      },
     });
     if (!row) {
       return NextResponse.json(

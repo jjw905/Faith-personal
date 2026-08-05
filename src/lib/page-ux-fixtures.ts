@@ -1,11 +1,37 @@
 import { guessVaultMime } from "@/lib/vault-file-icon";
 import type { DevChangelogState } from "@/lib/changelog-store";
+import { defaultNotificationExamples } from "@/lib/notification-examples";
+import type { PipelineStatsSummary } from "@/lib/stt/pipeline-stats-store";
+import type { SurveyStatsSummary } from "@/lib/stt/survey-stats";
 import type { AiUsageSummary } from "@/lib/stt/usage-store";
 import type { VaultItemMeta, VaultUsage } from "@/lib/vault";
 import { VAULT_QUOTA_BYTES } from "@/lib/vault";
 import type { WorkspaceId } from "@/lib/workspaces";
 import type { Meeting } from "@/types/meeting";
 import type { AppNotification } from "@/types/notification";
+
+export type FixtureTeamChatMessage = {
+  id: string;
+  body: string;
+  attachmentType: "vault_file" | "team_meeting" | null;
+  vaultFileId: string | null;
+  teamMeetingId: string | null;
+  attachmentMeta: {
+    name?: string;
+    size?: number;
+    mime?: string;
+    title?: string;
+    state?: string;
+    endedAt?: string | null;
+  } | null;
+  createdAt: string;
+  author: {
+    id: string;
+    name: string | null;
+    handle: string | null;
+    image: string | null;
+  };
+};
 
 /** 관리자 팀 목록 UX용 운영 메타 (본문·정책 제외). */
 export type FixtureAdminTeam = {
@@ -416,78 +442,10 @@ export function fixtureDevChangelogFull(
 
 /**
  * 알림 UX 미리보기 (클릭 펼침).
- * 본문 확인, 수락·거절, 확인+바로가기, 바로가기만 (실존 경로만).
+ * 왼쪽 메뉴 알림 센터와 동일 예시 — `defaultNotificationExamples`.
  */
 export function fixtureNotificationsExpand(): AppNotification[] {
-  return [
-    {
-      id: "ux-n-exp-long",
-      type: "urgent",
-      title: "서비스 점검 안내",
-      body: "오늘 새벽 2시부터 30분간 점검이 있습니다. 점검 중에는 회의 업로드와 실시간 녹음이 잠시 중단될 수 있으며, 진행 중이던 분석은 점검 종료 후 이어서 처리됩니다. 도움말에서 일정을 확인할 수 있습니다.",
-      time: "방금",
-      unread: true,
-      createdAt: new Date().toISOString(),
-      data: { href: "/help" },
-    },
-    {
-      id: "ux-n-exp-invite",
-      type: "invite",
-      title: "제품기획팀 초대",
-      body: "김기획님이 제품기획팀에 초대했습니다. 1시간 안에 수락하거나 거절해 주세요. 거절 시 사유를 남길 수 있습니다.",
-      time: "3분 전",
-      unread: true,
-      createdAt: new Date(Date.now() - 3 * 60_000).toISOString(),
-      data: { inviteId: "ux-invite-expand" },
-    },
-    {
-      id: "ux-n-exp-mask",
-      type: "masking",
-      title: "마스킹 검증 필요",
-      body: "미확정 개인정보 후보가 있습니다. 회의 기록에서 가림을 확인하고 확정할 수 있습니다.",
-      time: "8분 전",
-      unread: true,
-      createdAt: new Date(Date.now() - 8 * 60_000).toISOString(),
-      data: { href: "/dashboard" },
-    },
-    {
-      id: "ux-n-exp-open",
-      type: "storage",
-      title: "회의 분석이 완료되었습니다",
-      body: "주간 싱크 기록이 준비되었습니다. 요약, 타임라인, 대화기록을 회의 목록에서 이어서 확인할 수 있습니다.",
-      time: "10분 전",
-      unread: true,
-      createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
-      data: {
-        kind: "analysis_done",
-        href: "/dashboard",
-      },
-    },
-    {
-      id: "ux-n-exp-ack",
-      type: "meeting",
-      title: "회의 참석 확인",
-      body: "내일 오전 10시 주간 싱크입니다. 참석을 확인하면 팀 예정에 반영됩니다. 확인은 참석 수락이 아닙니다.",
-      time: "20분 전",
-      unread: true,
-      createdAt: new Date(Date.now() - 20 * 60_000).toISOString(),
-      data: {
-        kind: "meeting_ack",
-        meetingId: "ux-mtg-ack-expand",
-        href: "/team",
-      },
-    },
-    {
-      id: "ux-n-exp-access",
-      type: "access",
-      title: "로그인 보호 안내",
-      body: "다른 기기에서 로그인 시도를 막아 두었습니다. 본인이 아니면 비밀번호를 바꿔 주세요.",
-      time: "1시간 전",
-      unread: true,
-      createdAt: new Date(Date.now() - 60 * 60_000).toISOString(),
-      data: { href: "/settings" },
-    },
-  ];
+  return defaultNotificationExamples();
 }
 
 const ADMIN_TEAM_FIXTURE_SEED: Omit<
@@ -715,4 +673,152 @@ export function fixtureSignupEmailVerify(): SignupEmailVerifyFixture {
     otp: FIXTURE_SIGNUP_VERIFY_CODE,
     message: "메일을 확인해 주세요.",
   };
+}
+
+export function fixturePipelineEmpty(): PipelineStatsSummary {
+  return {
+    total: 0,
+    done: 0,
+    error: 0,
+    moderationBlocked: 0,
+    quotaBlocked: 0,
+    failureRate: 0,
+    byFailedStage: {},
+    byModel: {},
+    byDurationBucket: {},
+    bySpeakerBucket: {},
+    byTopicBucket: {},
+    byModelAndStage: {},
+    byDurationAndStage: {},
+  };
+}
+
+export function fixturePipelineFull(): PipelineStatsSummary {
+  return {
+    total: 120,
+    done: 98,
+    error: 14,
+    moderationBlocked: 8,
+    quotaBlocked: 0,
+    failureRate: 14 / 120,
+    byFailedStage: { stt: 5, structure: 6, moderation: 3 },
+    byModel: { "gpt-4o-transcribe": 70, "gpt-4.1-mini": 50 },
+    byDurationBucket: { "0-10": 40, "10-30": 55, "30-60": 20, "60+": 5 },
+    bySpeakerBucket: { "1": 20, "2-3": 50, "4-6": 30, "7+": 20 },
+    byTopicBucket: {
+      business: 40,
+      tech_dev: 35,
+      education: 20,
+      other: 25,
+    },
+    byModelAndStage: {},
+    byDurationAndStage: {},
+  };
+}
+
+export function fixtureSurveyEmpty(): SurveyStatsSummary {
+  return {
+    total: 0,
+    totalUsers: 40,
+    responseRate: 0,
+    willingRate: 0,
+    avgSatisfaction: 0,
+    byPaymentIntent: {},
+    byPricePreference: {},
+    byFeature: {},
+    satisfactionCounts: {},
+  };
+}
+
+export function fixtureSurveyFull(): SurveyStatsSummary {
+  return {
+    total: 28,
+    totalUsers: 40,
+    responseRate: 0.7,
+    willingRate: 0.55,
+    avgSatisfaction: 4.1,
+    byPaymentIntent: {
+      willing: 15,
+      free_only: 8,
+      unsure: 5,
+    },
+    byPricePreference: {
+      under_5000: 6,
+      "5000_15000": 10,
+      "15000_30000": 7,
+      over_30000: 2,
+    },
+    byFeature: {
+      diarization: 18,
+      summary_timeline: 22,
+      memo: 9,
+      playback_sync: 14,
+    },
+    satisfactionCounts: { "3": 4, "4": 12, "5": 12 },
+  };
+}
+
+export function fixtureTeamChatEmpty(): FixtureTeamChatMessage[] {
+  return [];
+}
+
+export function fixtureTeamChatFull(
+  currentUserId = "ux-me",
+): FixtureTeamChatMessage[] {
+  const now = Date.now();
+  return [
+    {
+      id: "ux-tcm-1",
+      body: "오늘 싱크 자료 공유합니다.",
+      attachmentType: "vault_file",
+      vaultFileId: "ux-vault-1",
+      teamMeetingId: null,
+      attachmentMeta: {
+        name: "주간싱크.pdf",
+        size: 240_000,
+        mime: "application/pdf",
+      },
+      createdAt: new Date(now - 3_600_000).toISOString(),
+      author: {
+        id: "ux-peer-1",
+        name: "김동료",
+        handle: "kim",
+        image: null,
+      },
+    },
+    {
+      id: "ux-tcm-2",
+      body: "회의록도 같이 올려 둘게요.",
+      attachmentType: "team_meeting",
+      vaultFileId: null,
+      teamMeetingId: "ux-rec-1",
+      attachmentMeta: {
+        title: "최근 기록 1",
+        state: "COMPLETED",
+        endedAt: new Date(now - 86_400_000).toISOString(),
+      },
+      createdAt: new Date(now - 1_800_000).toISOString(),
+      author: {
+        id: currentUserId,
+        name: "나",
+        handle: "me",
+        image: null,
+      },
+    },
+    {
+      id: "ux-tcm-3",
+      body: "확인했습니다. 내일까지 피드백 남길게요.",
+      attachmentType: null,
+      vaultFileId: null,
+      teamMeetingId: null,
+      attachmentMeta: null,
+      createdAt: new Date(now - 600_000).toISOString(),
+      author: {
+        id: "ux-peer-2",
+        name: "이팀원",
+        handle: "lee",
+        image: null,
+      },
+    },
+  ];
 }

@@ -13,7 +13,7 @@ export default async function TeamPage() {
 
   return (
     <PageContainer soft>
-      <div className="mx-auto w-full max-w-6xl">
+      <div className="mx-auto w-full max-w-6xl xl:max-w-7xl">
         <Suspense
           fallback={
             <div className="panel-surface grid min-h-56 place-items-center rounded-2xl bg-card">

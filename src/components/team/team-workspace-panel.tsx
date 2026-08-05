@@ -32,14 +32,11 @@ import {
 
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import {
-  MeetingsMobileActionBar,
-  type MeetingsMobilePane,
-} from "@/components/dashboard/meetings-mobile-action-bar";
-import {
   RecordsPageNav,
   RECORDS_PAGE_SIZE,
   UPCOMING_PAGE_SIZE,
 } from "@/components/dashboard/records-page-nav";
+import { TeamChatHub } from "@/components/team/team-chat-hub";
 import {
   TeamMeetingComposer,
   type TeamMeetingComposerValues,
@@ -511,8 +508,6 @@ export function TeamWorkspacePanel() {
     [],
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobilePane, setMobilePane] =
-    useState<MeetingsMobilePane>("upcoming");
   const [upcomingLayout, setUpcomingLayout] = useState<SectionLayout>("list");
   const [announcementsLayout, setAnnouncementsLayout] =
     useState<SectionLayout>("list");
@@ -850,7 +845,6 @@ export function TeamWorkspacePanel() {
 
   useEffect(() => {
     setSearchQuery("");
-    setMobilePane("upcoming");
   }, [activeTeamId]);
 
   const nearestId = displayData?.nearest?.id ?? null;
@@ -1249,16 +1243,16 @@ export function TeamWorkspacePanel() {
   }
 
   return (
-    <div className="relative flex flex-col gap-4 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:pb-0">
+    <div className="relative flex flex-col gap-4 pb-0 md:pb-0">
       {message ? (
         <div className="rounded-2xl bg-primary-soft px-4 py-3 text-base">
           {message}
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-base font-medium leading-tight text-muted">
+      <div className="flex flex-wrap items-center justify-between gap-3 md:gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="hidden text-base font-medium leading-tight text-muted md:block">
             {dateHeading}
           </p>
           {renaming && caps.canActOwner ? (
@@ -1289,8 +1283,8 @@ export function TeamWorkspacePanel() {
               </Button>
             </div>
           ) : (
-            <div className="mt-2 flex min-w-0 items-center gap-1">
-              <h1 className="truncate text-2xl font-bold leading-tight tracking-tight text-foreground">
+            <div className="flex min-w-0 items-center gap-1 md:mt-2">
+              <h1 className="truncate text-xl font-bold leading-tight tracking-tight text-foreground md:text-2xl">
                 {data.team.name}
               </h1>
               {caps.showOwner && caps.canActOwner ? (
@@ -1306,7 +1300,7 @@ export function TeamWorkspacePanel() {
               {caps.showOwner ? (
                 <Button
                   variant="ghost"
-                  className="ml-0.5 min-h-12 shrink-0 gap-1.5 px-2.5 text-base md:min-h-10"
+                  className="ml-0.5 hidden min-h-12 shrink-0 gap-1.5 px-2.5 text-base md:inline-flex md:min-h-10"
                   disabled={!caps.canActOwner}
                   onClick={() => setSettingsOpen(true)}
                 >
@@ -1338,7 +1332,7 @@ export function TeamWorkspacePanel() {
             </label>
           ) : null}
         </div>
-        <div className="w-full min-w-0 sm:max-w-sm sm:flex-1">
+        <div className="hidden min-w-0 md:block md:max-w-sm md:flex-1">
           <MeetingSearch
             value={searchQuery}
             onChange={setSearchQuery}
@@ -1348,59 +1342,12 @@ export function TeamWorkspacePanel() {
         </div>
       </div>
 
-      {caps.showCreator || caps.showLeader ? (
-        <section className="hidden space-y-3 md:block" aria-label="팀 주요 작업">
-          <div className="flex flex-wrap items-center gap-2">
-            {caps.showCreator ? (
-              <TeamActionButton
-                primary
-                icon={
-                  <Mic
-                    className="h-5 w-5 shrink-0 text-primary-foreground"
-                    strokeWidth={1.75}
-                  />
-                }
-                label="실시간 회의 시작"
-                disabled={!caps.canActCreator}
-                onClick={() => router.push("/team/live")}
-              />
-            ) : null}
-            {caps.showCreator ? (
-              <TeamActionButton
-                icon={
-                  <CalendarDays
-                    className="h-5 w-5 shrink-0 text-muted"
-                    strokeWidth={1.75}
-                  />
-                }
-                label="일정 만들기"
-                disabled={!caps.canActCreator}
-                onClick={() => router.push("/team/schedule")}
-              />
-            ) : null}
-            {caps.showLeader ? (
-              <TeamActionButton
-                icon={
-                  <Megaphone
-                    className="h-5 w-5 shrink-0 text-muted"
-                    strokeWidth={1.75}
-                  />
-                }
-                label="공지 작성"
-                disabled={!caps.canActLeader}
-                onClick={openAnnouncementSheet}
-              />
-            ) : null}
-          </div>
-        </section>
-      ) : null}
-
       {caps.showInvite ||
       caps.showOwner ||
       caps.showRecordAccess ||
       caps.showAudit ? (
-        <section className="space-y-3">
-          <div>
+        <section className="space-y-2 md:space-y-3">
+          <div className="hidden md:block">
             <h2 className="text-xl font-semibold tracking-tight text-foreground">
               팀 관리
             </h2>
@@ -1408,7 +1355,10 @@ export function TeamWorkspacePanel() {
               구성원, 보안, 기록 접근을 관리합니다.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div
+            className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible md:pb-0"
+            aria-label="팀 관리"
+          >
             {caps.showInvite ? (
               <TeamActionButton
                 icon={
@@ -1420,7 +1370,7 @@ export function TeamWorkspacePanel() {
                 label="구성원 초대"
                 disabled={!caps.canActInvite}
                 onClick={() => router.push("/team?manage=invite")}
-                className="w-full sm:w-auto"
+                className="shrink-0"
               />
             ) : null}
             {caps.showOwner ? (
@@ -1434,7 +1384,7 @@ export function TeamWorkspacePanel() {
                 label="구성원 관리"
                 disabled={!caps.canActOwner}
                 onClick={() => router.push("/team?manage=members")}
-                className="w-full sm:w-auto"
+                className="shrink-0"
               />
             ) : null}
             {caps.showOwner ? (
@@ -1448,7 +1398,7 @@ export function TeamWorkspacePanel() {
                 label="보안 정책"
                 disabled={!caps.canActOwner}
                 onClick={() => router.push("/team?manage=security")}
-                className="w-full sm:w-auto"
+                className="shrink-0"
               />
             ) : null}
             {caps.showRecordAccess ? (
@@ -1462,7 +1412,7 @@ export function TeamWorkspacePanel() {
                 label="기록 접근"
                 disabled={!caps.canActRecordAccess}
                 onClick={() => router.push("/team?manage=records")}
-                className="w-full sm:w-auto"
+                className="shrink-0"
               />
             ) : null}
             {caps.showAudit ? (
@@ -1476,7 +1426,7 @@ export function TeamWorkspacePanel() {
                 label="감사 로그"
                 disabled={!caps.canActAudit}
                 onClick={() => router.push("/audit")}
-                className="w-full sm:w-auto"
+                className="shrink-0"
               />
             ) : null}
           </div>
@@ -1510,347 +1460,21 @@ export function TeamWorkspacePanel() {
         </section>
       ) : null}
 
-      <div
-        className={cn(
-          "grid grid-cols-1 items-stretch gap-4 md:grid-cols-2",
-          mobilePane !== "upcoming" && "max-md:hidden",
-        )}
-      >
-        <SectionCard
-          title="예정 회의"
-          count={filteredUpcoming.length}
-          action={
-            caps.showCreator && caps.canActCreator ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-12 w-12 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground md:h-8 md:w-8"
-                aria-label="일정 만들기"
-                onClick={() => router.push("/team/schedule")}
-              >
-                <Plus className="h-4 w-4" strokeWidth={1.75} />
-              </Button>
-            ) : null
-          }
-          toolbar={
-            filteredUpcoming.length > 0 ? (
-              <SectionLayoutToggle
-                value={upcomingLayout}
-                label="예정 회의"
-                onChange={setUpcomingLayoutPersist}
-              />
-            ) : null
-          }
-          empty={
-            filteredUpcoming.length === 0 ? (
-              <SectionEmpty
-                message={
-                  normalizedSearch
-                    ? "검색된 예정 회의가 없습니다."
-                    : "예정된 회의가 없습니다."
-                }
-                actionLabel={
-                  !normalizedSearch && caps.showCreator && caps.canActCreator
-                    ? "일정 만들기"
-                    : undefined
-                }
-                onAction={
-                  !normalizedSearch && caps.showCreator && caps.canActCreator
-                    ? () => router.push("/team/schedule")
-                    : undefined
-                }
-              />
-            ) : undefined
-          }
-        >
-          {filteredUpcoming.length > 0 ? (
-            <>
-              {upcomingLayout === "list" ? (
-                <ul className="divide-y divide-border">
-                  {pagedUpcoming.map((meeting) => (
-                    <li key={meeting.id}>
-                      <UpcomingMeetingRow
-                        meeting={meeting}
-                        emphasized={meeting.id === nearestId}
-                        showAck={caps.showLeader}
-                        trailing={
-                          caps.showLeader && caps.canActLeader ? (
-                            <Button
-                              variant="ghost"
-                            className="min-h-12 rounded-xl text-muted hover:text-foreground"
-                              onClick={() =>
-                                void cancelUpcomingMeeting(meeting.id)
-                              }
-                            >
-                              취소
-                            </Button>
-                          ) : null
-                        }
-                      />
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <ul
-                  className={sectionGridClass(pagedUpcoming.length, {
-                    split: true,
-                  })}
-                >
-                  {pagedUpcoming.map((meeting) => (
-                    <li key={meeting.id} className="min-h-0">
-                      <UpcomingMeetingGridCard
-                        meeting={meeting}
-                        emphasized={meeting.id === nearestId}
-                        showAck={caps.showLeader}
-                        trailing={
-                          caps.showLeader && caps.canActLeader ? (
-                            <Button
-                              variant="ghost"
-                            className="min-h-12 rounded-xl text-muted hover:text-foreground"
-                              onClick={() =>
-                                void cancelUpcomingMeeting(meeting.id)
-                              }
-                            >
-                              취소
-                            </Button>
-                          ) : null
-                        }
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <RecordsPageNav
-                page={Math.min(upcomingPage, upcomingTotalPages)}
-                totalPages={upcomingTotalPages}
-                onPageChange={setUpcomingPage}
-              />
-            </>
-          ) : null}
-        </SectionCard>
-
-        <SectionCard
-          title="팀 공지"
-          count={displayData!.announcements.length}
-          action={
-            caps.showLeader && caps.canActLeader ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-12 w-12 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground md:h-8 md:w-8"
-                aria-label="공지 작성"
-                onClick={openAnnouncementSheet}
-              >
-                <Plus className="h-4 w-4" strokeWidth={1.75} />
-              </Button>
-            ) : null
-          }
-          toolbar={
-            displayData!.announcements.length > 0 ? (
-              <SectionLayoutToggle
-                value={announcementsLayout}
-                label="팀 공지"
-                onChange={setAnnouncementsLayoutPersist}
-              />
-            ) : null
-          }
-          empty={
-            displayData!.announcements.length === 0 ? (
-              <SectionEmpty
-                message="등록된 공지가 없습니다."
-                actionLabel={
-                  caps.showLeader && caps.canActLeader
-                    ? "공지 작성"
-                    : undefined
-                }
-                onAction={
-                  caps.showLeader && caps.canActLeader
-                    ? openAnnouncementSheet
-                    : undefined
-                }
-              />
-            ) : undefined
-          }
-        >
-          {displayData!.announcements.length > 0 ? (
-            announcementsLayout === "list" ? (
-              <ul className="divide-y divide-border">
-                {displayData!.announcements.slice(0, 5).map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-start sm:justify-between sm:py-5"
-                  >
-                    <div className="min-w-0">
-                      <p
-                        className={cn(
-                          "text-lg font-semibold",
-                          item.read ? "text-muted" : "text-foreground",
-                        )}
-                      >
-                        {item.pinned ? "고정, " : ""}
-                        {item.title}
-                      </p>
-                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-base text-muted">
-                        {item.body}
-                      </p>
-                    </div>
-                    {!item.read ? (
-                      <Button
-                        variant="ghost"
-                        className="min-h-12 w-full shrink-0 rounded-xl sm:w-auto"
-                        onClick={() => void markAnnouncementRead(item.id)}
-                      >
-                        확인
-                      </Button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <ul
-                className={sectionGridClass(displayData!.announcements.length, {
-                  split: true,
-                })}
-              >
-                {displayData!.announcements.slice(0, 5).map((item) => (
-                  <li key={item.id} className="min-h-0">
-                    <div
-                      className={cn(
-                        "flex h-full min-h-[9.5rem] flex-col rounded-2xl bg-surface p-4 sm:min-h-[10.5rem]",
-                        item.read
-                          ? "ring-1 ring-border"
-                          : "ring-2 ring-primary/40",
-                      )}
-                    >
-                      <p
-                        className={cn(
-                          "line-clamp-2 text-lg font-semibold",
-                          item.read ? "text-muted" : "text-foreground",
-                        )}
-                      >
-                        {item.pinned ? "고정, " : ""}
-                        {item.title}
-                      </p>
-                      <p className="mt-2 line-clamp-3 flex-1 whitespace-pre-wrap text-base text-muted">
-                        {item.body}
-                      </p>
-                      {!item.read ? (
-                        <Button
-                          variant="secondary"
-                          className="mt-4 min-h-12 w-full rounded-xl"
-                          onClick={() => void markAnnouncementRead(item.id)}
-                        >
-                          확인
-                        </Button>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : null}
-        </SectionCard>
-      </div>
-
-      <div className={cn(mobilePane !== "records" && "max-md:hidden")}>
-      <SectionCard
-        title="최근 기록"
-        count={filteredRecords.length}
-        toolbar={
-          filteredRecords.length > 0 ? (
-            <SectionLayoutToggle
-              value={recordsLayout}
-              label="최근 기록"
-              onChange={setRecordsLayoutPersist}
-            />
-          ) : null
-        }
-        empty={
-          filteredRecords.length === 0 ? (
-            <SectionEmpty
-              message={
-                normalizedSearch
-                  ? "검색된 기록이 없습니다."
-                  : "접근 가능한 기록이 없습니다."
-              }
-            />
-          ) : undefined
-        }
-      >
-        {filteredRecords.length > 0 ? (
-          <>
-            {recordsLayout === "list" ? (
-              <ul className="divide-y divide-border">
-                {pagedRecords.map((record) => (
-                  <li key={record.id}>
-                    <Link
-                      href={`/meetings/team/${record.id}`}
-                      className="grid min-h-14 items-start gap-2 px-6 py-4 transition-colors hover:bg-surface/70 sm:grid-cols-[minmax(7rem,auto)_1fr_auto] sm:items-center sm:gap-3 sm:py-5"
-                    >
-                      <span className="text-base font-semibold tabular-nums tracking-tight text-muted sm:text-lg sm:text-foreground">
-                        {formatRecordWhen(record.endedAt)}
-                      </span>
-                      <span className="truncate text-lg font-semibold text-foreground">
-                        {record.title}
-                      </span>
-                      <span className="text-base text-muted">
-                        {recordStateLabel(record.state)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <ul className={sectionGridClass(pagedRecords.length)}>
-                {pagedRecords.map((record) => (
-                  <li key={record.id} className="min-h-0">
-                    <Link
-                      href={`/meetings/team/${record.id}`}
-                      className="flex h-full min-h-[8.5rem] flex-col rounded-2xl bg-surface p-4 ring-1 ring-border transition-colors hover:bg-surface-2 sm:min-h-[9.5rem]"
-                    >
-                      <span className="text-base font-semibold tabular-nums text-muted">
-                        {formatRecordWhen(record.endedAt)}
-                      </span>
-                      <span className="mt-2 line-clamp-2 flex-1 text-lg font-semibold leading-snug text-foreground">
-                        {record.title}
-                      </span>
-                      <span className="mt-3 text-base text-muted">
-                        {recordStateLabel(record.state)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <RecordsPageNav
-              page={Math.min(recordsPage, recordsTotalPages)}
-              totalPages={recordsTotalPages}
-              onPageChange={setRecordsPage}
-            />
-          </>
-        ) : null}
-      </SectionCard>
-      </div>
-
-      <MeetingsMobileActionBar
-        pane={mobilePane}
-        onPaneChange={setMobilePane}
-        startLabel="실시간 회의"
-        startHref={
-          caps.showCreator && caps.canActCreator
-            ? "/team/live"
-            : undefined
-        }
-        uploadLabel="일정 만들기"
-        uploadIcon="calendar"
-        createLabel="회의 추가"
-        onUpload={
-          caps.showCreator && caps.canActCreator
-            ? () => router.push("/team/schedule")
-            : undefined
-        }
+      <TeamChatHub
+        teamId={data.team.id}
+        currentUserId={data.currentMember.userId}
+        teamName={data.team.name}
+        upcoming={filteredUpcoming}
+        announcements={displayData!.announcements}
+        records={filteredRecords}
+        canCreateMeeting={Boolean(caps.showCreator && caps.canActCreator)}
+        canAnnounce={Boolean(caps.showLeader && caps.canActLeader)}
+        onStartLive={() => router.push("/team/live")}
+        onSchedule={() => router.push("/team/schedule")}
+        onComposeAnnouncement={openAnnouncementSheet}
+        onOpenRecord={(id) => router.push(`/meetings/team/${id}`)}
+        onOpenUpcoming={(id) => router.push(`/meetings/team/${id}`)}
+        onMarkAnnouncementRead={(id) => void markAnnouncementRead(id)}
       />
 
       <TeamSheet

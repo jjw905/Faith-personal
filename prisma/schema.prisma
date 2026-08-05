@@ -159,6 +159,7 @@ model User {
   teamMeetingAccess         TeamMeetingAccess[]
   authoredAnnouncements     TeamAnnouncement[]
   announcementReads         TeamAnnouncementRead[]
+  authoredTeamChatMessages  TeamChatMessage[]
   notifications             Notification[]
   auditActions              TeamAuditLog[]         @relation("AuditActor")
   auditTargets              TeamAuditLog[]         @relation("AuditTarget")
@@ -340,6 +341,7 @@ model Team {
   vaultFiles    VaultFile[]
   meetings      TeamMeeting[]
   announcements TeamAnnouncement[]
+  chatMessages  TeamChatMessage[]
   auditLogs     TeamAuditLog[]
   createdAt     DateTime           @default(now()) @map("created_at")
   updatedAt     DateTime           @updatedAt @map("updated_at")
@@ -538,6 +540,32 @@ model TeamAnnouncementRead {
   @@unique([announcementId, userId])
   @@index([userId, readAt])
   @@map("team_announcement_reads")
+}
+
+/**
+ * 팀 채널 채팅. 본문은 팀 content 키로 봉인.
+ * 첨부는 Faith 자원만: 보관함 파일, 팀 회의록.
+ */
+model TeamChatMessage {
+  id               String    @id @default(cuid())
+  teamId           String    @map("team_id")
+  team             Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  channel          String    @default("general") @db.VarChar(32)
+  authorId         String    @map("author_id")
+  author           User      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  /** 봉인된 텍스트. 첨부만 있으면 빈 문자열 봉인 가능. */
+  body             String    @db.Text
+  attachmentType   String?   @map("attachment_type") @db.VarChar(32)
+  vaultFileId      String?   @map("vault_file_id")
+  teamMeetingId    String?   @map("team_meeting_id")
+  /** 표시용 스냅샷 JSON(파일명·회의 제목 등). 민감 본문 아님. */
+  attachmentMeta   Json?     @map("attachment_meta")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  @@index([teamId, channel, createdAt])
+  @@index([authorId, createdAt])
+  @@map("team_chat_messages")
 }
 
 model UserPersonalSettings {

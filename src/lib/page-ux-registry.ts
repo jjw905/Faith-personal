@@ -13,7 +13,7 @@ const LOADING: PageUxScenario = { id: "loading", label: "불러오는 중" };
 const POPUP = {
   notificationsExpand: {
     id: "popup-notifications-expand",
-    label: "알림, 클릭 펼침",
+    label: "알림 센터",
   },
   account: { id: "popup-account", label: "계정 메뉴" },
   upload: { id: "upload", label: "올리기 팝업" },
@@ -30,15 +30,16 @@ const POPUP = {
     label: "보관함 비어 있음",
   },
   uploading: { id: "popup-uploading", label: "업로드 중" },
+  recording: { id: "popup-recording", label: "녹음 중(펼침)" },
   startReady: { id: "popup-start-ready", label: "시작 대기" },
   starting: { id: "popup-starting", label: "회의 시작 중" },
   startError: { id: "popup-start-error", label: "시작 실패" },
-  uploadFlow: { id: "anim-upload-flow", label: "올리기→시작 흐름" },
-  processing: { id: "anim-processing", label: "제작 중" },
+  uploadFlow: { id: "anim-upload-flow", label: "선택→시작 흐름" },
+  recordExpand: { id: "anim-record-expand", label: "녹음 펼침 흐름" },
+  processing: { id: "anim-processing", label: "제작 중(기록)" },
   sort: { id: "popup-sort", label: "정렬 메뉴" },
   recordsDelete: { id: "popup-records-delete", label: "기록 삭제" },
   recordsDownload: { id: "popup-records-download", label: "기록 받기" },
-  participants: { id: "popup-participants", label: "참석자" },
   upcoming: { id: "popup-upcoming", label: "예정 상세" },
   upcomingCreate: { id: "popup-upcoming-create", label: "예정 작성" },
   composer: { id: "popup-composer", label: "팀 회의 바로시작" },
@@ -74,22 +75,29 @@ const CHROME_POPUPS: PageUxScenario[] = [
 const DASHBOARD_SCENARIOS: PageUxScenario[] = [
   ...LIST_SCENARIOS,
   ...CHROME_POPUPS,
-  POPUP.vaultPicker,
-  POPUP.vaultPickerLoading,
-  POPUP.vaultPickerEmpty,
-  POPUP.uploading,
-  POPUP.startReady,
-  POPUP.starting,
-  POPUP.startError,
-  POPUP.uploadFlow,
-  POPUP.duplicate,
   POPUP.processing,
   POPUP.sort,
   POPUP.upcoming,
   POPUP.upcomingCreate,
-  POPUP.participants,
   POPUP.recordsDelete,
   POPUP.recordsDownload,
+];
+
+/** 회의록 생성(`/meetings/new`) — 보관함·업로드·녹음 → 분석 */
+const MEETING_CREATE_SCENARIOS: PageUxScenario[] = [
+  LIVE,
+  POPUP.vaultPicker,
+  POPUP.vaultPickerLoading,
+  POPUP.vaultPickerEmpty,
+  POPUP.uploading,
+  POPUP.recording,
+  POPUP.startReady,
+  POPUP.starting,
+  POPUP.startError,
+  POPUP.uploadFlow,
+  POPUP.recordExpand,
+  POPUP.duplicate,
+  ...CHROME_POPUPS,
 ];
 
 const VAULT_SCENARIOS: PageUxScenario[] = [
@@ -288,6 +296,13 @@ const SURFACE_RULES: SurfaceRule[] = [
       pathname === "/team" && (manage == null || manage === "announcements"),
   },
   {
+    id: "meetings.new",
+    label: "회의록 생성",
+    scenarios: MEETING_CREATE_SCENARIOS,
+    match: (pathname) =>
+      pathname === "/meetings/new" || pathname.startsWith("/meetings/new/"),
+  },
+  {
     id: "dashboard",
     label: "회의",
     scenarios: DASHBOARD_SCENARIOS,
@@ -350,12 +365,15 @@ const SURFACE_RULES: SurfaceRule[] = [
   },
   {
     id: "ai-usage",
-    label: "AI 사용량",
+    label: "통계",
     scenarios: ADMIN_LIST_SCENARIOS,
-    match: (pathname) => pathname === "/ai-usage",
+    match: (pathname) =>
+      pathname === "/stats" ||
+      pathname === "/ai-usage" ||
+      pathname === "/pipeline-stats" ||
+      pathname === "/survey-stats",
   },
 ];
-
 const UNSUPPORTED: PageUxSurface = {
   id: "none",
   label: "",
@@ -420,6 +438,8 @@ export function isPageUxAnimScenario(scenarioId: string): boolean {
     scenarioId === "popup-start-ready" ||
     scenarioId === "popup-start-error" ||
     scenarioId === "anim-upload-flow" ||
+    scenarioId === "anim-record-expand" ||
+    scenarioId === "popup-recording" ||
     scenarioId === "popup-vault-picker-loading" ||
     scenarioId === "popup-invite-search" ||
     scenarioId === "anim-processing"
@@ -428,6 +448,20 @@ export function isPageUxAnimScenario(scenarioId: string): boolean {
 
 export function isPageUxNotificationScenario(scenarioId: string): boolean {
   return scenarioId === "popup-notifications-expand";
+}
+
+/** 페이지 UX 시나리오 또는 디자인 랩 알림 씬 — 사이드바 알림 센터에 예시 고정. */
+export function isNotificationChromePreview(options: {
+  scenarioId: string;
+  pathname: string;
+  search?: string;
+}): boolean {
+  if (isPageUxNotificationScenario(options.scenarioId)) return true;
+  if (options.pathname !== "/design") return false;
+  const q = new URLSearchParams(
+    (options.search ?? "").replace(/^\?/, ""),
+  );
+  return q.get("cat") === "popups" && q.get("scene") === "notifications";
 }
 
 export const DEFAULT_PAGE_UX_SCENARIOS = LIST_SCENARIOS;

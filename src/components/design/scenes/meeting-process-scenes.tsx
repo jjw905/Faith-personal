@@ -119,12 +119,15 @@ function DetailChrome({
           </div>
 
           <div className="mt-4">
-            <MeetingCaptureChip meeting={meeting} className="mb-3" />
-            <MeetingTitleHeading
-              meetingId={meeting.id}
-              title={meeting.title}
-              canEdit={false}
-            />
+            <div className="flex min-w-0 items-center gap-3">
+              <MeetingTitleHeading
+                meetingId={meeting.id}
+                title={meeting.title}
+                canEdit={false}
+                className="min-w-0 flex-1"
+              />
+              <MeetingCaptureChip meeting={meeting} className="shrink-0" />
+            </div>
           </div>
         </div>
 

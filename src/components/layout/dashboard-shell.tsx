@@ -34,6 +34,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     pathname === "/settings" ||
     pathname === "/ai-usage" ||
     pathname === "/pipeline-stats" ||
+    pathname === "/stats" ||
     pathname === "/survey" ||
     pathname === "/survey-stats" ||
     pathname === "/dashboard" ||
@@ -72,12 +73,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="flex h-dvh min-w-0 overflow-hidden bg-app-canvas">
+    <div className="relative flex h-dvh min-w-0 overflow-hidden bg-app-canvas">
       {!hideChrome ? (
         <>
           <div
             className={cn(
-              "fixed inset-0 z-40 bg-black/40 transition-opacity lg:hidden",
+              "fixed inset-0 z-40 bg-black/40 transition-opacity md:hidden",
               sidebarOpen ? "opacity-100" : "pointer-events-none opacity-0",
             )}
             onClick={closeMobile}
@@ -97,7 +98,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         onScroll={notifyDocsSectionScroll}
       >
         {!hideChrome ? (
-          <AppHeader onMenuClick={() => setMobileOpen(true)} />
+          <AppHeader onMenuClick={() => setMobileOpen((open) => !open)} />
         ) : null}
         {!focusMode ? <PageUxPreviewControl /> : null}
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>

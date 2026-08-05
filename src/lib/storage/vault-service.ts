@@ -668,11 +668,25 @@ export async function readUserFileContent(userId: string, fileId: string) {
   return readUserFileBytes(userId, fileId);
 }
 
+/** 소유자 또는 팀이 연결된 팀원. */
+function vaultFileAccessWhere(userId: string, fileId: string) {
+  return {
+    id: fileId,
+    OR: [
+      { userId },
+      {
+        teamId: { not: null },
+        team: { members: { some: { userId } } },
+      },
+    ],
+  };
+}
+
 /** GCS/S3/로컬 공통: STT 등 서버 처리용 바이트 읽기. */
 export async function readUserFileBytes(userId: string, fileId: string) {
   assertObjectStorageReady();
   const row = await prisma.vaultFile.findFirst({
-    where: { id: fileId, userId },
+    where: vaultFileAccessWhere(userId, fileId),
   });
   if (!row) return null;
 
@@ -764,7 +778,7 @@ export async function readUserFileRange(params: {
 }) {
   assertObjectStorageReady();
   const row = await prisma.vaultFile.findFirst({
-    where: { id: params.fileId, userId: params.userId },
+    where: vaultFileAccessWhere(params.userId, params.fileId),
   });
   if (!row) return null;
   if (
@@ -835,7 +849,7 @@ export async function readUserFileRange(params: {
 export async function streamUserChunkedFile(userId: string, fileId: string) {
   assertObjectStorageReady();
   const row = await prisma.vaultFile.findFirst({
-    where: { id: fileId, userId },
+    where: vaultFileAccessWhere(userId, fileId),
   });
   if (
     !row ||

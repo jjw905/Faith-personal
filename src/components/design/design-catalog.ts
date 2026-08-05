@@ -9,6 +9,7 @@ import {
   ClipboardList,
   FileAudio,
   FileWarning,
+  Gauge,
   LayoutDashboard,
   Mail,
   MessageSquare,
@@ -24,6 +25,11 @@ import {
   SceneAnimRecordBeat,
   SceneAnimRunningDots,
 } from "@/components/design/scenes/animation-scenes";
+import {
+  SceneAdminStatsEmpty,
+  SceneAdminStatsFull,
+  SceneTeamChatHub,
+} from "@/components/design/scenes/admin-team-scenes";
 import {
   SceneForgotPassword,
   SceneForgotPasswordSent,
@@ -46,6 +52,8 @@ import {
   SceneRecordsDeleteConfirm,
   SceneRecordsDeleteMany,
   SceneRecordsDownloadConfirm,
+  SceneRecordsDownloadMany,
+  SceneRecordsShareConfirm,
   SceneTeamSettingsOff,
   SceneVaultPicker,
 } from "@/components/design/scenes/dialog-scenes";
@@ -56,7 +64,6 @@ import {
 } from "@/components/design/scenes/meeting-process-scenes";
 import {
   SceneAttachMenuPopup,
-  SceneParticipantsPopup,
   SceneResetConfirmDialog,
   SceneSortControl,
   SceneUserProfileMenu,
@@ -70,11 +77,13 @@ import {
   SceneProcessingTranscribing,
   SceneProcessingWaiting,
   SceneUploadPanel,
+  SceneUploadRecording,
   SceneUploadStartError,
   SceneUploadStartFlow,
   SceneUploadStartReady,
   SceneUploadStarting,
   SceneUploadUploading,
+  SceneRecordExpandFlow,
 } from "@/components/design/scenes/processing-scenes";
 import {
   SceneDemandSurveyConsent,
@@ -85,7 +94,7 @@ import {
   SceneSurveyForm,
 } from "@/components/design/scenes/survey-legal-scenes";
 
-export type DesignSceneKind = "trigger" | "popup" | "animation";
+export type DesignSceneKind = "trigger" | "popup" | "animation" | "page";
 
 export type DesignScene = {
   id: string;
@@ -107,6 +116,7 @@ export const DESIGN_KIND_LABEL: Record<DesignSceneKind, string> = {
   trigger: "트리거",
   popup: "팝업",
   animation: "모션",
+  page: "화면",
 };
 
 export const DESIGN_CATEGORIES: DesignCategory[] = [
@@ -203,29 +213,45 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
   },
   {
     id: "upload-start",
-    label: "올리기, 시작",
+    label: "회의록 생성",
     icon: Upload,
     scenes: [
       {
         id: "upload-flow",
-        label: "올리기→시작 흐름",
-        route: "/dashboard",
+        label: "선택→시작 흐름",
+        route: "/meetings/new",
         kind: "animation",
-        trigger: "AudioUploadZone demoPhase timeline",
+        trigger: "MeetingCreatePage demoPhase timeline",
         Preview: SceneUploadStartFlow,
       },
       {
         id: "upload-panel",
-        label: "올리기 패널",
-        route: "/dashboard",
+        label: "업로드·보관함·녹음",
+        route: "/meetings/new",
         kind: "trigger",
         trigger: "demoPhase=panel",
         Preview: SceneUploadPanel,
       },
       {
+        id: "upload-recording",
+        label: "녹음 중(펼침)",
+        route: "/meetings/new",
+        kind: "animation",
+        trigger: "demoPhase=recording",
+        Preview: SceneUploadRecording,
+      },
+      {
+        id: "record-expand-flow",
+        label: "녹음 펼침 흐름",
+        route: "/meetings/new",
+        kind: "animation",
+        trigger: "panel→recording→ready",
+        Preview: SceneRecordExpandFlow,
+      },
+      {
         id: "upload-uploading",
         label: "업로드 중",
-        route: "/dashboard",
+        route: "/meetings/new",
         kind: "animation",
         trigger: "demoPhase=uploading",
         Preview: SceneUploadUploading,
@@ -233,7 +259,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
       {
         id: "upload-ready",
         label: "시작 대기",
-        route: "/dashboard",
+        route: "/meetings/new",
         kind: "trigger",
         trigger: "demoPhase=ready",
         Preview: SceneUploadStartReady,
@@ -241,7 +267,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
       {
         id: "upload-starting",
         label: "시작 중",
-        route: "/dashboard",
+        route: "/meetings/new",
         kind: "animation",
         trigger: "demoPhase=starting",
         Preview: SceneUploadStarting,
@@ -249,7 +275,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
       {
         id: "upload-start-error",
         label: "시작 실패",
-        route: "/dashboard",
+        route: "/meetings/new",
         kind: "trigger",
         trigger: "demoPhase=error",
         Preview: SceneUploadStartError,
@@ -266,7 +292,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         label: "받아쓰는 중",
         route: "/dashboard",
         kind: "animation",
-        trigger: "ProcessingNowSection animateDemo",
+        trigger: "기록 목록 분석 중 행",
         Preview: SceneProcessingTranscribing,
       },
       {
@@ -274,7 +300,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         label: "분석 대기",
         route: "/dashboard",
         kind: "animation",
-        trigger: "ProcessingNowSection waiting",
+        trigger: "기록 목록 대기 행",
         Preview: SceneProcessingWaiting,
       },
       {
@@ -282,7 +308,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         label: "정리하는 중",
         route: "/dashboard",
         kind: "animation",
-        trigger: "ProcessingNowSection animateDemo",
+        trigger: "기록 목록 분석 중 행",
         Preview: SceneProcessingStructuring,
       },
       {
@@ -290,7 +316,7 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         label: "진행·대기 혼재",
         route: "/dashboard",
         kind: "animation",
-        trigger: "ProcessingNowSection animateDemo",
+        trigger: "기록 목록 상단, 빠른순",
         Preview: SceneProcessingMulti,
       },
     ],
@@ -391,9 +417,23 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         Preview: SceneRecordsDownloadConfirm,
       },
       {
+        id: "records-download-many",
+        label: "기록 여러 건 내보내기",
+        route: "목록",
+        kind: "popup",
+        Preview: SceneRecordsDownloadMany,
+      },
+      {
+        id: "records-share",
+        label: "기록 공유",
+        route: "상세, 대화기록",
+        kind: "popup",
+        Preview: SceneRecordsShareConfirm,
+      },
+      {
         id: "vault-picker",
         label: "보관함에서 선택",
-        route: "업로드, 첨부",
+        route: "/meetings/new",
         kind: "popup",
         Preview: SceneVaultPicker,
       },
@@ -418,13 +458,6 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
     label: "작은 팝업",
     icon: MessageSquare,
     scenes: [
-      {
-        id: "participants",
-        label: "참석자",
-        route: "목록",
-        kind: "popup",
-        Preview: SceneParticipantsPopup,
-      },
       {
         id: "attach-menu",
         label: "첨부 메뉴",
@@ -455,8 +488,8 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
       },
       {
         id: "notifications",
-        label: "알림 센터, 클릭 펼침",
-        route: "헤더",
+        label: "알림 센터",
+        route: "사이드바",
         kind: "popup",
         Preview: SceneNotificationPanel,
       },
@@ -523,6 +556,34 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         route: "/policy",
         kind: "trigger",
         Preview: SceneLegalPolicy,
+      },
+    ],
+  },
+  {
+    id: "admin-ops",
+    label: "통계·팀",
+    icon: Gauge,
+    scenes: [
+      {
+        id: "stats-full",
+        label: "통계 (채워짐)",
+        route: "/stats",
+        kind: "page",
+        Preview: SceneAdminStatsFull,
+      },
+      {
+        id: "stats-empty",
+        label: "통계 (빈 화면)",
+        route: "/stats",
+        kind: "page",
+        Preview: SceneAdminStatsEmpty,
+      },
+      {
+        id: "team-chat-hub",
+        label: "팀 채팅 허브",
+        route: "/team",
+        kind: "page",
+        Preview: SceneTeamChatHub,
       },
     ],
   },

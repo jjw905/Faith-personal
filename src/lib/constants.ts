@@ -1,13 +1,11 @@
 import {
-  Activity,
   Archive,
   AudioLines,
+  Building2,
   CalendarClock,
   CircleHelp,
-  ClipboardList,
   EyeOff,
   Gauge,
-  Gem,
   History,
   KeyRound,
   Mic,
@@ -29,22 +27,22 @@ export type NavItem = {
   badge?: number;
 };
 
-/** 공통 메뉴. 감사, 팀 관리는 팀 워크스페이스 하위로만 노출. */
+/** 공통 메뉴. 개인·팀은 분리. 감사·팀 관리는 팀 워크스페이스 하위로만 노출. */
 export const NAV_ITEMS: NavItem[] = [
   {
-    title: "회의",
+    title: "개인",
     href: "/dashboard",
     icon: Mic,
+  },
+  {
+    title: "팀",
+    href: "/team",
+    icon: Building2,
   },
   {
     title: "보관함",
     href: "/vault",
     icon: Archive,
-  },
-  {
-    title: "플랜",
-    href: "/plan",
-    icon: Gem,
   },
   {
     title: "도움말",
@@ -120,33 +118,18 @@ export const TEAM_NAV_ITEMS: TeamNavItem[] = [
 /** 관리자만 사이드바 운영 메뉴에 노출. 계정·사용량 등. */
 export const OPS_NAV_ITEMS: NavItem[] = [
   {
-    title: "운영 상태",
-    href: "/operations",
-    icon: ShieldCheck,
-  },
-  {
     title: "사용자 관리",
     href: "/users",
     icon: UserCog,
   },
   {
-    title: "AI 사용량",
-    href: "/ai-usage",
+    title: "통계",
+    href: "/stats",
     icon: Gauge,
-  },
-  {
-    title: "파이프라인 통계",
-    href: "/pipeline-stats",
-    icon: Activity,
-  },
-  {
-    title: "설문 통계",
-    href: "/survey-stats",
-    icon: ClipboardList,
   },
 ];
 
-/** 관리자만 사이드바 개발자 메뉴에 노출. 공통 메뉴와 화면/경로를 섞지 않음. */
+/** 관리자만 사이드바 개발 메뉴에 노출. 공통 메뉴와 화면/경로를 섞지 않음. */
 export const DEV_NAV_ITEMS: NavItem[] = [
   {
     title: "Changelog",
@@ -164,7 +147,7 @@ export const DEV_NAV_ITEMS: NavItem[] = [
     icon: EyeOff,
   },
   {
-    title: "새 회의",
+    title: "회의록 생성",
     href: "/meetings/new",
     icon: Mic,
   },
@@ -187,8 +170,8 @@ export const PAGE_TITLES: Record<
     description: "원문과 마스킹 결과를 비교하며 R-08을 검증합니다.",
   },
   "/meetings/new": {
-    title: "새 회의",
-    description: "개발전용, 실시간 인식·채팅 레이아웃을 검증합니다.",
+    title: "회의록 생성",
+    description: "보관함·업로드·녹음으로 회의록 분석을 시작합니다.",
   },
   "/audit": {
     title: "감사 로그",
@@ -200,24 +183,33 @@ export const PAGE_TITLES: Record<
     description: "팀 회의, 공지, 기록을 확인합니다.",
   },
   "/ai-usage": {
-    title: "AI 사용량",
-    description: "받아쓰기, 정리 비용과 토큰을 확인합니다.",
+    title: "통계",
+    description:
+      "사용량, 파이프라인, 검열, 설문 지표를 카테고리별로 확인합니다.",
   },
   "/pipeline-stats": {
-    title: "파이프라인 통계",
-    description: "업로드 처리 실패율과 단계별, 모델별 분포를 확인합니다.",
+    title: "통계",
+    description:
+      "사용량, 파이프라인, 검열, 설문 지표를 카테고리별로 확인합니다.",
+  },
+  "/stats": {
+    title: "통계",
+    description:
+      "사용량, 파이프라인, 검열, 설문 지표를 카테고리별로 확인합니다.",
   },
   "/survey-stats": {
-    title: "설문 통계",
-    description: "결제 의향, 성능 만족도 설문 참여 현황을 확인합니다.",
+    title: "통계",
+    description:
+      "사용량, 파이프라인, 검열, 설문 지표를 카테고리별로 확인합니다.",
   },
   "/users": {
     title: "사용자 관리",
     description: "서비스를 이용하는 계정, 역할, 활성 상태를 관리합니다.",
   },
   "/operations": {
-    title: "운영 상태",
-    description: "서비스 연결, 정책, 보존 작업 상태를 확인합니다.",
+    title: "통계",
+    description:
+      "사용량, 파이프라인, 검열, 설문 지표를 카테고리별로 확인합니다.",
   },
   "/settings": {
     title: "시스템 설정",
