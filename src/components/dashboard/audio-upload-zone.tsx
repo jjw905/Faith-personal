@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -9,6 +8,7 @@ import {
   FileAudio,
   Loader2,
   Mic,
+  RefreshCw,
   Upload,
   Users,
   X,
@@ -19,12 +19,14 @@ import {
   useEffect,
   useId,
   useImperativeHandle,
+  useRef,
   useState,
 } from "react";
 
 import { Button } from "@/components/ui/button";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { DuplicateVaultNameDialog } from "@/components/vault/duplicate-name-dialog";
+import { RecordBeatBars } from "@/components/meetings/record-beat-bars";
 import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { useFileUpload } from "@/hooks/use-file-upload";
@@ -50,6 +52,7 @@ type Mode = "idle" | "upload";
 /** 디자인·UX 미리보기용 단계. 제품 경로는 쓰지 않는다. */
 export type AudioUploadDemoPhase =
   | "panel"
+  | "recording"
   | "uploading"
   | "ready"
   | "starting"
@@ -67,6 +70,23 @@ const UPLOAD_FLOW_PHASES: Array<{
   { phase: "ready", atMs: 2800 },
   { phase: "starting", atMs: 4300 },
 ];
+
+/** 추가 → 녹음 눌러 펼침 → 중지 후 시작 대기 */
+const RECORD_FLOW_PHASES: Array<{
+  phase: AudioUploadDemoPhase;
+  atMs: number;
+}> = [
+  { phase: "panel", atMs: 0 },
+  { phase: "recording", atMs: 700 },
+  { phase: "ready", atMs: 3200 },
+];
+
+function formatRecordClock(totalSec: number) {
+  const sec = Math.max(0, Math.floor(totalSec));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 const FORMAT_GUIDES = [
   { ext: ".mp3", hint: "음악/음성" },
@@ -89,6 +109,21 @@ export const AudioUploadZone = forwardRef<
     onMeetingStarted?: () => void;
     /** 모바일은 하단 추적형 바에 CTA를 두고, 상단 큰 CTA는 숨김 */
     hideMobileCtas?: boolean;
+    /** 상단 CTA를 페이지 헤더에 둘 때 존 안 CTA 그리드 숨김 */
+    hideCtas?: boolean;
+    /** 처음부터 업로드 패널을 연다 (회의록 생성 페이지) */
+    alwaysOpen?: boolean;
+    /** 패널 X 숨김 — 페이지 돌아가기로 닫음 */
+    hidePanelClose?: boolean;
+    /** 브라우저 녹음 진입점 표시 */
+    showRecord?: boolean;
+    /**
+     * 회의록 생성 페이지용. 카드·섹션 헤더·확장자 칩·「또는」 없이
+     * 업로드·보관함·녹음을 플랫 리스트로 분배.
+     */
+    flat?: boolean;
+    /** 설문·잔여를 페이지 상단에 둘 때 패널 안 배너 숨김 */
+    hideQuotaBanner?: boolean;
     /** 디자인 랩·시나리오 강제 단계 */
     demoPhase?: AudioUploadDemoPhase | null;
   }
@@ -98,6 +133,12 @@ export const AudioUploadZone = forwardRef<
     ctaUpload = "파일 업로드",
     onMeetingStarted,
     hideMobileCtas = false,
+    hideCtas = false,
+    alwaysOpen = false,
+    hidePanelClose = false,
+    showRecord = false,
+    flat = false,
+    hideQuotaBanner = false,
     demoPhase = null,
   },
   ref,
@@ -106,8 +147,9 @@ export const AudioUploadZone = forwardRef<
   const { data: session } = useSession();
   const { workspaceId, activeTeamId } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
-  const [mode, setMode] = useState<Mode>("idle");
+  const [mode, setMode] = useState<Mode>(alwaysOpen ? "upload" : "idle");
   const fileInputId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -116,11 +158,22 @@ export const AudioUploadZone = forwardRef<
     null,
   );
   const [usageDialogOpen, setUsageDialogOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const [recordElapsedSec, setRecordElapsedSec] = useState(0);
+  const [meetingTitle, setMeetingTitle] = useState("");
+  const titleTouchedRef = useRef(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<BlobPart[]>([]);
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const recordStartedAtRef = useRef<number | null>(null);
   const automaticAnalysisMode = resolveAnalysisModeForEntitlement(
     session?.user?.plan,
     session?.user?.role,
     workspaceId,
   );
+
   const speakerSplitAutomatic = automaticAnalysisMode === "precision";
 
   function applyQuotaPayload(
@@ -162,11 +215,24 @@ export const AudioUploadZone = forwardRef<
     handleDragLeave,
     handleDrop,
     handleFileSelect,
+    selectFile,
     confirmDuplicateUpload,
     cancelDuplicateUpload,
     attachExistingFile,
     clearFile,
   } = useFileUpload({ persist: isLive });
+
+  useEffect(() => {
+    if (!alwaysOpen) return;
+    setMode("upload");
+  }, [alwaysOpen]);
+
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current?.stop();
+      recordStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   useEffect(() => {
     if (
@@ -184,7 +250,9 @@ export const AudioUploadZone = forwardRef<
       scenarioId === "popup-starting" ||
       scenarioId === "popup-start-ready" ||
       scenarioId === "popup-start-error" ||
-      scenarioId === "anim-upload-flow"
+      scenarioId === "popup-recording" ||
+      scenarioId === "anim-upload-flow" ||
+      scenarioId === "anim-record-expand"
     ) {
       setMode("upload");
       setVaultPickerOpen(false);
@@ -198,16 +266,15 @@ export const AudioUploadZone = forwardRef<
       scenarioId === "popup-account" ||
       scenarioId === "popup-upcoming" ||
       scenarioId === "popup-upcoming-create" ||
-      scenarioId === "popup-participants" ||
       scenarioId === "popup-records-delete" ||
       scenarioId === "popup-records-download" ||
       scenarioId === "popup-sort" ||
       scenarioId === "anim-processing"
     ) {
       setVaultPickerOpen(false);
-      if (scenarioId !== "live") setMode("idle");
+      if (scenarioId !== "live" && !alwaysOpen) setMode("idle");
     }
-  }, [scenarioId]);
+  }, [scenarioId, alwaysOpen]);
 
   useEffect(() => {
     if (scenarioId !== "anim-upload-flow" || demoPhase) return;
@@ -228,6 +295,36 @@ export const AudioUploadZone = forwardRef<
         window.setTimeout(() => {
           if (!cancelled) run();
         }, 6500),
+      );
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+      for (const id of timers) window.clearTimeout(id);
+      timers.clear();
+    };
+  }, [scenarioId, demoPhase]);
+
+  useEffect(() => {
+    if (scenarioId !== "anim-record-expand" || demoPhase) return;
+    let cancelled = false;
+    const timers = new Set<number>();
+
+    const run = () => {
+      if (cancelled) return;
+      setFlowPhase("panel");
+      for (const { phase, atMs } of RECORD_FLOW_PHASES.slice(1)) {
+        timers.add(
+          window.setTimeout(() => {
+            if (!cancelled) setFlowPhase(phase);
+          }, atMs),
+        );
+      }
+      timers.add(
+        window.setTimeout(() => {
+          if (!cancelled) run();
+        }, 5200),
       );
     };
 
@@ -274,7 +371,94 @@ export const AudioUploadZone = forwardRef<
 
   useImperativeHandle(ref, () => ({ openUpload }), [openUpload]);
 
+  useEffect(() => {
+    if (mode !== "upload" || alwaysOpen) return;
+    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [mode, alwaysOpen]);
+
+  function stopBrowserTracks() {
+    recordStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordStreamRef.current = null;
+  }
+
+  function resetMeetingTitle() {
+    titleTouchedRef.current = false;
+    setMeetingTitle("");
+  }
+
+  async function toggleBrowserRecord() {
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    setRecordError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordStreamRef.current = stream;
+      recordChunksRef.current = [];
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "";
+      const recorder = mime
+        ? new MediaRecorder(stream, { mimeType: mime })
+        : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        setRecording(false);
+        recordStartedAtRef.current = null;
+        setRecordElapsedSec(0);
+        mediaRecorderRef.current = null;
+        stopBrowserTracks();
+        const blob = new Blob(recordChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        recordChunksRef.current = [];
+        if (blob.size < 1) {
+          setRecordError("녹음이 비어 있습니다. 다시 시도해 주세요.");
+          return;
+        }
+        const stamp = new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "Asia/Seoul",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        })
+          .format(new Date())
+          .replace(/[.\s:]/g, "")
+          .replace(/,/g, "-");
+        const file = new File([blob], `녹음_${stamp}.webm`, {
+          type: blob.type || "audio/webm",
+        });
+        selectFile(file);
+      };
+      recorder.start();
+      recordStartedAtRef.current = Date.now();
+      setRecordElapsedSec(0);
+      setRecording(true);
+    } catch {
+      stopBrowserTracks();
+      setRecording(false);
+      recordStartedAtRef.current = null;
+      setRecordElapsedSec(0);
+      setRecordError("마이크 권한을 허용해 주세요.");
+    }
+  }
+
   function closeUpload() {
+    if (alwaysOpen || hidePanelClose) {
+      if (recording) mediaRecorderRef.current?.stop();
+      clearFile();
+      setRecordError(null);
+      resetMeetingTitle();
+      return;
+    }
     if (
       scenarioId === "popup-vault-picker" ||
       scenarioId === "popup-vault-picker-loading" ||
@@ -291,12 +475,13 @@ export const AudioUploadZone = forwardRef<
     }
     clearFile();
     setStartError(null);
+    resetMeetingTitle();
     setMode("idle");
   }
 
   const resolvedDemo: AudioUploadDemoPhase | null =
     demoPhase ??
-    (scenarioId === "anim-upload-flow"
+    (scenarioId === "anim-upload-flow" || scenarioId === "anim-record-expand"
       ? flowPhase
       : scenarioId === "popup-uploading"
         ? "uploading"
@@ -306,15 +491,40 @@ export const AudioUploadZone = forwardRef<
             ? "ready"
             : scenarioId === "popup-start-error"
               ? "error"
-              : null);
+              : scenarioId === "popup-recording"
+                ? "recording"
+                : null);
 
   const previewUploading = resolvedDemo === "uploading";
   const previewStarting = resolvedDemo === "starting";
   const previewReady = resolvedDemo === "ready" || resolvedDemo === "error";
   const previewPanel = resolvedDemo === "panel";
+  const previewRecording = resolvedDemo === "recording";
+  const showRecordingUi = previewRecording || recording;
   const showUploading = previewUploading || uploadStatus === "uploading";
   const showStarting = previewStarting || starting;
   const demoActive = resolvedDemo != null;
+
+  useEffect(() => {
+    if (!showRecordingUi) {
+      if (!recording) setRecordElapsedSec(0);
+      return;
+    }
+    if (previewRecording && !recording) {
+      setRecordElapsedSec(12);
+      const id = window.setInterval(() => {
+        setRecordElapsedSec((prev) => prev + 1);
+      }, 1000);
+      return () => window.clearInterval(id);
+    }
+    const started = recordStartedAtRef.current ?? Date.now();
+    const tick = () => {
+      setRecordElapsedSec(Math.floor((Date.now() - started) / 1000));
+    };
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [showRecordingUi, previewRecording, recording]);
 
   async function startMeeting() {
     if (starting) return;
@@ -389,9 +599,7 @@ export const AudioUploadZone = forwardRef<
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vaultFileId: storedId,
-          title: selectedFile
-            ? stripFileExtension(selectedFile.name)
-            : undefined,
+          title: meetingTitle.trim() || undefined,
           workspace: workspaceId,
           analysisMode: automaticAnalysisMode,
           ...(workspaceId === "team" && activeTeamId
@@ -466,13 +674,46 @@ export const AudioUploadZone = forwardRef<
   const expectedChargedMinutes =
     selectedDurationSec == null
       ? null
-      : Math.ceil(
-          (selectedDurationSec *
-            (automaticAnalysisMode === "precision"
-              ? PRECISION_USAGE_MULTIPLIER
-              : 1)) /
-            60,
+      : Math.max(
+          1,
+          Math.ceil(
+            (selectedDurationSec *
+              (automaticAnalysisMode === "precision"
+                ? PRECISION_USAGE_MULTIPLIER
+                : 1)) /
+              60,
+          ),
         );
+  const remainingMinutes =
+    quotaStatus && quotaStatus.enforced !== false
+      ? Math.max(0, Math.floor(quotaStatus.remainingSec / 60))
+      : null;
+  const recordingChargeMinutes = Math.max(
+    1,
+    Math.ceil(
+      (Math.max(recordElapsedSec, 1) *
+        (automaticAnalysisMode === "precision"
+          ? PRECISION_USAGE_MULTIPLIER
+          : 1)) /
+        60,
+    ),
+  );
+
+  useEffect(() => {
+    if (!ready || previewPanel) return;
+    if (titleTouchedRef.current) return;
+    if (!fileLabel) return;
+    setMeetingTitle(fileLabel);
+  }, [ready, previewPanel, fileLabel]);
+
+  useEffect(() => {
+    if (!ready || previewPanel || showStarting) return;
+    const id = window.setTimeout(() => {
+      titleInputRef.current?.focus({ preventScroll: true });
+      titleInputRef.current?.select();
+    }, 320);
+    return () => window.clearTimeout(id);
+  }, [ready, previewPanel, showStarting, storedId, fileLabel]);
 
   const startDisabled =
     showStarting ||
@@ -489,6 +730,7 @@ export const AudioUploadZone = forwardRef<
 
   return (
     <div className="w-full space-y-3">
+      {!hideCtas ? (
       <div
         className={cn(
           "grid grid-cols-2 gap-2 sm:gap-3",
@@ -496,8 +738,9 @@ export const AudioUploadZone = forwardRef<
         )}
       >
         <div className="min-w-0 p-0.5">
-          <Link
-            href={`/meetings/new?workspace=${workspaceId}`}
+          <button
+            type="button"
+            onClick={openUpload}
             className="group flex h-20 w-full cursor-pointer items-center gap-2.5 rounded-2xl bg-primary px-3.5 text-left text-primary-foreground shadow-soft transition-colors duration-150 hover:bg-primary-hover sm:h-24 sm:gap-4 sm:px-6"
           >
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-primary sm:h-11 sm:w-11">
@@ -506,7 +749,7 @@ export const AudioUploadZone = forwardRef<
             <span className="min-w-0 truncate text-base font-semibold leading-tight tracking-tight sm:text-lg">
               {ctaStart}
             </span>
-          </Link>
+          </button>
         </div>
 
         <div className="min-w-0 p-0.5">
@@ -527,60 +770,128 @@ export const AudioUploadZone = forwardRef<
           </button>
         </div>
       </div>
+      ) : null}
 
       {mode === "upload" && (
-        <div className="overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
+        <div
+          ref={panelRef}
+          className={cn(
+            flat
+              ? "w-full"
+              : "overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border",
+          )}
+          onDragOver={flat ? handleDragOver : undefined}
+          onDragLeave={flat ? handleDragLeave : undefined}
+          onDrop={flat ? handleDrop : undefined}
+        >
+          {flat ? null : (
           <div className="space-y-0 px-6 pb-0 pt-6">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xl font-bold tracking-tight text-foreground">
-                {ready && !previewPanel ? "회의 정리" : "오디오 업로드"}
+                {ready && !previewPanel ? "정리 시작" : "오디오 업로드"}
               </p>
+              {hidePanelClose ? null : (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
+                className="h-12 w-12 shrink-0 cursor-pointer text-foreground/70 hover:bg-surface-2 hover:text-foreground"
                 onClick={closeUpload}
                 aria-label="업로드 닫기"
+                title="닫기"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" strokeWidth={1.75} />
               </Button>
+              )}
             </div>
-            <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
+            <div className="mt-3 h-px w-full bg-border" aria-hidden />
           </div>
+          )}
 
           {ready && !previewPanel ? (
-            <div className="space-y-4 px-6 py-5 animate-[bubble-in_280ms_ease-out] motion-reduce:animate-none">
-              <div className="flex items-center gap-3 rounded-2xl bg-surface px-3.5 py-3 sm:px-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-                  <FileAudio className="h-5 w-5" strokeWidth={1.75} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-semibold text-foreground">
-                    {fileLabel ?? "주간회의"}
-                  </p>
-                  <p className="mt-0.5 text-base tabular-nums text-muted">
-                    {awaitingStoreId
-                      ? "준비 중…"
-                      : (fileSizeLabel ?? "2.4 MB")}
-                  </p>
+            <div
+              className={cn(
+                "space-y-5",
+                flat ? "pt-1" : "px-5 py-5 sm:px-6",
+              )}
+            >
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                  "grid-rows-[1fr] opacity-100",
+                )}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  <div
+                    className={cn(
+                      flat
+                        ? "border-y border-border py-5 sm:py-6"
+                        : "space-y-3",
+                    )}
+                  >
+                    <label className="block animate-[bubble-in_280ms_ease-out] motion-reduce:animate-none">
+                      <span className="text-sm font-semibold tracking-wide text-muted-2">
+                        회의록 제목
+                      </span>
+                      <input
+                        ref={titleInputRef}
+                        type="text"
+                        value={meetingTitle}
+                        disabled={showStarting}
+                        placeholder="예: 주간 회의"
+                        aria-label="회의록 제목"
+                        onChange={(event) => {
+                          titleTouchedRef.current = true;
+                          setMeetingTitle(event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return;
+                          event.preventDefault();
+                          if (demoActive || startDisabled) return;
+                          void startMeeting();
+                        }}
+                        className={cn(
+                          "mt-2 h-14 w-full bg-transparent text-lg font-semibold tracking-tight text-foreground outline-none",
+                          "border-b border-border placeholder:text-muted-2",
+                          "focus:border-foreground disabled:opacity-60",
+                        )}
+                      />
+                    </label>
+                    <div className="mt-3 flex min-w-0 items-center gap-3">
+                      <span
+                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-muted"
+                        aria-hidden
+                      >
+                        <FileAudio className="h-5 w-5" strokeWidth={1.75} />
+                      </span>
+                      <p className="min-w-0 flex-1 truncate text-base tabular-nums text-muted">
+                        {awaitingStoreId
+                          ? "파일 연결 중…"
+                          : [fileSizeLabel, actualMinutes != null ? `약 ${actualMinutes}분` : null]
+                              .filter(Boolean)
+                              .join(" · ") || "준비됨"}
+                      </p>
+                      <button
+                        type="button"
+                        className="inline-flex min-h-12 shrink-0 cursor-pointer items-center justify-center px-2 text-base font-semibold text-muted transition-opacity hover:text-foreground hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={showStarting || demoActive}
+                        aria-label="파일 바꾸기"
+                        title="파일 바꾸기"
+                        onClick={() => {
+                          if (demoActive) return;
+                          clearFile();
+                          setStartError(null);
+                          resetMeetingTitle();
+                        }}
+                      >
+                        바꾸기
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 shrink-0 text-muted hover:text-foreground"
-                  disabled={showStarting || demoActive}
-                  onClick={() => {
-                    if (demoActive) return;
-                    clearFile();
-                    setStartError(null);
-                  }}
-                >
-                  바꾸기
-                </Button>
               </div>
 
+              {!flat ? (
               <div
                 className={cn(
                   "flex items-start gap-3 rounded-2xl px-3.5 py-3 sm:px-4",
@@ -597,9 +908,7 @@ export const AudioUploadZone = forwardRef<
                 )}
                 <span className="min-w-0">
                   <span className="block text-base font-semibold text-foreground">
-                    {speakerSplitAutomatic
-                      ? "화자 구분 자동"
-                      : ANALYSIS_MODE_COPY.standard.label}
+                    {speakerSplitAutomatic ? "화자 구분 자동" : ANALYSIS_MODE_COPY.standard.label}
                   </span>
                   <span className="mt-0.5 block text-base leading-snug text-muted">
                     {speakerSplitAutomatic
@@ -613,24 +922,67 @@ export const AudioUploadZone = forwardRef<
                   </span>
                 </span>
               </div>
-
-              {actualMinutes != null && expectedChargedMinutes != null ? (
-                <p className="text-base font-medium text-muted">
-                  실제 약 {actualMinutes}분, 잔여 시간 {expectedChargedMinutes}분 사용 예정
-                </p>
               ) : (
-                <p className="text-base font-medium text-muted">
-                  {ANALYSIS_MODE_COPY[automaticAnalysisMode].benefit}
-                </p>
+              <p className="text-base text-muted" role="status">
+                <span className="tabular-nums">
+                  차감 예정{" "}
+                  {expectedChargedMinutes != null
+                    ? `${expectedChargedMinutes}분`
+                    : "—"}
+                </span>
+                {remainingMinutes != null ? (
+                  <span className="tabular-nums">
+                    {" "}
+                    · 잔여 {remainingMinutes}분
+                  </span>
+                ) : null}
+                {actualMinutes != null &&
+                expectedChargedMinutes != null &&
+                expectedChargedMinutes !== actualMinutes ? (
+                  <span className="tabular-nums">
+                    {" "}
+                    · 길이 {actualMinutes}분
+                  </span>
+                ) : null}
+              </p>
               )}
 
+              {!flat && actualMinutes != null && expectedChargedMinutes != null ? (
+                <p className="px-1 text-base text-muted">
+                  <span className="tabular-nums">
+                    차감 예정{" "}
+                    <span className="font-semibold text-foreground">
+                      {expectedChargedMinutes}분
+                    </span>
+                  </span>
+                  {remainingMinutes != null ? (
+                    <span className="tabular-nums">
+                      {" "}
+                      · 잔여 {remainingMinutes}분
+                    </span>
+                  ) : null}
+                  {expectedChargedMinutes !== actualMinutes ? (
+                    <span className="tabular-nums">
+                      {" "}
+                      · 길이 {actualMinutes}분
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+
               {resolvedDemo === "error" || startError ? (
-                <p className="text-base font-medium text-red-600" role="alert">
+                <p
+                  className={cn(
+                    "text-base font-medium text-masked",
+                    flat ? "" : "rounded-2xl bg-masked-soft px-3.5 py-3",
+                  )}
+                  role="alert"
+                >
                   {startError ?? "회의 정리를 시작하지 못했습니다."}
                 </p>
               ) : awaitingStoreId ? (
                 <p className="text-base font-medium text-muted" role="status">
-                  파일 연결을 마치는 중…
+                  파일을 연결하는 중이에요. 곧 시작할 수 있어요.
                 </p>
               ) : null}
 
@@ -643,7 +995,7 @@ export const AudioUploadZone = forwardRef<
                   void startMeeting();
                 }}
                 className={cn(
-                  "flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-primary px-5 text-base font-semibold tracking-tight text-primary-foreground shadow-soft transition-[opacity,transform,background-color] duration-150",
+                  "flex h-14 w-full items-center justify-center gap-2 rounded-[50px] bg-primary px-5 text-base font-semibold tracking-tight text-primary-foreground shadow-soft transition-[opacity,transform,background-color] duration-150",
                   showStarting && "scale-[0.99]",
                   startDisabled && !previewReady && !showStarting
                     ? "cursor-not-allowed opacity-70"
@@ -658,12 +1010,179 @@ export const AudioUploadZone = forwardRef<
                     {awaitingStoreId ? "준비 중…" : "시작 중…"}
                   </>
                 ) : (
-                  <>
-                    <AudioLines className="h-5 w-5" strokeWidth={1.75} />
-                    시작
-                  </>
+                  "회의 정리 시작"
                 )}
               </button>
+            </div>
+          ) : flat ? (
+            <div className="space-y-5">
+              <input
+                id={fileInputId}
+                type="file"
+                accept={acceptedFormats.join(",")}
+                onChange={handleFileSelect}
+                className="sr-only"
+                aria-label="오디오 파일 업로드"
+              />
+
+              {showUploading ? (
+                <div className="flex min-h-[5.5rem] items-center gap-3 border-b border-border py-6 sm:min-h-[6.25rem] sm:py-8">
+                  <Loader2
+                    className="h-5 w-5 shrink-0 animate-spin text-primary"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold text-foreground">업로드 중</p>
+                    <p className="mt-0.5 truncate text-base text-muted">{fileLabel}</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div
+                    className={cn(
+                      "border-y border-border",
+                      isDragging && !showRecordingUi && "bg-primary-soft/60",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                        showRecordingUi
+                          ? "pointer-events-none grid-rows-[0fr] opacity-0"
+                          : "grid-rows-[1fr] opacity-100",
+                      )}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <div className="divide-y divide-border">
+                          <label
+                            htmlFor={fileInputId}
+                            className="flex min-h-[5.5rem] cursor-pointer items-center gap-3 py-6 transition-colors hover:bg-surface/70 sm:min-h-[6.25rem] sm:gap-4 sm:py-8"
+                          >
+                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted">
+                              <Upload className="h-4 w-4" strokeWidth={1.75} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-lg font-semibold tracking-tight text-foreground">
+                                파일 업로드
+                              </span>
+                              <span className="mt-0.5 block text-base text-muted">
+                                드래그 앤 드롭 또는 선택 · 최대{" "}
+                                {MAX_UPLOAD_AUDIO_MINUTES}분
+                              </span>
+                            </span>
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() => setVaultPickerOpen(true)}
+                            className="flex min-h-[5.5rem] w-full cursor-pointer items-center gap-3 py-6 text-left transition-colors hover:bg-surface/70 sm:min-h-[6.25rem] sm:gap-4 sm:py-8"
+                          >
+                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted">
+                              <Archive className="h-4 w-4" strokeWidth={1.75} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-lg font-semibold tracking-tight text-foreground">
+                                보관함
+                              </span>
+                              <span className="mt-0.5 block text-base text-muted">
+                                올려 둔 음성 바로 사용
+                              </span>
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {showRecord ? (
+                      <div
+                        className={cn(
+                          !showRecordingUi && "border-t border-border",
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                            showRecordingUi
+                              ? "grid-rows-[1fr]"
+                              : "grid-rows-[0fr]",
+                          )}
+                        >
+                          <div className="min-h-0 overflow-hidden">
+                            <div
+                              className="flex min-h-[5.5rem] items-center gap-3 py-6 sm:min-h-[6.25rem] sm:gap-4 sm:py-8"
+                              role="status"
+                              aria-live="polite"
+                            >
+                              <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-foreground">
+                                <RecordBeatBars size="md" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-lg font-semibold tabular-nums tracking-tight text-foreground">
+                                  {formatRecordClock(recordElapsedSec)}
+                                </p>
+                                <p className="mt-0.5 text-base tabular-nums text-muted">
+                                  차감 예정 {recordingChargeMinutes}분
+                                  {remainingMinutes != null
+                                    ? ` · 잔여 ${remainingMinutes}분`
+                                    : null}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (demoActive && previewRecording) return;
+                                  void toggleBrowserRecord();
+                                }}
+                                disabled={demoActive && previewRecording}
+                                className="inline-flex min-h-12 shrink-0 cursor-pointer items-center justify-center px-2 text-base font-semibold text-foreground transition-opacity hover:opacity-70 disabled:cursor-default disabled:opacity-50"
+                              >
+                                중지
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {!showRecordingUi ? (
+                          <button
+                            type="button"
+                            onClick={() => void toggleBrowserRecord()}
+                            aria-pressed={false}
+                            className="flex min-h-[5.5rem] w-full cursor-pointer items-center gap-3 py-6 text-left transition-colors hover:bg-surface/70 sm:min-h-[6.25rem] sm:gap-4 sm:py-8"
+                          >
+                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted">
+                              <Mic className="h-4 w-4" strokeWidth={1.75} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-lg font-semibold tracking-tight text-foreground">
+                                녹음
+                              </span>
+                              <span className="mt-0.5 block text-base text-muted">
+                                브라우저에서 바로 녹음
+                              </span>
+                            </span>
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {isLive && !demoActive && !hideQuotaBanner ? (
+                    <UploadQuotaBanner />
+                  ) : null}
+
+                  {uploadStatus === "error" ? (
+                    <p className="text-base font-medium text-red-600" role="alert">
+                      {uploadError ?? "업로드에 실패했습니다."}
+                    </p>
+                  ) : null}
+                  {recordError ? (
+                    <p className="text-base font-medium text-masked" role="alert">
+                      {recordError}
+                    </p>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-0">
@@ -673,9 +1192,11 @@ export const AudioUploadZone = forwardRef<
                 onDrop={handleDrop}
                 className={cn(
                   "relative flex min-h-[188px] w-full flex-col items-center justify-center gap-3 px-6 py-6 transition-colors",
-                  isDragging
-                    ? "bg-primary-soft"
-                    : "bg-surface/40 hover:bg-surface/70",
+                  showUploading
+                    ? "bg-transparent"
+                    : isDragging
+                      ? "bg-primary-soft"
+                      : "bg-surface/40 hover:bg-surface/70",
                 )}
               >
                 {uploadStatus !== "uploading" && !previewUploading && (
@@ -700,12 +1221,11 @@ export const AudioUploadZone = forwardRef<
 
                 {showUploading ? (
                   <div className="flex flex-col items-center gap-3 text-center animate-[bubble-in_280ms_ease-out] motion-reduce:animate-none">
-                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-                      <Loader2
-                        className="h-6 w-6 animate-spin"
-                        strokeWidth={1.75}
-                      />
-                    </span>
+                    <Loader2
+                      className="h-6 w-6 animate-spin text-primary"
+                      strokeWidth={1.75}
+                      aria-hidden
+                    />
                     <div>
                       <p className="text-base font-semibold text-foreground">
                         업로드 중
@@ -727,7 +1247,7 @@ export const AudioUploadZone = forwardRef<
                     <p className="relative z-10 text-base text-muted">
                       최대 {MAX_UPLOAD_AUDIO_MINUTES}분(1시간)
                     </p>
-                    {isLive && !demoActive ? (
+                    {isLive && !demoActive && !hideQuotaBanner ? (
                       <div className="relative z-10 w-full">
                         <UploadQuotaBanner />
                       </div>
@@ -757,15 +1277,18 @@ export const AudioUploadZone = forwardRef<
                           {uploadError ?? "업로드에 실패했습니다."}
                         </p>
                         <Button
+                          type="button"
                           variant="outline"
-                          size="sm"
-                          className="h-9"
+                          size="icon"
+                          className="h-12 w-12"
+                          aria-label="다시 선택"
+                          title="다시 선택"
                           onClick={(e) => {
                             e.stopPropagation();
                             clearFile();
                           }}
                         >
-                          다시 선택
+                          <RefreshCw className="h-5 w-5" strokeWidth={1.75} />
                         </Button>
                       </div>
                     ) : null}
@@ -803,6 +1326,80 @@ export const AudioUploadZone = forwardRef<
                       </span>
                     </span>
                   </button>
+                  {showRecord ? (
+                    <div className="mt-2">
+                      <div
+                        className={cn(
+                          "grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                          showRecordingUi
+                            ? "grid-rows-[1fr]"
+                            : "grid-rows-[0fr]",
+                        )}
+                      >
+                        <div className="min-h-0 overflow-hidden">
+                          <div
+                            className="mb-2 flex min-h-14 items-center gap-3 px-1 py-3"
+                            role="status"
+                            aria-live="polite"
+                          >
+                            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center text-foreground">
+                              <RecordBeatBars size="md" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-base font-semibold tabular-nums tracking-tight text-foreground">
+                                {formatRecordClock(recordElapsedSec)}
+                              </p>
+                              <p className="mt-0.5 text-base tabular-nums text-muted">
+                                차감 예정 {recordingChargeMinutes}분
+                                {remainingMinutes != null
+                                  ? ` · 잔여 ${remainingMinutes}분`
+                                  : null}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (demoActive && previewRecording) return;
+                                void toggleBrowserRecord();
+                              }}
+                              disabled={demoActive && previewRecording}
+                              className="inline-flex min-h-12 shrink-0 cursor-pointer items-center justify-center px-2 text-base font-semibold text-foreground transition-opacity hover:opacity-70 disabled:cursor-default disabled:opacity-50"
+                            >
+                              중지
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {!showRecordingUi ? (
+                        <button
+                          type="button"
+                          onClick={() => void toggleBrowserRecord()}
+                          aria-pressed={false}
+                          className="flex h-14 w-full cursor-pointer items-center gap-3 bg-transparent px-4 text-left transition-opacity hover:opacity-80"
+                        >
+                          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-muted">
+                            <Mic className="h-5 w-5" strokeWidth={1.75} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-base font-semibold text-foreground">
+                              녹음하기
+                            </span>
+                            <span className="mt-0.5 block text-base text-muted">
+                              브라우저에서 바로 녹음
+                            </span>
+                          </span>
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {recordError ? (
+                    <p
+                      className="mt-2 px-1 text-base font-medium text-masked"
+                      role="alert"
+                    >
+                      {recordError}
+                    </p>
+                  ) : null}
                 </div>
                 ) : previewPanel ? (
                 <div className="px-6 py-4">

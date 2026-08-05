@@ -18,11 +18,65 @@ import {
   FIXTURE_PROCESSING_WAITING,
 } from "@/components/design/fixtures";
 import { ReplayStage } from "@/components/design/preview-stage";
+import { MeetingRecordChrome } from "@/components/meetings/meeting-record-layout";
+import { formatSeoulDateParts } from "@/lib/meeting-date";
+
+function CreatePageShell({
+  demoPhase,
+}: {
+  demoPhase?: AudioUploadDemoPhase | null;
+}) {
+  const nowIso = new Date().toISOString();
+  const { day, time } = formatSeoulDateParts(nowIso);
+  const headerLabel = `${day} · ${time}`;
+
+  return (
+    <div className="h-full min-h-full overflow-y-auto bg-white px-4 pt-1 sm:px-6 sm:pt-2">
+      <MeetingRecordChrome
+        back={
+          <span className="-ml-2 mb-3 inline-flex h-9 items-center gap-1.5 px-2 text-sm font-semibold text-muted">
+            돌아가기
+          </span>
+        }
+        headerCenter={
+          <time className="block truncate text-center text-xl font-bold tabular-nums tracking-tight text-foreground">
+            {headerLabel}
+          </time>
+        }
+        title={
+          <>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              회의록 생성
+            </h1>
+            <p className="mt-3 text-base text-muted">
+              잔여 120분
+              <span className="mx-2 text-muted-2" aria-hidden>
+                ·
+              </span>
+              <span className="font-semibold text-primary">설문하고 60분 받기</span>
+            </p>
+          </>
+        }
+      >
+        <div className="mt-5 space-y-5 pb-8">
+          <AudioUploadZone
+            hideCtas
+            alwaysOpen
+            hidePanelClose
+            showRecord
+            flat
+            hideQuotaBanner
+            demoPhase={demoPhase ?? "panel"}
+          />
+        </div>
+      </MeetingRecordChrome>
+    </div>
+  );
+}
 
 function DashboardChrome({ children }: { children: React.ReactNode }) {
   return (
     <div className="h-full min-h-full space-y-3 overflow-y-auto bg-background p-4 sm:p-6">
-      <AudioUploadZone ctaStart="새 회의 시작" ctaUpload="파일 업로드" />
       {children}
     </div>
   );
@@ -33,6 +87,12 @@ const FLOW_STEPS: Array<{ phase: AudioUploadDemoPhase; atMs: number }> = [
   { phase: "uploading", atMs: 1100 },
   { phase: "ready", atMs: 2800 },
   { phase: "starting", atMs: 4300 },
+];
+
+const RECORD_FLOW_STEPS: Array<{ phase: AudioUploadDemoPhase; atMs: number }> = [
+  { phase: "panel", atMs: 0 },
+  { phase: "recording", atMs: 700 },
+  { phase: "ready", atMs: 3200 },
 ];
 
 function UploadFlowDemo() {
@@ -48,19 +108,19 @@ function UploadFlowDemo() {
   }, []);
 
   return (
-    <div className="h-full min-h-full space-y-3 overflow-y-auto bg-background p-4 sm:p-6">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="relative h-full min-h-full">
+      <div className="pointer-events-none absolute left-4 right-4 top-2 z-10 flex flex-wrap justify-center gap-2 sm:left-6 sm:right-6">
         {FLOW_STEPS.map(({ phase: step }) => (
           <span
             key={step}
             className={
               phase === step
-                ? "rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground"
-                : "rounded-full bg-surface-2 px-3 py-1 text-sm font-medium text-muted"
+                ? "rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground shadow-soft"
+                : "rounded-full bg-card/90 px-3 py-1 text-sm font-medium text-muted ring-1 ring-border backdrop-blur-sm"
             }
           >
             {step === "panel"
-              ? "패널"
+              ? "선택"
               : step === "uploading"
                 ? "업로드"
                 : step === "ready"
@@ -69,20 +129,53 @@ function UploadFlowDemo() {
           </span>
         ))}
       </div>
-      <AudioUploadZone
-        ctaStart="새 회의 시작"
-        ctaUpload="파일 업로드"
-        demoPhase={phase}
-      />
+      <CreatePageShell demoPhase={phase} />
     </div>
   );
 }
 
-/** 올리기 → 업로드 → 시작 대기 → 시작 중. 한 번에 이어서 재생. */
+function RecordExpandFlowDemo() {
+  const [phase, setPhase] = useState<AudioUploadDemoPhase>("panel");
+
+  useEffect(() => {
+    const timers = RECORD_FLOW_STEPS.slice(1).map(({ phase: next, atMs }) =>
+      window.setTimeout(() => setPhase(next), atMs),
+    );
+    return () => {
+      for (const id of timers) window.clearTimeout(id);
+    };
+  }, []);
+
+  return (
+    <div className="relative h-full min-h-full">
+      <div className="pointer-events-none absolute left-4 right-4 top-2 z-10 flex flex-wrap justify-center gap-2 sm:left-6 sm:right-6">
+        {RECORD_FLOW_STEPS.map(({ phase: step }) => (
+          <span
+            key={step}
+            className={
+              phase === step
+                ? "rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground shadow-soft"
+                : "rounded-full bg-card/90 px-3 py-1 text-sm font-medium text-muted ring-1 ring-border backdrop-blur-sm"
+            }
+          >
+            {step === "panel"
+              ? "선택"
+              : step === "recording"
+                ? "녹음 펼침"
+                : "시작 대기"}
+          </span>
+        ))}
+      </div>
+      <CreatePageShell demoPhase={phase} />
+    </div>
+  );
+}
+
+/** 회의록 생성: 선택 → 업로드 → 시작 대기 → 시작 중 */
 export function SceneUploadStartFlow() {
   return (
     <ReplayStage
-      hint="올리기 패널 → 업로드 → 시작 대기 → 시작 중. 재생으로 처음부터."
+      hint="회의록 생성 화면. 선택 → 업로드 → 시작 대기 → 시작 중."
       fill
       autoReplayMs={7200}
     >
@@ -91,50 +184,55 @@ export function SceneUploadStartFlow() {
   );
 }
 
+/** 회의록 생성: 녹음 눌러 펼침 → 중지 후 시작 대기 */
+export function SceneRecordExpandFlow() {
+  return (
+    <ReplayStage
+      hint="추가 후 녹음 — 업로드·보관함이 접히고 녹음 패널이 펼쳐짐."
+      fill
+      autoReplayMs={5600}
+    >
+      {() => <RecordExpandFlowDemo />}
+    </ReplayStage>
+  );
+}
+
 export function SceneUploadPanel() {
   return (
-    <ReplayStage hint="파일 올리기 패널 열림." fill>
-      {() => (
-        <div className="h-full min-h-full overflow-y-auto bg-background p-4 sm:p-6">
-          <AudioUploadZone demoPhase="panel" />
-        </div>
-      )}
+    <ReplayStage hint="회의록 생성 — 업로드·보관함·녹음." fill>
+      {() => <CreatePageShell demoPhase="panel" />}
+    </ReplayStage>
+  );
+}
+
+export function SceneUploadRecording() {
+  return (
+    <ReplayStage hint="녹음 중 — 비트·타이머·중지." fill autoReplayMs={4000}>
+      {() => <CreatePageShell demoPhase="recording" />}
     </ReplayStage>
   );
 }
 
 export function SceneUploadUploading() {
   return (
-    <ReplayStage hint="업로드 중 스피너." fill autoReplayMs={3200}>
-      {() => (
-        <div className="h-full min-h-full overflow-y-auto bg-background p-4 sm:p-6">
-          <AudioUploadZone demoPhase="uploading" />
-        </div>
-      )}
+    <ReplayStage hint="업로드 중." fill autoReplayMs={3200}>
+      {() => <CreatePageShell demoPhase="uploading" />}
     </ReplayStage>
   );
 }
 
 export function SceneUploadStartReady() {
   return (
-    <ReplayStage hint="파일 준비 완료, 시작 버튼." fill>
-      {() => (
-        <div className="h-full min-h-full overflow-y-auto bg-background p-4 sm:p-6">
-          <AudioUploadZone demoPhase="ready" />
-        </div>
-      )}
+    <ReplayStage hint="파일 준비 완료, 회의 정리 시작." fill>
+      {() => <CreatePageShell demoPhase="ready" />}
     </ReplayStage>
   );
 }
 
 export function SceneUploadStarting() {
   return (
-    <ReplayStage hint="시작 누른 직후, 시작 중…" fill autoReplayMs={3200}>
-      {() => (
-        <div className="h-full min-h-full overflow-y-auto bg-background p-4 sm:p-6">
-          <AudioUploadZone demoPhase="starting" />
-        </div>
-      )}
+    <ReplayStage hint="시작 중…" fill autoReplayMs={3200}>
+      {() => <CreatePageShell demoPhase="starting" />}
     </ReplayStage>
   );
 }
@@ -142,20 +240,16 @@ export function SceneUploadStarting() {
 export function SceneUploadStartError() {
   return (
     <ReplayStage hint="시작 실패 메시지." fill>
-      {() => (
-        <div className="h-full min-h-full overflow-y-auto bg-background p-4 sm:p-6">
-          <AudioUploadZone demoPhase="error" />
-        </div>
-      )}
+      {() => <CreatePageShell demoPhase="error" />}
     </ReplayStage>
   );
 }
 
-/** 처리중 카드: 받아쓰는 중 (대시보드 전체 + 진행 애니메이션) */
+/** 기록 목록에 붙는 분석 중 행(디자인 랩 카드) */
 export function SceneProcessingTranscribing() {
   return (
     <ReplayStage
-      hint="대시보드 전체, 받아쓰기 카드 진행."
+      hint="기록 목록, 받아쓰는 중."
       fill
       autoReplayMs={5600}
     >
@@ -171,10 +265,9 @@ export function SceneProcessingTranscribing() {
   );
 }
 
-/** 처리중 카드: 워커 대기 */
 export function SceneProcessingWaiting() {
   return (
-    <ReplayStage hint="대시보드 전체, 분석 대기(곧 시작)." fill>
+    <ReplayStage hint="기록 목록, 분석 대기." fill>
       {() => (
         <DashboardChrome>
           <ProcessingNowSection demoItems={FIXTURE_PROCESSING_WAITING} />
@@ -184,11 +277,10 @@ export function SceneProcessingWaiting() {
   );
 }
 
-/** 처리중 카드: 정리하는 중 */
 export function SceneProcessingStructuring() {
   return (
     <ReplayStage
-      hint="대시보드 전체, 정리 카드 진행."
+      hint="기록 목록, 정리하는 중."
       fill
       autoReplayMs={5600}
     >
@@ -204,11 +296,10 @@ export function SceneProcessingStructuring() {
   );
 }
 
-/** 처리중 카드: 진행 1 + 대기 여러 건 */
 export function SceneProcessingMulti() {
   return (
     <ReplayStage
-      hint="대시보드 전체, 진행·대기 혼재."
+      hint="기록 목록 상단. 진행 → 대기 빠른순."
       fill
       autoReplayMs={5600}
     >
@@ -224,35 +315,47 @@ export function SceneProcessingMulti() {
   );
 }
 
-/** 최근 활동 팝업: 진행 중 */
 export function SceneActivityPopupActive() {
   return (
-    <div className="flex h-full min-h-full items-start justify-end bg-background p-4 sm:p-6">
-      <ProcessingStatusPopup
-        demoItems={FIXTURE_ACTIVITY_ACTIVE}
-        forceOpen
-      />
-    </div>
+    <ReplayStage hint="최근 활동 팝업, 진행 중." fill>
+      {() => (
+        <div className="relative flex h-full min-h-[28rem] justify-end bg-background p-6">
+          <ProcessingStatusPopup
+            forceOpen
+            demoItems={FIXTURE_ACTIVITY_ACTIVE}
+          />
+        </div>
+      )}
+    </ReplayStage>
   );
 }
 
-/** 최근 활동 팝업: 실패 + 완료 */
 export function SceneActivityPopupError() {
   return (
-    <div className="flex h-full min-h-full items-start justify-end bg-background p-4 sm:p-6">
-      <ProcessingStatusPopup
-        demoItems={FIXTURE_ACTIVITY_ERROR}
-        forceOpen
-      />
-    </div>
+    <ReplayStage hint="최근 활동 팝업, 실패." fill>
+      {() => (
+        <div className="relative flex h-full min-h-[28rem] justify-end bg-background p-6">
+          <ProcessingStatusPopup
+            forceOpen
+            demoItems={FIXTURE_ACTIVITY_ERROR}
+          />
+        </div>
+      )}
+    </ReplayStage>
   );
 }
 
-/** 최근 활동 팝업: 비어 있음 */
 export function SceneActivityPopupEmpty() {
   return (
-    <div className="flex h-full min-h-full items-start justify-end bg-background p-4 sm:p-6">
-      <ProcessingStatusPopup demoItems={FIXTURE_ACTIVITY_EMPTY} forceOpen />
-    </div>
+    <ReplayStage hint="최근 활동 팝업, 비어 있음." fill>
+      {() => (
+        <div className="relative flex h-full min-h-[28rem] justify-end bg-background p-6">
+          <ProcessingStatusPopup
+            forceOpen
+            demoItems={FIXTURE_ACTIVITY_EMPTY}
+          />
+        </div>
+      )}
+    </ReplayStage>
   );
 }

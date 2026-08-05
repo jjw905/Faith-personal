@@ -1,11 +1,23 @@
 "use client";
 
-import { Download, Pencil, Share2, Trash2 } from "lucide-react";
+import {
+  Download,
+  MoreHorizontal,
+  Paperclip,
+  Pencil,
+  Share2,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
+import {
+  MeetingAttachmentsList,
+  collectTranscriptFiles,
+} from "@/components/meetings/meeting-attachments";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MonthDayCalendar } from "@/components/meetings/month-day-calendar";
 import {
@@ -55,6 +67,8 @@ export function MeetingTitleHeading({
   className,
   align = "start",
   size = "page",
+  /** 헤더 「수정」 클릭 시 증가 → 편집 모드 진입 */
+  editNonce = 0,
 }: {
   meetingId: string;
   title: string;
@@ -63,6 +77,7 @@ export function MeetingTitleHeading({
   align?: "start" | "center";
   /** page: 상세 본문, header: 대화·다시듣기 상단 */
   size?: "page" | "header";
+  editNonce?: number;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -81,6 +96,11 @@ export function MeetingTitleHeading({
     setDisplayTitle(title);
     setValue(title);
   }, [title]);
+
+  useEffect(() => {
+    if (!editNonce || !canEdit) return;
+    setEditing(true);
+  }, [editNonce, canEdit]);
 
   useEffect(() => {
     if (!editing) return;
@@ -187,7 +207,7 @@ export function MeetingTitleHeading({
         >
           {displayTitle}
           <Pencil
-            className="ml-1 inline-block h-3.5 w-3.5 shrink-0 translate-y-[-0.1em] text-muted transition-colors group-hover:text-foreground"
+            className="ml-1 inline-block h-5 w-5 shrink-0 translate-y-[-0.1em] text-muted transition-colors group-hover:text-foreground"
             strokeWidth={2}
             aria-hidden
           />
@@ -232,9 +252,8 @@ export function MeetingDateTimeMeta({
   const datePart = value.slice(0, 10) || seoulDateKey();
   const timePart = value.slice(11, 16) || "12:00";
   const hasDuration = Boolean(duration && duration !== "—");
-  const headerLabel = hasDuration
-    ? `${day} · ${time} · ${duration}`
-    : `${day} · ${time}`;
+  /** 헤더에는 분석(기록) 시각만. 재생 길이(duration)는 붙이지 않음 — 어지러움 방지. */
+  const headerLabel = `${day} · ${time}`;
 
   useEffect(() => {
     setMounted(true);
@@ -433,38 +452,35 @@ export function MeetingDateTimeMeta({
       <>
         <div
           className={cn(
-            "flex w-full min-w-0 items-center gap-2 md:gap-0.5",
+            "flex w-full min-w-0 items-center justify-center",
             className,
           )}
         >
           <button
             type="button"
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => {
+              if (canEdit) {
+                setEditing(true);
+                return;
+              }
+              setExpanded((v) => !v);
+            }}
             aria-expanded={expanded}
-            title={headerLabel}
-            className="min-w-0 flex-1 cursor-pointer text-center outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            title={
+              canEdit ? `날짜 수정: ${headerLabel}` : headerLabel
+            }
+            className="min-w-0 max-w-full cursor-pointer text-center outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             <time
               dateTime={date}
               className={cn(
-                "block text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl md:text-xl",
-                expanded ? "line-clamp-2 break-words" : "truncate",
+                "block max-w-full truncate text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl md:text-xl",
+                expanded ? "line-clamp-2 whitespace-normal break-words" : null,
               )}
             >
               {headerLabel}
             </time>
           </button>
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9"
-              title="날짜 수정"
-              aria-label={`날짜 수정: ${day} ${time}`}
-            >
-              <Pencil className="h-4 w-4 md:h-3.5 md:w-3.5" strokeWidth={2} />
-            </button>
-          ) : null}
         </div>
         {mobileSheet}
       </>
@@ -553,7 +569,7 @@ export function MeetingDateTimeMeta({
             {time}
           </span>
           <Pencil
-            className="h-4 w-4 shrink-0 text-muted transition-colors group-hover:text-foreground md:h-3 md:w-3"
+            className="h-5 w-5 shrink-0 text-muted transition-colors group-hover:text-foreground md:h-4 md:w-4"
             strokeWidth={2}
             aria-hidden
           />
@@ -574,6 +590,8 @@ export function MeetingRecordActions({
   transcript,
   summary,
   processing = false,
+  canEdit = false,
+  onEdit,
 }: {
   meetingId: string;
   tags?: string[];
@@ -583,20 +601,80 @@ export function MeetingRecordActions({
   summary?: string;
   /** 분석 중에는 아직 완성되지 않은 기록이므로 다운로드·삭제를 막는다. */
   processing?: boolean;
+  /** 제목·날짜 수정 가능(본인 업로드). 수정 아이콘은 항상 노출. */
+  canEdit?: boolean;
+  onEdit?: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [actionMode, setActionMode] = useState<
     "delete" | "download" | "share" | null
   >(null);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [shareHint, setShareHint] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
   const disabled = busy || processing;
+  const attachmentCount = transcript
+    ? collectTranscriptFiles(transcript).length
+    : 0;
 
   useEffect(() => {
     if (!shareHint) return;
     const t = window.setTimeout(() => setShareHint(null), 1800);
     return () => window.clearTimeout(t);
   }, [shareHint]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setMenuOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (!attachmentsOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setAttachmentsOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [attachmentsOpen]);
+
+  function handleEdit() {
+    if (disabled) return;
+    if (!canEdit) {
+      setShareHint("본인이 올린 기록만 수정할 수 있습니다");
+      return;
+    }
+    onEdit?.();
+  }
+
+  const iconBtnClass =
+    "h-12 w-12 shrink-0 text-muted hover:bg-surface-2 hover:text-foreground md:h-10 md:w-10 lg:h-11 lg:w-11 [&_svg]:size-6 md:[&_svg]:size-5 lg:[&_svg]:size-6 disabled:pointer-events-none disabled:opacity-40";
+
+  const menuItemClass =
+    "inline-flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-base font-semibold transition-colors disabled:pointer-events-none disabled:opacity-40";
+
+  function closeMenuThen(fn: () => void) {
+    setMenuOpen(false);
+    fn();
+  }
 
   async function confirmAction(
     format?: MeetingExportFormat,
@@ -676,43 +754,200 @@ export function MeetingRecordActions({
 
   return (
     <>
-      <div className="relative flex h-12 shrink-0 items-center gap-2 md:h-9 md:gap-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
-          aria-label="다운로드"
-          title={processing ? "분석이 끝나면 다운로드할 수 있습니다" : "다운로드"}
-          disabled={disabled}
-          onClick={() => setActionMode("download")}
-        >
-          <Download strokeWidth={1.75} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-12 w-12 text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
-          aria-label="공유"
-          title={processing ? "분석이 끝나면 공유할 수 있습니다" : "공유"}
-          disabled={disabled}
-          onClick={() => setActionMode("share")}
-        >
-          <Share2 strokeWidth={1.75} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-12 w-12 text-masked hover:bg-masked-soft hover:text-masked md:h-9 md:w-9 [&_svg]:size-6 md:[&_svg]:size-4 disabled:pointer-events-none disabled:opacity-40"
-          aria-label="기록 삭제"
-          title={processing ? "분석이 끝나면 삭제할 수 있습니다" : "기록 삭제"}
-          disabled={disabled}
-          onClick={() => setActionMode("delete")}
-        >
-          <Trash2 strokeWidth={1.75} />
-        </Button>
+      <div className="relative flex min-h-12 shrink-0 items-center justify-end md:min-h-11">
+        {/* md+: 아이콘 한 줄 */}
+        <div className="hidden items-center gap-0 md:flex">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={iconBtnClass}
+            aria-label="수정"
+            title={
+              processing
+                ? "분석이 끝나면 수정할 수 있습니다"
+                : canEdit
+                  ? "제목 수정"
+                  : "본인이 올린 기록만 수정할 수 있습니다"
+            }
+            disabled={disabled}
+            onClick={handleEdit}
+          >
+            <Pencil strokeWidth={1.75} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={iconBtnClass}
+            aria-label={
+              attachmentCount > 0 ? `첨부 ${attachmentCount}개` : "첨부"
+            }
+            title={
+              processing
+                ? "분석이 끝나면 첨부를 볼 수 있습니다"
+                : attachmentCount > 0
+                  ? `첨부 ${attachmentCount}개`
+                  : "첨부 파일"
+            }
+            disabled={disabled || !transcript}
+            onClick={() => setAttachmentsOpen(true)}
+          >
+            <Paperclip strokeWidth={1.75} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={iconBtnClass}
+            aria-label="다운로드"
+            title={
+              processing ? "분석이 끝나면 다운로드할 수 있습니다" : "다운로드"
+            }
+            disabled={disabled}
+            onClick={() => setActionMode("download")}
+          >
+            <Download strokeWidth={1.75} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={iconBtnClass}
+            aria-label="공유"
+            title={processing ? "분석이 끝나면 공유할 수 있습니다" : "공유"}
+            disabled={disabled}
+            onClick={() => setActionMode("share")}
+          >
+            <Share2 strokeWidth={1.75} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              iconBtnClass,
+              "text-muted hover:bg-surface/70 hover:text-foreground",
+            )}
+            aria-label="기록 삭제"
+            title={processing ? "분석이 끝나면 삭제할 수 있습니다" : "기록 삭제"}
+            disabled={disabled}
+            onClick={() => setActionMode("delete")}
+          >
+            <Trash2 strokeWidth={1.75} />
+          </Button>
+        </div>
+
+        {/* 좁은 폭: 메인보드처럼 … → 세로 메뉴 */}
+        <div ref={menuRef} className="relative md:hidden">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-12 w-12 shrink-0 [&_svg]:size-6",
+              menuOpen
+                ? "bg-foreground text-background hover:bg-foreground hover:text-background"
+                : "text-muted hover:bg-surface-2 hover:text-foreground",
+            )}
+            aria-label={menuOpen ? "도구 닫기" : "도구 더보기"}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            aria-controls={menuId}
+            title={menuOpen ? "닫기" : "도구"}
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            {menuOpen ? (
+              <X strokeWidth={1.75} />
+            ) : (
+              <MoreHorizontal strokeWidth={1.75} />
+            )}
+          </Button>
+
+          {menuOpen ? (
+            <div
+              id={menuId}
+              role="menu"
+              aria-label="회의 기록 도구"
+              className="absolute right-0 top-[calc(100%+0.5rem)] z-40 flex min-w-[12.5rem] flex-col gap-1 rounded-2xl border border-border bg-card p-1.5 shadow-float"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={disabled}
+                className={cn(
+                  menuItemClass,
+                  "text-foreground hover:bg-surface-2",
+                )}
+                onClick={() =>
+                  closeMenuThen(() => {
+                    handleEdit();
+                  })
+                }
+              >
+                <Pencil className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                수정
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={disabled || !transcript}
+                className={cn(
+                  menuItemClass,
+                  "text-foreground hover:bg-surface-2",
+                )}
+                onClick={() =>
+                  closeMenuThen(() => setAttachmentsOpen(true))
+                }
+              >
+                <Paperclip className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                {attachmentCount > 0 ? `첨부 ${attachmentCount}개` : "첨부"}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={disabled}
+                className={cn(
+                  menuItemClass,
+                  "text-foreground hover:bg-surface-2",
+                )}
+                onClick={() =>
+                  closeMenuThen(() => setActionMode("download"))
+                }
+              >
+                <Download className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                다운로드
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={disabled}
+                className={cn(
+                  menuItemClass,
+                  "text-foreground hover:bg-surface-2",
+                )}
+                onClick={() => closeMenuThen(() => setActionMode("share"))}
+              >
+                <Share2 className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                공유
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={disabled}
+                className={cn(
+                  menuItemClass,
+                  "text-foreground hover:bg-surface/70",
+                )}
+                onClick={() => closeMenuThen(() => setActionMode("delete"))}
+              >
+                <Trash2 className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                삭제
+              </button>
+            </div>
+          ) : null}
+        </div>
+
         {shareHint ? (
           <p
             role="status"
@@ -733,6 +968,48 @@ export function MeetingRecordActions({
           void confirmAction(format, maskStyle)
         }
       />
+
+      {attachmentsOpen && transcript ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          role="presentation"
+          onClick={() => setAttachmentsOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="meeting-attachments-title"
+            className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-card shadow-float sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-6 sm:px-7 sm:pt-7">
+              <h2
+                id="meeting-attachments-title"
+                className="text-xl font-bold tracking-tight text-foreground sm:text-lg"
+              >
+                첨부
+              </h2>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-12 min-w-12 px-3 text-base font-semibold text-muted hover:bg-transparent hover:text-foreground md:h-11 md:text-sm"
+                onClick={() => setAttachmentsOpen(false)}
+              >
+                닫기
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4 sm:px-7 sm:pb-7">
+              <MeetingAttachmentsList
+                transcript={transcript}
+                onSelectLine={(lineId) => {
+                  setAttachmentsOpen(false);
+                  router.push(`/meetings/${meetingId}/chat?line=${lineId}`);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
