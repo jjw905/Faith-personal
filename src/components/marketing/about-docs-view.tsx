@@ -62,7 +62,7 @@ function SectionBlock({
         {section.items.map((item) => (
           <li
             key={item}
-            className="relative pl-5 text-base leading-relaxed text-muted before:absolute before:left-0 before:top-2.5 before:h-1.5 before:w-1.5 before:rounded-full before:bg-border-strong"
+            className="relative break-words pl-5 text-base leading-relaxed text-muted [overflow-wrap:anywhere] before:absolute before:left-0 before:top-2.5 before:h-1.5 before:w-1.5 before:rounded-full before:bg-border-strong"
           >
             {item}
           </li>
@@ -179,7 +179,7 @@ export function AboutDocsView() {
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
         onScroll={() => {
           syncFloatChrome();
           notifyDocsSectionScroll();

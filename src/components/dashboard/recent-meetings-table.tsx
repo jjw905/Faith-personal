@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { MeetingCaptureIcon } from "@/components/meetings/meeting-capture-label";
@@ -30,6 +30,7 @@ import {
 import { DateRangeCalendar } from "@/components/meetings/date-range-calendar";
 import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
+import { useMdUp } from "@/hooks/use-md-up";
 import { meetingCaptureLabel } from "@/lib/meeting-capture";
 import type { MeetingExportFormat } from "@/lib/meeting-export";
 import type { MaskStyle } from "@/lib/masking";
@@ -57,22 +58,6 @@ import { getWorkspaceProfile } from "@/lib/workspaces";
 import type { Meeting } from "@/types/meeting";
 import { TOUCH_ICON_BUTTON } from "@/lib/touch-target";
 import { cn } from "@/lib/utils";
-
-const MD_UP_QUERY = "(min-width: 768px)";
-
-function subscribeMdUp(onChange: () => void) {
-  const mq = window.matchMedia(MD_UP_QUERY);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
-}
-
-function getMdUpSnapshot() {
-  return window.matchMedia(MD_UP_QUERY).matches;
-}
-
-function getMdUpServerSnapshot() {
-  return false;
-}
 
 interface RecentMeetingsTableProps {
   meetings: Meeting[];
@@ -137,11 +122,7 @@ function PeriodDateNav({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const isMdUp = useSyncExternalStore(
-    subscribeMdUp,
-    getMdUpSnapshot,
-    getMdUpServerSnapshot,
-  );
+  const isMdUp = useMdUp();
   const [draftFrom, setDraftFrom] = useState(fromIso);
   const [draftTo, setDraftTo] = useState(toIso);
   const [draftFromText, setDraftFromText] = useState(() =>
@@ -558,11 +539,7 @@ export function RecentMeetingsTable({
   const { workspaceId } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
   const profile = getWorkspaceProfile(workspaceId);
-  const isMdUp = useSyncExternalStore(
-    subscribeMdUp,
-    getMdUpSnapshot,
-    getMdUpServerSnapshot,
-  );
+  const isMdUp = useMdUp();
   const pageSize = recordsPageSize(isMdUp);
   const [localSearch, setLocalSearch] = useState("");
   const recordSearch = searchQueryProp ?? localSearch;

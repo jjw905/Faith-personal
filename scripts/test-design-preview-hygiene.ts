@@ -78,4 +78,27 @@ scenario("카탈로그 씬 Preview는 모두 함수", () => {
   }
 });
 
+scenario("회의 기록 헤더 · 모바일 돌아가기", () => {
+  const layout = read("src/components/meetings/meeting-record-layout.tsx");
+  assert.match(layout, /showLeadingOnMobile/);
+  assert.match(layout, /backAlwaysVisible/);
+  const create = read("src/components/meetings/meeting-create-page.tsx");
+  assert.match(create, /max-md:hidden|hidden[\s\S]*md:block/);
+  assert.match(create, /backAlwaysVisible/);
+});
+
+scenario("useMdUp · 디자인 스테이지 폭 우선", () => {
+  const hook = read("src/hooks/use-md-up.ts");
+  assert.match(hook, /data-faith-design-viewport/);
+  assert.match(hook, /data-faith-design-width/);
+  assert.match(
+    read("src/components/dashboard/recent-meetings-table.tsx"),
+    /useMdUp/,
+  );
+  assert.doesNotMatch(
+    read("src/components/dashboard/recent-meetings-table.tsx"),
+    /matchMedia\(MD_UP_QUERY\)/,
+  );
+});
+
 console.log("design preview hygiene: all ok");

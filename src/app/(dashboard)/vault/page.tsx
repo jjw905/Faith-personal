@@ -17,7 +17,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -28,6 +27,7 @@ import {
 } from "@/components/dashboard/records-page-nav";
 import { ExpandableMeetingSearch } from "@/components/dashboard/meeting-search";
 import { PageContainer } from "@/components/layout/page-container";
+import { useMdUp } from "@/hooks/use-md-up";
 import { MeetingRecordHeaderRow } from "@/components/meetings/meeting-record-layout";
 import { Button } from "@/components/ui/button";
 import { VaultFileIcon } from "@/components/vault/vault-file-icon";
@@ -59,15 +59,7 @@ import {
 import { cn } from "@/lib/utils";
 
 function useIsMdUp() {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia("(min-width: 768px)");
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia("(min-width: 768px)").matches,
-    () => true,
-  );
+  return useMdUp();
 }
 
 function vaultDayKey(iso: string) {

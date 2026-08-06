@@ -7,7 +7,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   useTransition,
   type ComponentType,
 } from "react";
@@ -43,6 +42,7 @@ import { GoogleIcon, NaverIcon, XIcon } from "@/components/auth/social-icons";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { LoadingMark } from "@/components/ui/loading-mark";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
+import { useMaxMd } from "@/hooks/use-md-up";
 import {
   fixtureAdminTeamsEmpty,
   fixtureAdminTeamsFull,
@@ -50,15 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 
 function useIsNarrowMobile() {
-  return useSyncExternalStore(
-    (onChange) => {
-      const mq = window.matchMedia("(max-width: 767px)");
-      mq.addEventListener("change", onChange);
-      return () => mq.removeEventListener("change", onChange);
-    },
-    () => window.matchMedia("(max-width: 767px)").matches,
-    () => false,
-  );
+  return useMaxMd();
 }
 
 type Filter = "all" | "admin" | "pro" | "paused" | "noteam";

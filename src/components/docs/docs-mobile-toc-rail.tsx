@@ -40,14 +40,18 @@ export function DocsMobileTocRail({
 
   useEffect(() => {
     if (!activeId || !scrollerRef.current) return;
-    const chip = scrollerRef.current.querySelector<HTMLElement>(
+    const scroller = scrollerRef.current;
+    const chip = scroller.querySelector<HTMLElement>(
       `[data-toc-id="${activeId}"]`,
     );
     if (!chip) return;
-    chip.scrollIntoView({
+    // scrollIntoView(inline)는 페이지 본문까지 가로 스크롤시킬 수 있어
+    // 목차 레일만 이동한다.
+    const left =
+      chip.offsetLeft - (scroller.clientWidth - chip.clientWidth) / 2;
+    scroller.scrollTo({
+      left: Math.max(0, left),
       behavior: "smooth",
-      inline: "center",
-      block: "nearest",
     });
   }, [activeId]);
 

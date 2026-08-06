@@ -43,7 +43,7 @@ export function AdminPageChrome({
           leading={leading}
           center={
             typeof title === "string" ? (
-              <h1 className="truncate text-center text-xl font-semibold tracking-tight text-foreground">
+              <h1 className="truncate text-center text-2xl font-semibold tracking-tight text-foreground md:text-xl">
                 {title}
               </h1>
             ) : (

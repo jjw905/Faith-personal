@@ -830,7 +830,7 @@ export const AudioUploadZone = forwardRef<
                     )}
                   >
                     <label className="block animate-[bubble-in_280ms_ease-out] motion-reduce:animate-none">
-                      <span className="text-sm font-semibold tracking-wide text-muted-2">
+                      <span className="text-base font-semibold tracking-wide text-muted-2">
                         회의록 제목
                       </span>
                       <input

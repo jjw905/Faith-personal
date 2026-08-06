@@ -20,6 +20,7 @@ import {
 } from "@/components/meetings/meeting-attachments";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
 import { MonthDayCalendar } from "@/components/meetings/month-day-calendar";
+import { useMaxMd } from "@/hooks/use-md-up";
 import {
   exportMeetingDownload,
   exportMeetingsListDownload,
@@ -245,7 +246,7 @@ export function MeetingDateTimeMeta({
   const [value, setValue] = useState(() => toSeoulDateTimeLocal(date));
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useMaxMd();
   const titleId = useId();
   const isHeader = variant === "header";
 
@@ -257,11 +258,6 @@ export function MeetingDateTimeMeta({
 
   useEffect(() => {
     setMounted(true);
-    const mq = window.matchMedia("(max-width: 767px)");
-    const sync = () => setIsMobile(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
   }, []);
 
   useEffect(() => {

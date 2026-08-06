@@ -211,4 +211,18 @@ scenario("뷰포트 fidelity · container breakpoint", () => {
   assert.match(read("src/app/layout.tsx"), /@container min-h-full/);
 });
 
+scenario("기록 헤더 · md 판정 · 확인 다이얼로그 열", () => {
+  const layout = read("src/components/meetings/meeting-record-layout.tsx");
+  assert.match(layout, /showLeadingOnMobile/);
+  assert.match(read("src/hooks/use-md-up.ts"), /data-faith-design-viewport/);
+  assert.match(
+    read("src/components/meetings/meeting-records-action-dialog.tsx"),
+    /w-\[5\.75rem\]/,
+  );
+  assert.match(
+    read("src/components/admin/admin-page-chrome.tsx"),
+    /text-2xl font-semibold tracking-tight[\s\S]*md:text-xl/,
+  );
+});
+
 console.log("\nall ok — full page mobile audit");

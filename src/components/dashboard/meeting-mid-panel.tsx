@@ -5,7 +5,7 @@ import {
   CalendarPlus,
   Plus,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import { UpcomingDetailPanel } from "@/components/dashboard/upcoming-detail-panel";
@@ -17,6 +17,7 @@ import { PersonAvatar } from "@/components/people/person-avatar";
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
+import { useMdUp } from "@/hooks/use-md-up";
 import {
   daysUntilFromDateLabel,
   resolveUpcomingListDate,
@@ -85,22 +86,7 @@ function writeStoredUpcoming(workspaceId: string, items: UpcomingItem[]) {
   }
 }
 
-/** Faith `md` (768px) — 개인 일정 데스크톱/모바일 분기 */
-const MD_UP_QUERY = "(min-width: 768px)";
-
-function subscribeMdUp(onChange: () => void) {
-  const mq = window.matchMedia(MD_UP_QUERY);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
-}
-
-function getMdUpSnapshot() {
-  return window.matchMedia(MD_UP_QUERY).matches;
-}
-
-function getMdUpServerSnapshot() {
-  return false;
-}
+/** Faith `md` (768px) — 개인 일정 데스크톱/모바일 분기는 useMdUp */
 
 function parseTimeMinutes(timeLabel: string) {
   const m = timeLabel.trim().match(/^(\d{1,2}):(\d{2})$/);
@@ -126,11 +112,7 @@ function UpcomingListItem({
   item: UpcomingItem;
   onOpen: (item: UpcomingItem) => void;
 }) {
-  const isMdUp = useSyncExternalStore(
-    subscribeMdUp,
-    getMdUpSnapshot,
-    getMdUpServerSnapshot,
-  );
+  const isMdUp = useMdUp();
   const { label: dateLabel, days } = resolveUpcomingListDate(item.dateLabel);
   const isToday = days === 0;
   const agendaPreview = item.agenda.slice(0, 2);
@@ -250,11 +232,7 @@ export function MeetingMidPanel({
   const { workspaceId, currentUser } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
   const profile = getWorkspaceProfile(workspaceId);
-  const isMdUp = useSyncExternalStore(
-    subscribeMdUp,
-    getMdUpSnapshot,
-    getMdUpServerSnapshot,
-  );
+  const isMdUp = useMdUp();
   const seed = useMemo(
     () => getUpcomingByWorkspace(workspaceId),
     [workspaceId],

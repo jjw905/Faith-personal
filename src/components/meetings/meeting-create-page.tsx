@@ -96,10 +96,10 @@ function CreateSurveyHint() {
   );
 }
 
-/** 일자 슬롯은 비움 — 생성은 날짜 나열이 아님. 행 높이만 맞춤. */
+/** 일자 슬롯은 비움 — 데스크톱만 행 높이 맞춤. 모바일은 투명 슬롯이 제목을 아래로 밀지 않게 숨김. */
 const EMPTY_HEADER_CENTER = (
   <span
-    className="block truncate text-center text-xl font-bold tabular-nums tracking-tight text-foreground opacity-0 sm:text-2xl md:text-xl"
+    className="hidden truncate text-center text-xl font-bold tabular-nums tracking-tight text-foreground opacity-0 md:block md:text-xl"
     aria-hidden
   >
     —

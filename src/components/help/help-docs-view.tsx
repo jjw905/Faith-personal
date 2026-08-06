@@ -45,7 +45,9 @@ import { cn } from "@/lib/utils";
 function HelpBlockView({ block }: { block: HelpBlock }) {
   if (block.type === "p") {
     return (
-      <p className="text-base leading-relaxed text-foreground/85">{block.text}</p>
+      <p className="text-base leading-relaxed break-words text-foreground/85 [overflow-wrap:anywhere]">
+        {block.text}
+      </p>
     );
   }
   const ListTag = block.type === "ol" ? "ol" : "ul";
@@ -57,7 +59,7 @@ function HelpBlockView({ block }: { block: HelpBlock }) {
       )}
     >
       {block.items.map((item) => (
-        <li key={item} className="pl-1">
+        <li key={item} className="break-words pl-1 [overflow-wrap:anywhere]">
           {item}
         </li>
       ))}
@@ -209,7 +211,7 @@ export function HelpDocsView() {
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
         onScroll={() => {
           syncFloatChrome();
           notifyDocsSectionScroll();

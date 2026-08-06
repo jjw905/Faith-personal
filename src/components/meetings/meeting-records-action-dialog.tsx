@@ -304,7 +304,7 @@ function ActionConfirmMeetingRow({ meeting }: { meeting: Meeting }) {
 
   return (
     <li className="flex min-w-0 items-center gap-3 py-3.5">
-      <div className="w-[4.5rem] shrink-0 space-y-0.5 sm:w-[5rem]">
+      <div className="w-[5.75rem] shrink-0 space-y-0.5 sm:w-[5rem]">
         <p className="text-base leading-5 tracking-tight text-muted">{day}</p>
         <p className="text-lg tabular-nums leading-6 tracking-tight text-foreground">
           {time}
