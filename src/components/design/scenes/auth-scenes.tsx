@@ -11,17 +11,13 @@ import {
   SignupSocialStep,
 } from "@/components/auth/signup-flow";
 import {
-  DesignViewportPicker,
-  DesignViewportStage,
-  useDesignViewport,
-} from "@/components/design/use-design-viewport";
-import {
   FIXTURE_SIGNUP_VERIFY_CODE,
   FIXTURE_SIGNUP_VERIFY_EMAIL,
 } from "@/lib/page-ux-fixtures";
 
 /** AuthShell 시각만 복제 (html/body 배경 부작용 없음).
  *  Faith 바는 스크롤 밖(불투명) — NN/g: 본문과 대비, 반투명 겹침 금지.
+ *  창 크기(모바일/태블릿/데스크톱)는 DesignFrame 스테이지가 담당.
  */
 function AuthPreviewShell({ children }: { children: React.ReactNode }) {
   return (
@@ -43,20 +39,7 @@ function AuthPreviewShell({ children }: { children: React.ReactNode }) {
 }
 
 function AuthSceneFrame({ children }: { children: React.ReactNode }) {
-  const { viewport, setViewport, width } = useDesignViewport();
-
-  return (
-    <div className="flex h-full min-h-full flex-col bg-surface">
-      <DesignViewportPicker value={viewport} onChange={setViewport} />
-      <div className="min-h-0 min-w-0 flex-1 px-4 pb-6">
-        <div className="mx-auto h-full min-h-[28rem] w-full min-w-0 overflow-hidden rounded-xl ring-1 ring-border/60">
-          <DesignViewportStage width={width} className="h-full">
-            <AuthPreviewShell>{children}</AuthPreviewShell>
-          </DesignViewportStage>
-        </div>
-      </div>
-    </div>
-  );
+  return <AuthPreviewShell>{children}</AuthPreviewShell>;
 }
 
 function withSuspense(node: React.ReactNode) {

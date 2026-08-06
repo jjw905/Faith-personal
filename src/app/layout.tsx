@@ -70,7 +70,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-full">
+      <body className="@container min-h-full">
         <AuthSessionProvider>
           <AppProvider>{children}</AppProvider>
         </AuthSessionProvider>

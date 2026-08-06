@@ -138,9 +138,11 @@ function formatWhen(iso: string | null) {
 function TeamHubMobileRail({
   active,
   onChange,
+  embed = false,
 }: {
   active: TeamHubPane;
   onChange: (next: TeamHubPane) => void;
+  embed?: boolean;
 }) {
   const mounted = useMounted();
   const { open: notificationsOpen } = useNotificationsUi();
@@ -175,14 +177,23 @@ function TeamHubMobileRail({
     return () => window.removeEventListener("resize", onResize);
   }, [active]);
 
-  if (!mounted || notificationsOpen) return null;
+  if (!mounted || (!embed && notificationsOpen)) return null;
 
-  return createPortal(
+  const nav = (
     <nav
-      className="pointer-events-none fixed inset-x-0 z-[55] md:hidden"
-      style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.75rem)",
-      }}
+      className={cn(
+        "pointer-events-none z-[55]",
+        embed
+          ? "absolute inset-x-0 bottom-3"
+          : "fixed inset-x-0 md:hidden",
+      )}
+      style={
+        embed
+          ? undefined
+          : {
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.75rem)",
+            }
+      }
       aria-label="팀 창 전환"
     >
       <div className="pointer-events-auto mx-auto w-full max-w-lg px-4">
@@ -236,9 +247,11 @@ function TeamHubMobileRail({
           })}
         </div>
       </div>
-    </nav>,
-    document.body,
+    </nav>
   );
+
+  if (embed) return nav;
+  return createPortal(nav, document.body);
 }
 
 function AttachSheet({
@@ -734,13 +747,20 @@ export function TeamChatHub({
     PANE_ITEMS.find((item) => item.id === pane)?.label ?? "채팅";
 
   return (
-    <div className="flex flex-col gap-3 pb-[calc(env(safe-area-inset-bottom,0px)+11rem)] md:gap-4 md:pb-0">
+    <div
+      className={cn(
+        "relative flex flex-col gap-3 pb-[calc(env(safe-area-inset-bottom,0px)+11rem)] md:gap-4 md:pb-0",
+        previewLock && "min-h-full pb-24 md:pb-0",
+      )}
+    >
       {/* 모바일: 하단 레일 위에 채팅면이 보이도록 뷰포트 높이 고정 */}
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-card ring-1 ring-inset ring-border",
-          "h-[calc(100dvh-14.5rem)] max-h-[calc(100dvh-14.5rem)]",
-          "md:grid md:h-[calc(100dvh-11rem)] md:max-h-none md:min-h-[28rem] md:grid-cols-[13rem_minmax(0,1fr)]",
+          previewLock
+            ? "h-full min-h-[24rem] md:min-h-[28rem]"
+            : "h-[calc(100dvh-14.5rem)] max-h-[calc(100dvh-14.5rem)] md:h-[calc(100dvh-11rem)] md:max-h-none",
+          "md:grid md:min-h-[28rem] md:grid-cols-[13rem_minmax(0,1fr)]",
           "lg:grid-cols-[15rem_minmax(0,1fr)]",
         )}
       >
@@ -1124,7 +1144,11 @@ export function TeamChatHub({
         </section>
       </div>
 
-      <TeamHubMobileRail active={pane} onChange={setPane} />
+      <TeamHubMobileRail
+        active={pane}
+        onChange={setPane}
+        embed={previewLock}
+      />
 
       <AttachSheet
         open={attachOpen}

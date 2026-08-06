@@ -63,8 +63,9 @@ export function useDesignViewport() {
 }
 
 /**
- * 고정 뷰포트 폭으로 렌더. 컨테이너가 더 좁으면 고정폭+축소 대신
- * fluid(100%)로 내려 히트 영역 어긋남(transform/zoom)을 피한다.
+ * 고정 뷰포트 폭으로 렌더. `@container` 로 sm/md/lg 가 이 폭을 따르게 한다
+ * (브라우저 창이 넓어도 모바일 레이아웃이 실제로 적용됨).
+ * 바깥이 더 좁으면 고정폭+축소 대신 fluid(100%)로 내려 히트 어긋남을 피한다.
  */
 export function DesignViewportStage({
   width,
@@ -98,9 +99,11 @@ export function DesignViewportStage({
         "h-full w-full min-w-0 overflow-x-hidden overflow-y-auto",
         className,
       )}
+      data-faith-design-viewport=""
+      data-faith-design-width={width}
     >
       <div
-        className="mx-auto min-h-full"
+        className="@container relative mx-auto min-h-full"
         style={{
           width: fits ? width : "100%",
           maxWidth: width,

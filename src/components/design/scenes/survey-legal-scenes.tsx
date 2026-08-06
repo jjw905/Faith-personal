@@ -3,32 +3,17 @@
 import { useState } from "react";
 
 import { PreviewStage } from "@/components/design/preview-stage";
-import {
-  DesignViewportPicker,
-  DesignViewportStage,
-  useDesignViewport,
-} from "@/components/design/use-design-viewport";
 import { DemandSurveyConsentGate } from "@/components/layout/demand-survey-consent-gate";
 import { LegalDocsView } from "@/components/legal/legal-docs-view";
 import { SurveyForm } from "@/components/survey/survey-form";
 import { SURVEY_UNLOCKED_MONTHLY_MINUTES } from "@/lib/stt/survey";
 import type { LegalDoc } from "@/lib/legal";
 
+/** 창 크기는 DesignFrame 스테이지가 담당. */
 function PageSceneFrame({ children }: { children: React.ReactNode }) {
-  const { viewport, setViewport, width } = useDesignViewport();
-
   return (
-    <div className="flex h-full min-h-full flex-col bg-surface">
-      <DesignViewportPicker value={viewport} onChange={setViewport} />
-      <div className="min-h-0 min-w-0 flex-1 px-4 pb-6">
-        <div className="mx-auto h-full min-h-[28rem] w-full min-w-0 overflow-hidden rounded-xl ring-1 ring-border/60">
-          <DesignViewportStage width={width} className="h-full">
-            <div className="h-full min-h-full overflow-y-auto overscroll-y-contain bg-background">
-              {children}
-            </div>
-          </DesignViewportStage>
-        </div>
-      </div>
+    <div className="h-full min-h-full overflow-y-auto overscroll-y-contain bg-background">
+      {children}
     </div>
   );
 }

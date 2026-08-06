@@ -45,13 +45,18 @@ function useMounted() {
   );
 }
 
-/** 모바일: 하단보다 위, 선택 칩이 따라가는 추적형 전환. */
+/** 모바일: 하단보다 위, 선택 칩이 따라가는 추적형 전환.
+ *  embed=true 이면 포털/md:hidden 없이 부모(relative) 안에 붙여
+ *  디자인 랩 모바일 폭에서도 실제 폰과 같이 보이게 한다.
+ */
 export function StatsAdminMobileRail({
   active,
   onChange,
+  embed = false,
 }: {
   active: StatsAdminCategory;
   onChange: (next: StatsAdminCategory) => void;
+  embed?: boolean;
 }) {
   const mounted = useMounted();
   const { open: notificationsOpen } = useNotificationsUi();
@@ -84,14 +89,23 @@ export function StatsAdminMobileRail({
     return () => window.removeEventListener("resize", onResize);
   }, [active]);
 
-  if (!mounted || notificationsOpen) return null;
+  if (!mounted || (!embed && notificationsOpen)) return null;
 
-  return createPortal(
+  const nav = (
     <nav
-      className="pointer-events-none fixed inset-x-0 z-[55] md:hidden"
-      style={{
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.75rem)",
-      }}
+      className={cn(
+        "pointer-events-none z-[55]",
+        embed
+          ? "absolute inset-x-0 bottom-3"
+          : "fixed inset-x-0 md:hidden",
+      )}
+      style={
+        embed
+          ? undefined
+          : {
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 4.75rem)",
+            }
+      }
       aria-label="통계 분류 전환"
     >
       <div className="pointer-events-auto mx-auto w-full max-w-lg px-4">
@@ -145,9 +159,11 @@ export function StatsAdminMobileRail({
           })}
         </div>
       </div>
-    </nav>,
-    document.body,
+    </nav>
   );
+
+  if (embed) return nav;
+  return createPortal(nav, document.body);
 }
 
 export const STATS_CATEGORY_TABS: Array<{

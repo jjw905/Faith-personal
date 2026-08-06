@@ -88,7 +88,7 @@ export function SceneTeamChatHub() {
   }));
 
   return (
-    <div className="min-h-[32rem] bg-background p-3">
+    <div className="min-h-full bg-background p-3">
       <TeamChatHub
         teamId="ux-team"
         currentUserId="ux-me"

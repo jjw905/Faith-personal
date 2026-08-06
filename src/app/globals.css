@@ -1,5 +1,21 @@
 @import "tailwindcss";
 
+/*
+ * Breakpoints follow the nearest @container (body / design stage),
+ * so design-lab “모바일” width matches a real phone instead of the
+ * outer browser window. Keep sizes identical to Tailwind defaults.
+ */
+@custom-variant sm (@container (min-width: 640px));
+@custom-variant md (@container (min-width: 768px));
+@custom-variant lg (@container (min-width: 1024px));
+@custom-variant xl (@container (min-width: 1280px));
+@custom-variant 2xl (@container (min-width: 1536px));
+@custom-variant max-sm (@container (max-width: 639px));
+@custom-variant max-md (@container (max-width: 767px));
+@custom-variant max-lg (@container (max-width: 1023px));
+@custom-variant max-xl (@container (max-width: 1279px));
+@custom-variant max-2xl (@container (max-width: 1535px));
+
 :root {
   /* 60% — 중립 베이스 */
   --background: #fbfbfd;
@@ -157,29 +173,6 @@ body {
   }
 }
 
-/* 분석 진행 중 — 정적인 스피너 대신 호흡하는 중심과 얇은 회전 링을 사용한다. */
-@keyframes process-breathe {
-  0%,
-  100% {
-    transform: scale(0.88);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 1;
-  }
-}
-
-/* 분석 대기열 — 대기(indeterminate) 막대 */
-@keyframes process-queue-indeterminate {
-  0% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(320%);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   @keyframes process-rise {
     from {
@@ -191,25 +184,17 @@ body {
       opacity: 1;
     }
   }
-
-  @keyframes process-queue-indeterminate {
-    from {
-      transform: none;
-    }
-    to {
-      transform: none;
-    }
-  }
 }
 
-/* 애플식 큰 헤드라인 — 모바일은 줄간격 여유, xl+만 타이트 */
-.text-hero {
+/* 애플식 큰 헤드라인 — 모바일은 줄간격 여유, xl+만 타이트.
+ * 클래스명에 text- 접두를 쓰지 않음: twMerge가 text-5xl 등과 충돌해 제거함. */
+.faith-hero-title {
   letter-spacing: -0.03em;
   line-height: 1.22;
 }
 
 @media (min-width: 1280px) {
-  .text-hero {
+  .faith-hero-title {
     line-height: 1.08;
   }
 }
@@ -446,46 +431,73 @@ body {
 @keyframes record-beat {
   0%,
   100% {
-    transform: scaleY(0.32);
-    opacity: 0.45;
+    transform: scaleY(0.4);
+    opacity: 0.4;
   }
   50% {
     transform: scaleY(1);
-    opacity: 0.95;
+    opacity: 0.85;
   }
 }
 
 .record-beat-bars {
   display: inline-flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
+  height: 10px;
+}
+
+.record-beat-bars--md {
   height: 12px;
+  gap: 2px;
+}
+
+.record-beat-bars--lg {
+  height: 14px;
+  gap: 2.5px;
 }
 
 .record-beat-bars > span {
   display: block;
-  width: 2.5px;
+  width: 1.5px;
   height: 100%;
   border-radius: 999px;
   background: currentColor;
-  transform-origin: center bottom;
-  animation: record-beat 1.15s ease-in-out infinite;
+  transform-origin: center center;
+  animation: record-beat 1.2s ease-in-out infinite;
+}
+
+.record-beat-bars--md > span,
+.record-beat-bars--lg > span {
+  width: 2px;
 }
 
 .record-beat-bars > span:nth-child(1) {
   animation-delay: 0ms;
 }
 .record-beat-bars > span:nth-child(2) {
-  animation-delay: 140ms;
+  animation-delay: 80ms;
 }
 .record-beat-bars > span:nth-child(3) {
-  animation-delay: 70ms;
+  animation-delay: 40ms;
 }
 .record-beat-bars > span:nth-child(4) {
-  animation-delay: 210ms;
+  animation-delay: 120ms;
 }
 .record-beat-bars > span:nth-child(5) {
-  animation-delay: 105ms;
+  animation-delay: 60ms;
+}
+.record-beat-bars > span:nth-child(6) {
+  animation-delay: 100ms;
+}
+.record-beat-bars > span:nth-child(7) {
+  animation-delay: 20ms;
+}
+.record-beat-bars > span:nth-child(8) {
+  animation-delay: 140ms;
+}
+.record-beat-bars > span:nth-child(9) {
+  animation-delay: 70ms;
 }
 
 @keyframes faith-mark-pulse {
@@ -567,8 +579,8 @@ body {
 
   .record-beat-bars > span {
     animation: none;
-    opacity: 0.7;
-    transform: scaleY(0.65);
+    opacity: 0.65;
+    transform: scaleY(0.7);
   }
 
   .faith-mark-bar {

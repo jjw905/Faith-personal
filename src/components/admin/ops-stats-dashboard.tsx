@@ -597,7 +597,12 @@ export function OpsStatsDashboard({
   );
 
   return (
-    <div className="flex flex-col gap-6 pb-[calc(env(safe-area-inset-bottom,0px)+11rem)] md:pb-0">
+    <div
+      className={cn(
+        "relative flex flex-col gap-6 pb-[calc(env(safe-area-inset-bottom,0px)+11rem)] md:pb-0",
+        previewLock && "min-h-full",
+      )}
+    >
       <div className="hidden items-end border-b border-border md:flex">
         <div
           role="tablist"
@@ -972,7 +977,11 @@ export function OpsStatsDashboard({
         </div>
       ) : null}
 
-      <StatsAdminMobileRail active={category} onChange={selectCategory} />
+      <StatsAdminMobileRail
+        active={category}
+        onChange={selectCategory}
+        embed={previewLock}
+      />
     </div>
   );
 }
