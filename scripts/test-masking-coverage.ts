@@ -64,7 +64,7 @@ function main() {
   console.log("=== 가려져야 할 것 ===");
   const missed: Case[] = [];
   for (const item of CASES) {
-    const result = maskPii(item.text, { style: "label" });
+    const result = maskPii(item.text, { style: "partial" });
     const hidden = !result.masked.includes(item.secret);
     if (!hidden) missed.push(item);
     console.log(
@@ -75,7 +75,7 @@ function main() {
   console.log("\n=== 가리면 안 되는 것 ===");
   const overMasked: string[] = [];
   for (const text of FALSE_POSITIVE_CASES) {
-    const result = maskPii(text, { style: "label" });
+    const result = maskPii(text, { style: "partial" });
     const changed = result.masked !== text;
     if (changed) overMasked.push(text);
     console.log(`${changed ? "과잉" : "정상"}  ${result.masked}`);

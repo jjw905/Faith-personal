@@ -33,7 +33,7 @@ function TextBtn({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="h-10 shrink-0 rounded-full border border-border-strong bg-surface px-3.5 text-sm font-semibold text-foreground hover:bg-surface-2 disabled:opacity-50"
+      className="min-h-12 shrink-0 rounded-full border border-border-strong bg-surface px-3.5 text-base font-semibold text-foreground hover:bg-surface-2 disabled:opacity-50 md:h-10 md:min-h-10 md:text-sm"
     >
       {children}
     </button>
@@ -55,7 +55,7 @@ function FilledBtn({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "h-10 shrink-0 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground",
+        "min-h-12 shrink-0 rounded-full bg-primary px-4 text-base font-semibold text-primary-foreground md:h-10 md:min-h-10 md:text-sm",
         "hover:bg-primary-hover disabled:opacity-60",
       )}
     >
@@ -282,7 +282,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                         value={nameDraft}
                         onChange={(e) => setNameDraft(e.target.value)}
                         placeholder="표시 이름"
-                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        className="min-w-0 flex-1 rounded-xl bg-card"
                         autoComplete="name"
                       />
                       <FilledBtn
@@ -292,7 +292,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                         저장
                       </FilledBtn>
                       <TextBtn onClick={() => setPanel(null)}>취소</TextBtn>
-                      <p className="w-full pl-24 text-xs text-muted-2">
+                      <p className="w-full pl-24 text-base text-muted-2">
                         한글 2~5자
                       </p>
                     </>
@@ -306,7 +306,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                   )}
                 </FieldLine>
                 {nameMsg ? (
-                  <p className="pb-2 text-sm font-medium text-muted">
+                  <p className="pb-2 text-base font-medium text-muted">
                     {nameMsg}
                   </p>
                 ) : null}
@@ -319,7 +319,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                         placeholder="새 이메일"
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
-                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        className="min-w-0 flex-1 rounded-xl bg-card"
                         autoComplete="email"
                       />
                       <FilledBtn
@@ -354,13 +354,13 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                       placeholder="인증번호 6자리"
                       value={otp}
                       onChange={(e) => setOtp(e.target.value)}
-                      className="h-10 rounded-xl bg-card"
+                      className="rounded-xl bg-card"
                       autoComplete="one-time-code"
                     />
                   </div>
                 ) : null}
                 {emailMsg ? (
-                  <p className="pb-3 text-sm font-medium text-muted">
+                  <p className="pb-3 text-base font-medium text-muted">
                     {emailMsg}
                   </p>
                 ) : null}
@@ -389,7 +389,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                         autoComplete="current-password"
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
-                        className="h-10 rounded-xl bg-card"
+                        className="rounded-xl bg-card"
                       />
                     ) : null}
                     <div className="flex flex-wrap items-center gap-2">
@@ -399,7 +399,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                         autoComplete="new-password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        className="min-w-0 flex-1 rounded-xl bg-card"
                       />
                       <Input
                         type="password"
@@ -409,7 +409,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                         onChange={(e) =>
                           setNewPasswordConfirm(e.target.value)
                         }
-                        className="h-10 min-w-0 flex-1 rounded-xl bg-card"
+                        className="min-w-0 flex-1 rounded-xl bg-card"
                       />
                       <FilledBtn
                         disabled={
@@ -437,7 +437,7 @@ export function AccountSettings({ children }: { children?: React.ReactNode }) {
                 )}
               </FieldLine>
               {pwMsg ? (
-                <p className="pb-2 text-sm font-medium text-muted">{pwMsg}</p>
+                <p className="pb-2 text-base font-medium text-muted">{pwMsg}</p>
               ) : null}
 
               <div className="flex min-h-0 flex-1 flex-col gap-3 pt-4">

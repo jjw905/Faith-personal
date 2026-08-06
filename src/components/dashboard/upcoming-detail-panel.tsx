@@ -3,6 +3,7 @@
 import {
   Link2,
   MapPin,
+  Pencil,
   Plus,
   Trash2,
   X,
@@ -15,10 +16,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MonthDayCalendar } from "@/components/meetings/month-day-calendar";
 import {
+  MeetingRecordPortal,
+} from "@/components/meetings/meeting-record-layout";
+import {
   dateLabelToIso,
   formatUpcomingScheduleSummary,
   isoToUpcomingDateLabel,
   relativeUpcomingHint,
+  resolveUpcomingListDate,
   seoulDateKey,
 } from "@/lib/meeting-date";
 import {
@@ -107,7 +112,7 @@ function DetailRow({
     >
       <p
         className={cn(
-          "w-16 shrink-0 text-base font-medium leading-5 text-muted md:w-14 md:text-xs",
+          "w-[3.25rem] shrink-0 text-base font-semibold leading-6 text-muted",
           align === "start" && "pt-0.5",
         )}
       >
@@ -132,7 +137,6 @@ function PersonAvatar({
     <Avatar
       className={cn(
         size === "sm" ? "h-8 w-8" : "h-9 w-9",
-        "border-2 border-card",
         className,
       )}
     >
@@ -159,7 +163,7 @@ function AddAction({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-border px-3.5 text-base font-medium text-muted transition-colors hover:border-foreground/25 hover:bg-surface hover:text-foreground md:h-9 md:px-3 md:text-xs"
+      className="inline-flex h-12 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-dashed border-border px-3.5 text-base font-semibold leading-none text-muted transition-colors hover:border-foreground/25 hover:bg-surface hover:text-foreground"
     >
       {children}
       <span>{label}</span>
@@ -276,7 +280,7 @@ function MinuteInput({
   ariaLabel: string;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
       <input
         type="number"
         inputMode="numeric"
@@ -291,11 +295,11 @@ function MinuteInput({
         }}
         className={cn(
           outlinedFieldClass,
-          "w-[4.75rem] px-2 text-center text-base font-semibold tabular-nums",
+          "h-14 min-w-0 flex-1 px-3 text-center text-lg font-semibold tabular-nums sm:w-[5.5rem] sm:flex-none",
         )}
         aria-label={ariaLabel}
       />
-      <span className="shrink-0 text-base text-muted md:text-sm">분</span>
+      <span className="shrink-0 text-base font-medium text-muted">분</span>
     </div>
   );
 }
@@ -338,19 +342,17 @@ function DurationFields({
   }
 
   return (
-    <div className="min-w-0 space-y-2">
-      {/* 라벨 옆에 현재 값을 바로 보여줘 아래 문구와 중복 표기하지 않는다 */}
+    <div className="min-w-0 space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-base font-medium text-muted md:text-xs">소요</p>
-        <p className="text-base font-semibold tabular-nums text-foreground md:text-sm">
+        <p className="text-base font-semibold text-muted">소요</p>
+        <p className="text-lg font-semibold tabular-nums tracking-tight text-foreground">
           {label}
         </p>
       </div>
 
-      {/* 방식·프리셋·직접 입력을 한 카드로 묶어 따로 노는 느낌을 없앤다 */}
-      <div className="min-w-0 space-y-3 rounded-xl border border-border p-3">
+      <div className="min-w-0 space-y-3 rounded-2xl border border-border p-3.5">
         <div
-          className="inline-flex rounded-lg border border-border p-0.5"
+          className="grid grid-cols-2 gap-1 rounded-xl bg-surface p-1"
           role="radiogroup"
           aria-label="소요 입력 방식"
         >
@@ -375,10 +377,10 @@ function DurationFields({
                   applyRange(minMins, Math.max(maxMins, minMins + 15));
                 }}
                 className={cn(
-                  "h-11 cursor-pointer rounded-md px-4 text-base font-medium transition-colors md:h-8 md:px-3 md:text-xs",
+                  "inline-flex h-12 cursor-pointer items-center justify-center rounded-lg text-base font-semibold transition-colors",
                   active
-                    ? "bg-primary-soft text-primary"
-                    : "text-muted hover:text-foreground",
+                    ? "bg-card text-foreground shadow-soft"
+                    : "text-muted hover:bg-card/70 hover:text-foreground",
                 )}
               >
                 {text}
@@ -388,7 +390,7 @@ function DurationFields({
         </div>
 
         <div
-          className="flex flex-wrap gap-2"
+          className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"
           role="group"
           aria-label="빠른 소요"
         >
@@ -400,6 +402,7 @@ function DurationFields({
                 key={preset}
                 active={active}
                 onClick={() => applyExact(mins)}
+                className="w-full justify-center sm:w-auto"
               >
                 {preset}
               </Chip>
@@ -407,10 +410,8 @@ function DurationFields({
           })}
         </div>
 
-        <div className="space-y-1.5 border-t border-border pt-3">
-          <p className="text-sm font-medium text-muted md:text-xs">
-            직접 입력
-          </p>
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="text-base font-semibold text-muted">직접 입력</p>
           {mode === "exact" ? (
             <MinuteInput
               value={minMins}
@@ -418,13 +419,13 @@ function DurationFields({
               ariaLabel="소요 분"
             />
           ) : (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               <MinuteInput
                 value={minMins}
                 onChange={(mins) => applyRange(mins, maxMins)}
                 ariaLabel="최소 소요 분"
               />
-              <span className="text-base text-muted md:text-sm" aria-hidden>
+              <span className="shrink-0 text-lg font-semibold text-muted" aria-hidden>
                 ~
               </span>
               <MinuteInput
@@ -440,9 +441,9 @@ function DurationFields({
   );
 }
 
-/** M3 outlined text field */
+/** M3 outlined text field — 모바일 본문/입력 16px+ */
 const outlinedFieldClass =
-  "flex h-12 w-full rounded-md border border-border bg-transparent px-3.5 text-base text-foreground placeholder:text-muted-2 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary md:text-sm";
+  "flex h-14 w-full rounded-xl border border-border bg-transparent px-3.5 text-base text-foreground placeholder:text-muted-2 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
 
 function Chip({
   active,
@@ -460,7 +461,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-11 cursor-pointer items-center rounded-lg px-3.5 text-base font-medium transition-colors md:h-8 md:px-2.5 md:text-xs",
+        "inline-flex h-12 cursor-pointer items-center justify-center rounded-xl px-3.5 text-base font-semibold leading-none transition-colors",
         active
           ? "bg-primary-soft text-primary"
           : "border border-border bg-transparent text-foreground hover:bg-surface",
@@ -492,17 +493,17 @@ function ScheduleSummary({
 
   return (
     <div className={cn("min-w-0", className)}>
-      <p className="text-base font-medium tabular-nums tracking-tight text-foreground md:text-sm">
+      <p className="text-lg font-semibold tabular-nums tracking-tight text-foreground">
         {summary}
       </p>
       {hint ? (
-        <p className="mt-1 text-sm text-muted md:mt-0.5 md:text-xs">{hint}</p>
+        <p className="mt-1 text-base font-medium text-muted">{hint}</p>
       ) : null}
     </div>
   );
 }
 
-/** M3: 월 달력 + 시간/소요. 표시는 항상 절대 일정. */
+/** M3: 월 달력 + 시간/소요. 모바일에서 시간·소요를 크게 잡기 쉽게. */
 function ScheduleFields({
   dateLabel,
   timeLabel,
@@ -522,16 +523,16 @@ function ScheduleFields({
   const selectedIso = dateLabelToIso(dateLabel) ?? todayIso;
 
   return (
-    <div className="min-w-0 space-y-4">
+    <div className="min-w-0 space-y-5">
       <ScheduleSummary
         dateLabel={dateLabel}
         timeLabel={timeLabel}
         duration={duration}
-        className="rounded-md border border-border px-3 py-2.5"
+        className="rounded-2xl border border-border px-4 py-3.5"
       />
 
       <div className="min-w-0">
-        <p className="mb-1.5 text-base font-medium text-muted">날짜</p>
+        <p className="mb-2 text-base font-semibold text-muted">날짜</p>
         <MonthDayCalendar
           selectedIso={selectedIso}
           minIso={todayIso}
@@ -540,14 +541,16 @@ function ScheduleFields({
       </div>
 
       <label className="block min-w-0">
-        <span className="mb-1 block text-base font-medium text-muted">시작</span>
+        <span className="mb-2 block text-base font-semibold text-muted">
+          시작 시간
+        </span>
         <input
           type="time"
           value={toTimeInputValue(timeLabel)}
           onChange={(e) => onTimeChange(fromTimeInputValue(e.target.value))}
           className={cn(
             outlinedFieldClass,
-            "h-14 max-w-[10.5rem] cursor-pointer text-base font-semibold tabular-nums md:h-11",
+            "h-14 w-full cursor-pointer text-lg font-semibold tabular-nums tracking-tight",
           )}
           aria-label={`시작 시간 ${timeLabel}`}
         />
@@ -568,7 +571,116 @@ function fromTimeInputValue(value: string) {
   return value || "16:00";
 }
 
-/** 예정 회의 상세/수정. 보기 레이아웃을 유지한 채 바로 수정. */
+function upcomingHeaderLabel(
+  dateLabel: string,
+  timeLabel: string,
+  duration: string,
+) {
+  const { label } = resolveUpcomingListDate(dateLabel);
+  const time = timeLabel.trim() || "--:--";
+  const dur = duration.trim();
+  if (dur && dur !== "—") return `${label} · ${time} · ${dur}`;
+  return `${label} · ${time}`;
+}
+
+/** 회의 기록 상세와 같은 페이지 셸(포털). MeetingRecordPortal만 사용. */
+function UpcomingAnalysisPageShell({
+  ariaLabel,
+  onBack,
+  headerLabel,
+  trailing,
+  leading,
+  title,
+  children,
+  footer,
+}: {
+  ariaLabel: string;
+  onBack: () => void;
+  headerLabel: string;
+  trailing?: ReactNode;
+  leading?: ReactNode;
+  title: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  return (
+    <MeetingRecordPortal
+      open
+      ariaLabel={ariaLabel}
+      onBack={onBack}
+      leading={leading}
+      headerCenter={
+        <time
+          className="block truncate text-center text-xl font-bold tabular-nums tracking-tight text-foreground sm:text-2xl md:text-xl"
+          title={headerLabel}
+        >
+          {headerLabel}
+        </time>
+      }
+      trailing={trailing}
+      title={title}
+      footer={footer}
+    >
+      {children}
+    </MeetingRecordPortal>
+  );
+}
+
+/** 보기 본문 — 일정·제목은 셸 헤더. 장소·참석·안건·메모만. */
+function UpcomingDetailViewBody({ item }: { item: UpcomingItem }) {
+  const platform = resolvePlatform(item);
+  const hasAgenda = item.agenda.length > 0;
+  const hasNotes = Boolean(item.notes.trim());
+  const hasPeople = item.participants.length > 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-lg font-medium text-muted">
+          <MeetingPlatformIcon platform={platform} size="sm" />
+          <span className="min-w-0 truncate">{item.location}</span>
+        </div>
+        {hasPeople ? (
+          <div
+            className="flex shrink-0 -space-x-2"
+            aria-label={`참석자 ${item.participants.length}명`}
+          >
+            {item.participants.slice(0, 3).map((name) => (
+              <PersonAvatar key={name} name={name} size="sm" />
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {hasAgenda ? (
+        <div className="space-y-2.5">
+          <p className="text-base font-semibold text-muted">안건</p>
+          <ol className="space-y-2.5">
+            {item.agenda.map((line, index) => (
+              <li
+                key={`${item.id}-agenda-${index}`}
+                className="flex gap-2.5 text-lg leading-snug text-foreground"
+              >
+                <span className="shrink-0 tabular-nums text-muted-2">
+                  {index + 1}.
+                </span>
+                <span className="min-w-0">{line}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
+      {hasNotes ? (
+        <div className="space-y-2.5">
+          <p className="text-base font-semibold text-muted">메모</p>
+          <p className="text-lg leading-relaxed text-foreground">{item.notes}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function UpcomingDetailPanel({
   item,
   open,
@@ -690,96 +802,157 @@ export function UpcomingDetailPanel({
     : view
       ? form ?? toForm(view)
       : null;
-  const sheetTitle = isCreate
-    ? "예정 회의 추가"
-    : editing
-      ? "예정 회의 수정"
-      : "예정 회의";
-
   if (!open || !view || !data) return null;
 
-  return (
-    <>
-      {/* M3: 모바일은 full-screen dialog라 스크림 없음. md+ side sheet만 스크림. */}
-      <div
-        className={cn(
-          "fixed inset-0 z-[70] hidden bg-black/40 transition-opacity duration-200 md:block",
-          "opacity-100",
-        )}
-        onClick={onClose}
-        aria-hidden
-      />
+  const dialogLabel = isCreate
+    ? "일정 추가"
+    : editing
+      ? "일정 수정"
+      : view.title;
 
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-label={sheetTitle}
-        className={cn(
-          // 모바일: edge-to-edge full-screen dialog. md+: 우측 side sheet.
-          "fixed inset-0 z-[70] flex h-dvh w-full flex-col overflow-hidden bg-card transition-transform duration-200 ease-out",
-          "md:inset-y-0 md:right-0 md:left-auto md:max-w-md md:shadow-[0_0_40px_rgba(17,24,46,0.12)]",
-          "translate-x-0",
+  if (!editing) {
+    return (
+      <UpcomingAnalysisPageShell
+        ariaLabel={dialogLabel}
+        onBack={onClose}
+        headerLabel={upcomingHeaderLabel(
+          view.dateLabel,
+          view.timeLabel,
+          view.duration,
         )}
+        leading={
+          <span
+            className="pointer-events-none invisible inline-flex h-12 w-12 shrink-0 md:h-9 md:w-9"
+            aria-hidden
+          />
+        }
+        trailing={
+          <button
+            type="button"
+            onClick={startEdit}
+            className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9"
+            title="일정 수정"
+            aria-label="일정 수정"
+          >
+            <Pencil className="h-4 w-4 md:h-3.5 md:w-3.5" strokeWidth={2} />
+          </button>
+        }
+        title={
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            {view.title}
+          </h1>
+        }
+        footer={
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
+            {onDelete ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn(
+                  TOUCH_BUTTON,
+                  "inline-flex w-full cursor-pointer items-center justify-center text-base leading-none text-masked hover:bg-masked-soft hover:text-masked sm:mr-auto sm:w-auto",
+                )}
+                onClick={() => {
+                  if (!window.confirm("이 일정을 삭제할까요?")) return;
+                  onDelete(view);
+                  onClose();
+                }}
+              >
+                삭제
+              </Button>
+            ) : null}
+            <Button
+              asChild
+              className={cn(
+                TOUCH_BUTTON,
+                "col-span-2 inline-flex w-full cursor-pointer items-center justify-center text-base leading-none sm:col-span-1 sm:ml-auto sm:w-auto sm:min-w-[5.5rem]",
+                !onDelete && "col-span-2",
+              )}
+            >
+              <Link href={view.href} onClick={onClose}>
+                회의 시작
+              </Link>
+            </Button>
+          </div>
+        }
       >
-        {/* M3 top app bar: X(취소/닫기) 좌측, 편집 중엔 저장 액션 우측(모바일 full-screen dialog 규칙) */}
-        <div className="flex h-14 shrink-0 items-center gap-1 border-b border-border px-2 sm:px-3">
+        <UpcomingDetailViewBody item={view} />
+      </UpcomingAnalysisPageShell>
+    );
+  }
+
+  return (
+    <UpcomingAnalysisPageShell
+      ariaLabel={dialogLabel}
+      onBack={cancelEdit}
+      headerLabel={upcomingHeaderLabel(
+        data.dateLabel,
+        data.timeLabel,
+        data.duration,
+      )}
+      leading={
+        <Button
+          type="button"
+          className={cn(
+            TOUCH_BUTTON,
+            "pointer-events-none invisible inline-flex items-center justify-center px-4 text-base leading-none",
+          )}
+          tabIndex={-1}
+          aria-hidden
+        >
+          {isCreate ? "추가" : "저장"}
+        </Button>
+      }
+      trailing={
+        <Button
+          type="button"
+          className={cn(
+            TOUCH_BUTTON,
+            "inline-flex cursor-pointer items-center justify-center px-4 text-base leading-none",
+          )}
+          onClick={handleSave}
+        >
+          {isCreate ? "추가" : "저장"}
+        </Button>
+      }
+      title={
+        <input
+          value={data.title}
+          onChange={(e) => update("title", e.target.value)}
+          className="w-full border-b border-foreground bg-transparent py-0.5 text-2xl font-bold tracking-tight text-foreground outline-none placeholder:text-muted-2"
+          placeholder="회의 제목"
+          aria-label="회의 제목"
+        />
+      }
+      footer={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button
             type="button"
             variant="ghost"
-            size="icon"
             className={cn(
-              TOUCH_ICON_BUTTON,
-              "shrink-0 cursor-pointer text-foreground/70 hover:bg-surface hover:text-foreground",
+              TOUCH_BUTTON,
+              "inline-flex w-full cursor-pointer items-center justify-center text-base leading-none sm:w-auto sm:min-w-[4.5rem]",
             )}
-            onClick={editing ? cancelEdit : onClose}
-            aria-label={editing ? "편집 취소" : "상세 닫기"}
+            onClick={cancelEdit}
           >
-            <X />
+            취소
           </Button>
-          <div className="min-w-0 flex-1 px-1">
-            <p className="truncate text-base font-medium text-foreground">
-              {sheetTitle}
-            </p>
-          </div>
-          {editing ? (
-            <Button
-              type="button"
-              className={cn(
-                TOUCH_BUTTON,
-                "shrink-0 cursor-pointer px-4 text-base md:hidden",
-              )}
-              onClick={handleSave}
-            >
-              {isCreate ? "추가" : "저장"}
-            </Button>
-          ) : null}
-          {/* 보기 모드 수정, 삭제는 하단 액션 바에만 둔다. 헤더 중복 시 같은 기능이 위아래로 겹침 */}
+          <Button
+            type="button"
+            className={cn(
+              TOUCH_BUTTON,
+              "inline-flex w-full cursor-pointer items-center justify-center text-base leading-none sm:w-auto sm:min-w-[5rem]",
+            )}
+            onClick={handleSave}
+          >
+            {isCreate ? "추가" : "저장"}
+          </Button>
         </div>
-
-        {view && data ? (
-          <>
-            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
-              <div className="min-w-0 space-y-0 px-4 py-2 sm:px-5">
-                {/* Title */}
-                <div className="border-b border-border py-4">
-                  {editing ? (
-                    <input
-                      value={data.title}
-                      onChange={(e) => update("title", e.target.value)}
-                      className="w-full bg-transparent text-xl font-medium leading-snug text-foreground outline-none placeholder:text-muted-2"
-                      placeholder="회의 제목"
-                      aria-label="회의 제목"
-                    />
-                  ) : (
-                    <h2 className="text-xl font-medium leading-snug text-foreground">
-                      {view.title}
-                    </h2>
-                  )}
-                </div>
-
+      }
+    >
+      <div className="min-w-0 space-y-0">
                 <section className="divide-y divide-border">
                   <div className="py-4">
-                    {editing ? (
                       <ScheduleFields
                         dateLabel={data.dateLabel}
                         timeLabel={data.timeLabel}
@@ -788,15 +961,6 @@ export function UpcomingDetailPanel({
                         onTimeChange={(next) => update("timeLabel", next)}
                         onDurationChange={(next) => update("duration", next)}
                       />
-                    ) : (
-                      <DetailRow label="일정" align="start">
-                        <ScheduleSummary
-                          dateLabel={view.dateLabel}
-                          timeLabel={view.timeLabel}
-                          duration={view.duration}
-                        />
-                      </DetailRow>
-                    )}
                   </div>
 
                   <div className="py-4">
@@ -834,10 +998,10 @@ export function UpcomingDetailPanel({
                                     }
                                   }}
                                   className={cn(
-                                    "inline-flex min-h-11 min-w-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg px-2 py-1.5 transition-colors",
+                                    "inline-flex min-h-12 min-w-12 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-colors",
                                     selected
-                                      ? "bg-primary-soft"
-                                      : "hover:bg-surface",
+                                      ? "bg-primary-soft text-primary"
+                                      : "text-muted hover:bg-surface hover:text-foreground",
                                   )}
                                 >
                                   <MeetingPlatformIcon
@@ -849,7 +1013,7 @@ export function UpcomingDetailPanel({
                                   />
                                   <span
                                     className={cn(
-                                      "text-sm font-medium md:text-xs",
+                                      "text-sm font-semibold leading-none",
                                       selected ? "text-primary" : "text-muted",
                                     )}
                                   >
@@ -871,7 +1035,7 @@ export function UpcomingDetailPanel({
                                 </span>
                                 <button
                                   type="button"
-                                  className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground md:h-7 md:w-7"
+                                  className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
                                   aria-label="장소 지우기"
                                   onClick={() => {
                                     update("location", "");
@@ -935,7 +1099,7 @@ export function UpcomingDetailPanel({
                               </span>
                               <button
                                 type="button"
-                                className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground md:h-7 md:w-7"
+                                className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
                                 aria-label="링크 지우기"
                                 onClick={() => {
                                   update(
@@ -1010,7 +1174,7 @@ export function UpcomingDetailPanel({
                           <button
                             type="button"
                             onClick={() => setShowOrganizerPick((v) => !v)}
-                            className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:bg-surface md:min-h-0"
+                            className="inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-3 transition-colors hover:bg-surface"
                             aria-expanded={showOrganizerPick}
                             aria-label="주최자 변경"
                           >
@@ -1049,7 +1213,7 @@ export function UpcomingDetailPanel({
                                       }
                                     }}
                                     className={cn(
-                                      "inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors md:min-h-0",
+                                      "inline-flex min-h-12 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1.5 pr-3 transition-colors",
                                       active
                                         ? "border-primary bg-primary-soft text-primary"
                                         : "border-border hover:bg-surface",
@@ -1060,7 +1224,7 @@ export function UpcomingDetailPanel({
                                       size="sm"
                                       className="border-transparent"
                                     />
-                                    <span className="text-base font-medium leading-5 md:text-sm">
+                                    <span className="text-base font-semibold leading-none">
                                       {person.name}
                                     </span>
                                   </button>
@@ -1091,7 +1255,7 @@ export function UpcomingDetailPanel({
                             {data.participants.map((name) => (
                               <span
                                 key={name}
-                                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-1 md:min-h-0"
+                                className="inline-flex min-h-12 shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1.5 pr-1"
                               >
                                 <PersonAvatar name={name} size="sm" />
                                 <span className="max-w-[8rem] truncate text-base font-medium leading-5 text-foreground md:text-sm">
@@ -1099,7 +1263,7 @@ export function UpcomingDetailPanel({
                                 </span>
                                 <button
                                   type="button"
-                                  className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground md:h-6 md:w-6"
+                                  className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface hover:text-foreground"
                                   aria-label={`${name} 제거`}
                                   onClick={() =>
                                     update(
@@ -1147,10 +1311,10 @@ export function UpcomingDetailPanel({
                                         toggleParticipant(person.name)
                                       }
                                       className={cn(
-                                        "inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1 pr-2.5 transition-colors md:min-h-0",
-                                        selected
-                                          ? "border-primary bg-primary-soft text-primary"
-                                          : "border-border hover:bg-surface",
+                                      "inline-flex min-h-12 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border py-1.5 pl-1.5 pr-3 transition-colors",
+                                      selected
+                                        ? "border-primary bg-primary-soft text-primary"
+                                        : "border-border hover:bg-surface",
                                       )}
                                     >
                                       <PersonAvatar
@@ -1158,7 +1322,7 @@ export function UpcomingDetailPanel({
                                         size="sm"
                                         className="border-transparent"
                                       />
-                                      <span className="text-base font-medium leading-5 md:text-sm">
+                                      <span className="text-base font-semibold leading-none">
                                         {person.name}
                                       </span>
                                     </button>
@@ -1198,7 +1362,7 @@ export function UpcomingDetailPanel({
                               ) : (
                                 <button
                                   type="button"
-                                  className="min-h-11 cursor-pointer text-base font-medium text-muted hover:text-foreground md:min-h-0 md:text-xs"
+                                  className="inline-flex min-h-12 cursor-pointer items-center rounded-lg px-2 text-base font-semibold text-muted transition-colors hover:bg-surface hover:text-foreground"
                                   onClick={() =>
                                     setShowCustomParticipant(true)
                                   }
@@ -1214,7 +1378,7 @@ export function UpcomingDetailPanel({
                           {view.participants.map((name) => (
                             <span
                               key={name}
-                              className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1 pr-2.5 md:min-h-0"
+                              className="inline-flex min-h-12 shrink-0 items-center gap-1.5 rounded-full border border-border py-1.5 pl-1.5 pr-3"
                             >
                               <PersonAvatar name={name} size="sm" />
                               <span className="max-w-[8rem] truncate text-base font-medium leading-5 text-foreground md:text-sm">
@@ -1235,7 +1399,7 @@ export function UpcomingDetailPanel({
                       <button
                         type="button"
                         onClick={addAgendaRow}
-                        className="min-h-11 cursor-pointer text-base font-medium text-primary hover:underline md:min-h-0 md:text-xs"
+                        className="inline-flex min-h-12 cursor-pointer items-center rounded-lg px-2 text-base font-semibold text-primary transition-colors hover:bg-primary-soft"
                       >
                         추가
                       </button>
@@ -1273,7 +1437,7 @@ export function UpcomingDetailPanel({
                             />
                             <button
                               type="button"
-                              className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-masked hover:bg-masked-soft md:h-10 md:w-10"
+                              className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-masked hover:bg-masked-soft"
                               aria-label={`안건 ${index + 1} 삭제`}
                               onClick={() =>
                                 update(
@@ -1328,90 +1492,7 @@ export function UpcomingDetailPanel({
                     </p>
                   )}
                 </section>
-              </div>
-            </div>
-
-            {/* M3 action bar: 편집 중엔 저장이 상단으로 옮겨가서 모바일에서 숨김(키보드 겹침 방지). 데스크탑 side sheet는 유지. */}
-            <div
-              className={cn(
-                "shrink-0 border-t border-border bg-card px-4 pt-3",
-                "pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]",
-                "sm:px-5 sm:pb-4",
-                editing && "hidden md:block",
-              )}
-            >
-              {editing ? (
-                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className={cn(
-                      TOUCH_BUTTON,
-                      "w-full cursor-pointer text-base sm:w-auto sm:min-w-[4.5rem] sm:text-sm",
-                    )}
-                    onClick={cancelEdit}
-                  >
-                    취소
-                  </Button>
-                  <Button
-                    type="button"
-                    className={cn(
-                      TOUCH_BUTTON,
-                      "w-full cursor-pointer text-base sm:w-auto sm:min-w-[5rem] sm:text-sm",
-                    )}
-                    onClick={handleSave}
-                  >
-                    {isCreate ? "추가" : "저장"}
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end">
-                  {onDelete ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className={cn(
-                        TOUCH_BUTTON,
-                        "cursor-pointer justify-self-stretch text-base text-masked hover:bg-masked-soft hover:text-masked sm:mr-auto sm:w-auto sm:text-sm",
-                      )}
-                      onClick={() => {
-                        if (!window.confirm("이 일정을 삭제할까요?")) return;
-                        onDelete(view);
-                        onClose();
-                      }}
-                    >
-                      삭제
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      TOUCH_BUTTON,
-                      "cursor-pointer justify-self-stretch text-base sm:w-auto sm:min-w-[4.5rem] sm:text-sm",
-                      !onDelete && "col-span-2 sm:col-span-1",
-                    )}
-                    onClick={startEdit}
-                  >
-                    수정
-                  </Button>
-                  <Button
-                    asChild
-                    className={cn(
-                      TOUCH_BUTTON,
-                      "col-span-2 w-full cursor-pointer text-base sm:col-span-1 sm:w-auto sm:min-w-[5.5rem] sm:text-sm",
-                    )}
-                  >
-                    <Link href={view.href} onClick={onClose}>
-                      회의 시작
-                    </Link>
-                  </Button>
-                </div>
-              )}
-            </div>
-          </>
-        ) : null}
-      </aside>
-    </>
+      </div>
+    </UpcomingAnalysisPageShell>
   );
 }

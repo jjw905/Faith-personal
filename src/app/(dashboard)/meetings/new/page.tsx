@@ -7,12 +7,17 @@ import { requireUser } from "@/lib/require-user";
 export default async function NewMeetingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ workspace?: string; intent?: string }>;
+  searchParams: Promise<{
+    workspace?: string;
+    intent?: string;
+    mode?: string;
+  }>;
 }) {
   const session = await requireUser();
   if (!session) redirect("/login");
   const query = await searchParams;
   const initialWorkspace = query.workspace === "team" ? "team" : "personal";
+  const liveMode = query.mode === "live";
   const teamIntent =
     query.intent === "schedule"
       ? ("schedule" as const)
@@ -29,6 +34,7 @@ export default async function NewMeetingPage({
       initialWorkspace={initialWorkspace}
       initialIntent={teamIntent}
       fixedIntent={initialWorkspace === "team" ? teamIntent : undefined}
+      liveMode={liveMode}
     />
   );
 }

@@ -231,7 +231,7 @@ function PeopleRow({
                 onClick={() => onSelectName?.(p.name)}
                 aria-pressed={selected}
                 className={cn(
-                  "inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-full pr-3 pl-1 transition-colors md:h-8 md:min-h-0 md:pr-2.5 md:pl-0.5",
+                  "inline-flex min-h-12 cursor-pointer items-center gap-2 pr-1 pl-0.5 transition-colors md:h-8 md:min-h-0",
                   selected
                     ? "bg-primary-soft ring-1 ring-primary/30"
                     : "hover:bg-surface-2",
@@ -364,7 +364,7 @@ function SpeakerContributionList({
           <li key={person.id}>
             <div
               className={cn(
-                "group/person -m-1 flex gap-3 rounded-xl p-1 transition-colors",
+                "group/person flex gap-3 transition-colors",
                 selected && "bg-primary-soft/60",
               )}
             >
@@ -388,7 +388,7 @@ function SpeakerContributionList({
                       onCancel={onStopEdit}
                     />
                     {summary ? (
-                      <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-muted">
+                      <p className="mt-0.5 line-clamp-3 text-base leading-5 text-muted">
                         {summary}
                       </p>
                     ) : null}
@@ -445,10 +445,10 @@ function SpeakerContributionBody({
 }: SpeakerRow) {
   return (
     <>
-      <Avatar className="mt-0.5 h-10 w-10 shrink-0 md:h-8 md:w-8">
+      <Avatar className="mt-0.5 h-10 w-10 shrink-0">
         <AvatarFallback
           className={cn(
-            "text-sm font-semibold leading-none text-white md:text-xs",
+            "text-sm font-semibold leading-none text-white",
             person.color,
           )}
         >
@@ -458,27 +458,30 @@ function SpeakerContributionBody({
 
       <div className="min-w-0 flex-1">
         <span
-          className="block min-w-0 truncate text-base font-semibold leading-5 text-foreground md:text-sm"
+          className="block min-w-0 truncate text-base font-semibold leading-5 text-foreground"
           title={person.recognitionNote || person.name}
         >
           {person.name}
         </span>
         {summary ? (
           <p
-            className="mt-0.5 line-clamp-2 text-base leading-5 text-muted md:text-xs md:leading-4"
+            className="mt-0.5 line-clamp-3 text-base leading-5 text-muted"
             title={summary}
           >
             {summary}
           </p>
         ) : null}
         {tags.length > 0 ? (
-          <ul className="mt-1.5 flex min-w-0 flex-wrap gap-1">
+          <ul className="mt-1.5 flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1">
             {tags.map((tag) => (
               <li
                 key={tag}
-                className="max-w-full rounded-md bg-surface-2 px-1.5 py-0.5 text-sm font-semibold leading-4 text-foreground md:text-xs"
+                className="inline-flex max-w-full items-baseline text-sm leading-4 tracking-tight"
               >
-                {tag}
+                <span className="shrink-0 text-muted-2" aria-hidden>
+                  #
+                </span>
+                <span className="truncate text-muted">{tag}</span>
               </li>
             ))}
           </ul>
@@ -520,11 +523,27 @@ export function MeetingParticipants({
   onParticipantRenamed?: (from: string, to: string) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [desktopLimit, setDesktopLimit] = useState(true);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => setDesktopLimit(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   if (participants.length === 0) return null;
 
-  const useContributionList =
-    participants.length > 1 && participants.some(hasContribution);
+  const useContributionList = participants.some(hasContribution);
+  const limit = desktopLimit ? 8 : 5;
+  const needsCollapse = participants.length > limit;
+  const visibleParticipants =
+    expanded || !needsCollapse
+      ? participants
+      : participants.slice(0, limit);
+  const hiddenCount = participants.length - limit;
 
   function handleRenamed(from: string, to: string) {
     setEditingId(null);
@@ -541,38 +560,44 @@ export function MeetingParticipants({
   };
 
   return (
-    <section
-      className="panel-surface rounded-2xl px-4 py-4 sm:px-5"
-      aria-label={`참석자 ${participants.length}명`}
-    >
+    <section aria-label={`참석자 ${participants.length}명`}>
       <div className="mb-3 flex flex-wrap items-baseline gap-2">
-        <h2 className="text-sm font-semibold tracking-wide text-muted-2 md:text-xs">
+        <h2 className="text-sm font-semibold tracking-wide text-muted-2">
           참석
         </h2>
-        <span className="text-sm font-semibold tabular-nums text-muted-2 md:text-xs">
+        <span className="text-sm font-semibold tabular-nums text-muted-2">
           {participants.length}
         </span>
         {selectedName ? (
-          <span className="text-base font-medium text-primary md:text-xs">
+          <span className="text-base font-medium text-primary">
             {selectedName} 구간
           </span>
         ) : null}
       </div>
       {useContributionList ? (
         <SpeakerContributionList
-          rows={buildContributionRows(participants)}
+          rows={buildContributionRows(visibleParticipants)}
           selectedName={selectedName}
           onSelectName={onSelectName}
           {...editProps}
         />
       ) : (
         <GroupedParticipantsList
-          participants={participants}
+          participants={visibleParticipants}
           selectedName={selectedName}
           onSelectName={onSelectName}
           {...editProps}
         />
       )}
+      {needsCollapse ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-3 inline-flex min-h-12 w-full items-center justify-center text-base font-semibold text-primary transition-colors hover:bg-primary-soft md:min-h-10"
+        >
+          {expanded ? "접기" : `${hiddenCount}명 더보기`}
+        </button>
+      ) : null}
     </section>
   );
 }

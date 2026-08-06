@@ -23,7 +23,7 @@ export function AppHeader({ onMenuClick }: { onMenuClick?: () => void }) {
         <Button
           variant="ghost"
           size="icon"
-          className="h-12 w-12 shrink-0 cursor-pointer hover:bg-surface-2 lg:hidden [&_svg]:size-6"
+          className="h-12 w-12 shrink-0 cursor-pointer hover:bg-surface-2 md:hidden [&_svg]:size-6"
           onClick={onMenuClick}
           aria-label="메뉴 열기"
         >

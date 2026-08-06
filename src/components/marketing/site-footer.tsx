@@ -30,7 +30,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
 ];
 
 const linkCls =
-  "text-base font-medium text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm";
+  "break-keep text-base font-medium text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm";
 
 /** 하단 푸터 — 제품/회사/법률 3열(가운데 기준). 아주 좁을 때만 세로. */
 export function SiteFooter() {
@@ -56,7 +56,7 @@ export function SiteFooter() {
           ))}
         </div>
 
-        <p className="mt-10 text-center text-sm text-muted-2 sm:mt-12">
+        <p className="mt-10 text-center text-base text-muted-2 sm:mt-12">
           © 2026 Faith
         </p>
       </Container>

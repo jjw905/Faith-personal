@@ -16,6 +16,7 @@ import { Container } from "@/components/marketing/container";
 import {
   DocsFloatChrome,
   DocsScrollTopFab,
+  isDocsTitleChromeGone,
   useDocsFloatBox,
 } from "@/components/docs/docs-float-tools";
 import {
@@ -91,7 +92,7 @@ export function AboutDocsView() {
   const syncFloatChrome = useCallback(() => {
     const chrome = chromeRef.current;
     if (!chrome) return;
-    setShowFloatChrome(chrome.getBoundingClientRect().bottom < 12);
+    setShowFloatChrome(isDocsTitleChromeGone(chrome));
   }, []);
 
   useEffect(() => {
@@ -246,11 +247,11 @@ export function AboutDocsView() {
               <div className="flex flex-col gap-6 pb-32 md:flex-row md:gap-8 md:pb-0 lg:gap-12">
                 <DocsDesktopToc
                   ariaLabel="제품 소개 목차"
-                  stickyTopClass={showFloatChrome ? "md:top-20" : "md:top-4"}
+                  stickyTopClass={showFloatChrome ? "md:top-24" : "md:top-4"}
                 >
                   {searching ? (
                     <div className="space-y-1">
-                      <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
+                      <p className="px-2 text-base font-semibold tracking-wide text-muted-2">
                         검색 결과
                       </p>
                       {results.length === 0 ? (
@@ -273,7 +274,7 @@ export function AboutDocsView() {
                     <div className="space-y-5">
                       {ABOUT_NAV.map((group) => (
                         <div key={group.title}>
-                          <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
+                          <p className="px-2 text-base font-semibold tracking-wide text-muted-2">
                             {group.title}
                           </p>
                           <ul className="mt-1.5 space-y-0.5">

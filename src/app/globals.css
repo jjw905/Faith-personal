@@ -669,6 +669,33 @@ body {
   }
 }
 
+/* 히어로 타이핑 커서 */
+.hero-caret {
+  display: inline-block;
+  margin-left: 0.06em;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  animation: hero-caret-blink 1s steps(1, end) infinite;
+}
+
+@keyframes hero-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-caret {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* 히어로 유리 말풍선 PNG */
 .hero-chat-glass {
   display: block;

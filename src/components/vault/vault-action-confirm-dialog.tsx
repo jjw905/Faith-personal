@@ -13,6 +13,7 @@ export type VaultConfirmAction = "delete" | "download" | "share";
 /**
  * 보관함 다운로드, 공유, 삭제 확인.
  * 모바일은 바텀시트(확인 위, 취소 아래 = HIG 액션시트 순서), 데스크톱은 중앙 모달.
+ * 톤: 기록 확인창(MeetingRecordsActionDialog)과 동일.
  */
 export function VaultActionConfirmDialog({
   open,
@@ -122,82 +123,89 @@ export function VaultActionConfirmDialog({
         aria-modal="true"
         aria-labelledby="vault-action-confirm-title"
         aria-describedby="vault-action-confirm-desc"
-        className="w-full max-w-md rounded-t-3xl bg-card px-5 pt-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] shadow-float sm:rounded-3xl sm:p-7"
+        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-card shadow-float sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2
-          id="vault-action-confirm-title"
-          className="text-xl font-bold tracking-tight text-foreground sm:text-lg"
-        >
-          {title}
-        </h2>
-        <p
-          id="vault-action-confirm-desc"
-          className="mt-2 text-base leading-relaxed text-muted"
-        >
-          {description}
-        </p>
-
-        <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-base font-semibold text-muted">
-              {single ? "대상 파일" : "선택 목록"}
-            </p>
-            {single ? null : (
-              <span className="text-base font-semibold tabular-nums text-muted">
-                {count}개
-              </span>
-            )}
-          </div>
-          <ul
-            ref={listRef}
-            className="max-h-52 space-y-1 overflow-y-auto rounded-2xl bg-surface/60 px-3 py-1"
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6 sm:px-7 sm:pt-7">
+          <h2
+            id="vault-action-confirm-title"
+            className="text-xl font-bold tracking-tight text-foreground sm:text-lg"
           >
-            {items.map((item) => (
-              <li key={item.id} className="flex min-w-0 items-center gap-3 py-2">
-                <VaultFileIcon
-                  name={item.name}
-                  mime={item.mime}
-                  size={18}
-                  className="h-9 w-9"
-                />
-                <p
-                  className="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
-                  title={item.name}
-                >
-                  {item.name}
-                </p>
-                <span className="shrink-0 text-base tabular-nums text-muted">
-                  {formatVaultSize(item.size)}
+            {title}
+          </h2>
+          <p
+            id="vault-action-confirm-desc"
+            className="mt-2 text-base leading-relaxed text-muted"
+          >
+            {description}
+          </p>
+
+          <div className="mt-5">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-base font-semibold text-muted">
+                {single ? "대상 파일" : "선택 목록"}
+              </p>
+              {single ? null : (
+                <span className="text-base font-semibold tabular-nums text-muted">
+                  {count}개
                 </span>
-              </li>
-            ))}
-          </ul>
+              )}
+            </div>
+            <ul
+              ref={listRef}
+              className="max-h-[min(40vh,16rem)] divide-y divide-border overflow-y-auto"
+            >
+              {items.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex min-w-0 items-center gap-3 py-3"
+                >
+                  <VaultFileIcon
+                    name={item.name}
+                    mime={item.mime}
+                    size={20}
+                    className="h-10 w-10 shrink-0 rounded-full border border-border bg-transparent"
+                  />
+                  <p
+                    className="min-w-0 flex-1 truncate text-lg font-semibold leading-6 tracking-tight text-foreground"
+                    title={item.name}
+                  >
+                    {item.name}
+                  </p>
+                  <span className="shrink-0 text-base tabular-nums text-muted">
+                    {formatVaultSize(item.size)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:mt-7 sm:flex-row sm:justify-end sm:gap-2.5">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="inline-flex h-12 w-full cursor-pointer items-center justify-center rounded-2xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-auto sm:rounded-xl"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={busy}
-            className={cn(
-              "inline-flex h-12 w-full cursor-pointer items-center justify-center gap-1.5 rounded-2xl px-5 text-base font-bold transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-auto sm:rounded-xl",
-              destructive
-                ? "bg-masked text-white"
-                : "bg-primary text-primary-foreground",
-            )}
-          >
-            <ConfirmIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-            {confirmLabel}
-          </button>
+        <div className="shrink-0 bg-card px-5 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:px-7 sm:pb-6">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-2.5">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-2xl px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:min-h-0 sm:w-auto sm:rounded-xl"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={busy}
+              className={cn(
+                "inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:min-h-0 sm:w-auto sm:rounded-xl",
+                destructive
+                  ? "bg-foreground text-background"
+                  : "bg-primary text-primary-foreground",
+              )}
+            >
+              <ConfirmIcon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+              {confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
     </div>

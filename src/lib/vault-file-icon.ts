@@ -170,7 +170,9 @@ export function vaultFileSymbol(
 }
 
 /**
- * 아이콘 안에 넣는 확장자 라벨. 3자로 정규화해 타일을 넘치지 않게 한다.
+ * 아이콘 안에 넣는 확장자 라벨.
+ * 사용자에게 익숙한 소문자(m4a, mp3, jpg…)로 표시. 업계·웹 관례도 소문자.
+ * 긴 확장자는 3자로 줄여 타일을 넘치지 않게 한다.
  * 확장자를 못 읽으면 빈 문자열 → 호출부는 심볼 글리프로 대체.
  */
 export function vaultFileExtLabel(name: string): string {
@@ -178,24 +180,24 @@ export function vaultFileExtLabel(name: string): string {
   if (!ext) return "";
   switch (ext) {
     case "jpeg":
-      return "JPG";
+      return "jpg";
     case "docx":
-      return "DOC";
+      return "doc";
     case "xlsx":
-      return "XLS";
+      return "xls";
     case "pptx":
-      return "PPT";
+      return "ppt";
     case "hwpx":
-      return "HWP";
+      return "hwp";
     case "webm":
-      return "WEB";
+      return "web";
     case "flac":
-      return "FLA";
+      return "fla";
     case "heic":
-      return "HEI";
+      return "hei";
     case "webp":
-      return "WEP";
+      return "wep";
     default:
-      return ext.slice(0, 3).toUpperCase();
+      return ext.slice(0, 3);
   }
 }

@@ -306,7 +306,7 @@ async function main() {
     buildMeetingShareUrl("off", maskedShareUrl),
   );
   assert(!originalShare.searchParams.has("mask"), "share off removes mask");
-  assert(resolveMeetingShareMask("label") === "label", "share label parsed");
+  assert(resolveMeetingShareMask("label") === "partial", "share label maps to partial");
   assert(resolveMeetingShareMask("unexpected") === null, "share invalid rejected");
 
   // All formats build

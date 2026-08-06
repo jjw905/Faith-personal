@@ -60,5 +60,8 @@ export function resolveMeetingShareMask(
   value: string | string[] | undefined,
 ): MaskStyle | null {
   const raw = Array.isArray(value) ? value[0] : value;
-  return raw === "partial" || raw === "label" || raw === "off" ? raw : null;
+  if (raw === "partial" || raw === "off") return raw;
+  // 구 공유 링크의 [유형] 표기 → 부분 가림으로 호환
+  if (raw === "label") return "partial";
+  return null;
 }

@@ -301,7 +301,7 @@ export const HELP_ARTICLES: HelpArticle[] = [
     blocks: [
       {
         type: "p",
-        text: "오른쪽 위 벨에서 분석 완료, 실패 알림을 모아서 봅니다.",
+        text: "왼쪽 메뉴 알림에서 실패·초대·보안 안내를 모아서 봅니다.",
       },
       {
         type: "ul",

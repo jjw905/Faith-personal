@@ -81,7 +81,7 @@ function ProcessProgressBar({
 
   return (
     <div
-      className={cn("w-full max-w-[min(20rem,86vw)]", className)}
+      className={cn("w-full max-w-lg", className)}
       role="progressbar"
       aria-valuemin={0}
       aria-valuemax={100}
@@ -148,21 +148,7 @@ export function MeetingProcessLoader({
           : label
       }
     >
-      {active ? (
-        <div className="flex flex-col items-center gap-4">
-          <div
-            className="relative flex h-[4.5rem] w-[4.5rem] items-center justify-center"
-            aria-hidden="true"
-          >
-            <span className="absolute inset-0 rounded-full bg-primary/10 motion-safe:animate-[process-breathe_2.4s_ease-in-out_infinite] motion-reduce:animate-none" />
-            <span className="absolute inset-2 rounded-full border-2 border-primary/20 border-t-primary motion-safe:animate-[spin_1.8s_linear_infinite] motion-reduce:animate-none" />
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-card text-xs font-bold tracking-tight text-primary shadow-soft">
-              {phase === "transcribing" ? "음성" : "정리"}
-            </span>
-          </div>
-          <ProcessProgressBar percent={percentRaw} />
-        </div>
-      ) : null}
+      {active ? <ProcessProgressBar percent={percentRaw} /> : null}
 
       <div className="relative mx-auto flex h-7 w-full max-w-[min(22rem,90vw)] items-center justify-center overflow-hidden">
         <p

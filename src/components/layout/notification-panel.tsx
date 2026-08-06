@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   Check,
+  ChevronLeft,
   EyeOff,
   HardDrive,
   Loader2,
@@ -13,10 +14,11 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 
+import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import { Button } from "@/components/ui/button";
 import { MaterialSymbol } from "@/components/ui/material-symbol";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,10 +27,11 @@ import {
   NOTIFICATION_RECENT_DISPLAY_DAYS,
 } from "@/lib/data-retention";
 import {
-  fixtureNotificationsExpand,
-} from "@/lib/page-ux-fixtures";
-import { getNotifications } from "@/lib/notifications-mock";
-import { isPageUxNotificationScenario } from "@/lib/page-ux-registry";
+  formatRecordsDayParts,
+  seoulDateKey,
+} from "@/lib/meeting-date";
+import { defaultNotificationExamples } from "@/lib/notification-examples";
+import { isNotificationChromePreview } from "@/lib/page-ux-registry";
 import type { AppNotification, NotificationType } from "@/types/notification";
 import {
   isUrgentNotification,
@@ -36,7 +39,87 @@ import {
 } from "@/types/notification";
 import { cn } from "@/lib/utils";
 
-type PanelTab = "unread" | "all";
+type PanelTab = "unread" | "records";
+/** 공지·초대·회의·일반로 묶은 카테고리 (세부 type보다 스캔이 쉽다). */
+type CategoryId = "all" | "notice" | "invite" | "meeting" | "general";
+
+const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
+  invite: "초대",
+  meeting: "회의",
+  team: "팀",
+  masking: "마스킹",
+  access: "보안",
+  storage: "저장공간",
+  system: "시스템",
+  urgent: "공지",
+};
+
+const CATEGORY_OPTIONS: { id: CategoryId; label: string }[] = [
+  { id: "all", label: "전체" },
+  { id: "notice", label: "공지" },
+  { id: "invite", label: "초대" },
+  { id: "meeting", label: "회의" },
+  { id: "general", label: "일반" },
+];
+
+function notificationCategory(
+  type: NotificationType,
+): Exclude<CategoryId, "all"> {
+  if (type === "urgent") return "notice";
+  if (type === "invite") return "invite";
+  if (type === "meeting") return "meeting";
+  return "general";
+}
+
+function matchesCategory(n: AppNotification, category: CategoryId) {
+  if (category === "all") return true;
+  return notificationCategory(n.type) === category;
+}
+
+function matchesNotificationSearch(n: AppNotification, query: string) {
+  const q = query.trim().toLocaleLowerCase("ko-KR");
+  if (!q) return true;
+  const typeLabel = NOTIFICATION_TYPE_LABEL[n.type];
+  const catLabel =
+    CATEGORY_OPTIONS.find((c) => c.id === notificationCategory(n.type))
+      ?.label ?? "";
+  const haystack = [n.title, n.body, typeLabel, catLabel]
+    .join(" ")
+    .toLocaleLowerCase("ko-KR");
+  return haystack.includes(q);
+}
+
+function sortNotificationsNewestFirst(items: AppNotification[]) {
+  return [...items].sort((a, b) => {
+    const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+    const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+    return tb - ta;
+  });
+}
+
+function groupNotificationsByDay(items: AppNotification[]) {
+  const groups: {
+    key: string;
+    label: string;
+    items: AppNotification[];
+  }[] = [];
+  for (const item of sortNotificationsNewestFirst(items)) {
+    const iso = item.createdAt ?? new Date().toISOString();
+    const key = seoulDateKey(iso);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.items.push(item);
+      continue;
+    }
+    const { relative, absolute } = formatRecordsDayParts(iso);
+    groups.push({
+      key,
+      label: relative ?? absolute,
+      items: [item],
+    });
+  }
+  return groups;
+}
 
 function notificationIcon(type: NotificationType) {
   if (type === "masking") return EyeOff;
@@ -62,7 +145,6 @@ function notificationOpenHref(n: AppNotification): string | null {
   if (!meetingId) return null;
   const kind = typeof n.data?.kind === "string" ? n.data.kind : "";
   if (
-    kind === "analysis_done" ||
     kind === "analysis_failed" ||
     kind.startsWith("meeting_") ||
     n.type === "meeting" ||
@@ -101,6 +183,13 @@ function hasConfirmActions(
 type NotificationGroupProps = {
   label: string;
   items: AppNotification[];
+  /**
+   * 기록 조회용: 읽은 항목은 수락/확인 CTA를 숨기고 바로가기만 남겨
+   * 날짜·유형 스캔이 편해지게 한다. 안 읽음(액션 필요)은 그대로 노출.
+   */
+  browseMode?: boolean;
+  /** 탭이 이미 구역을 말해주면 섹션 라벨을 숨긴다 (모바일 안 읽음). */
+  hideLabel?: boolean;
   onClose?: () => void;
   onMarkRead?: (id: string) => void;
   onMarkReadInPlace?: (id: string) => void;
@@ -116,24 +205,6 @@ type NotificationGroupProps = {
     meetingId: string | null,
   ) => void;
 };
-
-/** 알림 종류 칩 라벨. '긴급' 문구는 쓰지 않는다. */
-function notificationCategory(
-  type: NotificationType,
-  data?: Record<string, unknown> | null,
-): string {
-  const kind = typeof data?.kind === "string" ? data.kind : "";
-  if (kind === "analysis_done" || kind === "analysis_failed") return "분석";
-  if (type === "urgent") return "공지";
-  if (type === "access") return "보안";
-  if (type === "system") return "시스템";
-  if (type === "masking") return "마스킹";
-  if (type === "storage") return "저장";
-  if (type === "invite") return "초대";
-  if (type === "team") return "팀";
-  if (type === "meeting") return "회의";
-  return "알림";
-}
 
 function emitNotificationsChanged(unreadCount: number) {
   if (typeof window === "undefined") return;
@@ -169,43 +240,70 @@ export function NotificationPanel({
 }: NotificationPanelProps) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
   const { scenarioId, isLive } = usePageUxPreview();
   const [unread, setUnread] = useState<AppNotification[]>([]);
   const [recent, setRecent] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<PanelTab>("unread");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [category, setCategory] = useState<CategoryId>("all");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const softActions = !isLive || Boolean(contained);
+  /** API에 알림이 없을 때 공통 예시를 보여 미리보기와 맞춘다. */
+  const [usingExamples, setUsingExamples] = useState(false);
+
+  const chromePreview = isNotificationChromePreview({
+    scenarioId,
+    pathname,
+    search: search ? `?${search}` : "",
+  });
+  const softActions =
+    !isLive || Boolean(contained) || chromePreview || usingExamples;
 
   const applyPreview = useCallback(() => {
     if (previewItems) {
       const { unread: u, recent: r } = applyFixtureItems(previewItems);
       setUnread(u);
       setRecent(r);
+      setUsingExamples(true);
       setLoading(false);
-      setTab(u.length > 0 ? "unread" : "all");
+      setTab(u.length > 0 ? "unread" : "records");
+      emitNotificationsChanged(u.length);
       return true;
     }
-    if (scenarioId === "popup-notifications-expand") {
+    if (chromePreview) {
       const { unread: u, recent: r } = applyFixtureItems(
-        fixtureNotificationsExpand(),
+        defaultNotificationExamples(),
       );
       setUnread(u);
       setRecent(r);
+      setUsingExamples(true);
       setLoading(false);
       setTab("unread");
+      emitNotificationsChanged(u.length);
       return true;
     }
     return false;
-  }, [previewItems, scenarioId]);
+  }, [previewItems, chromePreview]);
+
+  const loadExamples = useCallback(() => {
+    const { unread: u, recent: r } = applyFixtureItems(
+      defaultNotificationExamples(),
+    );
+    setUnread(u);
+    setRecent(r);
+    setUsingExamples(true);
+    setTab(u.length > 0 ? "unread" : "records");
+    emitNotificationsChanged(u.length);
+  }, []);
 
   const load = useCallback(async () => {
     if (applyPreview()) return;
 
     if (contained || status !== "authenticated" || !session?.user?.id) {
-      const items = getNotifications().map((n) => ({ ...n }));
-      setUnread(sortNotificationsUrgentFirst(items.filter((n) => n.unread)));
-      setRecent(items.filter((n) => !n.unread));
+      loadExamples();
       return;
     }
 
@@ -220,14 +318,30 @@ export function NotificationPanel({
         recent?: AppNotification[];
         unreadCount?: number;
       };
-      if (!res.ok || !data.ok) return;
-      setUnread(sortNotificationsUrgentFirst(data.unread ?? []));
-      setRecent(data.recent ?? []);
-      emitNotificationsChanged(data.unreadCount ?? 0);
+      if (!res.ok || !data.ok) {
+        loadExamples();
+        return;
+      }
+      const apiUnread = data.unread ?? [];
+      const apiRecent = data.recent ?? [];
+      if (apiUnread.length === 0 && apiRecent.length === 0) {
+        loadExamples();
+        return;
+      }
+      setUsingExamples(false);
+      setUnread(sortNotificationsUrgentFirst(apiUnread));
+      setRecent(apiRecent);
+      emitNotificationsChanged(data.unreadCount ?? apiUnread.length);
     } finally {
       setLoading(false);
     }
-  }, [applyPreview, contained, session?.user?.id, status]);
+  }, [
+    applyPreview,
+    contained,
+    loadExamples,
+    session?.user?.id,
+    status,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -242,7 +356,7 @@ export function NotificationPanel({
       ]);
       setUnread([]);
       emitNotificationsChanged(0);
-      setTab("all");
+      setTab("records");
       return;
     }
     const res = await fetch("/api/notifications", {
@@ -254,7 +368,7 @@ export function NotificationPanel({
     if (res.ok && data.ok) {
       emitNotificationsChanged(data.unreadCount ?? 0);
       await load();
-      setTab("all");
+      setTab("records");
     }
   }
 
@@ -376,7 +490,9 @@ export function NotificationPanel({
     if (!open || contained) return;
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (chromePreview) return;
+      onClose();
     };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -385,7 +501,19 @@ export function NotificationPanel({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [open, onClose, contained]);
+  }, [open, onClose, contained, chromePreview]);
+
+  useEffect(() => {
+    if (open) return;
+    setSearchQuery("");
+    setCategory("all");
+    setActionMessage(null);
+  }, [open]);
+
+  function requestClose() {
+    if (chromePreview) return;
+    onClose();
+  }
 
   const sortedUnread = useMemo(
     () => sortNotificationsUrgentFirst(unread),
@@ -396,27 +524,126 @@ export function NotificationPanel({
     [unread],
   );
 
+  const filteredUnread = useMemo(
+    () =>
+      sortedUnread.filter(
+        (n) =>
+          matchesCategory(n, category) &&
+          matchesNotificationSearch(n, searchQuery),
+      ),
+    [sortedUnread, category, searchQuery],
+  );
+
+  /** 기록: 안 읽음+최근을 날짜순으로 합쳐 조회 */
+  const recordsPool = useMemo(() => {
+    const byId = new Map<string, AppNotification>();
+    for (const n of [...unread, ...recent]) {
+      byId.set(n.id, n);
+    }
+    return sortNotificationsNewestFirst([...byId.values()]);
+  }, [unread, recent]);
+
+  const categoryPool = tab === "unread" ? sortedUnread : recordsPool;
+
+  const visibleCategories = useMemo(() => {
+    const present = new Set(
+      categoryPool.map((n) => notificationCategory(n.type)),
+    );
+    return CATEGORY_OPTIONS.filter(
+      (opt) => opt.id === "all" || present.has(opt.id),
+    );
+  }, [categoryPool]);
+
+  useEffect(() => {
+    if (category === "all") return;
+    if (!visibleCategories.some((opt) => opt.id === category)) {
+      setCategory("all");
+    }
+  }, [category, visibleCategories]);
+
+  const filteredRecords = useMemo(() => {
+    return recordsPool.filter(
+      (n) =>
+        matchesCategory(n, category) &&
+        matchesNotificationSearch(n, searchQuery),
+    );
+  }, [recordsPool, category, searchQuery]);
+
+  const recordDayGroups = useMemo(
+    () => groupNotificationsByDay(filteredRecords),
+    [filteredRecords],
+  );
+
   const empty =
     !loading &&
     unread.length === 0 &&
     recent.length === 0;
 
   const showUnreadEmpty =
-    !loading && tab === "unread" && unread.length === 0;
+    !loading &&
+    tab === "unread" &&
+    unread.length === 0;
+
+  const showBrowseEmpty =
+    !loading &&
+    !empty &&
+    !showUnreadEmpty &&
+    ((tab === "unread" && filteredUnread.length === 0) ||
+      (tab === "records" && filteredRecords.length === 0));
+
+  const paneTabs = [
+    { id: "unread" as const, label: "안 읽음", count: unreadBadge },
+    {
+      id: "records" as const,
+      label: "기록",
+      count: recordsPool.length,
+    },
+  ];
+
+  const categoryToolbar =
+    visibleCategories.length > 1 ? (
+      <div
+        className="flex gap-1 overflow-x-auto py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        role="toolbar"
+        aria-label="알림 카테고리"
+      >
+        {visibleCategories.map((opt) => {
+          const selected = category === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setCategory(opt.id)}
+              className={cn(
+                "inline-flex h-12 shrink-0 items-center border-b-2 px-3 text-base font-semibold transition-colors md:h-10",
+                selected
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted hover:text-foreground",
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
+
+  const recordsFilterActive =
+    tab === "records" &&
+    (category !== "all" || searchQuery.trim().length > 0);
+  const recordsResultCount = filteredRecords.length;
 
   return (
     <>
-      {/* M3: 모바일은 full-screen dialog라 스크림 없음. md+ side sheet만 스크림. */}
+      {/* M3: 모바일은 full-screen dialog라 스크림 없음. md+ side sheet만 스크림.
+          z는 하단 추적 바(z-55)보다 위 — 열리면 바가 알림을 가리지 않게. */}
       <div
         className={cn(
           "hidden bg-black/40 transition-opacity duration-200 md:block",
-          contained ? "absolute inset-0 z-10" : "fixed inset-0 z-50",
+          contained ? "absolute inset-0 z-10" : "fixed inset-0 z-[60]",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
-        onClick={() => {
-          if (isPageUxNotificationScenario(scenarioId)) return;
-          onClose();
-        }}
+        onClick={requestClose}
         aria-hidden={!open}
       />
 
@@ -432,48 +659,82 @@ export function NotificationPanel({
           "md:max-w-md md:shadow-[0_0_40px_rgba(17,24,46,0.12)]",
           contained
             ? "absolute inset-y-0 right-0 z-10"
-            : "fixed inset-y-0 right-0 z-50",
+            : "fixed inset-y-0 right-0 z-[60]",
           open ? "translate-x-0" : "translate-x-full",
         )}
       >
-        <div className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border/60 px-4 sm:px-5">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-foreground md:text-base">
-              알림
-            </h2>
-            {unreadBadge > 0 ? (
-              <span className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full bg-primary px-2 py-0.5 text-sm font-semibold tabular-nums text-primary-foreground">
-                {unreadBadge}
-              </span>
-            ) : null}
+        <div className="shrink-0 pt-[env(safe-area-inset-top,0px)]">
+          <div className="flex h-12 items-center gap-1 px-2 md:h-16 md:gap-3 md:px-5">
+            <Button
+              type="button"
+              variant="ghost"
+              className="-ml-0.5 h-12 gap-1.5 px-2 text-base font-semibold text-muted hover:text-foreground md:hidden"
+              onClick={requestClose}
+              aria-label="알림 센터 닫기"
+            >
+              <ChevronLeft className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+              돌아가기
+            </Button>
+            <div className="hidden min-w-0 flex-1 items-center gap-2 md:flex">
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                알림
+              </h2>
+              {unreadBadge > 0 ? (
+                <span className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-full bg-primary px-2 py-0.5 text-sm font-semibold tabular-nums text-primary-foreground">
+                  {unreadBadge}
+                </span>
+              ) : null}
+            </div>
+            <div className="ml-auto flex items-center gap-1">
+              {unreadBadge > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="hidden h-9 cursor-pointer gap-1.5 px-2.5 text-sm font-semibold text-muted hover:text-foreground md:inline-flex"
+                  onClick={() => void markAllRead()}
+                  disabled={loading}
+                >
+                  <Check className="h-3.5 w-3.5" strokeWidth={2} />
+                  모두 읽음
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="hidden h-9 w-9 cursor-pointer text-muted hover:text-foreground md:inline-flex"
+                onClick={requestClose}
+                aria-label="알림 센터 닫기"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
+
+          {/* 모바일: 제목·배지·모두 읽음을 돌아가기 아래 한 줄에 — 엄지 스캔 쉽게 */}
+          <div className="flex items-center justify-between gap-3 px-4 pb-3 md:hidden">
+            <div className="flex min-w-0 items-center gap-2">
+              <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                알림
+              </h2>
+              {unreadBadge > 0 ? (
+                <span className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-full bg-primary px-2 py-0.5 text-base font-semibold tabular-nums text-primary-foreground">
+                  {unreadBadge}
+                </span>
+              ) : null}
+            </div>
             {unreadBadge > 0 ? (
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                className="h-12 cursor-pointer gap-1.5 px-3 text-base font-semibold text-muted hover:text-foreground md:h-9 md:px-2.5 md:text-sm"
+                className="h-12 shrink-0 px-3 text-base font-semibold text-muted hover:text-foreground"
                 onClick={() => void markAllRead()}
                 disabled={loading}
               >
-                <Check className="h-4 w-4 md:h-3.5 md:w-3.5" strokeWidth={2} />
                 모두 읽음
               </Button>
             ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-12 w-12 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground md:h-9 md:w-9"
-              onClick={() => {
-                if (isPageUxNotificationScenario(scenarioId)) return;
-                onClose();
-              }}
-              aria-label="알림 센터 닫기"
-            >
-              <X className="h-5 w-5" />
-            </Button>
           </div>
         </div>
 
@@ -487,40 +748,80 @@ export function NotificationPanel({
         ) : null}
 
         {!empty && !loading ? (
-          <div className="flex shrink-0 gap-1 border-b border-border/60 px-3 py-2 sm:px-4">
-            {(
-              [
-                { id: "unread" as const, label: "안 읽음", count: unreadBadge },
-                {
-                  id: "all" as const,
-                  label: "전체",
-                  count: unread.length + recent.length,
-                },
-              ] as const
-            ).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setTab(item.id)}
-                className={cn(
-                  "min-h-12 flex-1 rounded-xl px-3 text-base font-semibold transition-colors md:min-h-10 md:text-sm",
-                  tab === item.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-surface text-muted hover:text-foreground",
-                )}
-              >
-                {item.label}
-                {item.count > 0 ? (
-                  <span className="ml-1.5 tabular-nums opacity-80">
-                    {item.count}
-                  </span>
+          <div className="shrink-0 px-4 pt-1 sm:px-4">
+            <div
+              role="tablist"
+              aria-label="알림 보기"
+              className="flex items-end gap-1 border-b border-border"
+            >
+              {paneTabs.map((item) => {
+                const isSelected = tab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      setTab(item.id);
+                      if (item.id === "unread") setSearchQuery("");
+                    }}
+                    className={cn(
+                      "-mb-px inline-flex min-h-12 flex-1 items-center justify-center border-b-2 px-2 text-base font-semibold transition-colors md:flex-none md:justify-start md:px-3",
+                      isSelected
+                        ? "border-foreground text-foreground"
+                        : "border-transparent text-muted hover:text-foreground",
+                    )}
+                  >
+                    {item.label}
+                    {item.count > 0 ? (
+                      <span className="ml-1.5 tabular-nums opacity-80">
+                        {item.count}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="pt-1">{categoryToolbar}</div>
+            {tab === "records" ? (
+              <div className="mt-2 space-y-2">
+                <MeetingSearch
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="검색…"
+                  label="기록 검색"
+                  className="max-w-none"
+                />
+                {recordsFilterActive ? (
+                  <div className="flex min-h-12 items-center justify-between gap-2 px-0.5">
+                    <p className="text-base text-muted">
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {recordsResultCount}
+                      </span>
+                      건
+                      {category !== "all"
+                        ? ` · ${CATEGORY_OPTIONS.find((c) => c.id === category)?.label}`
+                        : ""}
+                    </p>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-12 items-center px-2 text-base font-semibold text-muted hover:text-foreground"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setCategory("all");
+                      }}
+                    >
+                      초기화
+                    </button>
+                  </div>
                 ) : null}
-              </button>
-            ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1 pb-[env(safe-area-inset-bottom,0px)]">
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-3 px-6 py-20 text-center">
               <Loader2
@@ -552,17 +853,50 @@ export function NotificationPanel({
                 type="button"
                 variant="secondary"
                 className="mt-4 min-h-12 md:min-h-10"
-                onClick={() => setTab("all")}
+                onClick={() => setTab("records")}
               >
                 최근 {NOTIFICATION_RECENT_DISPLAY_DAYS}일 보기
               </Button>
+            </div>
+          ) : showBrowseEmpty ? (
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <p className="text-base font-medium text-foreground">
+                {category !== "all"
+                  ? "이 카테고리의 알림이 없습니다"
+                  : searchQuery.trim()
+                    ? "검색 결과가 없습니다"
+                    : "표시할 알림이 없습니다"}
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {searchQuery.trim() ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-12 text-base md:min-h-10"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    검색어 지우기
+                  </Button>
+                ) : null}
+                {category !== "all" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-12 text-base md:min-h-10"
+                    onClick={() => setCategory("all")}
+                  >
+                    전체 보기
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ) : (
             <div className="px-2 py-2">
               {tab === "unread" ? (
                 <NotificationGroup
                   label="안 읽음"
-                  items={sortedUnread}
+                  items={filteredUnread}
+                  hideLabel
                   onClose={onClose}
                   onMarkRead={(id) => void markRead(id)}
                   onMarkReadInPlace={(id) => void markReadInPlace(id)}
@@ -586,43 +920,35 @@ export function NotificationPanel({
                   }
                 />
               ) : (
-                <>
-                  {sortedUnread.length > 0 ? (
-                    <NotificationGroup
-                      label="안 읽음"
-                      items={sortedUnread}
-                      onClose={onClose}
-                      onMarkRead={(id) => void markRead(id)}
-                      onMarkReadInPlace={(id) => void markReadInPlace(id)}
-                      onInviteAction={(
+                recordDayGroups.map((group) => (
+                  <NotificationGroup
+                    key={group.key}
+                    label={group.label}
+                    items={group.items}
+                    browseMode
+                    onClose={onClose}
+                    onMarkRead={(id) => void markRead(id)}
+                    onMarkReadInPlace={(id) => void markReadInPlace(id)}
+                    onInviteAction={(
+                      notificationId,
+                      inviteId,
+                      action,
+                      reason,
+                      inviteType,
+                    ) =>
+                      void respondInvite(
                         notificationId,
                         inviteId,
                         action,
                         reason,
                         inviteType,
-                      ) =>
-                        void respondInvite(
-                          notificationId,
-                          inviteId,
-                          action,
-                          reason,
-                          inviteType,
-                        )
-                      }
-                      onConfirmMeeting={(notificationId, meetingId) =>
-                        void confirmMeeting(notificationId, meetingId)
-                      }
-                    />
-                  ) : null}
-                  {recent.length > 0 ? (
-                    <NotificationGroup
-                      label={`최근 ${NOTIFICATION_RECENT_DISPLAY_DAYS}일`}
-                      items={recent}
-                      onClose={onClose}
-                      onMarkReadInPlace={(id) => void markReadInPlace(id)}
-                    />
-                  ) : null}
-                </>
+                      )
+                    }
+                    onConfirmMeeting={(notificationId, meetingId) =>
+                      void confirmMeeting(notificationId, meetingId)
+                    }
+                  />
+                ))
               )}
             </div>
           )}
@@ -632,9 +958,21 @@ export function NotificationPanel({
   );
 }
 
+/** 알림 행 CTA — 대시보드형, 섹션 배경면 없이 primary / outline만 */
+const NOTIFICATION_ACTION_PRIMARY =
+  "inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 md:min-h-11";
+
+const NOTIFICATION_ACTION_SECONDARY =
+  "inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl border border-border bg-transparent px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 md:min-h-11";
+
+const NOTIFICATION_ACTION_GHOST =
+  "inline-flex min-h-12 shrink-0 cursor-pointer items-center justify-center rounded-xl px-4 text-base font-semibold text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-11";
+
 function NotificationGroup({
   label,
   items,
+  browseMode = false,
+  hideLabel = false,
   onClose,
   onMarkRead,
   onMarkReadInPlace,
@@ -664,27 +1002,39 @@ function NotificationGroup({
 
   return (
     <div className="mb-1">
-      <p className="px-3 pb-1.5 pt-2 text-base font-semibold text-muted-2">
-        {label}
-      </p>
+      {!hideLabel ? (
+        <p className="sticky top-0 z-[1] bg-card px-3 pb-2 pt-5 text-base font-semibold tracking-tight text-foreground first:pt-3">
+          {label}
+        </p>
+      ) : (
+        <div className="pt-2" />
+      )}
       <ul className="space-y-1">
         {items.map((n) => {
           const Icon = notificationIcon(n.type);
           const urgent = isUrgentNotification(n.type, n.data);
-          const category = notificationCategory(n.type, n.data);
           const expanded = expandedId === n.id;
           const openHref = notificationOpenHref(n);
-          const inviteOk = hasInviteActions(n, onInviteAction);
-          const confirmOk = hasConfirmActions(n, onConfirmMeeting);
+          const inviteOk =
+            hasInviteActions(n, onInviteAction) &&
+            (!browseMode || n.unread);
+          const confirmOk =
+            hasConfirmActions(n, onConfirmMeeting) &&
+            (!browseMode || n.unread);
           const kind = typeof n.data?.kind === "string" ? n.data.kind : "";
+          const showOpenOnly = Boolean(openHref) && !inviteOk && !confirmOk;
+          const hasActions = inviteOk || confirmOk || showOpenOnly;
+          const typeLabel = NOTIFICATION_TYPE_LABEL[n.type];
           return (
             <li key={n.id}>
               <div
                 role="button"
                 tabIndex={0}
                 aria-expanded={expanded}
+                aria-label={`${typeLabel}. ${n.title}`}
                 className={cn(
-                  "flex w-full cursor-pointer gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-surface",
+                  "group flex w-full cursor-pointer items-start gap-3 rounded-xl px-3 py-4 text-left transition-colors hover:bg-surface/70 sm:gap-3.5 sm:px-3.5 sm:py-5",
+                  "min-h-12",
                   expanded && "bg-surface/80",
                 )}
                 onClick={() => toggleExpand(n)}
@@ -695,59 +1045,64 @@ function NotificationGroup({
                   }
                 }}
               >
-                <div
+                <span
                   className={cn(
-                    "flex h-12 w-12 shrink-0 items-center justify-center self-start rounded-2xl md:h-10 md:w-10 md:rounded-xl",
-                    urgent
-                      ? n.unread
-                        ? "bg-red-600 text-white"
-                        : "bg-red-50 text-red-700"
-                      : n.unread
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-surface-2 text-muted",
+                    "mt-0.5 inline-flex h-12 w-12 shrink-0 items-center justify-center md:h-10 md:w-10",
+                    urgent ? "text-red-600" : "text-muted",
                   )}
+                  aria-hidden
                 >
-                  <Icon className="h-5 w-5 md:h-4 md:w-4" aria-hidden />
-                </div>
+                  <Icon className="h-5 w-5" strokeWidth={1.75} />
+                </span>
+
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <span
-                        className={cn(
-                          "inline-flex h-7 max-w-full items-center rounded-full px-2.5 text-sm font-semibold leading-none",
-                          urgent
-                            ? "bg-red-600 text-white"
-                            : n.unread
-                              ? "bg-primary-soft text-primary"
-                              : "bg-surface-2 text-muted",
-                        )}
-                      >
-                        {category}
-                      </span>
-                      <p
-                        className={cn(
-                          "text-base leading-snug text-foreground",
-                          n.unread ? "font-semibold" : "font-medium",
-                        )}
-                      >
-                        {n.title}
-                      </p>
-                    </div>
-                    <span className="inline-flex h-7 shrink-0 items-center text-sm tabular-nums leading-none text-muted-2 md:text-xs">
-                      {n.time}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p
+                      className={cn(
+                        "text-base font-semibold tracking-wide",
+                        urgent
+                          ? "text-red-600"
+                          : n.unread
+                            ? "text-foreground"
+                            : "text-muted-2",
+                      )}
+                    >
+                      {typeLabel}
+                    </p>
+                    <span
+                      className="shrink-0 text-base tabular-nums text-muted-2"
+                      title={
+                        n.createdAt
+                          ? formatRecordsDayParts(n.createdAt).absolute
+                          : undefined
+                      }
+                    >
+                      {browseMode && n.createdAt
+                        ? (formatRecordsDayParts(n.createdAt).relative ??
+                          formatRecordsDayParts(n.createdAt).absolute)
+                        : n.time}
                     </span>
                   </div>
                   <p
                     className={cn(
-                      "mt-1.5 text-base leading-relaxed text-muted md:text-sm",
-                      !expanded && "line-clamp-2",
+                      "mt-1 text-lg leading-snug tracking-tight text-foreground",
+                      n.unread ? "font-semibold" : "font-medium",
+                    )}
+                  >
+                    {n.title}
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-1.5 text-base leading-relaxed text-muted",
+                      !expanded && (browseMode ? "line-clamp-3" : "line-clamp-2"),
                     )}
                   >
                     {n.body}
                   </p>
-                  {expanded ? (
+
+                  {hasActions ? (
                     <div
-                      className="mt-3 space-y-3 border-t border-border/60 pt-3"
+                      className="mt-3 space-y-2"
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >
@@ -761,50 +1116,56 @@ function NotificationGroup({
                               }
                               placeholder="거절 사유, 선택"
                               maxLength={500}
-                              className="min-h-12 w-full rounded-xl border border-border bg-card px-3 text-base outline-none focus:ring-2 focus:ring-ring md:min-h-10"
+                              className="min-h-12 w-full rounded-xl border border-border bg-transparent px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-11"
                             />
-                            <div className="flex flex-col gap-2 md:flex-row">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="min-h-12 w-full md:min-h-10 md:w-auto"
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className={NOTIFICATION_ACTION_GHOST}
                                 onClick={() => setDeclineId(null)}
                               >
                                 취소
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="min-h-12 w-full md:min-h-10 md:flex-1"
+                              </button>
+                              <button
+                                type="button"
+                                className={cn(
+                                  NOTIFICATION_ACTION_SECONDARY,
+                                  "flex-1",
+                                )}
                                 onClick={() =>
                                   onInviteAction(
                                     n.id,
                                     String(n.data?.inviteId),
                                     "decline",
                                     reason,
-                                  typeof n.data?.inviteType === "string"
-                                    ? n.data.inviteType
-                                    : undefined,
+                                    typeof n.data?.inviteType === "string"
+                                      ? n.data.inviteType
+                                      : undefined,
                                   )
                                 }
                               >
                                 거절
-                              </Button>
+                              </button>
                             </div>
                           </div>
                         ) : (
-                          <div className="flex flex-col-reverse gap-2 md:flex-row">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="min-h-12 w-full md:min-h-10 md:flex-1 md:border md:border-border md:bg-card md:hover:bg-surface"
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className={cn(
+                                NOTIFICATION_ACTION_SECONDARY,
+                                "flex-1",
+                              )}
                               onClick={() => setDeclineId(n.id)}
                             >
                               거절
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="min-h-12 w-full md:min-h-10 md:flex-1"
+                            </button>
+                            <button
+                              type="button"
+                              className={cn(
+                                NOTIFICATION_ACTION_PRIMARY,
+                                "flex-1",
+                              )}
                               onClick={() =>
                                 onInviteAction(
                                   n.id,
@@ -818,36 +1179,33 @@ function NotificationGroup({
                               }
                             >
                               수락
-                            </Button>
+                            </button>
                           </div>
                         )
                       ) : null}
 
                       {confirmOk && onConfirmMeeting ? (
-                        <div
-                          className={cn(
-                            "flex gap-2",
-                            openHref
-                              ? "flex-col-reverse md:flex-row"
-                              : "flex-col md:flex-row",
-                          )}
-                        >
+                        <div className="flex gap-2">
                           {openHref ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="min-h-12 w-full md:min-h-10 md:flex-1"
+                            <button
+                              type="button"
+                              className={cn(
+                                NOTIFICATION_ACTION_SECONDARY,
+                                "flex-1",
+                              )}
                               onClick={() => goTo(n, openHref)}
                             >
                               바로가기
-                            </Button>
+                            </button>
                           ) : null}
-                          <Button
-                            size="sm"
-                            className="min-h-12 w-full md:min-h-10 md:flex-1"
-                            variant={
-                              kind === "meeting_ack" ? "default" : "secondary"
-                            }
+                          <button
+                            type="button"
+                            className={cn(
+                              kind === "meeting_ack"
+                                ? NOTIFICATION_ACTION_PRIMARY
+                                : NOTIFICATION_ACTION_SECONDARY,
+                              "flex-1",
+                            )}
                             onClick={() =>
                               onConfirmMeeting(
                                 n.id,
@@ -859,23 +1217,27 @@ function NotificationGroup({
                             }
                           >
                             확인
-                          </Button>
+                          </button>
                         </div>
-                      ) : openHref ? (
-                        <Button
-                          size="sm"
-                          className="min-h-12 w-full md:min-h-10"
+                      ) : null}
+
+                      {showOpenOnly && openHref ? (
+                        <button
+                          type="button"
+                          className={cn(
+                            browseMode
+                              ? NOTIFICATION_ACTION_SECONDARY
+                              : NOTIFICATION_ACTION_PRIMARY,
+                            "w-full",
+                          )}
                           onClick={() => goTo(n, openHref)}
                         >
                           바로가기
-                        </Button>
+                        </button>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
-                {n.unread ? (
-                  <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />
-                ) : null}
               </div>
             </li>
           );

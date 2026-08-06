@@ -11,16 +11,16 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import {
+  AdminDataRow,
+  AdminSection,
+} from "@/components/admin/admin-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import type { OperationsCheck, OperationsReadiness } from "@/lib/operations-readiness-types";
+import type {
+  OperationsCheck,
+  OperationsReadiness,
+} from "@/lib/operations-readiness-types";
 import type { TeamRetentionPreview } from "@/lib/team/retention-policy";
 import { cn } from "@/lib/utils";
 
@@ -69,20 +69,22 @@ function formatDate(value: string | null) {
 
 function CheckRow({ check }: { check: OperationsCheck }) {
   return (
-    <li className="flex min-w-0 items-start gap-3 rounded-2xl bg-surface p-4">
-      <StatusIcon status={check.status} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-lg font-semibold text-foreground">{check.label}</p>
-          <Badge className={cn("border-0", STATUS_CLASS[check.status])}>
-            {STATUS_LABEL[check.status]}
-          </Badge>
+    <li>
+      <AdminDataRow>
+        <StatusIcon status={check.status} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-lg font-semibold text-foreground">{check.label}</p>
+            <Badge className={cn("border-0", STATUS_CLASS[check.status])}>
+              {STATUS_LABEL[check.status]}
+            </Badge>
+          </div>
+          <p className="mt-1 text-base leading-6 text-muted">{check.detail}</p>
+          {check.action ? (
+            <p className="mt-1 text-base leading-5 text-muted-2">{check.action}</p>
+          ) : null}
         </div>
-        <p className="mt-1 text-base leading-6 text-muted">{check.detail}</p>
-        {check.action ? (
-          <p className="mt-1 text-sm leading-5 text-muted-2">{check.action}</p>
-        ) : null}
-      </div>
+      </AdminDataRow>
     </li>
   );
 }
@@ -170,22 +172,19 @@ export function OperationsStatusPanel({
   }
 
   return (
-    <div className="space-y-6">
-      <Card className="rounded-3xl shadow-soft ring-1 ring-border">
-        <CardHeader className="gap-3 px-6 pb-4 pt-6 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <ShieldCheck className="h-5 w-5 text-primary" aria-hidden />
-              서비스 운영 상태
-            </CardTitle>
-            <CardDescription className="mt-2 text-base leading-6">
-              사용자에게 기능을 열기 전에 연결, 정책, 보존 작업을 한 곳에서
-              확인합니다.
-            </CardDescription>
-          </div>
+    <div className="space-y-8">
+      <AdminSection
+        title={
+          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
+            <ShieldCheck className="h-5 w-5 text-primary" aria-hidden />
+            서비스 운영 상태
+          </h2>
+        }
+        description="사용자에게 기능을 열기 전에 연결, 정책, 보존 작업을 한 곳에서 확인합니다."
+        trailing={
           <Button
             type="button"
-            variant="secondary"
+            variant="ghost"
             className="min-h-12 shrink-0 rounded-full px-4 text-base"
             onClick={() => void refresh()}
             disabled={refreshing || running}
@@ -197,134 +196,129 @@ export function OperationsStatusPanel({
             )}
             새로 고침
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-4 px-6 pb-6">
-          <div className="flex flex-wrap gap-2" aria-label="운영 상태 요약">
-            <Badge variant="success" className="px-3 py-1 text-sm">
-              정상 {readiness.summary.ready}
-            </Badge>
-            <Badge className="bg-amber-100 px-3 py-1 text-sm text-amber-800">
-              확인 필요 {readiness.summary.attention}
-            </Badge>
-            <Badge variant="secondary" className="px-3 py-1 text-sm">
-              중지됨 {readiness.summary.paused}
-            </Badge>
-          </div>
-          <ul className="grid gap-3 md:grid-cols-2">
-            {readiness.checks.map((check) => (
-              <CheckRow key={check.id} check={check} />
-            ))}
-          </ul>
-          <p className="text-sm text-muted-2">
-            마지막 확인: {formatDate(readiness.generatedAt) ?? "방금"}
-          </p>
-        </CardContent>
-      </Card>
+        }
+      >
+        <div className="flex flex-wrap gap-2" aria-label="운영 상태 요약">
+          <Badge variant="success" className="px-3 py-1 text-base">
+            정상 {readiness.summary.ready}
+          </Badge>
+          <Badge className="bg-amber-100 px-3 py-1 text-base text-amber-800">
+            확인 필요 {readiness.summary.attention}
+          </Badge>
+          <Badge variant="secondary" className="px-3 py-1 text-base">
+            중지됨 {readiness.summary.paused}
+          </Badge>
+        </div>
+        <ul className="grid gap-3 md:grid-cols-2">
+          {readiness.checks.map((check) => (
+            <CheckRow key={check.id} check={check} />
+          ))}
+        </ul>
+        <p className="text-base text-muted-2">
+          마지막 확인: {formatDate(readiness.generatedAt) ?? "방금"}
+        </p>
+      </AdminSection>
 
-      <Card className="rounded-3xl shadow-soft ring-1 ring-border">
-        <CardHeader className="px-6 pb-4 pt-6">
-          <CardTitle className="flex items-center gap-2 text-xl">
+      <AdminSection
+        title={
+          <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-foreground">
             <Trash2 className="h-5 w-5 text-primary" aria-hidden />
             팀 기록 보존 작업
-          </CardTitle>
-          <CardDescription className="mt-2 text-base leading-6">
-            팀 정책의 보존기간이 지난 종료·취소 회의만 삭제합니다. 진행 중인
-            회의와 보관함 원본 파일은 건드리지 않습니다.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 px-6 pb-6">
-          <div className="rounded-2xl bg-surface p-4">
-            <p className="text-lg font-semibold text-foreground">
-              현재 삭제 대상 {expiredMeetings}건
+          </h2>
+        }
+        description="팀 정책의 보존기간이 지난 종료·취소 회의만 삭제합니다. 진행 중인 회의와 보관함 원본 파일은 건드리지 않습니다."
+      >
+        <AdminDataRow className="flex-col">
+          <p className="text-lg font-semibold text-foreground">
+            현재 삭제 대상 {expiredMeetings}건
+          </p>
+          <ul className="mt-3 w-full space-y-2 text-base text-muted">
+            {retention.filter((row) => row.expiredMeetings > 0).length === 0 ? (
+              <li>지금 실행할 보존기간 초과 회의가 없습니다.</li>
+            ) : (
+              retention
+                .filter((row) => row.expiredMeetings > 0)
+                .map((row) => (
+                  <li
+                    key={row.teamId}
+                    className="flex flex-wrap justify-between gap-2"
+                  >
+                    <span>{row.teamName}</span>
+                    <span>
+                      {row.expiredMeetings}건 · {row.retentionDays}일 보관
+                    </span>
+                  </li>
+                ))
+            )}
+          </ul>
+        </AdminDataRow>
+        <div
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-base leading-6 text-amber-900"
+          role="note"
+        >
+          삭제는 되돌릴 수 없습니다. 실행 전 대상 목록을 확인하고, 자동 실행은
+          운영 스케줄러에서 같은 엔드포인트를 호출하세요.
+        </div>
+        {confirming ? (
+          <AdminDataRow className="flex-col">
+            <p className="text-base font-semibold text-foreground">
+              대상 회의 {expiredMeetings}건을 지금 삭제할까요?
             </p>
-            <ul className="mt-3 space-y-2 text-base text-muted">
-              {retention.filter((row) => row.expiredMeetings > 0).length === 0 ? (
-                <li>지금 실행할 보존기간 초과 회의가 없습니다.</li>
-              ) : (
-                retention
-                  .filter((row) => row.expiredMeetings > 0)
-                  .map((row) => (
-                    <li
-                      key={row.teamId}
-                      className="flex flex-wrap justify-between gap-2"
-                    >
-                      <span>{row.teamName}</span>
-                      <span>
-                        {row.expiredMeetings}건 · {row.retentionDays}일 보관
-                      </span>
-                    </li>
-                  ))
-              )}
-            </ul>
-          </div>
-          <div
-            className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-base leading-6 text-amber-900"
-            role="note"
-          >
-            삭제는 되돌릴 수 없습니다. 실행 전 대상 목록을 확인하고, 자동
-            실행은 운영 스케줄러에서 같은 엔드포인트를 호출하세요.
-          </div>
-          {confirming ? (
-            <div className="rounded-2xl border border-border bg-surface p-4">
-              <p className="text-base font-semibold text-foreground">
-                대상 회의 {expiredMeetings}건을 지금 삭제할까요?
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  className="min-h-12 rounded-full px-4 text-base"
-                  onClick={() => void runRetention(false)}
-                  disabled={running || expiredMeetings === 0}
-                >
-                  {running ? (
-                    <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden />
-                  ) : (
-                    <Trash2 className="h-5 w-5" aria-hidden />
-                  )}
-                  삭제 실행
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="min-h-12 rounded-full px-4 text-base"
-                  onClick={() => setConfirming(false)}
-                  disabled={running}
-                >
-                  취소
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-12 rounded-full px-4 text-base"
-                onClick={() => void runRetention(true)}
-                disabled={running}
-              >
-                대상 다시 확인
-              </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 type="button"
                 variant="destructive"
                 className="min-h-12 rounded-full px-4 text-base"
-                onClick={() => setConfirming(true)}
+                onClick={() => void runRetention(false)}
                 disabled={running || expiredMeetings === 0}
               >
-                <Trash2 className="h-5 w-5" aria-hidden />
-                보존 작업 실행
+                {running ? (
+                  <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 className="h-5 w-5" aria-hidden />
+                )}
+                삭제 실행
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-12 rounded-full px-4 text-base"
+                onClick={() => setConfirming(false)}
+                disabled={running}
+              >
+                취소
               </Button>
             </div>
-          )}
-          {message ? (
-            <p className="text-base text-muted" role="status" aria-live="polite">
-              {message}
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+          </AdminDataRow>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-12 rounded-full px-4 text-base"
+              onClick={() => void runRetention(true)}
+              disabled={running}
+            >
+              대상 다시 확인
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="min-h-12 rounded-full px-4 text-base"
+              onClick={() => setConfirming(true)}
+              disabled={running || expiredMeetings === 0}
+            >
+              <Trash2 className="h-5 w-5" aria-hidden />
+              보존 작업 실행
+            </Button>
+          </div>
+        )}
+        {message ? (
+          <p className="text-base text-muted" role="status" aria-live="polite">
+            {message}
+          </p>
+        ) : null}
+      </AdminSection>
     </div>
   );
 }

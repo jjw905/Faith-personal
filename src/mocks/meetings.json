@@ -437,7 +437,7 @@
     },
     {
       "id": "mtg-002",
-      "title": "마스킹 규칙 혼자 점검",
+      "title": "마스킹 규칙 점검",
       "tags": [
         "개인",
         "마스킹"
@@ -445,17 +445,183 @@
       "summaryTags": [
         "논의",
         "미결",
-        "예외"
+        "예외",
+        "검수",
+        "배포"
       ],
       "daysAgo": 1,
       "time": "10:30:00",
-      "duration": "45분",
+      "duration": "2시간 10분",
       "participants": [
         {
           "id": "p1",
           "name": "김철수",
           "initials": "김",
-          "color": "bg-blue-500"
+          "color": "bg-blue-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "예외·미결 규칙을 총괄 점검하고 우선순위를 확정",
+          "tags": [
+            "검수",
+            "총괄",
+            "마스킹"
+          ],
+          "isHost": true
+        },
+        {
+          "id": "p2",
+          "name": "이영희",
+          "initials": "이",
+          "color": "bg-emerald-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "전화·이메일 패턴 강화안을 초안하고 PR 범위를 제안",
+          "tags": [
+            "개발",
+            "규칙"
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "박민수",
+          "initials": "박",
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "음성 추정",
+          "summary": "노이즈·겹침 화자 샘플에서 오탐/미탐을 측정",
+          "tags": [
+            "STT",
+            "벤치"
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "최지원",
+          "initials": "최",
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "guest",
+          "recognitionNote": "외부 게스트",
+          "summary": "검수 큐·예외 목록 UX와 배포 체크리스트를 정리",
+          "tags": [
+            "배포",
+            "UX"
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "정하늘",
+          "initials": "정",
+          "color": "bg-rose-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "약어·호칭 변형 사전을 수집해 예외표에 반영",
+          "tags": [
+            "사전",
+            "예외"
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "한서연",
+          "initials": "한",
+          "color": "bg-cyan-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "음성 추정",
+          "summary": "QA 시나리오와 재현 오디오 체크리스트를 작성",
+          "tags": [
+            "QA",
+            "재현"
+          ]
+        },
+        {
+          "id": "p7",
+          "name": "오세린",
+          "initials": "오",
+          "color": "bg-teal-600",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "개인정보 유형 분류(식별자/준식별자) 기준을 제안",
+          "tags": [
+            "정책",
+            "분류"
+          ]
+        },
+        {
+          "id": "p8",
+          "name": "윤도현",
+          "initials": "윤",
+          "color": "bg-indigo-600",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "음성 추정",
+          "summary": "계좌·카드 숫자 읽기 변형 케이스를 정리",
+          "tags": [
+            "금융",
+            "패턴"
+          ]
+        },
+        {
+          "id": "p9",
+          "name": "배수아",
+          "initials": "배",
+          "color": "bg-sky-600",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "팀 공유용 점검 노트와 미결 트래커를 업데이트",
+          "tags": [
+            "문서",
+            "트래커"
+          ]
+        },
+        {
+          "id": "p10",
+          "name": "장우진",
+          "initials": "장",
+          "color": "bg-orange-500",
+          "isMember": false,
+          "recognition": "guest",
+          "recognitionNote": "외부 게스트",
+          "summary": "외부 미팅 환경 리스크와 재검증 게이트를 제안",
+          "tags": [
+            "리스크",
+            "게이트"
+          ]
+        },
+        {
+          "id": "p11",
+          "name": "서민재",
+          "initials": "서",
+          "color": "bg-fuchsia-600",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "음성 추정",
+          "summary": "모델 보조 NER 후보와 비용·지연을 비교",
+          "tags": [
+            "NER",
+            "비용"
+          ]
+        },
+        {
+          "id": "p12",
+          "name": "고은비",
+          "initials": "고",
+          "color": "bg-lime-600",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "고객 문의에서 나온 마스킹 불만 케이스를 분류",
+          "tags": [
+            "고객",
+            "피드백"
+          ]
         }
       ],
       "status": "completed",
@@ -483,19 +649,43 @@
           "id": "p2",
           "name": "이영희",
           "initials": "이",
-          "color": "bg-emerald-500"
+          "color": "bg-emerald-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "역할 계층·권한 매트릭스 초안을 제시하고 마이그레이션 범위 조율",
+          "tags": [
+            "RBAC",
+            "설계"
+          ]
         },
         {
           "id": "p3",
           "name": "박민수",
           "initials": "박",
-          "color": "bg-violet-500"
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "낮은 톤, '민수'로 호칭됨",
+          "summary": "레거시 ACL 충돌·감사 로그 누락 리스크를 지적",
+          "tags": [
+            "보안",
+            "리스크"
+          ]
         },
         {
           "id": "p6",
           "name": "한서연",
           "initials": "한",
-          "color": "bg-cyan-500"
+          "color": "bg-cyan-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "조용한 톤, 질문 위주",
+          "summary": "게스트·외부 협업자 권한 시나리오와 QA 체크리스트 확인",
+          "tags": [
+            "QA",
+            "게스트"
+          ]
         }
       ],
       "status": "in_progress",
@@ -523,19 +713,44 @@
           "id": "p1",
           "name": "김철수",
           "initials": "김",
-          "color": "bg-blue-500"
+          "color": "bg-blue-500",
+          "isMember": true,
+          "isHost": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "스프린트 블로커를 취합하고 우선순위를 재배치",
+          "tags": [
+            "진행",
+            "블로커"
+          ]
         },
         {
           "id": "p2",
           "name": "이영희",
           "initials": "이",
-          "color": "bg-emerald-500"
+          "color": "bg-emerald-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "마스킹 PR 리뷰 대기·API 스펙 확정 필요를 공유",
+          "tags": [
+            "개발",
+            "리뷰"
+          ]
         },
         {
           "id": "p3",
           "name": "박민수",
           "initials": "박",
-          "color": "bg-violet-500"
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "낮은 톤",
+          "summary": "벤치 환경 GPU 쿼터 부족으로 재측정 일정 조정 요청",
+          "tags": [
+            "인프라",
+            "STT"
+          ]
         }
       ],
       "status": "completed",
@@ -563,7 +778,17 @@
           "id": "p1",
           "name": "김철수",
           "initials": "김",
-          "color": "bg-blue-500"
+          "color": "bg-blue-500",
+          "isMember": true,
+          "isHost": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "모델별 WER·지연·비용을 비교하고 기본 엔진 후보를 좁힘",
+          "tags": [
+            "벤치",
+            "STT",
+            "의사결정"
+          ]
         }
       ],
       "status": "completed",
@@ -590,7 +815,17 @@
           "id": "p1",
           "name": "김철수",
           "initials": "김",
-          "color": "bg-blue-500"
+          "color": "bg-blue-500",
+          "isMember": true,
+          "isHost": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "발표 흐름·시간 배분·질의 대비 멘트를 녹음해 스스로 피드백",
+          "tags": [
+            "발표",
+            "연습",
+            "피드백"
+          ]
         }
       ],
       "status": "completed",
@@ -618,19 +853,44 @@
           "id": "p1",
           "name": "김철수",
           "initials": "김",
-          "color": "bg-blue-500"
+          "color": "bg-blue-500",
+          "isMember": true,
+          "isHost": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "파트너 킥오프 목표·커뮤니케이션 채널·주간 리듬을 제안",
+          "tags": [
+            "킥오프",
+            "조율"
+          ]
         },
         {
           "id": "p2",
           "name": "이영희",
           "initials": "이",
-          "color": "bg-emerald-500"
+          "color": "bg-emerald-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "기술 연동 범위·샌드박스 일정·API 키 발급 절차를 정리",
+          "tags": [
+            "연동",
+            "API"
+          ]
         },
         {
           "id": "p4",
           "name": "최지원",
           "initials": "최",
-          "color": "bg-amber-500"
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "guest",
+          "recognitionNote": "외부 파트너",
+          "summary": "계약·보안 검토 일정과 납품 마일스톤을 공유",
+          "tags": [
+            "파트너",
+            "일정"
+          ]
         }
       ],
       "status": "scheduled",
@@ -658,19 +918,44 @@
           "id": "p1",
           "name": "김철수",
           "initials": "김",
-          "color": "bg-blue-500"
+          "color": "bg-blue-500",
+          "isMember": true,
+          "isHost": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "감사 범위·증거 목록을 확정하고 담당 매트릭스를 배정",
+          "tags": [
+            "감사",
+            "총괄"
+          ]
         },
         {
           "id": "p3",
           "name": "박민수",
           "initials": "박",
-          "color": "bg-violet-500"
+          "color": "bg-violet-500",
+          "isMember": false,
+          "recognition": "voice",
+          "recognitionNote": "낮은 톤",
+          "summary": "접근 로그·암호화 키 로테이션 증빙 수집 상태를 보고",
+          "tags": [
+            "로그",
+            "암호"
+          ]
         },
         {
           "id": "p4",
           "name": "최지원",
           "initials": "최",
-          "color": "bg-amber-500"
+          "color": "bg-amber-500",
+          "isMember": false,
+          "recognition": "guest",
+          "recognitionNote": "외부 게스트",
+          "summary": "벤더 질문지·정책 문서 갭을 점검하고 보완 일정을 제시",
+          "tags": [
+            "정책",
+            "문서"
+          ]
         }
       ],
       "status": "completed",
@@ -698,13 +983,30 @@
           "id": "p1",
           "name": "김철수",
           "initials": "김",
-          "color": "bg-blue-500"
+          "color": "bg-blue-500",
+          "isMember": true,
+          "isHost": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "연간 OKR·운영 예산 한도와 분기별 점검 리듬을 제안",
+          "tags": [
+            "OKR",
+            "운영"
+          ]
         },
         {
           "id": "p2",
           "name": "이영희",
           "initials": "이",
-          "color": "bg-emerald-500"
+          "color": "bg-emerald-500",
+          "isMember": true,
+          "recognition": "member",
+          "recognitionNote": "계정 프로필과 매칭",
+          "summary": "제품 로드맵·채용·기술 부채 상환 우선순위를 조율",
+          "tags": [
+            "로드맵",
+            "채용"
+          ]
         }
       ],
       "status": "completed",

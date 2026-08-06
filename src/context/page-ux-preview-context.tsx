@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { SessionContext } from "next-auth/react";
 
 import {
   DEFAULT_PAGE_UX_SCENARIOS,
@@ -56,8 +56,9 @@ const FALLBACK_VALUE: PageUxPreviewContextValue = {
 function PageUxPreviewProviderInner({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
-  const enabled = session?.user?.role === "ADMIN";
+  // useSession()는 Provider 밖이면 throw. HMR/부분 트리에서도 죽지 않게 Context만 읽음.
+  const sessionValue = useContext(SessionContext);
+  const enabled = sessionValue?.data?.user?.role === "ADMIN";
 
   const search = searchParams.toString();
   const surface = useMemo(

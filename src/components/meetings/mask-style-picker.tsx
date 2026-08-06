@@ -7,56 +7,24 @@ import {
   useId,
   useRef,
   useState,
-  type ReactNode,
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 
 import { MaterialSymbol } from "@/components/ui/material-symbol";
-import { labelFor } from "@/lib/masking/mask-style";
 import type { MaskStyle } from "@/lib/masking/types";
 import { cn } from "@/lib/utils";
 
-/** 가림 방식 미리보기 칩 — 말풍선 마스킹과 같은 톤 */
-function MaskPreviewChip({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-block max-w-full truncate rounded-md bg-masked-soft px-1.5 font-mono text-xs font-semibold leading-5 text-masked">
-      {children}
-    </span>
-  );
-}
-
-/** 실제 마스킹 결과와 같은 미리보기 샘플 */
-const MASK_STYLE_SAMPLES = {
-  partial: {
-    phone: "010-****-3916",
-    email: "s*********e@partner.co.kr",
-  },
-  label: {
-    phone: labelFor("phone"),
-    email: labelFor("email"),
-  },
-  off: {
-    phone: "010-2456-3916",
-    email: "sunhyeeee@partner.co.kr",
-  },
-} as const;
-
+/** 마스킹 켜짐 / 꺼짐만. */
 const MASK_OPTIONS: Array<{
   value: MaskStyle;
   label: string;
-  /** Material Symbol name */
   symbol: string;
 }> = [
   {
     value: "partial",
-    label: "부분 가림",
-    symbol: "password",
-  },
-  {
-    value: "label",
-    label: "유형 표시",
-    symbol: "label",
+    label: "마스킹",
+    symbol: "visibility_off",
   },
   {
     value: "off",
@@ -88,31 +56,92 @@ function MaskStyleIcon({
   );
 }
 
-/** 부분 가림 / 유형 표시 / 가리지 않음. */
+/** 내보내기·공유용: 아이콘 칩만 (버튼 섹션 배경 없음). */
+function MaskStyleIconSoft({
+  symbol,
+  selected,
+}: {
+  symbol: string;
+  selected?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-10 w-10 items-center justify-center rounded-xl",
+        selected ? "text-primary" : "text-muted",
+      )}
+    >
+      <MaterialSymbol name={symbol} size={22} weight={selected ? 500 : 400} />
+    </span>
+  );
+}
+
+/** 마스킹 있음 / 없음. */
 export function MaskStylePicker({
   value,
   onChange,
   className,
   showHeading = true,
   compact = false,
+  /** 아이콘만 (내보내기·공유). 라벨은 aria */
+  iconsOnly = false,
 }: {
   value: MaskStyle;
   onChange: (next: MaskStyle) => void;
   className?: string;
   showHeading?: boolean;
-  /** 한 줄 요약 + 아이콘 강조 */
   compact?: boolean;
+  iconsOnly?: boolean;
 }) {
+  if (iconsOnly) {
+    return (
+      <div
+        role="radiogroup"
+        aria-label="개인정보 마스킹"
+        className={cn("grid grid-cols-2 gap-2", className)}
+      >
+        {MASK_OPTIONS.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={option.label}
+              title={option.label}
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "relative flex min-h-12 items-center justify-center rounded-2xl px-1 py-2.5 transition-colors",
+                selected ? "text-foreground" : "text-muted hover:text-foreground",
+              )}
+            >
+              {selected ? (
+                <span
+                  className="absolute top-1 right-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground"
+                  aria-hidden
+                >
+                  <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
+                </span>
+              ) : null}
+              <MaskStyleIconSoft symbol={option.symbol} selected={selected} />
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className={cn(className)}>
       {showHeading ? (
         <p className="mb-1.5 text-sm font-semibold text-muted">
-          개인정보 가림
+          개인정보 마스킹
         </p>
       ) : null}
       <div
         role="radiogroup"
-        aria-label="개인정보 가림 방식"
+        aria-label="개인정보 마스킹"
         className="flex flex-col gap-0.5"
       >
         {MASK_OPTIONS.map((option) => {
@@ -127,22 +156,17 @@ export function MaskStylePicker({
               className={cn(
                 "flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-2xl text-left transition-colors",
                 compact ? "min-h-14 px-2 py-2" : "min-h-14 px-2.5 py-2.5",
-                selected ? "bg-surface-2" : "hover:bg-surface-2/60",
+                selected ? "text-foreground" : "text-muted hover:bg-surface/70 hover:text-foreground",
               )}
             >
               <MaskStyleIcon symbol={option.symbol} active={selected} />
-              <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span
-                  className={cn(
-                    "text-base font-semibold",
-                    selected ? "text-foreground" : "text-muted",
-                  )}
-                >
-                  {option.label}
-                </span>
-                <MaskPreviewChip>
-                  {MASK_STYLE_SAMPLES[option.value].phone}
-                </MaskPreviewChip>
+              <span
+                className={cn(
+                  "min-w-0 flex-1 text-base font-semibold",
+                  selected ? "text-foreground" : "text-muted",
+                )}
+              >
+                {option.label}
               </span>
               {selected ? (
                 <Check
@@ -249,7 +273,7 @@ export function MaskStylePopup({
         Math.max(8, r.right - width),
         window.innerWidth - width - 8,
       );
-      const panelH = panelRef.current?.offsetHeight || 260;
+      const panelH = panelRef.current?.offsetHeight || 160;
       const spaceBelow = window.innerHeight - r.bottom - 8;
       const openUp =
         spaceBelow < panelH + 16 || r.top > window.innerHeight * 0.55;
@@ -298,7 +322,7 @@ export function MaskStylePopup({
       ref={panelRef}
       id={panelId}
       role="dialog"
-      aria-label="개인정보 가림 방식"
+      aria-label="개인정보 마스킹"
       className="z-[70] rounded-2xl border border-border bg-card p-2 shadow-[0_16px_40px_rgba(17,24,46,0.14)]"
       style={
         forceOpen
@@ -337,7 +361,7 @@ export function MaskStylePopup({
           type="button"
           aria-expanded={panelOpen}
           aria-controls={panelId}
-          aria-label="개인정보 가림 방식"
+          aria-label="개인정보 마스킹"
           title={activeOption.label}
           onClick={() => {
             if (forceOpen) return;

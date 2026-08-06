@@ -91,7 +91,7 @@ function SpeakerAvatar({
   return (
     <span
       className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base font-semibold",
         tone === "primary"
           ? "bg-primary text-primary-foreground"
           : "bg-surface-2 text-foreground",
@@ -156,7 +156,7 @@ export function MockLiveTranscribe() {
             )}
           />
         </span>
-        <span className="text-sm font-semibold text-muted">
+        <span className="text-base font-semibold text-muted">
           {finished ? "기록 완료" : recording ? "회의 기록 중" : "회의 기록"}
         </span>
         {recording ? (
@@ -168,7 +168,7 @@ export function MockLiveTranscribe() {
             <span />
           </span>
         ) : finished ? (
-          <span className="ml-auto inline-flex items-center gap-1 text-sm font-semibold text-primary">
+          <span className="ml-auto inline-flex items-center gap-1 text-base font-semibold text-primary">
             <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.5} />
             대화 4턴
           </span>
@@ -193,14 +193,14 @@ export function MockLiveTranscribe() {
             <div className="min-w-0 max-w-[85%]">
               <p
                 className={cn(
-                  "mb-1.5 flex items-baseline gap-1.5 text-sm font-semibold",
+                  "mb-1.5 flex items-baseline gap-1.5 text-base font-semibold",
                   line.mine
                     ? "flex-row-reverse text-primary"
                     : "text-foreground",
                 )}
               >
                 <span>{line.speaker}</span>
-                <span className="font-mono text-xs font-medium tabular-nums text-muted">
+                <span className="font-mono text-sm font-medium tabular-nums text-muted">
                   {line.time}
                 </span>
               </p>
@@ -234,7 +234,7 @@ export function MockAutoMask() {
 
   return (
     <div ref={ref} className={MOCK_CARD} data-showcase="mask">
-      <div className="flex items-center gap-2 text-sm font-semibold text-muted">
+      <div className="flex items-center gap-2 text-base font-semibold text-muted">
         <ShieldCheck className="h-4 w-4" strokeWidth={2} />
         개인정보 자동 감지
       </div>
@@ -247,9 +247,9 @@ export function MockAutoMask() {
         >
           <SpeakerAvatar label="이" tone="primary" />
           <div className="min-w-0">
-            <p className="mb-1.5 flex flex-row-reverse items-baseline gap-1.5 text-sm font-semibold text-primary">
+            <p className="mb-1.5 flex flex-row-reverse items-baseline gap-1.5 text-base font-semibold text-primary">
               <span>이서준</span>
-              <span className="font-mono text-xs font-medium tabular-nums text-muted">
+              <span className="font-mono text-sm font-medium tabular-nums text-muted">
                 08:04
               </span>
             </p>
@@ -267,9 +267,9 @@ export function MockAutoMask() {
         >
           <SpeakerAvatar label="김" tone="muted" />
           <div className="min-w-0">
-            <p className="mb-1.5 flex items-baseline gap-1.5 text-sm font-semibold text-foreground">
+            <p className="mb-1.5 flex items-baseline gap-1.5 text-base font-semibold text-foreground">
               <span>김민수</span>
-              <span className="font-mono text-xs font-medium tabular-nums text-muted">
+              <span className="font-mono text-sm font-medium tabular-nums text-muted">
                 08:10
               </span>
             </p>
@@ -292,7 +292,7 @@ export function MockAutoMask() {
           </div>
         </div>
       </div>
-      <div className="mt-4 flex items-center gap-1.5 text-sm font-medium text-muted">
+      <div className="mt-4 flex items-center gap-1.5 text-base font-medium text-muted">
         <span
           className={cn(
             "h-1.5 w-1.5 rounded-full transition-colors motion-reduce:transition-none",
@@ -344,8 +344,8 @@ export function MockAutoSummary() {
   return (
     <div ref={ref} className={MOCK_CARD} data-showcase="summary">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-muted">타임라인</p>
-        <span className="text-sm font-medium tabular-nums text-muted">45분</span>
+        <p className="text-base font-semibold text-muted">타임라인</p>
+        <span className="text-base font-medium tabular-nums text-muted">45분</span>
       </div>
       <ul className="relative mt-5 space-y-3.5 before:absolute before:bottom-2 before:left-[0.85rem] before:top-2 before:w-px before:bg-border">
         {segments.map((seg, i) => (
@@ -363,17 +363,17 @@ export function MockAutoSummary() {
             </span>
             <div className="min-w-0 flex-1 rounded-xl bg-surface px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs font-semibold tabular-nums text-muted">
+                <span className="font-mono text-sm font-semibold tabular-nums text-muted">
                   {seg.time}
                 </span>
-                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-foreground">
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-sm font-semibold text-foreground">
                   {seg.kind}
                 </span>
-                <span className="text-sm font-semibold text-foreground">
+                <span className="text-base font-semibold text-foreground">
                   {seg.title}
                 </span>
               </div>
-              <p className="mt-1 text-sm leading-relaxed text-muted">
+              <p className="mt-1 break-keep text-base leading-relaxed text-muted">
                 {seg.body}
               </p>
             </div>
@@ -382,7 +382,7 @@ export function MockAutoSummary() {
       </ul>
       <span
         className={cn(
-          "mt-3 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-semibold text-primary transition-opacity duration-700 motion-reduce:opacity-100 motion-reduce:transition-none",
+          "mt-3 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-base font-semibold text-primary transition-opacity duration-700 motion-reduce:opacity-100 motion-reduce:transition-none",
           phase >= segments.length ? "opacity-100" : "opacity-0",
         )}
       >
@@ -408,7 +408,7 @@ export function MockReplayHighlight() {
 
   return (
     <div ref={ref} className={MOCK_CARD} data-showcase="replay">
-      <div className="flex items-center gap-2 text-sm font-semibold text-muted">
+      <div className="flex items-center gap-2 text-base font-semibold text-muted">
         <span className="relative flex h-2 w-2">
           <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-50" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
@@ -418,9 +418,9 @@ export function MockReplayHighlight() {
       <div className="mt-5 flex gap-2.5">
         <SpeakerAvatar label="이" tone="primary" />
         <div className="min-w-0 flex-1">
-          <p className="mb-1.5 flex items-baseline gap-1.5 text-sm font-semibold text-primary">
+          <p className="mb-1.5 flex items-baseline gap-1.5 text-base font-semibold text-primary">
             <span>이서준</span>
-            <span className="font-mono text-xs font-medium tabular-nums text-muted">
+            <span className="font-mono text-sm font-medium tabular-nums text-muted">
               12:40
             </span>
           </p>
@@ -480,8 +480,8 @@ export function MockSecureVault() {
           <Lock className="h-4 w-4" strokeWidth={2} />
         </span>
         <div>
-          <p className="text-sm font-semibold text-foreground">보관함</p>
-          <p className="text-sm text-muted">암호화 저장, 역할 기반 접근</p>
+          <p className="text-base font-semibold text-foreground">보관함</p>
+          <p className="text-base text-muted">암호화 저장, 역할 기반 접근</p>
         </div>
       </div>
       <div className="mt-5 space-y-2.5">
@@ -496,12 +496,12 @@ export function MockSecureVault() {
             )}
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">
+              <p className="truncate text-base font-semibold text-foreground">
                 {row.name}
               </p>
-              <p className="text-sm text-muted">{row.meta}</p>
+              <p className="text-base text-muted">{row.meta}</p>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-muted">
+            <span className="inline-flex shrink-0 items-center gap-1 text-base font-medium text-muted">
               <CheckCircle2
                 className="h-3.5 w-3.5 text-primary"
                 strokeWidth={2.5}

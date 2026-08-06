@@ -160,10 +160,10 @@ export function PersonalVoiceRoom({ meetingId }: { meetingId: string }) {
     return (
       <section className="mx-auto w-full max-w-2xl rounded-3xl bg-card p-5 shadow-soft sm:p-7">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex min-h-10 items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+          <span className="inline-flex min-h-12 items-center rounded-full bg-primary text-base font-semibold text-primary-foreground">
             개인 공동 기록
           </span>
-          <span className="inline-flex min-h-10 items-center rounded-full bg-surface px-3 text-sm font-semibold text-muted">
+          <span className="inline-flex min-h-12 items-center rounded-full bg-surface px-3 text-base font-semibold text-muted">
             본인 포함 {meeting.maxParticipants}명
           </span>
         </div>
@@ -477,7 +477,7 @@ function PersonalVoiceRoomBody({
             <h1 className="truncate text-xl font-semibold text-foreground">
               {title}
             </h1>
-            <span className="inline-flex min-h-10 items-center rounded-full bg-primary-soft px-3 text-sm font-semibold text-primary">
+            <span className="inline-flex min-h-12 items-center rounded-full bg-primary-soft px-3 text-base font-semibold text-primary">
               개인 공동 기록
             </span>
           </div>
@@ -485,7 +485,7 @@ function PersonalVoiceRoomBody({
             호스트의 잔여 시간에서 회의 시간만 한 번 사용됩니다.
           </p>
         </div>
-        <span className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-full bg-primary-soft px-3 text-sm font-semibold">
+        <span className="inline-flex min-h-12 shrink-0 items-center gap-2 rounded-full bg-primary-soft px-3 text-base font-semibold">
           {participants.length}명
         </span>
       </header>
@@ -546,7 +546,7 @@ function PersonalVoiceRoomBody({
               <p className="mt-3 max-w-full truncate text-lg font-semibold">
                 {name}
               </p>
-              <p className="mt-1 text-sm text-muted">
+              <p className="mt-1 text-base text-muted">
                 {participant.isMicrophoneEnabled ? "마이크 켜짐" : "음소거"}
               </p>
             </div>

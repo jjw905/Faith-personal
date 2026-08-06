@@ -135,10 +135,10 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground">
+                  <p className="text-base font-semibold text-foreground">
                     {LABELS[provider]}
                   </p>
-                  <p className="mt-0.5 text-sm font-medium text-muted">
+                  <p className="mt-0.5 text-base font-medium text-muted">
                     {isSignupMethod
                       ? "가입할 때 사용한 계정"
                       : isLinked
@@ -155,7 +155,7 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
                     void (isLinked ? unlink(provider) : link(provider))
                   }
                   className={cn(
-                    "h-9 shrink-0 rounded-full border px-3.5 text-sm font-semibold transition-colors disabled:opacity-60",
+                    "min-h-12 shrink-0 rounded-full border px-3.5 text-base font-semibold transition-colors disabled:opacity-60 md:h-9 md:min-h-9 md:text-sm",
                     isLinked
                       ? "border-border-strong bg-card text-foreground hover:bg-card/80"
                       : "border-transparent bg-primary text-primary-foreground hover:bg-primary-hover",
@@ -169,7 +169,7 @@ export function SocialLinksCard({ initial }: { initial: SocialLinksInitial }) {
         })}
       </div>
       {msg ? (
-        <p className="text-xs font-medium text-muted">{msg}</p>
+        <p className="text-base font-medium text-muted">{msg}</p>
       ) : null}
     </div>
   );

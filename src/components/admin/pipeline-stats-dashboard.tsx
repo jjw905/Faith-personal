@@ -1,14 +1,9 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useState } from "react";
 import { Activity, RefreshCw, ShieldAlert } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AdminSection } from "@/components/admin/admin-section";
 import type { PipelineStatsSummary } from "@/lib/stt/pipeline-stats-store";
 import { cn } from "@/lib/utils";
 
@@ -20,9 +15,6 @@ export type BlockedModerationRow = {
   maxScore: number;
   createdAt: string;
 };
-
-const CARD_SHADOW =
-  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
 
 const STAGE_LABEL: Record<string, string> = {
   stt: "받아쓰기",
@@ -103,9 +95,11 @@ export function PipelineStatsDashboard({
   }, []);
 
   const reprocess = useCallback(async (meetingId: string) => {
-    if (!window.confirm(
-      "이용자 본인의 이의제기를 접수한 건에만 사용하세요. 검열 차단을 건너뛰고 다시 처리할까요?",
-    )) {
+    if (
+      !window.confirm(
+        "이용자 본인의 이의제기를 접수한 건에만 사용하세요. 검열 차단을 건너뛰고 다시 처리할까요?",
+      )
+    ) {
       return;
     }
     setReprocessingId(meetingId);
@@ -127,8 +121,14 @@ export function PipelineStatsDashboard({
   }, []);
 
   const empty = summary.total === 0;
-  const maxStage = Math.max(1, ...sortedEntries(summary.byFailedStage).map((e) => e[1]));
-  const maxModel = Math.max(1, ...sortedEntries(summary.byModel).map((e) => e[1]));
+  const maxStage = Math.max(
+    1,
+    ...sortedEntries(summary.byFailedStage).map((e) => e[1]),
+  );
+  const maxModel = Math.max(
+    1,
+    ...sortedEntries(summary.byModel).map((e) => e[1]),
+  );
   const maxDuration = Math.max(
     1,
     ...sortedEntries(summary.byDurationBucket).map((e) => e[1]),
@@ -137,19 +137,22 @@ export function PipelineStatsDashboard({
     1,
     ...sortedEntries(summary.bySpeakerBucket).map((e) => e[1]),
   );
-  const maxTopic = Math.max(1, ...sortedEntries(summary.byTopicBucket).map((e) => e[1]));
+  const maxTopic = Math.max(
+    1,
+    ...sortedEntries(summary.byTopicBucket).map((e) => e[1]),
+  );
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionCard
+    <div className="flex flex-col gap-8">
+      <AdminSection
         title="실패율"
         description="전체 업로드 처리 시도 대비 결과 비율. 회의 내용은 포함하지 않습니다."
-        action={
+        trailing={
           <button
             type="button"
             onClick={() => void refresh()}
             disabled={loading}
-            className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-border-strong bg-surface px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:opacity-60"
+            className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-border px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70 disabled:opacity-60"
           >
             <RefreshCw
               className={cn("h-4 w-4", loading && "animate-spin")}
@@ -173,7 +176,9 @@ export function PipelineStatsDashboard({
           <StatCell
             label="완료"
             value={String(summary.done)}
-            hint={summary.total > 0 ? formatPct(summary.done / summary.total) : "0%"}
+            hint={
+              summary.total > 0 ? formatPct(summary.done / summary.total) : "0%"
+            }
           />
           <StatCell
             label="검열 차단"
@@ -181,25 +186,23 @@ export function PipelineStatsDashboard({
             hint="정책 위반으로 처리 중단"
           />
         </div>
-      </SectionCard>
+      </AdminSection>
 
       {empty ? (
-        <Card className={CARD_SHADOW}>
-          <CardContent className="px-6 py-16 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-              <Activity className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <p className="text-lg font-semibold text-foreground">
-              아직 쌓인 처리 기록이 없습니다
-            </p>
-            <p className="mx-auto mt-2 max-w-md text-base text-muted">
-              회의를 업로드해 처리하면 여기에 통계가 쌓입니다.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="px-2 py-16 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center text-primary">
+            <Activity className="h-7 w-7" strokeWidth={1.75} />
+          </div>
+          <p className="text-lg font-semibold text-foreground">
+            아직 쌓인 처리 기록이 없습니다
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-base text-muted">
+            회의를 업로드해 처리하면 여기에 통계가 쌓입니다.
+          </p>
+        </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <SectionCard
+        <div className="grid gap-8 lg:grid-cols-2">
+          <AdminSection
             title="어디서 깨졌는지"
             description="실패, 검열차단 건의 단계별 분포"
           >
@@ -208,33 +211,33 @@ export function PipelineStatsDashboard({
               max={maxStage}
               labelOf={(k) => STAGE_LABEL[k] ?? k}
             />
-          </SectionCard>
+          </AdminSection>
 
-          <SectionCard title="모델별" description="전체 처리 건수 분포">
+          <AdminSection title="모델별" description="전체 처리 건수 분포">
             <BarList
               entries={sortedEntries(summary.byModel)}
               max={maxModel}
               labelOf={(k) => k}
             />
-          </SectionCard>
+          </AdminSection>
 
-          <SectionCard title="길이대별" description="0~10 / 10~30 / 30~60 / 60분+">
+          <AdminSection title="길이대별" description="0~10 / 10~30 / 30~60 / 60분+">
             <BarList
               entries={sortedEntries(summary.byDurationBucket)}
               max={maxDuration}
               labelOf={(k) => DURATION_LABEL[k] ?? k}
             />
-          </SectionCard>
+          </AdminSection>
 
-          <SectionCard title="화자 수대별" description="1 / 2~3 / 4~6 / 7인+">
+          <AdminSection title="화자 수대별" description="1 / 2~3 / 4~6 / 7인+">
             <BarList
               entries={sortedEntries(summary.bySpeakerBucket)}
               max={maxSpeaker}
               labelOf={(k) => SPEAKER_LABEL[k] ?? k}
             />
-          </SectionCard>
+          </AdminSection>
 
-          <SectionCard
+          <AdminSection
             className="lg:col-span-2"
             title="대분류(고정 라벨)"
             description="회의 본문은 포함하지 않는 운영 통계용 대분류"
@@ -244,11 +247,11 @@ export function PipelineStatsDashboard({
               max={maxTopic}
               labelOf={(k) => TOPIC_LABEL[k] ?? k}
             />
-          </SectionCard>
+          </AdminSection>
         </div>
       )}
 
-      <SectionCard
+      <AdminSection
         title="최근 검열 차단"
         description="카테고리, 점수만 표시합니다. 회의 본문은 포함하지 않습니다."
       >
@@ -259,7 +262,9 @@ export function PipelineStatsDashboard({
         ) : (
           <ul className="divide-y divide-border">
             {blocked.map((row) => {
-              const done = row.meetingId ? reprocessedIds.has(row.meetingId) : false;
+              const done = row.meetingId
+                ? reprocessedIds.has(row.meetingId)
+                : false;
               return (
                 <li
                   key={row.id}
@@ -283,7 +288,7 @@ export function PipelineStatsDashboard({
                       type="button"
                       onClick={() => void reprocess(row.meetingId!)}
                       disabled={reprocessingId === row.meetingId || done}
-                      className="inline-flex h-12 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:opacity-60"
+                      className="inline-flex h-12 shrink-0 items-center justify-center rounded-full border border-border px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70 disabled:opacity-60"
                     >
                       {done
                         ? "재처리 요청됨"
@@ -297,7 +302,7 @@ export function PipelineStatsDashboard({
             })}
           </ul>
         )}
-      </SectionCard>
+      </AdminSection>
     </div>
   );
 }
@@ -351,42 +356,6 @@ function BarList({
         );
       })}
     </ul>
-  );
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-  className,
-  action,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  className?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <Card className={cn(CARD_SHADOW, className)}>
-      <CardHeader className="space-y-0 px-6 pb-0 pt-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="text-xl font-bold tracking-tight">
-              {title}
-            </CardTitle>
-            {description ? (
-              <p className="mt-1.5 text-base font-medium text-muted">
-                {description}
-              </p>
-            ) : null}
-          </div>
-          {action}
-        </div>
-        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
-      </CardHeader>
-      <CardContent className="px-6 pb-5 pt-1">{children}</CardContent>
-    </Card>
   );
 }
 

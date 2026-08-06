@@ -62,7 +62,7 @@ export const IMPROVEMENT_NOTE_MAX = 500;
 export const FREE_MONTHLY_MINUTES = 20;
 export const SURVEY_UNLOCKED_MONTHLY_MINUTES = 60;
 
-/** 설문 제출 완료. 사이드바 플랜 Gift 등 진입점을 즉시 갱신한다. */
+/** 설문 제출 완료. 사이드바 잔여 시간 Gift 등 진입점을 즉시 갱신한다. */
 export const SURVEY_COMPLETED_EVENT = "faith:survey-completed";
 
 export function notifySurveyCompleted() {

@@ -236,7 +236,10 @@ export function MaskedText({
             }}
             title={open ? "다시 가리기" : "클릭하여 원문 보기"}
             className={cn(
-              "mx-0.5 inline-flex min-h-12 items-center rounded-md px-1.5 font-mono text-base font-semibold transition-colors md:inline-block md:min-h-0 md:text-[0.85em]",
+              // 본문과 같은 baseline. min-h/inline-flex는 줄 높이만 키워 위아래가 어긋난다.
+              // 모바일 터치 48은 ::before로만 넓힌다(레이아웃에는 영향 없음).
+              "relative mx-0.5 inline-block align-baseline rounded-md px-1 font-mono text-[0.95em] font-semibold leading-[inherit]",
+              "before:absolute before:left-1/2 before:top-1/2 before:z-0 before:min-h-12 before:min-w-12 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] md:before:content-none",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               open
                 ? onPrimary
@@ -249,7 +252,9 @@ export function MaskedText({
             )}
             style={isActive ? markStyle : undefined}
           >
-            {open ? seg.match.value : seg.match.replacement}
+            <span className="relative z-[1]">
+              {open ? seg.match.value : seg.match.replacement}
+            </span>
           </button>
         );
       })}

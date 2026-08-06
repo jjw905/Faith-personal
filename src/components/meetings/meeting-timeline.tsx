@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 import {
   AlertTriangle,
@@ -8,11 +9,12 @@ import {
   FileBarChart,
   ListChecks,
   MessageSquare,
+  MessagesSquare,
   Scale,
-  Search,
   X,
 } from "lucide-react";
 
+import { ExpandableMeetingSearch } from "@/components/dashboard/meeting-search";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { Participant } from "@/types/meeting";
 import type {
@@ -22,49 +24,41 @@ import type {
 } from "@/types/timeline";
 import { cn } from "@/lib/utils";
 
-/** 종류별 아이콘 + 짧은 한글 라벨(한눈에 의미). */
+/** 종류별 아이콘 + 짧은 한글 라벨(한눈에 의미). 색 톤·면 없이 아이콘만. */
 const KIND_META: Record<
   TimelineSegmentKind,
   {
     label: string;
     icon: typeof ClipboardList;
-    iconTone: string;
   }
 > = {
   agenda: {
     label: "안건",
     icon: ClipboardList,
-    iconTone: "text-[#3d6a8a]",
   },
   discussion: {
     label: "논의",
     icon: MessageSquare,
-    iconTone: "text-[#5c6570]",
   },
   decision: {
     label: "결정",
     icon: CheckCircle2,
-    iconTone: "text-[#2f6b45]",
   },
   action: {
     label: "후속",
     icon: ListChecks,
-    iconTone: "text-[#2f6f9f]",
   },
   risk: {
     label: "주의",
     icon: AlertTriangle,
-    iconTone: "text-[#8a6a28]",
   },
   report: {
     label: "보고",
     icon: FileBarChart,
-    iconTone: "text-[#5b4a8a]",
   },
   vote: {
     label: "표결",
     icon: Scale,
-    iconTone: "text-[#6a4a2f]",
   },
 };
 
@@ -126,11 +120,11 @@ function SpeakerLines({
 
   if (!hasNotes) {
     return (
-      <ul className="mt-3 flex flex-wrap gap-2 md:gap-1.5" aria-label="발화자">
+      <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-2 md:gap-x-2.5" aria-label="발화자">
         {speakers.map((s) => (
           <li
             key={s.key}
-            className="inline-flex min-h-12 items-center gap-2 rounded-full bg-surface-2 py-1 pl-1 pr-3 md:h-7 md:min-h-0 md:gap-1.5 md:py-0.5 md:pl-0.5 md:pr-2.5"
+            className="inline-flex min-h-12 items-center gap-2 md:h-7 md:min-h-0 md:gap-1.5"
           >
             <Avatar className="h-8 w-8 shrink-0 md:h-6 md:w-6">
               <AvatarFallback
@@ -142,11 +136,11 @@ function SpeakerLines({
                 {s.initials}
               </AvatarFallback>
             </Avatar>
-            <span className="max-w-[8rem] truncate text-base font-semibold leading-5 text-foreground md:text-xs md:leading-4">
+            <span className="max-w-[8rem] truncate text-base font-semibold leading-5 text-foreground">
               {s.name}
             </span>
             {s.roleLabel ? (
-              <span className="shrink-0 text-sm font-medium leading-4 text-muted-2 md:text-xs">
+              <span className="shrink-0 text-sm font-medium leading-4 text-muted-2">
                 {s.roleLabel}
               </span>
             ) : null}
@@ -172,7 +166,7 @@ function SpeakerLines({
                 {s.initials}
               </AvatarFallback>
             </Avatar>
-            <p className="min-w-0 text-base leading-6 md:text-sm">
+            <p className="min-w-0 text-base leading-6">
               <span className="font-semibold text-foreground">{s.name}</span>
               {said ? (
                 <span className="text-muted"> {said}</span>
@@ -232,6 +226,7 @@ export function MeetingTimelineView({
   speakerFilter = null,
   onClearSpeakerFilter,
   onSegmentSelect,
+  chatHref,
 }: {
   timeline: MeetingTimeline;
   participants?: Participant[];
@@ -240,6 +235,8 @@ export function MeetingTimelineView({
   onClearSpeakerFilter?: () => void;
   /** 구간 선택 시 대화기록 점프용 */
   onSegmentSelect?: (segmentId: string) => void;
+  /** 있으면 툴바에 대화·다시듣기 링크 */
+  chatHref?: string;
 }) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -249,58 +246,52 @@ export function MeetingTimelineView({
       (!speakerFilter || speakerInSegment(seg, speakerFilter)),
   );
   const searching = deferredQuery.trim().length > 0;
+  const metaLabel =
+    searching || speakerFilter
+      ? `${filtered.length}/${timeline.segments.length}`
+      : timeline.durationLabel;
 
   return (
-    <section>
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        <span className="shrink-0 text-base font-medium text-muted-2 md:text-xs">
-          {searching || speakerFilter
-            ? `${filtered.length}/${timeline.segments.length}`
-            : timeline.durationLabel}
-        </span>
+    <section aria-label="타임라인">
+      <ExpandableMeetingSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="구간·키워드 검색"
+        label="타임라인 검색"
+        toolbar={
+          <div className="flex min-h-12 min-w-0 items-center gap-2 pb-2 md:min-h-11 md:gap-2.5 md:pb-2.5">
+            <p className="shrink-0 text-sm font-semibold tracking-wide text-muted-2">
+              타임라인
+            </p>
+            <span className="shrink-0 text-base font-medium tabular-nums text-muted-2">
+              {metaLabel}
+            </span>
+            {speakerFilter ? (
+              <button
+                type="button"
+                onClick={onClearSpeakerFilter}
+                className="inline-flex min-h-12 max-w-[10rem] cursor-pointer items-center gap-1.5 truncate text-base font-semibold text-primary md:h-8 md:min-h-0"
+              >
+                <span className="truncate">{speakerFilter}</span>
+                <X className="h-4 w-4 shrink-0" strokeWidth={2} />
+              </button>
+            ) : null}
+            {chatHref ? (
+              <Link
+                href={chatHref}
+                className="ml-auto hidden min-h-0 shrink-0 items-center gap-2 px-1 text-base font-semibold text-primary transition-colors hover:text-primary-hover md:inline-flex"
+              >
+                <MessagesSquare className="h-4 w-4" strokeWidth={1.75} />
+                대화, 다시듣기
+              </Link>
+            ) : null}
+          </div>
+        }
+      />
 
-        {speakerFilter ? (
-          <button
-            type="button"
-            onClick={onClearSpeakerFilter}
-            className="inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-full bg-primary-soft px-3 text-base font-semibold text-primary md:h-7 md:min-h-0 md:gap-1 md:px-2.5 md:text-xs"
-          >
-            {speakerFilter}
-            <X className="h-4 w-4 md:h-3 md:w-3" strokeWidth={2} />
-          </button>
-        ) : null}
-
-        <label className="ml-auto flex h-14 min-w-0 max-w-full flex-1 items-center rounded-xl bg-surface-2 px-3 sm:max-w-[13rem] md:h-8 md:max-w-[11rem] md:rounded-lg md:px-2">
-          <span className="sr-only">타임라인 검색</span>
-          <Search
-            className="h-5 w-5 shrink-0 text-foreground/50 md:h-3.5 md:w-3.5"
-            strokeWidth={1.75}
-            aria-hidden
-          />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="검색"
-            className="min-w-0 flex-1 bg-transparent px-2 text-base font-medium text-foreground outline-none placeholder:text-foreground/40 md:px-1.5 md:text-sm [&::-webkit-search-cancel-button]:hidden"
-            autoComplete="off"
-            enterKeyHint="search"
-          />
-          {query ? (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              className="inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-xl text-foreground/50 hover:text-foreground md:h-5 md:w-5 md:rounded"
-              aria-label="검색어 지우기"
-            >
-              <X className="h-5 w-5 md:h-3.5 md:w-3.5" strokeWidth={2} />
-            </button>
-          ) : null}
-        </label>
-      </div>
-
+      <div className="mt-5">
       {filtered.length === 0 ? (
-        <p className="py-10 text-center text-base text-muted md:text-sm">
+        <p className="py-10 text-center text-base text-muted">
           {speakerFilter
             ? `${speakerFilter}이(가) 표시된 구간이 없습니다.`
             : "검색 결과가 없습니다."}
@@ -315,45 +306,47 @@ export function MeetingTimelineView({
             return (
               <li
                 key={seg.id}
-                className={cn("relative flex gap-3 sm:gap-4", !isLast && "pb-9")}
+                className={cn(
+                  "relative flex gap-3 sm:gap-4",
+                  /* 구간 간격 — 세로선이 다음 시각 앞에서 끊기도록 pb와 선 mb를 짝맞춤 */
+                  !isLast && "pb-8",
+                )}
               >
-                {/* 녹음 시각: 이 구간이 시작되는 지점 */}
-                <div className="flex w-[3.75rem] shrink-0 justify-end pt-1.5 sm:w-[4.25rem]">
+                {/* 녹음 시각: 아이콘과 같은 높이대 */}
+                <div className="flex w-[3.75rem] shrink-0 justify-end pt-2.5 sm:w-[4.25rem] md:pt-2">
                   <time
                     dateTime={seg.start}
-                    className="text-base font-bold tabular-nums tracking-tight text-foreground md:text-sm"
+                    className="text-base font-bold tabular-nums tracking-tight text-foreground"
                   >
                     {seg.start}
                   </time>
                 </div>
 
-                {/* 흐르는 축 + 종류 라벨 */}
-                <div className="relative flex w-11 shrink-0 flex-col items-center">
-                  {!isLast ? (
-                    <span
-                      aria-hidden
-                      className="absolute top-9 bottom-[-2.25rem] w-px bg-border"
-                    />
-                  ) : null}
+                {/*
+                  축: 아이콘 → 종류 라벨 → (여백) → 선 → (여백) → 다음 시각.
+                  선은 라벨·다음 시각과 겹치지 않고, 위·아래 여백을 같게(0.5rem).
+                */}
+                <div className="relative flex w-11 shrink-0 flex-col items-center self-stretch">
                   <div
-                    className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full bg-surface md:h-9 md:w-9"
+                    className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center md:h-9 md:w-9"
                     aria-label={meta.label}
                     title={meta.label}
                   >
                     <Icon
-                      className={cn("h-5 w-5 md:h-4 md:w-4", meta.iconTone)}
-                      strokeWidth={2.25}
+                      className="h-5 w-5 text-muted md:h-4 md:w-4"
+                      strokeWidth={2}
                       aria-hidden
                     />
                   </div>
-                  <span
-                    className={cn(
-                      "relative z-10 mt-1 text-sm font-semibold leading-none md:text-xs",
-                      meta.iconTone,
-                    )}
-                  >
+                  <span className="relative z-10 mt-1.5 shrink-0 text-sm font-semibold leading-none text-muted-2">
                     {meta.label}
                   </span>
+                  {!isLast ? (
+                    <span
+                      aria-hidden
+                      className="mt-2 mb-[-1.5rem] w-px min-h-0 flex-1 bg-border"
+                    />
+                  ) : null}
                 </div>
 
                 <div className="min-w-0 flex-1 pt-1">
@@ -361,16 +354,16 @@ export function MeetingTimelineView({
                     <button
                       type="button"
                       onClick={() => onSegmentSelect(seg.id)}
-                      className="min-h-12 text-left text-lg font-semibold text-foreground underline-offset-2 hover:underline md:min-h-0 md:text-sm"
+                      className="min-h-12 text-left text-lg font-semibold text-foreground underline-offset-2 hover:underline md:min-h-0"
                     >
                       {seg.title}
                     </button>
                   ) : (
-                    <h3 className="text-lg font-semibold text-foreground md:text-sm">
+                    <h3 className="text-lg font-semibold text-foreground">
                       {seg.title}
                     </h3>
                   )}
-                  <p className="mt-2 text-base leading-relaxed text-muted md:text-sm">
+                  <p className="mt-2 text-base leading-[1.65] text-muted">
                     {seg.summary}
                   </p>
                   {seg.points && seg.points.length > 0 ? (
@@ -378,7 +371,7 @@ export function MeetingTimelineView({
                       {seg.points.map((point) => (
                         <li
                           key={point}
-                          className="flex gap-2 text-base leading-6 text-foreground md:text-sm"
+                          className="flex gap-2 text-base leading-6 text-foreground"
                         >
                           <span
                             aria-hidden
@@ -402,6 +395,7 @@ export function MeetingTimelineView({
           })}
         </ol>
       )}
+      </div>
     </section>
   );
 }

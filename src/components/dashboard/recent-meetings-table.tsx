@@ -12,43 +12,67 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { GroupedParticipantsList } from "@/components/meetings/meeting-participants";
-import { MeetingCaptureOverline } from "@/components/meetings/meeting-capture-label";
+import { MeetingCaptureIcon } from "@/components/meetings/meeting-capture-label";
 import {
   deleteMeetingRecord,
   exportMeetingsListDownload,
 } from "@/components/meetings/meeting-record-actions";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
+import { MeetingTopicTags } from "@/components/meetings/meeting-topic-tags";
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
 import {
   RecordsPageNav,
-  RECORDS_PAGE_SIZE,
+  recordsPageSize,
 } from "@/components/dashboard/records-page-nav";
+import { DateRangeCalendar } from "@/components/meetings/date-range-calendar";
 import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { meetingCaptureLabel } from "@/lib/meeting-capture";
 import type { MeetingExportFormat } from "@/lib/meeting-export";
 import type { MaskStyle } from "@/lib/masking";
 import {
-  formatRecentDaysLabel,
+  defaultRecordsRange,
+  formatDottedDate,
+  formatDottedRangeLabel,
+  formatRecordsDayParts,
+  formatRecordsRangeLabel,
   formatSeoulListLeading,
-  getPeriodRange,
-  isCurrentPeriod,
-  isMeetingInPeriod,
-  shiftPeriodAnchor,
-  type PeriodUnit,
+  isMeetingInDateRange,
+  normalizeDateRange,
+  parseFlexibleDateInput,
+  recordsQuickRanges,
+  seoulDateKey,
+  shiftDateRange,
 } from "@/lib/meeting-date";
 import { meetingDisplayKeywords } from "@/lib/meeting-keywords";
+import {
+  friendlyProcessStageLabel,
+  MEETING_PROCESS_LABEL,
+} from "@/lib/meeting-process";
 import { matchesSearchText } from "@/lib/search-text";
 import { getWorkspaceProfile } from "@/lib/workspaces";
-import type { Meeting, Participant } from "@/types/meeting";
+import type { Meeting } from "@/types/meeting";
 import { TOUCH_ICON_BUTTON } from "@/lib/touch-target";
 import { cn } from "@/lib/utils";
+
+const MD_UP_QUERY = "(min-width: 768px)";
+
+function subscribeMdUp(onChange: () => void) {
+  const mq = window.matchMedia(MD_UP_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function getMdUpSnapshot() {
+  return window.matchMedia(MD_UP_QUERY).matches;
+}
+
+function getMdUpServerSnapshot() {
+  return false;
+}
 
 interface RecentMeetingsTableProps {
   meetings: Meeting[];
@@ -60,6 +84,10 @@ interface RecentMeetingsTableProps {
   onMobileBarChange?: (state: {
     onExitSelect: () => void;
   } | null) => void;
+  /** 상위 탭이 제목을 그릴 때 섹션 h2 숨김 */
+  hideTitle?: boolean;
+  /** 상위(탭 행)에서 검색을 그릴 때 섹션 검색 숨김 */
+  hideSearch?: boolean;
 }
 
 type SelectMode = "delete" | "download" | null;
@@ -87,22 +115,250 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "duration", label: "소요시간순" },
 ];
 
-const PERIOD_OPTIONS: { value: PeriodUnit; label: string }[] = [
-  { value: "week", label: "주" },
-  { value: "month", label: "월" },
-  { value: "year", label: "년" },
-];
+/** 정렬 트리거. 선택·열림에 섹션면(bg-surface) 금지 — 색·굵기만. */
+const SORT_TRIGGER_CLASS =
+  "inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-xl px-2.5 text-base font-semibold text-muted transition-colors hover:bg-surface/70 hover:text-foreground md:min-h-9";
 
-const VISIBLE_AVATARS = 3;
+function formatDottedDraft(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}.${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6)}`;
+}
+
+function PeriodDateNav({
+  fromIso,
+  toIso,
+  onRangeChange,
+}: {
+  fromIso: string;
+  toIso: string;
+  onRangeChange: (fromIso: string, toIso: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const isMdUp = useSyncExternalStore(
+    subscribeMdUp,
+    getMdUpSnapshot,
+    getMdUpServerSnapshot,
+  );
+  const [draftFrom, setDraftFrom] = useState(fromIso);
+  const [draftTo, setDraftTo] = useState(toIso);
+  const [draftFromText, setDraftFromText] = useState(() =>
+    formatDottedDate(fromIso),
+  );
+  const [draftToText, setDraftToText] = useState(() => formatDottedDate(toIso));
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const presets = useMemo(() => recordsQuickRanges(), []);
+
+  useEffect(() => {
+    if (!open) return;
+    setDraftFrom(fromIso);
+    setDraftTo(toIso);
+    setDraftFromText(formatDottedDate(fromIso));
+    setDraftToText(formatDottedDate(toIso));
+    setDraftError(null);
+  }, [open, fromIso, toIso]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const headerLabel = isMdUp
+    ? formatRecordsRangeLabel(fromIso, toIso)
+    : formatDottedRangeLabel(fromIso, toIso);
+
+  function commitRange(nextFrom: string, nextTo: string) {
+    const next = normalizeDateRange(nextFrom, nextTo);
+    onRangeChange(next.fromIso, next.toIso);
+    setDraftError(null);
+    setOpen(false);
+  }
+
+  function applyDraftText() {
+    const nextFrom = parseFlexibleDateInput(draftFromText);
+    const nextTo = parseFlexibleDateInput(draftToText);
+    if (!nextFrom || !nextTo) {
+      setDraftError("날짜를 2027.09.09 형식으로 입력해 주세요.");
+      return;
+    }
+    commitRange(nextFrom, nextTo);
+  }
+
+  function applyPreset(range: { fromIso: string; toIso: string }) {
+    setDraftFrom(range.fromIso);
+    setDraftTo(range.toIso);
+    setDraftFromText(formatDottedDate(range.fromIso));
+    setDraftToText(formatDottedDate(range.toIso));
+    setDraftError(null);
+    if (!isMdUp) commitRange(range.fromIso, range.toIso);
+  }
+
+  return (
+    <div ref={rootRef} className="relative flex min-w-0 max-w-full items-center justify-center gap-0.5">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          TOUCH_ICON_BUTTON,
+          "shrink-0 cursor-pointer text-muted hover:bg-card hover:text-foreground",
+        )}
+        aria-label="이전 기간"
+        onClick={() => {
+          const next = shiftDateRange(fromIso, toIso, -1);
+          onRangeChange(next.fromIso, next.toIso);
+        }}
+      >
+        <ChevronLeft strokeWidth={1.75} />
+      </Button>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label="기간 조회"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "min-h-12 min-w-0 max-w-[14rem] truncate rounded-lg px-1.5 py-2 text-center text-base font-semibold tabular-nums text-foreground transition-colors hover:bg-card sm:max-w-[18rem] sm:px-2 md:min-h-0 md:max-w-[22rem]",
+          open && "bg-card",
+        )}
+      >
+        {headerLabel}
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className={cn(
+          TOUCH_ICON_BUTTON,
+          "shrink-0 cursor-pointer text-muted hover:bg-card hover:text-foreground",
+        )}
+        aria-label="다음 기간"
+        onClick={() => {
+          const next = shiftDateRange(fromIso, toIso, 1);
+          onRangeChange(next.fromIso, next.toIso);
+        }}
+      >
+        <ChevronRight strokeWidth={1.75} />
+      </Button>
+
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="기간 조회"
+          className="absolute left-1/2 top-[calc(100%+0.5rem)] z-40 w-[min(100vw-2rem,24rem)] -translate-x-1/2 rounded-2xl border border-border bg-card p-3 shadow-[0_12px_28px_rgba(17,24,46,0.12)] md:w-[24rem]"
+        >
+          {isMdUp ? (
+            <DateRangeCalendar
+              from={draftFrom}
+              to={draftTo}
+              onChange={(nextFrom, nextTo) => {
+                const next = normalizeDateRange(nextFrom, nextTo);
+                setDraftFrom(next.fromIso);
+                setDraftTo(next.toIso);
+              }}
+              onComplete={(nextFrom, nextTo) => {
+                commitRange(nextFrom, nextTo);
+              }}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div
+                className="flex flex-wrap items-center justify-center gap-1.5"
+                role="group"
+                aria-label="빠른 선택"
+              >
+                {(
+                  [
+                    { id: "today", label: "오늘", range: presets.today },
+                    { id: "week", label: "이번 주", range: presets.week },
+                    { id: "month", label: "이번 달", range: presets.month },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => applyPreset(item.range)}
+                    className="inline-flex min-h-12 items-center rounded-full px-3 text-base font-semibold text-muted transition-colors hover:text-foreground"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex min-w-0 items-center gap-2">
+                <label className="sr-only" htmlFor="records-range-from">
+                  시작일
+                </label>
+                <input
+                  id="records-range-from"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="2027.09.09"
+                  value={draftFromText}
+                  onChange={(e) => {
+                    setDraftFromText(formatDottedDraft(e.target.value));
+                    setDraftError(null);
+                  }}
+                  className="h-14 min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 text-center text-lg font-semibold tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                />
+                <span className="shrink-0 text-base text-muted" aria-hidden>
+                  ~
+                </span>
+                <label className="sr-only" htmlFor="records-range-to">
+                  종료일
+                </label>
+                <input
+                  id="records-range-to"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="2028.09.10"
+                  value={draftToText}
+                  onChange={(e) => {
+                    setDraftToText(formatDottedDraft(e.target.value));
+                    setDraftError(null);
+                  }}
+                  className="h-14 min-w-0 flex-1 rounded-xl border border-border bg-transparent px-3 text-center text-lg font-semibold tabular-nums text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                />
+              </div>
+              {draftError ? (
+                <p role="alert" className="text-center text-base text-muted">
+                  {draftError}
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                className="h-12 w-full text-base"
+                onClick={applyDraftText}
+              >
+                조회
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /**
- * M3 List 3줄 템플릿
- * - leading: 날짜/시간
- * - overline: 기록 방식(칩)
+ * M3 List 슬롯
+ * - overline: 날짜·시간
  * - headline: 제목
- * - supporting: 키워드, 참석자
- * - trailing: 소요시간, 내보내기
- * 참고: m3.material.io/components/lists, m3.material.io/components/chips
+ * - supporting: 기록 방식, 키워드
+ * - disclosure: >
+ * 참고: m3.material.io/components/lists
  */
 const KEYWORD_VISIBLE = 3;
 
@@ -112,9 +368,21 @@ function parseDurationMinutes(duration: string) {
   return (hour ? Number(hour[1]) * 60 : 0) + (min ? Number(min[1]) : 0);
 }
 
+function compareProcessFast(a: Meeting, b: Meeting) {
+  const aw = a.process?.waiting ? 1 : 0;
+  const bw = b.process?.waiting ? 1 : 0;
+  if (aw !== bw) return aw - bw;
+  if (aw === 1) {
+    return (a.process?.queueAhead ?? 99) - (b.process?.queueAhead ?? 99);
+  }
+  return (b.process?.progressPercent ?? 0) - (a.process?.progressPercent ?? 0);
+}
+
 function sortMeetings(list: Meeting[], sortKey: SortKey) {
-  const next = [...list];
-  next.sort((a, b) => {
+  const active = list.filter((m) => m.status === "in_progress");
+  const rest = list.filter((m) => m.status !== "in_progress");
+  active.sort(compareProcessFast);
+  rest.sort((a, b) => {
     if (sortKey === "date_desc") {
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     }
@@ -126,7 +394,7 @@ function sortMeetings(list: Meeting[], sortKey: SortKey) {
     }
     return parseDurationMinutes(b.duration) - parseDurationMinutes(a.duration);
   });
-  return next;
+  return [...active, ...rest];
 }
 
 function MeetingKeywords({ meeting }: { meeting: Meeting }) {
@@ -136,119 +404,41 @@ function MeetingKeywords({ meeting }: { meeting: Meeting }) {
 
   const visible = tags.slice(0, KEYWORD_VISIBLE);
   const overflow = tags.length - visible.length;
-  const full = tags.join(", ");
 
-  return (
-    <div
-      className="flex min-w-0 flex-wrap items-center gap-1.5"
-      title={full}
-    >
-      {visible.map((tag) => (
-        <span
-          key={tag}
-          className="inline-flex max-w-full rounded-md bg-surface px-2.5 py-1 text-base font-medium leading-5 text-muted"
-        >
-          {tag}
-        </span>
-      ))}
-      {overflow > 0 ? (
-        <span className="inline-flex shrink-0 text-base font-medium leading-5 text-muted-2">
-          +{overflow}
-        </span>
-      ) : null}
-    </div>
-  );
+  return <MeetingTopicTags tags={visible} overflow={overflow} />;
 }
 
-
-function PeriodUnitControl({
-  unit,
-  onUnitChange,
-}: {
-  unit: PeriodUnit;
-  onUnitChange: (unit: PeriodUnit) => void;
-}) {
-  return (
-    <div
-      className="flex items-center rounded-lg bg-surface p-0.5"
-      role="group"
-      aria-label="기간 단위"
-    >
-      {PERIOD_OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={unit === option.value}
-          onClick={() => onUnitChange(option.value)}
-          className={cn(
-            "min-h-12 min-w-12 cursor-pointer rounded-md px-2.5 text-base font-semibold transition-colors md:min-h-9 md:min-w-9",
-            unit === option.value
-              ? "bg-card text-foreground shadow-soft"
-              : "text-muted hover:text-foreground",
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function PeriodDateNav({
-  unit,
-  anchor,
-  onAnchorChange,
-}: {
-  unit: PeriodUnit;
-  anchor: Date;
-  onAnchorChange: (anchor: Date) => void;
-}) {
-  const range = getPeriodRange(anchor, unit);
-  const current = isCurrentPeriod(anchor, unit);
-
-  return (
-    <div className="flex w-max max-w-full items-center justify-center gap-0.5 sm:gap-1">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className={cn(
-          TOUCH_ICON_BUTTON,
-          "shrink-0 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground",
-        )}
-        aria-label="이전 기간"
-        onClick={() => onAnchorChange(shiftPeriodAnchor(anchor, unit, -1))}
-      >
-        <ChevronLeft strokeWidth={1.75} />
-      </Button>
-      <p className="min-w-0 truncate px-1 text-center text-base font-medium tabular-nums text-foreground sm:px-1.5">
-        {range.label}
-      </p>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className={cn(
-          TOUCH_ICON_BUTTON,
-          "shrink-0 cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground",
-        )}
-        aria-label="다음 기간"
-        onClick={() => onAnchorChange(shiftPeriodAnchor(anchor, unit, 1))}
-      >
-        <ChevronRight strokeWidth={1.75} />
-      </Button>
-      {!current ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="ml-1 min-h-12 cursor-pointer px-3 text-base md:min-h-8 md:px-2.5 md:text-xs"
-          onClick={() => onAnchorChange(new Date())}
-        >
-          오늘
-        </Button>
-      ) : null}
-    </div>
-  );
+/** 기록 목록: 서울 캘린더 일 기준 그룹 (오늘·어제·내일은 상대만, 그 외 절대 날짜). */
+function groupRecordsByDay(
+  items: Meeting[],
+): {
+  key: string;
+  relative: string | null;
+  absolute: string;
+  items: Meeting[];
+}[] {
+  const groups: {
+    key: string;
+    relative: string | null;
+    absolute: string;
+    items: Meeting[];
+  }[] = [];
+  for (const item of items) {
+    const key = seoulDateKey(item.date);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.items.push(item);
+    } else {
+      const { relative, absolute } = formatRecordsDayParts(item.date);
+      groups.push({
+        key,
+        relative,
+        absolute,
+        items: [item],
+      });
+    }
+  }
+  return groups;
 }
 
 export function SortControl({
@@ -288,211 +478,71 @@ export function SortControl({
         type="button"
         aria-expanded={listOpen}
         aria-haspopup="listbox"
+        aria-label={`정렬, ${current}`}
         onClick={(e) => {
           e.stopPropagation();
           if (forceOpen) return;
           setOpen((v) => !v);
         }}
         className={cn(
-          "inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-lg bg-surface px-3 text-base font-semibold text-foreground transition-colors md:min-h-9",
-          "hover:bg-surface-2",
-          listOpen && "bg-card text-foreground shadow-soft ring-1 ring-border",
+          SORT_TRIGGER_CLASS,
+          listOpen && "text-foreground",
         )}
       >
-        <ArrowDownWideNarrow className="h-3.5 w-3.5 text-muted" />
+        <ArrowDownWideNarrow className="h-4 w-4 shrink-0" strokeWidth={1.75} />
         {current}
         <ChevronDown
           className={cn(
-            "h-3.5 w-3.5 text-muted transition-transform",
-            listOpen && "rotate-180",
+            "h-4 w-4 shrink-0 text-muted transition-transform",
+            listOpen && "rotate-180 text-foreground",
           )}
+          strokeWidth={1.75}
         />
       </button>
 
       {listOpen ? (
         <ul
           role="listbox"
-          className="absolute right-0 top-[calc(100%+0.35rem)] z-40 min-w-[9.5rem] overflow-hidden rounded-xl bg-card py-1 shadow-[0_12px_28px_rgba(17,24,46,0.12)]"
+          aria-label="정렬"
+          className="absolute right-0 top-[calc(100%+0.35rem)] z-40 max-h-[min(50vh,18rem)] min-w-[10.5rem] overflow-y-auto overflow-x-hidden rounded-2xl bg-card py-1.5 shadow-[0_12px_28px_rgba(17,24,46,0.12)] ring-1 ring-border"
         >
-          {SORT_OPTIONS.map((option) => (
-            <li key={option.value}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={option.value === value}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onChange(option.value);
-                  if (!forceOpen) setOpen(false);
-                }}
-                className={cn(
-                  "flex min-h-12 w-full cursor-pointer items-center px-3 text-left text-base font-medium transition-colors md:min-h-9",
-                  option.value === value
-                    ? "bg-primary-soft text-primary"
-                    : "text-foreground hover:bg-surface",
-                )}
-              >
-                {option.label}
-              </button>
-            </li>
-          ))}
+          {SORT_OPTIONS.map((option) => {
+            const selected = option.value === value;
+            return (
+              <li key={option.value}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onChange(option.value);
+                    if (!forceOpen) setOpen(false);
+                  }}
+                  className={cn(
+                    "flex min-h-12 w-full cursor-pointer items-center gap-3 px-3.5 text-left text-base transition-colors md:min-h-11",
+                    selected
+                      ? "font-semibold text-foreground"
+                      : "font-medium text-muted hover:bg-surface/70 hover:text-foreground",
+                  )}
+                >
+                  <span className="min-w-0 flex-1">{option.label}</span>
+                  {selected ? (
+                    <Check
+                      className="h-4 w-4 shrink-0 text-primary"
+                      strokeWidth={2.25}
+                      aria-hidden
+                    />
+                  ) : (
+                    <span className="h-4 w-4 shrink-0" aria-hidden />
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
-  );
-}
-
-export function ParticipantsPopup({
-  participants,
-  open,
-  onClose,
-  contained,
-}: {
-  participants: Participant[];
-  open: boolean;
-  onClose: () => void;
-  /** 디자인 랩: 프리뷰 영역 안에만 표시 */
-  contained?: boolean;
-}) {
-  useEffect(() => {
-    if (!open || contained) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [open, onClose, contained]);
-
-  if (!open) return null;
-
-  return (
-    <>
-      <div
-        className={cn(
-          "bg-black/40",
-          contained ? "absolute inset-0 z-10" : "fixed inset-0 z-50",
-        )}
-        onClick={onClose}
-        aria-hidden
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="참석자"
-        className={cn(
-          "flex max-h-[min(32rem,85vh)] w-[min(32rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl bg-card shadow-[0_20px_50px_rgba(17,24,46,0.18)]",
-          contained
-            ? "absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
-            : "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
-        )}
-      >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-5 py-3.5">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">참석자</h2>
-            <p className="mt-0.5 text-xs font-medium text-muted-2">
-              {participants.length}명
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn(
-              TOUCH_ICON_BUTTON,
-              "shrink-0 cursor-pointer text-muted hover:bg-surface-2",
-            )}
-            onClick={onClose}
-            aria-label="참석자 닫기"
-          >
-            <X />
-          </Button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <GroupedParticipantsList participants={participants} />
-        </div>
-      </div>
-    </>
-  );
-}
-
-function ParticipantsCell({
-  participants,
-  showCount = true,
-}: {
-  participants: Participant[];
-  showCount?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const visible = participants.slice(0, VISIBLE_AVATARS);
-  const overflow = Math.max(0, participants.length - VISIBLE_AVATARS);
-  const label =
-    participants.length === 0
-      ? "참석자 없음"
-      : participants.map((p) => p.name).join(", ");
-
-  if (participants.length === 0) {
-    return <span className="text-base text-muted-2">참석자 없음</span>;
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={`참석자 ${participants.length}명: ${label}`}
-        title={label}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setOpen(true);
-        }}
-        className={cn(
-          "inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-full py-0.5 pr-1.5 transition-colors",
-          "hover:bg-surface-2",
-          open && "bg-surface-2",
-        )}
-      >
-        <span className="flex shrink-0 whitespace-nowrap -space-x-2">
-          {visible.map((participant, index) => (
-            <Avatar
-              key={participant.id}
-              className="h-9 w-9 border-2 border-card"
-              style={{ zIndex: index + 1 }}
-            >
-              <AvatarFallback
-                className={`${participant.color} text-xs text-white/95`}
-              >
-                {participant.initials}
-              </AvatarFallback>
-            </Avatar>
-          ))}
-          {overflow > 0 ? (
-            <span
-              className="relative flex h-9 w-9 items-center justify-center rounded-full border-2 border-card bg-surface-2 text-xs font-semibold text-muted"
-              style={{ zIndex: visible.length + 1 }}
-            >
-              +{overflow}
-            </span>
-          ) : null}
-        </span>
-        {showCount ? (
-          <span className="hidden text-base font-medium text-muted sm:inline">
-            {participants.length}명
-          </span>
-        ) : null}
-      </button>
-      <ParticipantsPopup
-        participants={participants}
-        open={open}
-        onClose={() => setOpen(false)}
-      />
-    </>
   );
 }
 
@@ -502,16 +552,27 @@ export function RecentMeetingsTable({
   searchQuery: searchQueryProp,
   onSearchChange,
   onMobileBarChange,
+  hideTitle = false,
+  hideSearch = false,
 }: RecentMeetingsTableProps) {
   const { workspaceId } = useAppContext();
   const { scenarioId, isLive } = usePageUxPreview();
   const profile = getWorkspaceProfile(workspaceId);
+  const isMdUp = useSyncExternalStore(
+    subscribeMdUp,
+    getMdUpSnapshot,
+    getMdUpServerSnapshot,
+  );
+  const pageSize = recordsPageSize(isMdUp);
   const [localSearch, setLocalSearch] = useState("");
   const recordSearch = searchQueryProp ?? localSearch;
   const setRecordSearch = onSearchChange ?? setLocalSearch;
   const [sortKey, setSortKey] = useState<SortKey>("date_desc");
-  const [periodUnit, setPeriodUnit] = useState<PeriodUnit>("week");
-  const [periodAnchor, setPeriodAnchor] = useState(() => new Date());
+  const [rangeFrom, setRangeFrom] = useState(() => defaultRecordsRange().fromIso);
+  const [rangeTo, setRangeTo] = useState(() => {
+    // from과 같은 주 구간으로 맞춤. 초기 렌더에서 Date 흔들림을 피하려고 동일 헬퍼 재사용.
+    return defaultRecordsRange().toIso;
+  });
   const [selectMode, setSelectMode] = useState<SelectMode>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -523,7 +584,6 @@ export function RecentMeetingsTable({
   const filtered = useMemo(() => {
     const records = meetings.filter((m) => m.status !== "scheduled");
     if (
-      scenarioId === "popup-participants" ||
       scenarioId === "popup-records-delete" ||
       scenarioId === "popup-records-download"
     ) {
@@ -532,10 +592,13 @@ export function RecentMeetingsTable({
     if (activeQuery) {
       return records.filter((m) => matchesMeetingSearch(m, activeQuery));
     }
-    return records.filter((m) =>
-      isMeetingInPeriod(m.date, periodAnchor, periodUnit),
+    // 분석 중은 기간과 무관하게 항상 위에 둔다.
+    return records.filter(
+      (m) =>
+        m.status === "in_progress" ||
+        isMeetingInDateRange(m.date, rangeFrom, rangeTo),
     );
-  }, [meetings, periodAnchor, periodUnit, activeQuery, scenarioId]);
+  }, [meetings, rangeFrom, rangeTo, activeQuery, scenarioId]);
 
   const sorted = useMemo(
     () => sortMeetings(filtered, sortKey),
@@ -544,17 +607,22 @@ export function RecentMeetingsTable({
 
   const recordsTotalPages = Math.max(
     1,
-    Math.ceil(sorted.length / RECORDS_PAGE_SIZE),
+    Math.ceil(sorted.length / pageSize),
   );
   const pagedRecords = useMemo(() => {
     const page = Math.min(recordsPage, recordsTotalPages);
-    const start = (page - 1) * RECORDS_PAGE_SIZE;
-    return sorted.slice(start, start + RECORDS_PAGE_SIZE);
-  }, [sorted, recordsPage, recordsTotalPages]);
+    const start = (page - 1) * pageSize;
+    return sorted.slice(start, start + pageSize);
+  }, [sorted, recordsPage, recordsTotalPages, pageSize]);
+
+  const groupedRecords = useMemo(
+    () => groupRecordsByDay(pagedRecords),
+    [pagedRecords],
+  );
 
   useEffect(() => {
     setRecordsPage(1);
-  }, [workspaceId, periodUnit, periodAnchor, activeQuery, sortKey]);
+  }, [workspaceId, rangeFrom, rangeTo, activeQuery, sortKey, pageSize]);
 
   useEffect(() => {
     setRecordsPage((p) => Math.min(p, recordsTotalPages));
@@ -570,7 +638,7 @@ export function RecentMeetingsTable({
     setSelected(new Set());
     setSelectMode(null);
     setActionConfirmOpen(false);
-  }, [workspaceId, periodUnit, periodAnchor, activeQuery, scenarioId]);
+  }, [workspaceId, rangeFrom, rangeTo, activeQuery, scenarioId]);
 
   useEffect(() => {
     if (searchQueryProp === undefined) setLocalSearch("");
@@ -591,12 +659,6 @@ export function RecentMeetingsTable({
       setActionConfirmOpen(ids.length > 0);
       return;
     }
-    if (scenarioId === "popup-participants") {
-      setSelectMode(null);
-      setSelected(new Set());
-      setActionConfirmOpen(false);
-      return;
-    }
     if (
       scenarioId === "live" ||
       scenarioId === "empty" ||
@@ -607,11 +669,6 @@ export function RecentMeetingsTable({
       setActionConfirmOpen(false);
     }
   }, [scenarioId, sorted]);
-
-  const previewParticipants = useMemo(() => {
-    const withPeople = sorted.find((m) => m.participants.length > 0);
-    return withPeople?.participants ?? sorted[0]?.participants ?? [];
-  }, [sorted]);
 
   function enterMode(mode: Exclude<SelectMode, null>) {
     setSelectMode(mode);
@@ -693,17 +750,6 @@ export function RecentMeetingsTable({
     return () => onMobileBarChange(null);
   }, [onMobileBarChange, selectMode]);
 
-  const periodUnitControl =
-    !selectMode && !activeQuery ? (
-    <PeriodUnitControl
-      unit={periodUnit}
-      onUnitChange={(unit) => {
-        setPeriodUnit(unit);
-        setPeriodAnchor(new Date());
-      }}
-    />
-  ) : null;
-
   const sortControl = !selectMode ? (
     <SortControl
       value={sortKey}
@@ -713,7 +759,7 @@ export function RecentMeetingsTable({
   ) : null;
 
   const batchActions = (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
       {selectMode ? (
         <>
           <Button
@@ -735,7 +781,7 @@ export function RecentMeetingsTable({
             className={cn(
               "h-12 min-w-12 cursor-pointer gap-1.5 px-3 text-base md:h-9 md:min-w-0 md:px-3 md:text-sm",
               selectMode === "delete" &&
-                "bg-masked text-white hover:bg-masked/90",
+                "bg-foreground text-background hover:bg-foreground/90",
             )}
             disabled={selected.size === 0 || busy}
             onClick={() => void runSelectionAction()}
@@ -761,13 +807,14 @@ export function RecentMeetingsTable({
         </>
       ) : (
         <>
+          {sortControl}
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className={cn(
               TOUCH_ICON_BUTTON,
-              "cursor-pointer text-muted hover:bg-surface-2 hover:text-foreground",
+              "cursor-pointer text-muted hover:bg-surface/70 hover:text-foreground",
             )}
             aria-label="다운로드"
             disabled={sorted.length === 0}
@@ -781,7 +828,7 @@ export function RecentMeetingsTable({
             size="icon"
             className={cn(
               TOUCH_ICON_BUTTON,
-              "cursor-pointer text-masked hover:bg-masked-soft hover:text-masked",
+              "cursor-pointer text-muted hover:bg-surface/70 hover:text-foreground",
             )}
             aria-label="삭제"
             disabled={sorted.length === 0}
@@ -794,96 +841,108 @@ export function RecentMeetingsTable({
     </div>
   );
 
-  const titleBlock = (
+  const titleBlock = hideTitle ? null : (
     <div className="flex min-w-0 items-center gap-2.5">
-      <CardTitle className="text-xl font-bold tracking-tight">
+      <h2 className="text-xl font-bold tracking-tight text-foreground">
         {profile.recordsTitle}
-      </CardTitle>
+      </h2>
     </div>
   );
 
-  const periodHint = selectMode ? (
-    <p className="text-center text-base font-medium text-muted">
-      {selectMode === "delete" ? "삭제할 기록 선택" : "받을 기록 선택"}
-    </p>
-  ) : activeQuery ? (
-    <p className="text-center text-base font-medium text-muted">
-      검색 결과
-    </p>
-  ) : (
-    <PeriodDateNav
-      unit={periodUnit}
-      anchor={periodAnchor}
-      onAnchorChange={setPeriodAnchor}
-    />
-  );
-
-  const filterControls =
-    periodUnitControl || sortControl ? (
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-        {periodUnitControl}
-        {sortControl}
+  /** 기간 이동 + 날짜 클릭 구간 조회. 주간/배경면 없음. */
+  const periodCluster =
+    selectMode ? (
+      <p className="text-center text-base font-medium text-muted">
+        {selectMode === "delete" ? "삭제할 기록 선택" : "받을 기록 선택"}
+      </p>
+    ) : activeQuery ? (
+      <p className="text-center text-base font-medium text-muted">검색 결과</p>
+    ) : (
+      <div className="inline-flex max-w-full items-center justify-center" role="group" aria-label="기간">
+        <PeriodDateNav
+          fromIso={rangeFrom}
+          toIso={rangeTo}
+          onRangeChange={(from, to) => {
+            setRangeFrom(from);
+            setRangeTo(to);
+          }}
+        />
       </div>
-    ) : null;
+    );
 
   return (
-    <Card className="overflow-hidden rounded-3xl bg-card shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border">
-      <div className="space-y-3 bg-card px-6 pb-0 pt-6">
-        {/* 1행: 제목, 필터 */}
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          {titleBlock}
-          {filterControls}
-        </div>
+    <section className="outline-none">
+      <div className="space-y-3 pb-0 pt-1">
+        {titleBlock ? (
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            {titleBlock}
+          </div>
+        ) : null}
 
-        {/* 검색: 페이지에 둠. 하단 추적 바는 탐색만 */}
-        {!selectMode ? (
+        {!selectMode && !hideSearch ? (
           <MeetingSearch
             value={recordSearch}
             onChange={setRecordSearch}
             placeholder={profile.searchPlaceholder}
             label={`${profile.recordsTitle} 검색`}
-            className="h-12 max-w-none rounded-2xl sm:h-11"
+            className="h-12 max-w-none rounded-xl sm:h-11"
           />
         ) : null}
 
-        {/* 기간 / 선택 안내, 다운로드·삭제 (좌우 1fr로 날짜 광학 중앙) */}
-        <div className="grid min-h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 md:min-h-9">
-          <div className="min-w-0" aria-hidden />
-          <div className="min-w-0 justify-self-center px-1">{periodHint}</div>
-          <div className="justify-self-end">{batchActions}</div>
+        {/* 모바일: 기간 → 정렬/액션 세로. 데스크톱: 3열(좌 스페이서·기간·액션)로 겹침 방지 */}
+        <div className="flex flex-col gap-2 md:grid md:min-h-9 md:grid-cols-[11.5rem_minmax(0,1fr)_11.5rem] md:items-center md:gap-1.5">
+          <div className="hidden md:block" aria-hidden />
+          <div className="flex min-h-12 min-w-0 items-center justify-center md:min-h-0">
+            {periodCluster}
+          </div>
+          <div className="flex items-center justify-end">{batchActions}</div>
         </div>
-
-        <div className="h-0.5 w-full bg-foreground" aria-hidden />
       </div>
 
-      <CardContent className="px-0 pb-0 pt-0">
+      <div>
         {sorted.length === 0 ? (
-          <p className="px-6 py-10 text-center text-base text-muted">
+          <p className="py-10 text-center text-base text-muted">
             {activeQuery ? "검색 결과가 없습니다." : profile.recordsEmpty}
           </p>
         ) : (
-          <>
-            <ul className="divide-y divide-border">
-              {pagedRecords.map((meeting) => (
-                <li key={meeting.id}>
-                  <MeetingRecordListItem
-                    meeting={meeting}
-                    showPeopleDensity={profile.showPeopleDensity}
-                    selecting={Boolean(selectMode)}
-                    checked={selected.has(meeting.id)}
-                    onToggle={() => toggleId(meeting.id)}
-                  />
-                </li>
-              ))}
-            </ul>
-            <RecordsPageNav
-              page={Math.min(recordsPage, recordsTotalPages)}
-              totalPages={recordsTotalPages}
-              onPageChange={setRecordsPage}
-            />
-          </>
+            <>
+              <div>
+                {groupedRecords.map((group) => (
+                  <div key={group.key}>
+                    <p className="px-0 pb-2 pt-5 first:pt-3">
+                      {group.relative ? (
+                        <span className="text-base font-semibold tracking-tight text-foreground">
+                          {group.relative}
+                        </span>
+                      ) : (
+                        <span className="text-base font-semibold tracking-tight text-muted">
+                          {group.absolute}
+                        </span>
+                      )}
+                    </p>
+                    <ul className="divide-y divide-border">
+                      {group.items.map((meeting) => (
+                        <li key={meeting.id}>
+                          <MeetingRecordListItem
+                            meeting={meeting}
+                            selecting={Boolean(selectMode)}
+                            checked={selected.has(meeting.id)}
+                            onToggle={() => toggleId(meeting.id)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <RecordsPageNav
+                page={Math.min(recordsPage, recordsTotalPages)}
+                totalPages={recordsTotalPages}
+                onPageChange={setRecordsPage}
+              />
+            </>
         )}
-      </CardContent>
+      </div>
 
       <MeetingRecordsActionDialog
         open={
@@ -915,39 +974,42 @@ export function RecentMeetingsTable({
           void confirmSelectionAction(format, maskStyle);
         }}
       />
-
-      {scenarioId === "popup-participants" && previewParticipants.length > 0 ? (
-        <ParticipantsPopup
-          participants={previewParticipants}
-          open
-          onClose={() => undefined}
-        />
-      ) : null}
-    </Card>
+    </section>
   );
 }
 
 function MeetingRecordListItem({
   meeting,
-  showPeopleDensity,
   selecting,
   checked,
   onToggle,
 }: {
   meeting: Meeting;
-  showPeopleDensity: boolean;
   selecting: boolean;
   checked: boolean;
   onToggle: () => void;
 }) {
-  const { day, time } = formatSeoulListLeading(meeting.date);
-  const recent = formatRecentDaysLabel(meeting.date);
+  const { time } = formatSeoulListLeading(meeting.date);
   const href = `/meetings/${meeting.id}`;
+  const process = meeting.status === "in_progress" ? meeting.process : undefined;
+  const waiting = Boolean(process?.waiting);
+  const percent = process?.progressPercent ?? 0;
+  const stage = process
+    ? friendlyProcessStageLabel(
+        process.stageLabel?.trim() || MEETING_PROCESS_LABEL[process.phase],
+      )
+    : null;
+  const queueHint =
+    waiting && typeof process?.queueAhead === "number"
+      ? process.queueAhead <= 0
+        ? "곧 시작"
+        : `앞 ${process.queueAhead}건`
+      : null;
 
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-3 px-6 py-4 transition-colors hover:bg-surface/70 sm:gap-4 sm:py-5",
+        "group relative flex min-h-[5.5rem] items-center gap-3 py-6 transition-colors hover:bg-surface/70 sm:min-h-[6.25rem] sm:gap-4 sm:py-8",
         selecting && checked && "bg-primary-soft/40",
       )}
     >
@@ -962,7 +1024,11 @@ function MeetingRecordListItem({
         <Link
           href={href}
           className="absolute inset-0 z-0"
-          aria-label={`${meeting.title} 보기`}
+          aria-label={
+            process
+              ? `${meeting.title}, ${waiting ? "대기 중" : `진행 ${percent}퍼센트`}`
+              : `${meeting.title} 보기`
+          }
         />
       )}
 
@@ -980,50 +1046,68 @@ function MeetingRecordListItem({
         </span>
       ) : null}
 
-      <div className="relative z-10 pointer-events-none flex min-w-[8.5rem] shrink-0 flex-col justify-center sm:min-w-[10rem]">
-        <p className="whitespace-nowrap text-lg font-semibold leading-6 tracking-tight text-foreground">
-          <span className="font-medium text-muted">{day}</span>{" "}
-          <span className="tabular-nums">{time}</span>
+      {/* leading: 시간만 (날짜는 그룹 헤더) */}
+      <div className="relative z-10 w-[4.75rem] shrink-0 pointer-events-none sm:w-[5.25rem]">
+        <p className="text-lg tabular-nums leading-6 tracking-tight text-foreground">
+          {time}
         </p>
-        {recent ? (
-          <p className="mt-1 text-base font-medium leading-5 text-muted-2">
-            {recent}
-          </p>
-        ) : null}
       </div>
 
       <div className="relative z-10 min-w-0 flex-1 pointer-events-none">
-        <div className="flex flex-col gap-2">
-          <MeetingCaptureOverline meeting={meeting} />
-          <p
-            className="min-w-0 truncate text-lg font-semibold leading-6 tracking-tight text-foreground group-hover:text-primary"
-            title={meeting.title}
-          >
-            {meeting.title}
-          </p>
-          <MeetingKeywords meeting={meeting} />
-          {showPeopleDensity ? (
-            <div className="pointer-events-auto pt-0.5">
-              <ParticipantsCell
-                participants={meeting.participants}
-                showCount
-              />
+        {process ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p
+                className="min-w-0 truncate text-lg font-semibold leading-none tracking-tight text-foreground group-hover:text-primary"
+                title={meeting.title}
+              >
+                {meeting.title}
+              </p>
+              <p className="mt-2 truncate text-base text-muted">
+                {[stage, queueHint].filter(Boolean).join(" · ")}
+              </p>
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <div className="flex min-w-0 items-center gap-3">
+            <MeetingCaptureIcon
+              meeting={meeting}
+              size="lg"
+              className="shrink-0"
+            />
+            <div className="min-w-0 flex-1">
+              <p
+                className="min-w-0 truncate text-lg font-semibold leading-none tracking-tight text-foreground group-hover:text-primary"
+                title={meeting.title}
+              >
+                {meeting.title}
+              </p>
+              <div className="mt-2 flex flex-col gap-2">
+                <MeetingKeywords meeting={meeting} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="relative z-10 pointer-events-none flex shrink-0 flex-col items-end justify-center gap-1 self-stretch pl-1">
-        <span className="text-base font-medium tabular-nums text-muted">
-          {meeting.duration}
-        </span>
-        {!selecting ? (
-          <ArrowRight
-            className="h-4 w-4 text-foreground/35"
-            strokeWidth={2}
-            absoluteStrokeWidth
+      <div className="relative z-10 pointer-events-none flex shrink-0 items-center self-center">
+        {process ? (
+          <span
+            className={cn(
+              "min-w-[2.75rem] text-right text-base font-semibold tabular-nums tracking-tight",
+              waiting ? "text-muted" : "text-primary",
+            )}
             aria-hidden
-          />
+          >
+            {waiting ? "대기" : `${percent}%`}
+          </span>
+        ) : !selecting ? (
+          <span
+            className="inline-flex h-12 w-12 items-center justify-center text-foreground opacity-0 transition-opacity group-hover:opacity-100 max-md:hidden"
+            aria-hidden
+          >
+            <ArrowRight className="h-5 w-5" strokeWidth={2.25} />
+          </span>
         ) : null}
       </div>
     </div>

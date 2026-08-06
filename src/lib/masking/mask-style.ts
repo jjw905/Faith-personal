@@ -35,16 +35,13 @@ export function labelFor(type: PiiType): string {
 
 /**
  * 매치들의 치환 표기를 스타일에 맞춰 통일.
- * - label: 모두 [유형] 토큰
- * - partial: 라벨 토큰으로 되어있는 것만 부분 별표로 변환(이미 부분표기는 유지)
+ * - partial: [유형] 토큰이 있으면 부분 별표로 변환(이미 부분표기는 유지)
+ * - off: 가림 없음
  */
 export function applyStyle(matches: PiiMatch[], style: MaskStyle): PiiMatch[] {
   if (style === "off") return [];
   return matches.map((m) => {
     if (m.type === "bank") return m;
-    if (style === "label") {
-      return { ...m, replacement: labelFor(m.type) };
-    }
     if (/^\[[^\]]+\]$/.test(m.replacement)) {
       return { ...m, replacement: partialFor(m.type, m.value) };
     }

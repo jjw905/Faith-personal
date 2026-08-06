@@ -53,6 +53,7 @@ export type TranscriptLine = {
   time: string;
   /**
    * 소수점까지 살린 시작 시각(초). 재생 동기화는 이 값을 쓴다.
+   * 단어 실측 시각이 있으면 그 첫 단어를 우선하고, 없을 때 이 값을 쓴다.
    * time은 초 단위로 내림한 표시용이라 늘 0~1초 먼저 넘어간다.
    */
   startSec?: number;

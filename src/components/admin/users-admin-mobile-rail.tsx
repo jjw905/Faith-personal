@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useNotificationsUi } from "@/context/notifications-ui-context";
 
 export type UsersAdminMobilePane =
   | "users"
@@ -52,6 +53,7 @@ export function UsersAdminMobileRail({
   onChange: (next: UsersAdminMobilePane) => void;
 }) {
   const mounted = useMounted();
+  const { open: notificationsOpen } = useNotificationsUi();
   const trackRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<Partial<Record<UsersAdminMobilePane, HTMLButtonElement>>>(
     {},
@@ -81,7 +83,7 @@ export function UsersAdminMobileRail({
     return () => window.removeEventListener("resize", onResize);
   }, [active]);
 
-  if (!mounted) return null;
+  if (!mounted || notificationsOpen) return null;
 
   return createPortal(
     <nav

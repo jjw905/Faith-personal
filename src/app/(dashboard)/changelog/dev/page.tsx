@@ -1,5 +1,5 @@
 import { DevChangelogEditor } from "@/components/changelog/dev-changelog-editor";
-import { PageContainer } from "@/components/layout/page-container";
+import { AdminPageChrome } from "@/components/admin/admin-page-chrome";
 import { requireAdmin } from "@/lib/admin";
 import { getDevChangelogState } from "@/lib/changelog-store";
 
@@ -9,10 +9,8 @@ export default async function DevChangelogPage() {
   const state = await getDevChangelogState();
 
   return (
-    <PageContainer soft>
-      <div className="mx-auto w-full max-w-3xl">
-        <DevChangelogEditor initialState={state} />
-      </div>
-    </PageContainer>
+    <AdminPageChrome title="Changelog" maxWidth="max-w-3xl">
+      <DevChangelogEditor initialState={state} />
+    </AdminPageChrome>
   );
 }

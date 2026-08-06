@@ -151,7 +151,7 @@ export function UserAdminChangeDialog({
             placeholder="변경 사유를 입력하세요"
             className="mt-1.5 w-full resize-none rounded-xl bg-surface-2 px-3 py-2.5 text-base text-foreground outline-none placeholder:text-muted-2 focus:bg-[#dcdee4]"
           />
-          <span className="mt-1.5 block text-sm font-normal text-muted">
+          <span className="mt-1.5 block text-base font-normal text-muted">
             {reason.trim().length}/{REASON_MIN_LENGTH}자 이상
           </span>
         </label>
@@ -183,7 +183,7 @@ export function UserAdminChangeDialog({
                       }
                     }}
                     className={cn(
-                      "inline-flex h-8 items-center rounded-full px-3 text-base font-semibold transition-colors",
+                      "inline-flex min-h-12 items-center rounded-full px-3 text-base font-semibold transition-colors",
                       active
                         ? "bg-primary text-primary-foreground"
                         : "text-muted ring-1 ring-inset ring-border-strong hover:bg-surface hover:text-foreground",
@@ -202,7 +202,7 @@ export function UserAdminChangeDialog({
                   value={customDate}
                   min={toDateInputValue(new Date())}
                   onChange={(e) => setCustomDate(e.target.value)}
-                  className="mt-1.5 block h-11 w-full rounded-xl bg-surface-2 px-3 text-base text-foreground outline-none focus:bg-[#dcdee4]"
+                  className="mt-1.5 block h-14 w-full rounded-xl bg-surface-2 px-3 text-base text-foreground outline-none focus:bg-[#dcdee4] md:h-12"
                 />
               </label>
             ) : (
@@ -236,7 +236,7 @@ export function UserAdminChangeDialog({
             type="button"
             onClick={onCancel}
             disabled={pending}
-            className="inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold text-muted ring-1 ring-inset ring-border-strong hover:bg-surface hover:text-foreground disabled:opacity-50"
+            className="inline-flex min-h-12 items-center rounded-full px-4 text-base font-semibold text-muted ring-1 ring-inset ring-border-strong hover:bg-surface hover:text-foreground disabled:opacity-50"
           >
             취소
           </button>
@@ -253,7 +253,7 @@ export function UserAdminChangeDialog({
               })
             }
             className={cn(
-              "inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold disabled:opacity-40",
+              "inline-flex min-h-12 items-center rounded-full px-4 text-base font-semibold disabled:opacity-40",
               suspendDanger
                 ? "bg-red-600 text-white hover:bg-red-700"
                 : "bg-primary text-primary-foreground",

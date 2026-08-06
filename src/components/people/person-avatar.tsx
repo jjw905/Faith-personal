@@ -20,7 +20,6 @@ export function PersonAvatar({
         size === "sm" && "h-8 w-8",
         size === "md" && "h-9 w-9",
         size === "lg" && "h-14 w-14",
-        "border-2 border-card",
         className,
       )}
     >

@@ -54,7 +54,7 @@ function BillingSwitch({
           aria-pressed={value === "monthly"}
           onClick={() => onChange("monthly")}
           className={cn(
-            "min-h-9 flex-1 rounded-full px-3 text-base font-semibold transition-colors duration-200",
+            "min-h-12 flex-1 rounded-full px-3 text-base font-semibold transition-colors duration-200",
             value === "monthly"
               ? "bg-primary text-primary-foreground"
               : "text-foreground/70 hover:text-foreground",
@@ -67,7 +67,7 @@ function BillingSwitch({
           aria-pressed={value === "yearly"}
           onClick={() => onChange("yearly")}
           className={cn(
-            "min-h-9 flex-1 rounded-full px-3 text-base font-semibold transition-colors duration-200",
+            "min-h-12 flex-1 rounded-full px-3 text-base font-semibold transition-colors duration-200",
             value === "yearly"
               ? "bg-primary text-primary-foreground"
               : "text-foreground/70 hover:text-foreground",
@@ -78,7 +78,7 @@ function BillingSwitch({
       </div>
       <p
         className={cn(
-          "min-h-5 text-sm font-semibold transition-opacity",
+          "min-h-5 text-base font-semibold transition-opacity",
           value === "yearly" ? "text-primary opacity-100" : "opacity-0",
         )}
       >
@@ -141,7 +141,7 @@ function TierCard({
             {badges.map((label) => (
               <span
                 key={label}
-                className="whitespace-nowrap rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground"
+                className="whitespace-nowrap rounded-full bg-primary px-3 py-1 text-base font-semibold text-primary-foreground"
               >
                 {label}
               </span>
@@ -163,7 +163,7 @@ function TierCard({
           </span>
         ) : null}
       </div>
-      <p className="mt-1.5 min-h-5 text-sm font-medium text-muted-2">{note}</p>
+      <p className="mt-1.5 min-h-5 text-base font-medium text-muted-2">{note}</p>
 
       {locked ? (
         <span
@@ -236,7 +236,7 @@ function TopupPacks() {
   return (
     <div className="mx-auto mt-10 w-full max-w-lg lg:max-w-5xl">
       <div className="mx-auto max-w-2xl text-center">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+        <h2 className="break-keep text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           필요할 때 추가하는 시간
         </h2>
       </div>
@@ -257,7 +257,7 @@ function TopupPacks() {
                   {formatTopupDuration(pack.minutes)}
                 </p>
                 {pack.badge ? (
-                  <span className="shrink-0 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-base font-semibold text-primary-foreground">
                     {pack.badge}
                   </span>
                 ) : null}
@@ -288,7 +288,7 @@ function TopupPacks() {
         })}
       </div>
 
-      <p className="mt-4 text-center text-sm font-medium leading-snug text-muted-2">
+      <p className="mt-4 text-center text-base font-medium leading-snug text-muted-2">
         사용 시간을 다 썼을 때 고르는 선불 이용 시간입니다.
         {" "}
         유효기간 12개월 · 구독과 별도 · 잔여 시간에 합산
@@ -305,7 +305,7 @@ export function PricingTiers() {
     <section className="py-12 sm:py-16 xl:py-20">
       <Container>
         <div className="mx-auto max-w-2xl text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl xl:text-5xl">
+          <h1 className="break-keep text-3xl font-bold tracking-tight text-foreground sm:text-4xl xl:text-5xl">
             나의 방식에 맞는 요금제를 골라보세요.
           </h1>
         </div>

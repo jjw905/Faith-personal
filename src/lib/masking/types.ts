@@ -27,8 +27,8 @@ export interface PiiMatch {
   source?: "rule" | "ner";
 }
 
-/** 마스킹 표기: 전체 토큰([유형]), 부분 별표(앞**뒤), 가리지 않음 */
-export type MaskStyle = "label" | "partial" | "off";
+/** 마스킹 표기: 부분 별표(앞**뒤) 또는 가리지 않음 */
+export type MaskStyle = "partial" | "off";
 
 export interface MaskOptions {
   /**

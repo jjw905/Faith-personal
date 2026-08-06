@@ -23,8 +23,6 @@ export type WorkspaceProfile = Workspace & {
   /** 설정 페이지 제목 */
   settingsTitle: string;
   settingsDescription: string;
-  /** 예정/기록에서 참석자·인원 강조 여부 */
-  showPeopleDensity: boolean;
 };
 
 const PROFILES: Record<WorkspaceId, WorkspaceProfile> = {
@@ -45,7 +43,6 @@ const PROFILES: Record<WorkspaceId, WorkspaceProfile> = {
     settingsTitle: "팀 설정",
     settingsDescription:
       "구성원, 보안, 기록 접근 등 팀 운영 설정을 관리합니다.",
-    showPeopleDensity: true,
   },
   personal: {
     id: "personal",
@@ -54,17 +51,16 @@ const PROFILES: Record<WorkspaceId, WorkspaceProfile> = {
     meetingHeadline: "개인 회의",
     ctaStart: "새 회의 시작",
     ctaUpload: "파일 올리기",
-    upcomingTitle: "개인 일정",
+    upcomingTitle: "일정",
     upcomingEmpty: "잡혀 있는 개인 일정이 없습니다.",
     upcomingAddLabel: "일정 추가",
-    recordsTitle: "개인 기록",
-    recordsEmpty: "이 기간에 해당하는 개인 회의 기록이 없습니다.",
-    searchPlaceholder: "개인 회의 검색",
+    recordsTitle: "기록",
+    recordsEmpty: "이 기간에 해당하는 기록이 없습니다.",
+    searchPlaceholder: "회의 검색",
     settingsNavTitle: "개인 설정",
     settingsTitle: "개인 설정",
     settingsDescription:
       "개인 기록에 적용할 마스킹, 요약 등 기본 설정을 관리합니다.",
-    showPeopleDensity: false,
   },
 };
 

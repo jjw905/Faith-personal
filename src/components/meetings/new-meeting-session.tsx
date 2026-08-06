@@ -37,6 +37,7 @@ import { MaskedText } from "@/components/meetings/masked-text";
 import { CorrectionHint } from "@/components/meetings/correction-hint";
 import { MaskStylePopup } from "@/components/meetings/mask-style-picker";
 import { PersonalRealtimeStartDialog } from "@/components/meetings/personal-realtime-start-dialog";
+import { RecordBeatBars } from "@/components/meetings/record-beat-bars";
 import { VaultPickerDialog } from "@/components/vault/vault-picker";
 import { useAppContext } from "@/context/app-context";
 import { useAccountDisplayPrefs } from "@/hooks/use-account-display-prefs";
@@ -48,6 +49,7 @@ import {
   type BrowserRealtimeUtterance,
 } from "@/hooks/use-realtime-transcription";
 import { maskPii, type MaskStyle } from "@/lib/masking";
+import { vaultFileExtLabel } from "@/lib/vault-file-icon";
 import { cn } from "@/lib/utils";
 import type { TranscriptCorrection } from "@/types/transcript";
 import type { VaultItemMeta } from "@/lib/vault";
@@ -194,7 +196,7 @@ function FileAttachmentCard({
   isMe: boolean;
   isTest?: boolean;
 }) {
-  const ext = (name.split(".").pop() ?? "file").toUpperCase();
+  const ext = vaultFileExtLabel(name) || "file";
 
   return (
     <div
@@ -367,7 +369,7 @@ type MeetingMemo = {
   caution: string;
 };
 
-const DEFAULT_MEETING_TITLE = "새 기록";
+const DEFAULT_MEETING_TITLE = "실시간 회의";
 
 let memoLineSeq = 0;
 function createMemoLine(text: string): MemoLine {
@@ -575,17 +577,7 @@ function MobileFabButton({
   );
 }
 
-export function RecordBeatBars() {
-  return (
-    <span className="record-beat-bars text-white" aria-hidden>
-      <span />
-      <span />
-      <span />
-      <span />
-      <span />
-    </span>
-  );
-}
+export { RecordBeatBars } from "@/components/meetings/record-beat-bars";
 
 export function AttachMenuPopup({
   open,
@@ -704,14 +696,14 @@ export function ResetConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 cursor-pointer items-center justify-center rounded-xl px-4 text-sm font-semibold text-foreground transition-colors hover:bg-surface-2"
+            className="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface-2"
           >
             취소
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="inline-flex h-10 cursor-pointer items-center justify-center rounded-xl bg-masked px-4 text-sm font-bold text-white transition-opacity hover:opacity-90"
+            className="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-xl bg-masked px-4 text-base font-bold text-white transition-opacity hover:opacity-90"
           >
             초기화
           </button>
@@ -1805,7 +1797,7 @@ export function NewMeetingSession() {
                 >
                   {isRecording ? (
                     <>
-                      <RecordBeatBars />
+                      <RecordBeatBars className="text-white" />
                       <span className="text-[12px] font-bold tracking-tight">
                         회의 녹음중
                       </span>

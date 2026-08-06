@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronLeft } from "lucide-react";
 
 import { FIXTURE_MEETING } from "@/components/design/fixtures";
 import { ReplayStage } from "@/components/design/preview-stage";
@@ -15,7 +13,7 @@ import {
   MeetingTitleHeading,
 } from "@/components/meetings/meeting-record-actions";
 import { MeetingCaptureChip } from "@/components/meetings/meeting-capture-label";
-import { Button } from "@/components/ui/button";
+import { MeetingRecordLayout } from "@/components/meetings/meeting-record-layout";
 
 /** 구간별 ease로 1→100 느낌을 다양하게. */
 function segmentEase(t: number) {
@@ -78,59 +76,31 @@ function DetailChrome({
   const failed = phase === "error";
 
   return (
-    <div className="h-full min-h-full bg-white">
-      <div
-        className={
-          active || failed
-            ? "mx-auto flex h-full min-h-full max-w-3xl flex-col px-4 py-6 sm:px-6"
-            : "mx-auto h-full min-h-full max-w-3xl px-4 py-6 sm:px-6"
+    <div className="h-full min-h-full overflow-y-auto bg-white">
+      <MeetingRecordLayout
+        backAlwaysVisible
+        fillHeight={active || failed}
+        headerCenter={
+          <MeetingDateTimeMeta
+            meetingId={meeting.id}
+            date={meeting.date}
+            duration={meeting.duration}
+            canEdit={false}
+            variant="header"
+          />
+        }
+        title={
+          <div className="flex min-w-0 items-center gap-3">
+            <MeetingTitleHeading
+              meetingId={meeting.id}
+              title={meeting.title}
+              canEdit={false}
+              className="min-w-0 flex-1"
+            />
+            <MeetingCaptureChip meeting={meeting} className="shrink-0" />
+          </div>
         }
       >
-        <div className="shrink-0">
-          <Button
-            asChild
-            variant="ghost"
-            className="-ml-2 mb-3 h-12 gap-1.5 px-2 text-base font-semibold md:h-9 md:px-2.5 md:text-sm"
-          >
-            <Link href="/dashboard">
-              <ChevronLeft className="h-5 w-5" strokeWidth={1.75} />
-              돌아가기
-            </Link>
-          </Button>
-
-          <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5">
-            <div
-              className="pointer-events-none invisible h-12 w-[6.5rem] shrink-0 md:h-9 md:w-[4.75rem]"
-              aria-hidden
-            />
-            <div className="flex min-w-0 items-center justify-center justify-self-stretch px-1">
-              <MeetingDateTimeMeta
-                meetingId={meeting.id}
-                date={meeting.date}
-                duration={meeting.duration}
-                canEdit={false}
-                variant="header"
-              />
-            </div>
-            <div
-              className="pointer-events-none invisible h-12 w-[6.5rem] shrink-0 md:h-9 md:w-[4.75rem]"
-              aria-hidden
-            />
-          </div>
-
-          <div className="mt-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <MeetingTitleHeading
-                meetingId={meeting.id}
-                title={meeting.title}
-                canEdit={false}
-                className="min-w-0 flex-1"
-              />
-              <MeetingCaptureChip meeting={meeting} className="shrink-0" />
-            </div>
-          </div>
-        </div>
-
         <section
           className={
             active || failed
@@ -146,7 +116,7 @@ function DetailChrome({
             stageLabel={stageLabel}
           />
         </section>
-      </div>
+      </MeetingRecordLayout>
     </div>
   );
 }
@@ -259,15 +229,12 @@ export function SceneMeetingStructuring() {
 
 export function SceneMeetingError() {
   return (
-    <ReplayStage
-      hint="회의 상세 전체 화면, 실패 상태."
-      fill
-      autoReplayMs={3200}
-    >
+    <ReplayStage hint="회의 상세, 분석 실패." fill>
       {() => (
         <DetailChrome
           phase="error"
           error="보관함 파일을 찾을 수 없습니다."
+          progressPercent={40}
         />
       )}
     </ReplayStage>

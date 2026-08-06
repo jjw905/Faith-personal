@@ -15,6 +15,7 @@ import {
 import {
   DocsFloatChrome,
   DocsScrollTopFab,
+  isDocsTitleChromeGone,
   useDocsFloatBox,
 } from "@/components/docs/docs-float-tools";
 import {
@@ -93,7 +94,7 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
   const syncFloatChrome = useCallback(() => {
     const chrome = chromeRef.current;
     if (!chrome) return;
-    setShowFloatChrome(chrome.getBoundingClientRect().bottom < 12);
+    setShowFloatChrome(isDocsTitleChromeGone(chrome));
   }, []);
 
   useEffect(() => {
@@ -268,10 +269,10 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
               <div className="flex flex-col gap-6 pb-32 md:flex-row md:gap-8 md:pb-0 lg:gap-12">
                 <DocsDesktopToc
                   ariaLabel={`${meta.title} 목차`}
-                  stickyTopClass={showFloatChrome ? "md:top-20" : "md:top-4"}
+                  stickyTopClass={showFloatChrome ? "md:top-24" : "md:top-4"}
                 >
                   <div className="space-y-1">
-                    <p className="px-2 text-sm font-semibold tracking-wide text-muted-2">
+                    <p className="px-2 text-base font-semibold tracking-wide text-muted-2">
                       {searching ? "검색 결과" : "목차"}
                     </p>
                     {(searching ? results : sections).length === 0 ? (
@@ -294,7 +295,7 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
 
                 <div className="min-w-0 flex-1">
                   {searching && results.length === 0 ? (
-                    <p className="text-sm text-muted">
+                    <p className="text-base text-muted">
                       다른 검색어로 다시 시도해 보세요.
                     </p>
                   ) : (

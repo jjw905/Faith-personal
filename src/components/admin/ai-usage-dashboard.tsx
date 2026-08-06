@@ -9,12 +9,7 @@ import {
   Users,
 } from "lucide-react";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AdminSection } from "@/components/admin/admin-section";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   fixtureAiUsageEmpty,
@@ -23,9 +18,6 @@ import {
 import { seoulDateKey, seoulDateKeyDaysAgo } from "@/lib/meeting-date";
 import type { AiUsageSummary } from "@/lib/stt/usage-store";
 import { cn } from "@/lib/utils";
-
-const CARD_SHADOW =
-  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
 
 /** Faith tokens only (primary / success / muted). */
 const COLORS = {
@@ -340,7 +332,7 @@ export function AiUsageDashboard({
 
   if (scenarioId === "loading") {
     return (
-      <div className={cn("grid min-h-56 place-items-center bg-card", CARD_SHADOW)}>
+      <div className="grid min-h-56 place-items-center">
         <LoaderCircle
           className="h-6 w-6 animate-spin text-muted"
           aria-label="불러오는 중"
@@ -374,97 +366,95 @@ export function AiUsageDashboard({
   const visibleRecent = viewSummary.recent.slice(0, recentPage.visible);
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card className={CARD_SHADOW}>
-        <CardContent className="flex flex-col gap-3 px-5 py-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div
-              className="inline-flex max-w-full flex-wrap rounded-xl bg-surface p-1"
-              role="group"
-              aria-label="기간"
-            >
-              {RANGE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.key}
-                  type="button"
-                  onClick={() => setRange(opt.key)}
-                  className={cn(
-                    "min-h-12 cursor-pointer rounded-lg px-3 py-2 text-base font-semibold transition-colors",
-                    range === opt.key
-                      ? "bg-card text-foreground shadow-soft"
-                      : "text-muted hover:text-foreground",
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="relative block w-full min-w-0 max-w-[15rem] flex-1">
-                <Users
-                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted"
-                  strokeWidth={1.75}
-                />
-                <select
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  aria-label="사용자"
-                  className="h-12 w-full appearance-none rounded-xl bg-card py-2 pl-11 pr-8 text-base font-medium text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="all">전체 사용자</option>
-                  {viewUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div
+            className="inline-flex max-w-full flex-wrap gap-1"
+            role="group"
+            aria-label="기간"
+          >
+            {RANGE_OPTIONS.map((opt) => (
               <button
+                key={opt.key}
                 type="button"
-                onClick={() => void refresh()}
-                disabled={loading}
-                aria-label="새로고침"
-                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface text-foreground transition-colors hover:bg-surface-2 disabled:opacity-60"
+                onClick={() => setRange(opt.key)}
+                className={cn(
+                  "min-h-12 cursor-pointer rounded-xl bg-transparent px-3 py-2 text-base font-semibold transition-colors",
+                  range === opt.key
+                    ? "text-foreground ring-1 ring-inset ring-border-strong"
+                    : "text-muted hover:bg-surface/70 hover:text-foreground",
+                )}
               >
-                <RefreshCw
-                  className={cn("h-4 w-4", loading && "animate-spin")}
-                  strokeWidth={1.75}
-                />
+                {opt.label}
               </button>
-            </div>
+            ))}
           </div>
 
-          {range === "custom" ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
-                className="h-12 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
-                aria-label="시작일"
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative block w-full min-w-0 max-w-[15rem] flex-1">
+              <Users
+                className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted"
+                strokeWidth={1.75}
               />
-              <span className="text-base text-muted">~</span>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
-                className="h-12 rounded-xl bg-card px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
-                aria-label="종료일"
+              <select
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                aria-label="사용자"
+                className="h-12 w-full appearance-none rounded-xl bg-transparent py-2 pl-11 pr-8 text-base font-medium text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="all">전체 사용자</option>
+                {viewUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={loading}
+              aria-label="새로고침"
+              className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:bg-surface/70 disabled:opacity-60"
+            >
+              <RefreshCw
+                className={cn("h-4 w-4", loading && "animate-spin")}
+                strokeWidth={1.75}
               />
-            </div>
-          ) : null}
+            </button>
+          </div>
+        </div>
 
-          {fx ? (
-            <p className="text-sm text-muted">
-              일별 환율 적용, $1 = ₩{formatRate(fx.latestRate)} (
-              {formatShortDate(fx.latestAsOf)})
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+        {range === "custom" ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-12 rounded-xl bg-transparent px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+              aria-label="시작일"
+            />
+            <span className="text-base text-muted">~</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="h-12 rounded-xl bg-transparent px-3 text-base text-foreground ring-1 ring-border outline-none focus:ring-2 focus:ring-primary"
+              aria-label="종료일"
+            />
+          </div>
+        ) : null}
 
-      <SectionCard title="요약" description="선택한 조건의 추정 비용과 사용량입니다.">
+        {fx ? (
+          <p className="text-base text-muted">
+            일별 환율 적용, $1 = ₩{formatRate(fx.latestRate)} (
+            {formatShortDate(fx.latestAsOf)})
+          </p>
+        ) : null}
+      </div>
+
+      <AdminSection title="요약" description="선택한 조건의 추정 비용과 사용량입니다.">
         <div className="grid grid-cols-2 divide-y divide-border lg:grid-cols-4 lg:divide-x lg:divide-y-0">
           <StatCell
             label="추정 비용"
@@ -498,26 +488,24 @@ export function AiUsageDashboard({
             }
           />
         </div>
-      </SectionCard>
+      </AdminSection>
 
       {empty ? (
-        <Card className={CARD_SHADOW}>
-          <CardContent className="px-6 py-16 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
-              <Gauge className="h-5 w-5" strokeWidth={1.75} />
-            </div>
-            <p className="text-lg font-semibold text-foreground">
-              선택한 조건에 기록이 없습니다
-            </p>
-            <p className="mx-auto mt-2 max-w-md text-base text-muted">
-              기간이나 사용자를 바꾸거나, 회의를 처리하면 여기에 쌓입니다.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="px-2 py-16 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center text-primary">
+            <Gauge className="h-7 w-7" strokeWidth={1.75} />
+          </div>
+          <p className="text-lg font-semibold text-foreground">
+            선택한 조건에 기록이 없습니다
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-base text-muted">
+            기간이나 사용자를 바꾸거나, 회의를 처리하면 여기에 쌓입니다.
+          </p>
+        </div>
       ) : (
         <>
           {showUserList ? (
-            <SectionCard
+            <AdminSection
               title="사용자별"
               description={`${viewSummary.byUser.length}명, 비용 높은 순`}
             >
@@ -567,11 +555,11 @@ export function AiUsageDashboard({
                 onMore={() => usersPage.showMore(viewSummary.byUser.length)}
                 onCollapse={usersPage.collapse}
               />
-            </SectionCard>
+            </AdminSection>
           ) : null}
 
           <div className="grid gap-6 lg:grid-cols-5">
-            <SectionCard
+            <AdminSection
               className="lg:col-span-3"
               title="일별 추정 비용"
               description={`받아쓰기 + 정리, ${viewSummary.byDay.length}일`}
@@ -633,9 +621,9 @@ export function AiUsageDashboard({
                   { label: "정리", color: COLORS.structure },
                 ]}
               />
-            </SectionCard>
+            </AdminSection>
 
-            <SectionCard
+            <AdminSection
               className="lg:col-span-2"
               title="비용 비중"
               description="받아쓰기와 정리 비율"
@@ -681,11 +669,11 @@ export function AiUsageDashboard({
                   </ul>
                 </div>
               )}
-            </SectionCard>
+            </AdminSection>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <SectionCard
+            <AdminSection
               title="일별 토큰"
               description={`입력 + 출력, ${viewSummary.byDay.length}일`}
             >
@@ -748,9 +736,9 @@ export function AiUsageDashboard({
                   { label: "출력", color: COLORS.tokensOut },
                 ]}
               />
-            </SectionCard>
+            </AdminSection>
 
-            <SectionCard
+            <AdminSection
               title="모델별"
               description={`단계·모델 비용, ${viewSummary.byModel.length}종`}
             >
@@ -809,13 +797,13 @@ export function AiUsageDashboard({
                   />
                 </>
               )}
-            </SectionCard>
+            </AdminSection>
           </div>
 
-          <details className={cn(CARD_SHADOW, "group bg-card")}>
-            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
+          <details className="group">
+            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 py-4 [&::-webkit-details-marker]:hidden">
               <span className="min-w-0">
-                <span className="text-xl font-bold tracking-tight text-foreground">
+                <span className="text-xl font-semibold tracking-tight text-foreground">
                   최근 호출
                 </span>
                 <span className="ml-2 text-base font-medium text-muted">
@@ -827,30 +815,30 @@ export function AiUsageDashboard({
                 strokeWidth={1.75}
               />
             </summary>
-            <div className="border-t border-border px-6 pb-5 pt-4">
+            <div className="border-t border-border pb-5 pt-4">
             {viewSummary.recent.length === 0 ? (
               <EmptyChart />
             ) : (
               <>
                 <div className="-mx-1 max-h-[min(28rem,70vh)] overflow-auto sm:mx-0">
                   <table className="w-full min-w-[720px] text-left text-base">
-                    <thead className="sticky top-0 z-10 bg-card">
+                    <thead className="sticky top-0 z-10 bg-background">
                       <tr className="border-b border-border text-base text-muted">
-                        <th className="bg-card py-3 pr-3 text-center font-semibold">
+                        <th className="bg-background py-3 pr-3 text-center font-semibold">
                           시각
                         </th>
-                        <th className="bg-card py-3 pr-3 font-semibold">단계</th>
-                        <th className="bg-card py-3 pr-3 font-semibold">모델</th>
+                        <th className="bg-background py-3 pr-3 font-semibold">단계</th>
+                        <th className="bg-background py-3 pr-3 font-semibold">모델</th>
                         {userId === "all" ? (
-                          <th className="bg-card py-3 pr-3 font-semibold">
+                          <th className="bg-background py-3 pr-3 font-semibold">
                             사용자
                           </th>
                         ) : null}
-                        <th className="bg-card py-3 pr-3 font-semibold">회의</th>
-                        <th className="bg-card py-3 pr-3 text-center font-semibold">
+                        <th className="bg-background py-3 pr-3 font-semibold">회의</th>
+                        <th className="bg-background py-3 pr-3 text-center font-semibold">
                           토큰
                         </th>
-                        <th className="bg-card py-3 text-center font-semibold">
+                        <th className="bg-background py-3 text-center font-semibold">
                           비용
                         </th>
                       </tr>
@@ -909,33 +897,6 @@ export function AiUsageDashboard({
         </>
       )}
     </div>
-  );
-}
-
-function SectionCard({
-  title,
-  description,
-  children,
-  className,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <Card className={cn(CARD_SHADOW, className)}>
-      <CardHeader className="space-y-0 px-6 pb-0 pt-6">
-        <CardTitle className="text-xl font-bold tracking-tight">
-          {title}
-        </CardTitle>
-        {description ? (
-          <p className="mt-1.5 text-base font-medium text-muted">{description}</p>
-        ) : null}
-        <div className="mt-3 h-0.5 w-full bg-foreground" aria-hidden />
-      </CardHeader>
-      <CardContent className="px-6 pb-5 pt-1">{children}</CardContent>
-    </Card>
   );
 }
 

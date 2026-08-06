@@ -46,9 +46,7 @@ export function DuplicateVaultNameDialog({
     <div
       className={cn(
         "flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4",
-        contained
-          ? "absolute inset-0 z-10"
-          : "fixed inset-0 z-[70]",
+        contained ? "absolute inset-0 z-10" : "fixed inset-0 z-[70]",
       )}
       role="presentation"
       onClick={blockDismiss ? undefined : onCancel}
@@ -58,12 +56,12 @@ export function DuplicateVaultNameDialog({
         aria-modal="true"
         aria-labelledby="vault-dup-title"
         aria-describedby="vault-dup-desc"
-        className="w-full max-w-md rounded-t-3xl bg-card p-6 shadow-float sm:rounded-3xl sm:p-7"
+        className="w-full max-w-md rounded-t-3xl bg-card px-5 pt-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] shadow-float sm:rounded-3xl sm:px-7 sm:pt-7 sm:pb-6"
         onClick={(event) => event.stopPropagation()}
       >
         <h2
           id="vault-dup-title"
-          className="text-lg font-bold tracking-tight text-foreground"
+          className="text-xl font-bold tracking-tight text-foreground sm:text-lg"
         >
           중복 파일
         </h2>
@@ -74,13 +72,11 @@ export function DuplicateVaultNameDialog({
           같은 이름이 보관함에 있습니다. 새 이름으로 올릴까요?
         </p>
 
-        <div className="mt-6 space-y-5">
+        <div className="mt-5 space-y-4">
           <div>
-            <p className="text-sm font-bold tracking-wide text-primary">
-              올릴 파일
-            </p>
+            <p className="text-base font-semibold text-primary">올릴 파일</p>
             <p
-              className="mt-2 break-all text-lg font-bold leading-relaxed tracking-tight text-foreground"
+              className="mt-1.5 break-all text-lg font-semibold leading-relaxed tracking-tight text-foreground"
               title={nextName}
             >
               {nextName}
@@ -88,11 +84,9 @@ export function DuplicateVaultNameDialog({
           </div>
 
           <div>
-            <p className="text-sm font-bold tracking-wide text-foreground">
-              기존
-            </p>
+            <p className="text-base font-semibold text-muted">기존</p>
             <p
-              className="mt-2 break-all text-base font-medium leading-relaxed text-muted"
+              className="mt-1.5 break-all text-base font-medium leading-relaxed text-muted"
               title={originalName}
             >
               {originalName}
@@ -100,12 +94,12 @@ export function DuplicateVaultNameDialog({
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:mt-7 sm:flex-row sm:justify-end sm:gap-2.5">
           <button
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-2xl px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:min-h-0 sm:w-auto sm:rounded-xl"
           >
             취소
           </button>
@@ -113,7 +107,7 @@ export function DuplicateVaultNameDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-xl bg-primary px-5 text-base font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-2xl bg-primary px-4 text-base font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:min-h-0 sm:w-auto sm:rounded-xl"
           >
             올리기
           </button>

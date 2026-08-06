@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, Check, ChevronDown, Gift } from "lucide-react";
+import { ArrowUpRight, Check, Gift } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -116,7 +116,7 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
           <p className="text-base font-semibold text-muted">잔여 시간</p>
           <span
             className={cn(
-              "inline-flex min-h-8 items-center rounded-full px-3 text-sm font-semibold",
+              "inline-flex min-h-10 items-center rounded-full px-3 text-base font-semibold",
               TIER_BADGE[tier],
             )}
           >
@@ -180,7 +180,7 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
                 <Button
                   asChild
                   size="sm"
-                  className="h-10 shrink-0 rounded-full px-4 text-sm"
+                  className="min-h-12 shrink-0 rounded-full px-4 text-base md:h-10 md:min-h-10 md:text-sm"
                 >
                   <Link href="/survey" className="inline-flex items-center gap-1.5 whitespace-nowrap">
                     <Gift className="h-4 w-4" strokeWidth={1.75} />
@@ -229,7 +229,7 @@ function TopupPacksCard() {
                   {durationLabel}
                 </p>
                 {pack.badge ? (
-                  <span className="shrink-0 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-sm font-semibold text-primary-foreground">
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-primary px-3 py-1 text-base font-semibold text-primary-foreground">
                     {pack.badge}
                   </span>
                 ) : null}
@@ -243,7 +243,7 @@ function TopupPacksCard() {
               <span
                 aria-disabled={inert || undefined}
                 className={cn(
-                  "mt-auto inline-flex min-h-10 w-full cursor-default select-none items-center justify-center rounded-xl text-sm font-semibold",
+                  "mt-auto inline-flex min-h-12 w-full cursor-default select-none items-center justify-center rounded-xl text-base font-semibold",
                   featured
                     ? "bg-primary text-primary-foreground"
                     : "bg-surface text-foreground",
@@ -256,7 +256,7 @@ function TopupPacksCard() {
         })}
       </div>
 
-      <p className="text-sm font-medium leading-snug text-muted-2">
+      <p className="text-base font-medium leading-snug text-muted-2">
         사용 시간을 다 썼을 때 고르는 선불 이용 시간입니다.
         {" "}
         유효기간 12개월 · 구독과 별도 · 잔여 시간에 합산
@@ -314,12 +314,9 @@ export default function PlanPage() {
             </p>
           </CardHeader>
           <CardContent className="px-6 pb-6 pt-4">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {current.features.map((feature) => (
-                <div
-                  key={feature}
-                  className="flex items-start gap-2.5 rounded-xl bg-surface px-3.5 py-3"
-                >
+                <li key={feature} className="flex items-start gap-2.5">
                   <Check
                     className="mt-0.5 h-4 w-4 shrink-0 text-primary"
                     strokeWidth={2.5}
@@ -327,10 +324,10 @@ export default function PlanPage() {
                   <span className="text-base leading-snug text-foreground">
                     {feature}
                   </span>
-                </div>
+                </li>
               ))}
               {tier === "ADMIN" ? (
-                <div className="flex items-start gap-2.5 rounded-xl bg-surface px-3.5 py-3">
+                <li className="flex items-start gap-2.5">
                   <Check
                     className="mt-0.5 h-4 w-4 shrink-0 text-primary"
                     strokeWidth={2.5}
@@ -338,96 +335,80 @@ export default function PlanPage() {
                   <span className="text-base leading-snug text-foreground">
                     사용자 관리, AI 사용량, 운영 메뉴
                   </span>
-                </div>
+                </li>
               ) : null}
+            </ul>
+
+            <div className="mt-6 border-t border-border/50 pt-5">
+              <p className="text-base font-semibold text-foreground">
+                다른 요금제
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-3">
+                {(["FREE", "PRO", "TEAM"] as const).map((id) => {
+                  const entry = PLAN_CATALOG[id];
+                  const active = id === catalogId && tier !== "ADMIN";
+                  return (
+                    <div key={id} className="min-w-0">
+                      <p
+                        className={cn(
+                          "text-base font-bold",
+                          active ? "text-primary" : "text-foreground",
+                        )}
+                      >
+                        {entry.name}
+                        {active ? " · 현재" : ""}
+                      </p>
+                      <p className="mt-1 text-lg font-bold tabular-nums text-foreground">
+                        {planMonthlyFeeLabel(entry)}
+                      </p>
+                      <p className="mt-1 text-base font-medium text-muted">
+                        {formatPlanMinutes(entry)} · 보관함 {entry.storageLabel}
+                      </p>
+                      <p className="mt-1 text-base font-medium text-muted">
+                        {entry.tagline}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="min-h-12 rounded-full px-5 text-base md:h-11"
+                >
+                  <Link href="/pricing">
+                    요금제 자세히
+                    <ArrowUpRight className="h-4 w-4" strokeWidth={1.75} />
+                  </Link>
+                </Button>
+                {tier !== "ADMIN" ? (
+                  PAID_PLANS_ENABLED ? (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="min-h-12 rounded-full px-5 text-base md:h-11"
+                    >
+                      <a href={upgradeMailto}>
+                        {tier === "FREE" ? "업그레이드 문의" : "Team 문의"}
+                      </a>
+                    </Button>
+                  ) : (
+                    <span
+                      aria-disabled="true"
+                      className="inline-flex min-h-12 cursor-default select-none items-center justify-center rounded-full border border-border bg-transparent px-5 text-base font-semibold text-foreground md:h-11"
+                    >
+                      {tier === "FREE" ? "업그레이드 문의" : "Team 문의"}
+                    </span>
+                  )
+                ) : null}
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {tier !== "ADMIN" ? <TopupPacksCard /> : null}
-
-        <details className={cn(CARD_SHADOW, "group bg-card")}>
-          <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-2 px-6 py-4 [&::-webkit-details-marker]:hidden">
-            <span className="text-xl font-bold tracking-tight text-foreground">
-              다른 요금제
-            </span>
-            <ChevronDown
-              className="h-5 w-5 shrink-0 text-muted transition-transform duration-200 group-open:rotate-180"
-              strokeWidth={1.75}
-            />
-          </summary>
-          <div className="border-t border-border px-6 pb-6 pt-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {(["FREE", "PRO", "TEAM"] as const).map((id) => {
-                const entry = PLAN_CATALOG[id];
-                const active = id === catalogId && tier !== "ADMIN";
-                return (
-                  <div
-                    key={id}
-                    className={cn(
-                      "relative rounded-2xl px-4 py-3.5",
-                      active
-                        ? "bg-primary-soft ring-1 ring-primary/30"
-                        : "bg-surface",
-                    )}
-                  >
-                    <p
-                      className={cn(
-                        "text-base font-bold",
-                        active ? "text-primary" : "text-foreground",
-                      )}
-                    >
-                      {entry.name}
-                      {active ? " · 현재" : ""}
-                    </p>
-                    <p className="mt-1 text-lg font-bold tabular-nums text-foreground">
-                      {planMonthlyFeeLabel(entry)}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-muted">
-                      {formatPlanMinutes(entry)} · 보관함 {entry.storageLabel}
-                    </p>
-                    <p className="mt-1 text-sm font-medium text-muted">
-                      {entry.tagline}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                asChild
-                variant="outline"
-                className="h-11 rounded-full px-5 text-base"
-              >
-                <Link href="/pricing">
-                  요금제 자세히
-                  <ArrowUpRight className="h-4 w-4" strokeWidth={1.75} />
-                </Link>
-              </Button>
-              {tier !== "ADMIN" ? (
-                PAID_PLANS_ENABLED ? (
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="h-11 rounded-full px-5 text-base"
-                  >
-                    <a href={upgradeMailto}>
-                      {tier === "FREE" ? "업그레이드 문의" : "Team 문의"}
-                    </a>
-                  </Button>
-                ) : (
-                  <span
-                    aria-disabled="true"
-                    className="inline-flex h-11 cursor-default select-none items-center justify-center rounded-full border border-border bg-background px-5 text-base font-semibold text-foreground"
-                  >
-                    {tier === "FREE" ? "업그레이드 문의" : "Team 문의"}
-                  </span>
-                )
-              ) : null}
-            </div>
-          </div>
-        </details>
       </div>
     </PageContainer>
   );

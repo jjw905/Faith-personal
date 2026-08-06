@@ -24,7 +24,7 @@ function main() {
     for (const raw of readFileSync(path, "utf8").split(/\r?\n/)) {
       const line = raw.trim();
       if (!line) continue;
-      const hits = maskPii(line, { style: "label" }).matches.filter(
+      const hits = maskPii(line, { style: "partial" }).matches.filter(
         (match) => TARGETS.length === 0 || TARGETS.includes(match.value),
       );
       if (hits.length === 0) continue;

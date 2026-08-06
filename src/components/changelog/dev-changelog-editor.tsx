@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const inputCls =
-  "w-full rounded-xl bg-surface px-3 py-2 text-sm text-foreground outline-none ring-1 ring-border/60 transition focus:ring-2 focus:ring-primary";
+  "w-full min-h-12 rounded-xl bg-transparent px-3 py-2 text-base text-foreground outline-none ring-1 ring-border/60 transition focus:ring-2 focus:ring-primary";
 
 function IconBtn({
   label,
@@ -34,10 +34,10 @@ function IconBtn({
       title={label}
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors",
+        "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors md:h-9 md:w-9",
         danger
           ? "text-muted-2 hover:bg-red-50 hover:text-red-600"
-          : "text-muted-2 hover:bg-surface-2 hover:text-foreground",
+          : "text-muted-2 hover:bg-surface/70 hover:text-foreground",
       )}
     >
       {children}
@@ -50,7 +50,7 @@ function AddButton({ onClick, children }: { onClick: () => void; children: React
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-surface px-3 py-2 text-sm font-semibold text-foreground ring-1 ring-border/60 transition-colors hover:bg-surface-2"
+      className="inline-flex min-h-12 items-center gap-1.5 rounded-xl border border-border px-3 text-base font-semibold text-foreground transition-colors hover:bg-surface/70"
     >
       <Plus className="h-4 w-4" strokeWidth={2.25} />
       {children}
@@ -218,50 +218,43 @@ export function DevChangelogEditor({
 
   return (
     <div>
-      <header className="mb-8 flex items-start justify-between gap-4 sm:mb-10">
-        <div>
-          <p className="text-xs font-semibold tracking-wide text-muted-2">개발전용</p>
-          <h1 className="mt-1.5 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Changelog
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          {previewState ? null : editing ? (
-            <>
-              <button
-                type="button"
-                onClick={cancel}
-                disabled={pending}
-                className="inline-flex items-center gap-1.5 rounded-full bg-surface px-3.5 py-2 text-sm font-semibold text-foreground ring-1 ring-border-strong transition-colors hover:bg-surface-2 disabled:opacity-50"
-              >
-                <X className="h-4 w-4" strokeWidth={2.25} />
-                취소
-              </button>
-              <button
-                type="button"
-                onClick={() => void save()}
-                disabled={pending}
-                className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
-              >
-                <Check className="h-4 w-4" strokeWidth={2.5} />
-                {pending ? "저장 중" : "저장"}
-              </button>
-            </>
-          ) : (
+      {/* 페이지 AdminPageChrome 제목과 중복하지 않음. 편집 액션만. */}
+      <div className="mb-6 flex flex-wrap items-center justify-end gap-2">
+        {previewState ? null : editing ? (
+          <>
             <button
               type="button"
-              onClick={startEdit}
-              className="inline-flex items-center gap-1.5 rounded-full bg-surface px-4 py-2 text-sm font-semibold text-foreground ring-1 ring-border-strong transition-colors hover:bg-surface-2"
+              onClick={cancel}
+              disabled={pending}
+              className="inline-flex min-h-12 items-center gap-1.5 rounded-full border border-border px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70 disabled:opacity-50"
             >
-              <Pencil className="h-4 w-4" strokeWidth={2.25} />
-              편집
+              <X className="h-4 w-4" strokeWidth={2.25} />
+              취소
             </button>
-          )}
-        </div>
-      </header>
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={pending}
+              className="inline-flex min-h-12 items-center gap-1.5 rounded-full bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+            >
+              <Check className="h-4 w-4" strokeWidth={2.5} />
+              {pending ? "저장 중" : "저장"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={startEdit}
+            className="inline-flex min-h-12 items-center gap-1.5 rounded-full border border-border px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70"
+          >
+            <Pencil className="h-4 w-4" strokeWidth={2.25} />
+            편집
+          </button>
+        )}
+      </div>
 
       {msg ? (
-        <p className="mb-6 rounded-xl bg-surface px-4 py-2.5 text-sm font-medium text-muted ring-1 ring-border/60">
+        <p className="mb-6 rounded-xl px-4 py-2.5 text-base font-medium text-muted ring-1 ring-border/60">
           {msg}
         </p>
       ) : null}

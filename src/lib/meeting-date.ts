@@ -434,6 +434,37 @@ export function formatRecentDaysLabel(
   return `${days}일전`;
 }
 
+/**
+ * 기록 목록 날짜 그룹 헤더.
+ * 오늘·어제·내일은 상대만 쓰고, 그 외는 `8월 3일 (월)`.
+ */
+export function formatRecordsDayParts(
+  dateString: string,
+  now: Date = new Date(),
+): { relative: string | null; absolute: string } {
+  const parts = seoulParts(new Date(dateString));
+  const weekday = new Date(
+    toUtcDay(parts.year, parts.month, parts.day),
+  ).getUTCDay();
+  const weekdayShort = WEEKDAY_SHORT[weekday] ?? "";
+  const absolute = `${parts.month}월 ${parts.day}일 (${weekdayShort})`;
+
+  const days = getCalendarDaysAgo(dateString, now);
+  if (days === 0) return { relative: "오늘", absolute };
+  if (days === 1) return { relative: "어제", absolute };
+  if (days === -1) return { relative: "내일", absolute };
+  return { relative: null, absolute };
+}
+
+/** @deprecated formatRecordsDayParts 사용 */
+export function formatRecordsDayLabel(
+  dateString: string,
+  now: Date = new Date(),
+): string {
+  const { relative, absolute } = formatRecordsDayParts(dateString, now);
+  return relative ?? absolute;
+}
+
 /** mock의 daysAgo 기준으로 오늘(서울) 기준 실제 datetime 문자열 생성. */
 export function resolveDateFromDaysAgo(
   daysAgo: number,
@@ -591,4 +622,151 @@ export function isCurrentPeriod(
   const a = getPeriodRange(anchor, unit);
   const b = getPeriodRange(now, unit);
   return a.startMs === b.startMs && a.endMs === b.endMs;
+}
+
+/** YYYY-MM-DD → 2026.08.03 */
+export function formatDottedDate(iso: string): string {
+  const parts = parseIsoDateParts(iso);
+  if (!parts) return iso;
+  return `${parts.year}.${pad(parts.month)}.${pad(parts.day)}`;
+}
+
+/** 2026.08.03 / 2026-08-03 / 20260803 → YYYY-MM-DD */
+export function parseFlexibleDateInput(raw: string): string | null {
+  const trimmed = raw.trim();
+  const dotted = trimmed.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
+  if (dotted) {
+    const year = Number(dotted[1]);
+    const month = Number(dotted[2]);
+    const day = Number(dotted[3]);
+    if (!isValidYmd(year, month, day)) return null;
+    return `${year}-${pad(month)}-${pad(day)}`;
+  }
+  const compact = trimmed.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact) {
+    const year = Number(compact[1]);
+    const month = Number(compact[2]);
+    const day = Number(compact[3]);
+    if (!isValidYmd(year, month, day)) return null;
+    return `${year}-${pad(month)}-${pad(day)}`;
+  }
+  return null;
+}
+
+function isValidYmd(year: number, month: number, day: number) {
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return false;
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const ms = toUtcDay(year, month, day);
+  const back = fromUtcDay(ms);
+  return back.year === year && back.month === month && back.day === day;
+}
+
+export function defaultRecordsRange(now = new Date()): {
+  fromIso: string;
+  toIso: string;
+} {
+  const { startMs, endMs } = getPeriodRange(now, "week");
+  return {
+    fromIso: isoFromUtcDayMs(startMs),
+    toIso: isoFromUtcDayMs(endMs),
+  };
+}
+
+function isoFromUtcDayMs(ms: number): string {
+  const day = fromUtcDay(ms);
+  return `${day.year}-${pad(day.month)}-${pad(day.day)}`;
+}
+
+/** 기록 기간 빠른 선택. */
+export function recordsQuickRanges(now = new Date()): {
+  today: { fromIso: string; toIso: string };
+  week: { fromIso: string; toIso: string };
+  month: { fromIso: string; toIso: string };
+} {
+  const today = seoulDateKey(now);
+  const week = getPeriodRange(now, "week");
+  const month = getPeriodRange(now, "month");
+  return {
+    today: { fromIso: today, toIso: today },
+    week: {
+      fromIso: isoFromUtcDayMs(week.startMs),
+      toIso: isoFromUtcDayMs(week.endMs),
+    },
+    month: {
+      fromIso: isoFromUtcDayMs(month.startMs),
+      toIso: isoFromUtcDayMs(month.endMs),
+    },
+  };
+}
+
+/** 기록 헤더용 구간 라벨 (주간/월간 단위 문구 없음). */
+export function formatRecordsRangeLabel(fromIso: string, toIso: string): string {
+  const start = parseIsoDateParts(fromIso);
+  const end = parseIsoDateParts(toIso);
+  if (!start || !end) return `${fromIso} – ${toIso}`;
+  if (start.year === end.year && start.month === end.month) {
+    if (start.day === end.day) {
+      return `${start.year}년 ${start.month}월 ${start.day}일`;
+    }
+    return `${start.year}년 ${start.month}월 ${start.day}일 – ${end.day}일`;
+  }
+  if (start.year === end.year) {
+    return `${start.year}년 ${start.month}월 ${start.day}일 – ${end.month}월 ${end.day}일`;
+  }
+  return `${start.year}년 ${start.month}월 ${start.day}일 – ${end.year}년 ${end.month}월 ${end.day}일`;
+}
+
+/** 모바일 헤더·입력용: 2026.08.03 ~ 2026.08.09 */
+export function formatDottedRangeLabel(fromIso: string, toIso: string): string {
+  return `${formatDottedDate(fromIso)} ~ ${formatDottedDate(toIso)}`;
+}
+
+export function isMeetingInDateRange(
+  dateString: string,
+  fromIso: string,
+  toIso: string,
+): boolean {
+  const from = parseIsoDateParts(fromIso);
+  const to = parseIsoDateParts(toIso);
+  if (!from || !to) return false;
+  const startMs = toUtcDay(from.year, from.month, from.day);
+  const endMs = toUtcDay(to.year, to.month, to.day);
+  const low = Math.min(startMs, endMs);
+  const high = Math.max(startMs, endMs);
+  const parts = seoulParts(parseMeetingDate(dateString));
+  const dayMs = toUtcDay(parts.year, parts.month, parts.day);
+  return dayMs >= low && dayMs <= high;
+}
+
+/** 현재 구간 길이만큼 앞·뒤로 민다. */
+export function shiftDateRange(
+  fromIso: string,
+  toIso: string,
+  delta: number,
+): { fromIso: string; toIso: string } {
+  const from = parseIsoDateParts(fromIso);
+  const to = parseIsoDateParts(toIso);
+  if (!from || !to) return { fromIso, toIso };
+  const startMs = toUtcDay(from.year, from.month, from.day);
+  const endMs = toUtcDay(to.year, to.month, to.day);
+  const low = Math.min(startMs, endMs);
+  const high = Math.max(startMs, endMs);
+  const spanDays = Math.round((high - low) / 86400000) + 1;
+  const offset = delta * spanDays * 86400000;
+  const nextStart = fromUtcDay(low + offset);
+  const nextEnd = fromUtcDay(high + offset);
+  return {
+    fromIso: `${nextStart.year}-${pad(nextStart.month)}-${pad(nextStart.day)}`,
+    toIso: `${nextEnd.year}-${pad(nextEnd.month)}-${pad(nextEnd.day)}`,
+  };
+}
+
+export function normalizeDateRange(
+  fromIso: string,
+  toIso: string,
+): { fromIso: string; toIso: string } {
+  if (fromIso <= toIso) return { fromIso, toIso };
+  return { fromIso: toIso, toIso: fromIso };
 }

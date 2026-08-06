@@ -14,6 +14,10 @@ import { signOut, useSession } from "next-auth/react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  RAIL_ICON_CELL,
+  RailHoverCaption,
+} from "@/components/layout/rail-hover-caption";
 import { useAppContext } from "@/context/app-context";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import { clientGet } from "@/lib/client-fetch";
@@ -200,7 +204,7 @@ export function UserProfile({
             role="menuitem"
             disabled={!inviteCode}
             onClick={() => void copyInviteCode()}
-            className="relative flex w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-sm whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card disabled:cursor-wait disabled:opacity-60"
+            className="relative flex min-h-12 w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card disabled:cursor-wait disabled:opacity-60"
           >
             <UserRoundPlus
               className="h-4 w-4 shrink-0 text-muted-2"
@@ -235,7 +239,7 @@ export function UserProfile({
                   onNavigate?.();
                 }}
                 className={cn(
-                  "flex cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-sm whitespace-nowrap outline-none transition-colors",
+                  "flex min-h-12 cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap outline-none transition-colors",
                   "hover:bg-card",
                   "focus-visible:bg-card",
                   itemActive
@@ -261,7 +265,7 @@ export function UserProfile({
               if (!previewForceOpen) setOpen(false);
               void signOut({ callbackUrl: "/" });
             }}
-            className="flex w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-sm whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card"
+            className="flex min-h-12 w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card"
           >
             <LogOut
               className="h-4 w-4 shrink-0 text-muted-2"
@@ -295,14 +299,15 @@ export function UserProfile({
           if (previewForceOpen) return;
           setOpen((v) => !v);
         }}
-        title={compact ? currentUser.name : undefined}
         className={cn(
-          "group flex w-full cursor-pointer items-center rounded-xl outline-none transition-colors",
+          "w-full text-left outline-none transition-colors",
           "hover:bg-surface-2",
           "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
           "active:bg-surface-2",
           (menuOpen || active) && "bg-surface",
-          compact ? "justify-center px-2 py-2.5" : "gap-2.5 px-3 py-2.5",
+          compact
+            ? RAIL_ICON_CELL
+            : "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5",
         )}
       >
         <Avatar className="h-8 w-8 shrink-0 ring-1 ring-border">
@@ -326,6 +331,9 @@ export function UserProfile({
             {currentUser.tier}
           </span>
         </div>
+        {compact ? (
+          <RailHoverCaption placement="above">계정</RailHoverCaption>
+        ) : null}
         {!compact ? (
           <Settings className="h-5 w-5 shrink-0 text-muted-2 transition-colors group-hover:text-foreground" />
         ) : null}

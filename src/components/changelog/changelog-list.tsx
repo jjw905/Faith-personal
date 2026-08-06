@@ -24,10 +24,10 @@ function EntryBlock({
       )}
     >
       <aside className="pt-1">
-        <p className="text-sm font-semibold tabular-nums tracking-tight text-foreground">
+        <p className="text-base font-semibold tabular-nums tracking-tight text-foreground">
           {getChangelogDateLabel(entry.date)}
         </p>
-        <p className="mt-1 text-xs leading-relaxed text-muted-2">
+        <p className="mt-1 text-base leading-relaxed text-muted-2">
           {entry.version}
         </p>
       </aside>
@@ -43,11 +43,11 @@ function EntryBlock({
         <div className="mt-7 space-y-6">
           {entry.sections.map((section) => (
             <section key={section.title} className="max-w-2xl">
-              <h3 className="text-sm font-semibold tracking-tight text-foreground">
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
                 {section.title}
               </h3>
               {section.body ? (
-                <p className="mt-1.5 text-sm leading-[1.65] text-muted">
+                <p className="mt-1.5 text-base leading-[1.65] text-muted">
                   {section.body}
                 </p>
               ) : null}
@@ -56,7 +56,7 @@ function EntryBlock({
                   {section.items.map((item) => (
                     <li
                       key={item}
-                      className="text-sm leading-[1.65] text-muted"
+                      className="text-base leading-[1.65] text-muted"
                     >
                       {item}
                     </li>

@@ -19,13 +19,13 @@ export function AppLegalFooter() {
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface hover:text-foreground"
+              className="inline-flex min-h-12 items-center rounded-lg px-2.5 text-base font-medium text-muted transition-colors hover:bg-surface hover:text-foreground"
             >
               {link.label}
             </Link>
           ))}
         </nav>
-        <p className="px-2.5 text-sm text-muted-2">© 2026 Faith</p>
+        <p className="px-2.5 text-base text-muted-2">© 2026 Faith</p>
       </div>
     </footer>
   );

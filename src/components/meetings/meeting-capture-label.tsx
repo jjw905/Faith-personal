@@ -1,4 +1,4 @@
-import { AudioLines, Upload } from "lucide-react";
+import { Mic, Upload } from "lucide-react";
 
 import {
   meetingCaptureLabel,
@@ -8,13 +8,50 @@ import type { Meeting, MeetingCapture } from "@/types/meeting";
 import { cn } from "@/lib/utils";
 
 /**
- * M3 assist chip — 기록 경로 구분.
- * 실시간/업로드 동일 primary filled, 아이콘만 다르게.
+ * 기록 경로 구분 — 원형 테두리 + 아이콘.
+ * 녹음 Mic / 업로드 Upload.
  */
-const CAPTURE_ICON: Record<MeetingCapture, typeof AudioLines> = {
-  live: AudioLines,
+const CAPTURE_ICON: Record<MeetingCapture, typeof Mic> = {
+  live: Mic,
   upload: Upload,
 };
+
+const CAPTURE_SIZE = {
+  sm: { box: "h-5 w-5", icon: "h-3 w-3" },
+  md: { box: "h-6 w-6", icon: "h-3.5 w-3.5" },
+  /** 제목 행(상세·목록) — text-lg/2xl과 광학 맞춤 */
+  lg: { box: "h-10 w-10", icon: "h-5 w-5" },
+} as const;
+
+/** 목록 trailing·메타용: 원형 아이콘 (라벨은 aria). */
+export function MeetingCaptureIcon({
+  meeting,
+  className,
+  size = "md",
+}: {
+  meeting: Pick<Meeting, "id" | "tags" | "capture">;
+  className?: string;
+  size?: keyof typeof CAPTURE_SIZE;
+}) {
+  const capture = resolveMeetingCapture(meeting);
+  const label = meetingCaptureLabel(meeting);
+  const Icon = CAPTURE_ICON[capture];
+  const dims = CAPTURE_SIZE[size];
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-full border border-border text-muted",
+        dims.box,
+        className,
+      )}
+      aria-label={`기록 방식 ${label}`}
+      title={label}
+    >
+      <Icon className={dims.icon} strokeWidth={2} aria-hidden />
+    </span>
+  );
+}
 
 function MeetingCaptureBadge({
   meeting,
@@ -22,41 +59,15 @@ function MeetingCaptureBadge({
   className,
 }: {
   meeting: Pick<Meeting, "id" | "tags" | "capture">;
-  size?: "sm" | "md";
+  size?: keyof typeof CAPTURE_SIZE;
   className?: string;
 }) {
-  const capture = resolveMeetingCapture(meeting);
-  const label = meetingCaptureLabel(meeting);
-  const Icon = CAPTURE_ICON[capture];
-  const compact = size === "sm";
-
   return (
-    <span
-      className={cn(
-        "inline-flex w-fit max-w-full items-center bg-primary font-medium tracking-wide text-primary-foreground",
-        // 모바일 본문 최소 text-base. sm은 데스크탑 밀도용으로만 축소.
-        compact
-          ? "h-8 gap-1.5 rounded-md px-2.5 text-base leading-none md:h-7 md:gap-1 md:px-2 md:text-sm"
-          : "h-8 gap-1.5 rounded-lg px-2.5 text-[15px] leading-none",
-        className,
-      )}
-      aria-label={`기록 방식 ${label}`}
-    >
-      <Icon
-        className={
-          compact
-            ? "h-4 w-4 shrink-0 md:h-3.5 md:w-3.5"
-            : "h-4 w-4 shrink-0"
-        }
-        strokeWidth={2}
-        aria-hidden
-      />
-      <span className="truncate">{label}</span>
-    </span>
+    <MeetingCaptureIcon meeting={meeting} size={size} className={className} />
   );
 }
 
-/** 목록·확인 다이얼로그용 (밀도 높은 list). */
+/** 목록·확인 다이얼로그용: 아이콘만. */
 export function MeetingCaptureOverline({
   meeting,
   className,
@@ -65,19 +76,21 @@ export function MeetingCaptureOverline({
   className?: string;
 }) {
   return (
-    <MeetingCaptureBadge meeting={meeting} size="sm" className={className} />
+    <MeetingCaptureIcon meeting={meeting} size="sm" className={className} />
   );
 }
 
-/** 상세 메타 줄용. */
+/** 상세 제목 행용 — 제목 오른쪽, lg. */
 export function MeetingCaptureChip({
   meeting,
   className,
+  size = "lg",
 }: {
   meeting: Pick<Meeting, "id" | "tags" | "capture">;
   className?: string;
+  size?: keyof typeof CAPTURE_SIZE;
 }) {
   return (
-    <MeetingCaptureBadge meeting={meeting} size="md" className={className} />
+    <MeetingCaptureBadge meeting={meeting} size={size} className={className} />
   );
 }

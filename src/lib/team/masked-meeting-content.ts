@@ -48,13 +48,16 @@ function redactTranscriptLine(
 }
 
 export function maskTeamTranscript(
-  transcript: MeetingTranscript,
+  transcript: MeetingTranscript | null | undefined,
   names: string[] = [],
   style: MaskStyle = "partial",
 ): MeetingTranscript {
+  const safe: MeetingTranscript = transcript?.lines
+    ? transcript
+    : { meetingId: transcript?.meetingId ?? "", lines: [] };
   return {
-    ...transcript,
-    lines: transcript.lines.map((line) =>
+    ...safe,
+    lines: safe.lines.map((line) =>
       redactTranscriptLine(line, names, style),
     ),
   };

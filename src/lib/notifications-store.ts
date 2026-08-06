@@ -122,11 +122,21 @@ export async function listVisibleNotifications(
     await prisma.notification.deleteMany({
       where: { userId, createdAt: { lt: retentionCutoff } },
     });
+    // 분석 완료 알림은 제품에서 쓰지 않음 — 기존 잔여분 숨김
+    await prisma.notification.updateMany({
+      where: {
+        userId,
+        kind: "analysis_done",
+        dismissedAt: null,
+      },
+      data: { dismissedAt: new Date() },
+    });
   }
   const rows = await prisma.notification.findMany({
     where: {
       userId,
       dismissedAt: null,
+      NOT: { kind: "analysis_done" },
       createdAt: { gte: retentionCutoff },
       OR: [
         { confirmedAt: null, readAt: null },

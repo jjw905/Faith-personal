@@ -19,29 +19,6 @@ export type UpcomingItem = {
   workspace: WorkspaceId;
 };
 
-export type ProcessStatus =
-  | "masking"
-  | "transcribing"
-  | "structuring"
-  | "done"
-  | "error"
-  | "empty";
-
-export type ProcessItem = {
-  id: string;
-  title: string;
-  status: ProcessStatus;
-  phase?: string;
-  progressPercent?: number;
-  detail: string;
-  time: string;
-  href: string;
-  workspace: WorkspaceId;
-  waiting?: boolean;
-  jobStatus?: "queued" | "running" | null;
-  queueAhead?: number | null;
-};
-
 const UPCOMING: UpcomingItem[] = [
   {
     id: "up-1",
@@ -133,7 +110,7 @@ const UPCOMING: UpcomingItem[] = [
     location: "Discord",
     platform: "discord",
     organizer: "나",
-    participants: ["나"],
+    participants: ["나", "김동료", "이멘토", "박피드백"],
     agenda: ["발표 흐름 점검", "시간 배분 측정", "질문 대비 메모"],
     notes: "개인 워크스페이스에만 저장됩니다. 필요 시 팀으로 복사할 수 있습니다.",
     href: "/meetings/new",
@@ -165,61 +142,19 @@ const UPCOMING: UpcomingItem[] = [
     location: "Google Meet",
     platform: "meet",
     organizer: "나",
-    participants: ["나"],
+    participants: [
+      "나",
+      "김동료",
+      "이멘토",
+      "박피드백",
+      "최리뷰",
+      "정운영",
+      "한기획",
+    ],
     agenda: ["이번 주 완료 항목", "막힌 이슈", "다음 주 우선순위"],
-    notes: "혼자 진행하는 점검 회의입니다. 마스킹은 기본 규칙만 적용됩니다.",
+    notes: "동료·멘토와 함께 진행하는 점검 회의입니다. 마스킹은 기본 규칙만 적용됩니다.",
     href: "/meetings/new",
     workspace: "personal",
-  },
-];
-
-const PROCESSING: ProcessItem[] = [
-  {
-    id: "pr-1",
-    title: "Q3 보안 정책 검토",
-    status: "masking",
-    detail: "개인정보 검수",
-    time: "방금",
-    href: "/meetings/mtg-001",
-    workspace: "team",
-  },
-  {
-    id: "pr-2",
-    title: "RBAC 개편 회의 녹음",
-    status: "transcribing",
-    phase: "transcribing",
-    progressPercent: 36,
-    detail: "받아쓰는 중이에요",
-    time: "3분 전",
-    href: "/meetings/mtg-003",
-    workspace: "team",
-  },
-  {
-    id: "pr-3",
-    title: "발표 연습 녹음",
-    status: "masking",
-    detail: "개인정보 검수",
-    time: "방금",
-    href: "/meetings/mtg-006",
-    workspace: "personal",
-  },
-  {
-    id: "pr-4",
-    title: "마스킹 규칙 혼자 점검",
-    status: "done",
-    detail: "논의, 미결, 예외",
-    time: "오늘 11:20",
-    href: "/meetings/mtg-002",
-    workspace: "personal",
-  },
-  {
-    id: "pr-5",
-    title: "주간 팀 스탠드업",
-    status: "done",
-    detail: "블로커, 후속, 일정",
-    time: "어제",
-    href: "/meetings/mtg-004",
-    workspace: "team",
   },
 ];
 
@@ -303,8 +238,3 @@ export function createUpcomingDraft(
   };
 }
 
-export function getProcessingByWorkspace(
-  workspaceId: WorkspaceId,
-): ProcessItem[] {
-  return PROCESSING.filter((item) => item.workspace === workspaceId);
-}

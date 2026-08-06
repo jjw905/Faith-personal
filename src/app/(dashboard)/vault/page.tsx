@@ -2,11 +2,10 @@
 
 import {
   Check,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Inbox,
   MoreHorizontal,
+  Plus,
   Share2,
   Trash2,
   Upload,
@@ -22,26 +21,29 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { UsageLimitDialog } from "@/components/dashboard/usage-limit-dialog";
+import {
+  RecordsPageNav,
+  recordsPageSize,
+} from "@/components/dashboard/records-page-nav";
+import { ExpandableMeetingSearch } from "@/components/dashboard/meeting-search";
 import { PageContainer } from "@/components/layout/page-container";
+import { MeetingRecordHeaderRow } from "@/components/meetings/meeting-record-layout";
 import { Button } from "@/components/ui/button";
 import { VaultFileIcon } from "@/components/vault/vault-file-icon";
 import {
   VaultActionConfirmDialog,
   type VaultConfirmAction,
 } from "@/components/vault/vault-action-confirm-dialog";
-import {
-  VaultFloatSearch,
-  VaultRoundSearch,
-} from "@/components/vault/vault-float-search";
 import { VaultMobileActionBar } from "@/components/vault/vault-mobile-action-bar";
 import { VaultUploadDialog } from "@/components/vault/vault-upload-dialog";
 import { DuplicateVaultNameDialog } from "@/components/vault/duplicate-name-dialog";
-import { UsageLimitDialog } from "@/components/dashboard/usage-limit-dialog";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
 import {
   fixtureVaultItemsFull,
   fixtureVaultUsage,
 } from "@/lib/page-ux-fixtures";
+import { TOUCH_GROUP, TOUCH_ICON_BUTTON } from "@/lib/touch-target";
 import {
   VAULT_CHANGED_EVENT,
   VAULT_QUOTA_BYTES,
@@ -56,31 +58,17 @@ import {
 } from "@/lib/vault";
 import { cn } from "@/lib/utils";
 
-/** Desktop: one page + pager fits without inner list scroll. Mobile: fewer taller rows. */
-const PAGE_SIZE_DESKTOP = 8;
-const PAGE_SIZE_MOBILE = 5;
-
-/**
- * List body floor ≈ full page so short lists do not shrink the card.
- * Mobile 2-line rows (~4.75rem) + date header. Desktop 1-line denser.
- */
-const LIST_BODY_MIN_CLASS =
-  "min-h-[calc(5*4.75rem+2.5rem)] sm:min-h-[calc(5*4.75rem+2.5rem)] md:min-h-[calc(8*4.25rem+2.5rem)]";
-
-function useIsNarrowMobile() {
+function useIsMdUp() {
   return useSyncExternalStore(
     (onChange) => {
-      const mq = window.matchMedia("(max-width: 767px)");
+      const mq = window.matchMedia("(min-width: 768px)");
       mq.addEventListener("change", onChange);
       return () => mq.removeEventListener("change", onChange);
     },
-    () => window.matchMedia("(max-width: 767px)").matches,
-    () => false,
+    () => window.matchMedia("(min-width: 768px)").matches,
+    () => true,
   );
 }
-
-const CARD_SHADOW =
-  "rounded-3xl shadow-[0_2px_10px_rgba(17,22,46,0.1),0_8px_28px_rgba(17,22,46,0.14)] ring-1 ring-border";
 
 function vaultDayKey(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
@@ -127,13 +115,11 @@ function groupVaultByDay(
   return groups;
 }
 
-/** 유저별 스토리지 보관함 (한도 500MB). */
+/** 유저별 스토리지 보관함 (한도 500MB). 대시보드와 같은 흰 프레임·리스트 패턴. */
 export default function VaultPage() {
   const { scenarioId, isLive } = usePageUxPreview();
-  const isMobile = useIsNarrowMobile();
-  const pageSize = isMobile ? PAGE_SIZE_MOBILE : PAGE_SIZE_DESKTOP;
-  const pageRef = useRef<HTMLDivElement>(null);
-  const chromeRef = useRef<HTMLDivElement>(null);
+  const isMdUp = useIsMdUp();
+  const pageSize = recordsPageSize(isMdUp);
   const [items, setItems] = useState<VaultItemMeta[]>([]);
   const [usage, setUsage] = useState<VaultUsage | null>(null);
   const [query, setQuery] = useState("");
@@ -259,18 +245,6 @@ export default function VaultPage() {
   }, [filtered, currentPage, pageSize]);
 
   const grouped = useMemo(() => groupVaultByDay(pageItems), [pageItems]);
-
-  const pageNumbers = useMemo(() => {
-    const maxButtons = 5;
-    if (totalPages <= maxButtons) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    const half = Math.floor(maxButtons / 2);
-    let start = Math.max(1, currentPage - half);
-    const end = Math.min(totalPages, start + maxButtons - 1);
-    start = Math.max(1, end - maxButtons + 1);
-    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
-  }, [currentPage, totalPages]);
 
   async function ingestFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList);
@@ -433,137 +407,157 @@ export default function VaultPage() {
     }
   }
 
-  return (
-    <PageContainer soft className="min-h-0">
-      <div
-        ref={pageRef}
-        className="mx-auto flex w-full max-w-5xl flex-col gap-2 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:gap-3 md:pb-0"
-      >
-        <header className="relative z-20 flex min-w-0 shrink-0 flex-col gap-1.5 md:gap-2.5">
-          <h1 className="shrink-0 text-2xl font-bold leading-tight tracking-tight text-foreground">
-            보관함
-          </h1>
-          <div className="min-w-0 md:hidden">
-            <VaultQuotaGauge usage={viewUsage} />
-          </div>
-          <div
-            ref={chromeRef}
-            className="hidden min-w-0 items-center gap-2.5 md:flex"
+  const uploadButtonClass =
+    "inline-flex h-14 cursor-pointer items-center gap-2 rounded-[50px] bg-primary px-5 text-base font-semibold text-primary-foreground shadow-soft transition-colors hover:bg-primary-hover disabled:pointer-events-none disabled:opacity-50";
+
+  function openUpload() {
+    if (quotaFull) {
+      setUsageDialogOpen(true);
+      return;
+    }
+    setError(null);
+    setUploadOpen(true);
+  }
+
+  const batchActions = (
+    <div className={cn(TOUCH_GROUP, "shrink-0")}>
+      {selectMode ? (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "min-w-0 cursor-pointer px-3 text-base font-semibold md:h-9 md:min-h-9 md:min-w-0 md:px-2.5 md:text-xs",
+            )}
+            onClick={toggleSelectAll}
+            disabled={filtered.length === 0 || busy}
           >
-            <div className="min-w-0 flex-1 md:max-w-md md:flex-none md:w-[20rem]">
-              <VaultQuotaGauge usage={viewUsage} />
-            </div>
-            <VaultRoundSearch
-              query={query}
-              onQueryChange={setQuery}
-              className="min-w-0 md:flex-none"
+            {allFilteredSelected ? "선택 해제" : "전체"}
+          </Button>
+          <Button
+            type="button"
+            className={cn(
+              "h-12 min-w-12 cursor-pointer gap-1.5 px-3 text-base md:h-9 md:min-w-0 md:px-3 md:text-sm",
+              selectMode === "delete" &&
+                "bg-foreground text-background hover:bg-foreground/90",
+            )}
+            disabled={selected.size === 0 || busy}
+            onClick={() =>
+              askConfirm(
+                selectMode === "delete" ? "delete" : "download",
+                selectedItems,
+              )
+            }
+          >
+            {selectMode === "delete" ? (
+              <Trash2 className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
+            ) : (
+              <Download className="h-5 w-5 md:h-4 md:w-4" strokeWidth={1.75} />
+            )}
+            <span className="tabular-nums">{selected.size}</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(TOUCH_ICON_BUTTON, "cursor-pointer")}
+            aria-label="선택 취소"
+            disabled={busy}
+            onClick={exitSelectMode}
+          >
+            <X strokeWidth={1.75} />
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "cursor-pointer text-muted hover:bg-surface/70 hover:text-foreground",
+            )}
+            aria-label="다운로드"
+            disabled={filtered.length === 0}
+            onClick={() => enterSelectMode("download")}
+          >
+            <Download strokeWidth={1.75} />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              TOUCH_ICON_BUTTON,
+              "cursor-pointer text-muted hover:bg-surface/70 hover:text-foreground",
+            )}
+            aria-label="삭제"
+            disabled={filtered.length === 0}
+            onClick={() => enterSelectMode("delete")}
+          >
+            <Trash2 strokeWidth={1.75} />
+          </Button>
+        </>
+      )}
+    </div>
+  );
+
+  const listHeading =
+    selectMode === "download"
+      ? "받을 파일 선택"
+      : selectMode === "delete"
+        ? "삭제할 파일 선택"
+        : "보관 파일";
+
+  return (
+    <PageContainer soft>
+      <div className="flex flex-col gap-8 pb-[calc(env(safe-area-inset-bottom,0px)+6.25rem)] md:pb-0">
+        <div className="min-w-0">
+          <MeetingRecordHeaderRow
+            leading={
+              <span
+                className={cn(
+                  uploadButtonClass,
+                  "pointer-events-none invisible hidden md:inline-flex",
+                )}
+                aria-hidden
+              >
+                <Plus className="h-5 w-5 shrink-0" strokeWidth={2.25} />
+                올리기
+              </span>
+            }
+            center={
+              <h1 className="flex min-h-14 max-w-full items-center justify-center truncate text-center text-2xl font-bold leading-none tracking-tight text-foreground">
+                보관함
+              </h1>
+            }
+            trailing={
+              <button
+                type="button"
+                onClick={openUpload}
+                disabled={busy}
+                className={cn(uploadButtonClass, "hidden md:inline-flex")}
+                aria-label="올리기"
+                title="올리기"
+              >
+                <Upload
+                  className="h-5 w-5 shrink-0"
+                  strokeWidth={2.25}
+                  aria-hidden
+                />
+                올리기
+              </button>
+            }
+          />
+          <div className="mt-3 flex justify-center md:mt-2">
+            <VaultQuotaMeta
+              usage={viewUsage}
+              onOpen={() => setUsageDialogOpen(true)}
             />
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              {selectMode ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      "vault-select-actions-in h-11 cursor-pointer gap-2 rounded-full border border-border bg-card px-5 text-[15px] font-semibold",
-                      selectMode === "delete"
-                        ? "text-masked hover:bg-card hover:brightness-[0.98]"
-                        : "text-foreground hover:bg-card hover:brightness-[0.98]",
-                    )}
-                    disabled={busy || selected.size === 0}
-                    aria-label={
-                      selectMode === "delete"
-                        ? `삭제${selected.size > 0 ? ` ${selected.size}` : ""}`
-                        : `다운로드${selected.size > 0 ? ` ${selected.size}` : ""}`
-                    }
-                    onClick={() => {
-                      askConfirm(
-                        selectMode === "delete" ? "delete" : "download",
-                        selectedItems,
-                      );
-                    }}
-                  >
-                    {selectMode === "delete" ? (
-                      <Trash2
-                        className="h-[1.125rem] w-[1.125rem]"
-                        strokeWidth={1.75}
-                      />
-                    ) : (
-                      <Download
-                        className="h-[1.125rem] w-[1.125rem]"
-                        strokeWidth={2}
-                      />
-                    )}
-                    {selectMode === "delete" ? "삭제" : "다운로드"}
-                    {selected.size > 0 ? ` ${selected.size}` : ""}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="vault-select-actions-in-delay h-11 w-11 cursor-pointer rounded-full"
-                    aria-label="선택 취소"
-                    disabled={busy}
-                    onClick={exitSelectMode}
-                  >
-                    <X className="h-5 w-5" strokeWidth={1.75} />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    type="button"
-                    className="h-11 cursor-pointer gap-2 rounded-full px-5 text-[15px]"
-                    disabled={busy}
-                    aria-label="올리기"
-                    onClick={() => {
-                      if (quotaFull) {
-                        setUsageDialogOpen(true);
-                        return;
-                      }
-                      setError(null);
-                      setUploadOpen(true);
-                    }}
-                  >
-                    <Upload
-                      className="h-[1.125rem] w-[1.125rem]"
-                      strokeWidth={1.75}
-                    />
-                    올리기
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 cursor-pointer gap-2 rounded-full border border-border bg-card px-5 text-[15px] font-semibold text-foreground hover:bg-card hover:brightness-[0.98]"
-                    disabled={busy || filtered.length === 0}
-                    aria-label="다운로드"
-                    onClick={() => enterSelectMode("download")}
-                  >
-                    <Download
-                      className="h-[1.125rem] w-[1.125rem]"
-                      strokeWidth={2}
-                    />
-                    다운로드
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 cursor-pointer gap-2 rounded-full border border-border bg-card px-5 text-[15px] font-semibold text-masked hover:bg-card hover:text-masked hover:brightness-[0.98]"
-                    disabled={busy || filtered.length === 0}
-                    aria-label="삭제"
-                    onClick={() => enterSelectMode("delete")}
-                  >
-                    <Trash2
-                      className="h-[1.125rem] w-[1.125rem] text-masked"
-                      strokeWidth={1.75}
-                    />
-                    삭제
-                  </Button>
-                </>
-              )}
-            </div>
           </div>
-        </header>
+        </div>
 
         <VaultMobileActionBar
           query={query}
@@ -572,17 +566,7 @@ export default function VaultPage() {
           selectedCount={selected.size}
           busy={busy}
           quotaFull={quotaFull}
-          hasFiles={filtered.length > 0}
-          onUpload={() => {
-            if (quotaFull) {
-              setUsageDialogOpen(true);
-              return;
-            }
-            setError(null);
-            setUploadOpen(true);
-          }}
-          onEnterDownload={() => enterSelectMode("download")}
-          onEnterDelete={() => enterSelectMode("delete")}
+          onUpload={openUpload}
           onConfirmSelection={() => {
             askConfirm(
               selectMode === "delete" ? "delete" : "download",
@@ -603,13 +587,6 @@ export default function VaultPage() {
           </button>
         ) : null}
 
-        <VaultFloatSearch
-          chromeRef={chromeRef}
-          pageRef={pageRef}
-          query={query}
-          onQueryChange={setQuery}
-        />
-
         <VaultUploadDialog
           open={uploadOpen}
           usage={viewUsage}
@@ -617,7 +594,13 @@ export default function VaultPage() {
           error={error}
           onClose={() => {
             if (busy && scenarioId === "live") return;
-            if (scenarioId === "upload" || scenarioId === "upload-busy" || scenarioId === "upload-quota") return;
+            if (
+              scenarioId === "upload" ||
+              scenarioId === "upload-busy" ||
+              scenarioId === "upload-quota"
+            ) {
+              return;
+            }
             setError(null);
             setUploadOpen(false);
           }}
@@ -670,7 +653,7 @@ export default function VaultPage() {
         ) : null}
 
         <section
-          aria-labelledby="vault-list-heading"
+          aria-label={listHeading}
           onDragOver={(event) => {
             event.preventDefault();
             if (!quotaFull) setDragOver(true);
@@ -687,220 +670,182 @@ export default function VaultPage() {
             void ingestFiles(event.dataTransfer.files);
           }}
           className={cn(
-            "flex min-h-[16rem] flex-col bg-card transition-[box-shadow,background-color]",
-            CARD_SHADOW,
-            dragOver && !quotaFull && "bg-primary-soft ring-2 ring-primary",
+            "min-w-0 outline-none transition-colors",
+            dragOver && !quotaFull && "rounded-2xl bg-primary-soft/60",
           )}
         >
-          <div className="space-y-0 px-4 pb-0 pt-3 sm:px-6 sm:pt-5">
-            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-              {selectMode ? (
-                <button
-                  type="button"
-                  className="-my-2 -ml-2 flex min-h-12 min-w-12 shrink-0 cursor-pointer items-center justify-center rounded-full md:m-0 md:min-h-0 md:min-w-0 md:h-6 md:w-6"
-                  aria-label={
-                    allFilteredSelected ? "전체 선택 해제" : "전체 선택"
-                  }
-                  aria-pressed={allFilteredSelected}
-                  disabled={busy || filtered.length === 0}
-                  onClick={toggleSelectAll}
-                >
-                  <span
-                    className={cn(
-                      "flex h-6 w-6 items-center justify-center rounded-md border-2",
-                      allFilteredSelected
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border-strong bg-card",
-                    )}
-                    aria-hidden
-                  >
-                    {allFilteredSelected ? (
-                      <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                    ) : null}
-                  </span>
-                </button>
-              ) : null}
-              <h2
-                id="vault-list-heading"
-                className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-foreground"
-              >
-                {selectMode === "download"
-                  ? "받을 파일 선택"
-                  : selectMode === "delete"
-                    ? "삭제할 파일 선택"
-                    : "보관 파일"}
-              </h2>
-              <span className="shrink-0 text-base font-medium tabular-nums text-muted">
-                {filtered.length}
-                {query.trim() && filtered.length !== viewItems.length
-                  ? ` / ${viewItems.length}`
-                  : null}
-              </span>
-              {dragOver ? (
-                <p className="shrink-0 text-base tabular-nums text-muted-2">
-                  여기에 놓기
+          <div className="mb-3 min-w-0">
+            {/* 모바일: 하단 엄지 존 검색만 — 상단 검색 토글 숨김 (중복 금지) */}
+            <div className="md:hidden">
+              <ExpandableMeetingSearch
+                value={query}
+                onChange={setQuery}
+                placeholder="파일 검색"
+                label="파일 검색"
+                showSearchToggle={false}
+                toolbar={
+                  <div className="flex min-h-12 min-w-0 items-end gap-2">
+                    <h2 className="min-w-0 flex-1 truncate pb-2.5 text-xl font-bold tracking-tight text-foreground">
+                      {listHeading}
+                    </h2>
+                    <span className="shrink-0 pb-2.5 text-base font-medium tabular-nums text-muted">
+                      {filtered.length}
+                      {query.trim() && filtered.length !== viewItems.length
+                        ? ` / ${viewItems.length}`
+                        : null}
+                    </span>
+                  </div>
+                }
+              />
+              <div className="flex items-center justify-end pt-2">
+                {batchActions}
+              </div>
+              {query.trim() ? (
+                <p className="pt-2 text-base text-muted">
+                  “{query.trim()}” 검색 결과
                 </p>
               ) : null}
             </div>
-            <div className="mt-2 h-0.5 w-full bg-foreground sm:mt-2.5" aria-hidden />
-            {/* 데스크톱만 컬럼 헤더. 모바일은 M3 2줄 리스트로 표 느낌 제거. */}
-            {viewItems.length > 0 && !dragOver ? (
-              <div className="hidden h-11 shrink-0 items-center gap-3 border-b border-border px-0 sm:flex">
-                {selectMode ? (
-                  <span className="w-6 shrink-0" aria-hidden />
-                ) : null}
-                <span className="h-10 w-10 shrink-0" aria-hidden />
-                <span className="min-w-0 flex-1 text-base font-medium text-muted">
-                  이름
-                </span>
-                <div className="flex shrink-0 items-center gap-5">
-                  <span className="w-[4.5rem] text-center text-base font-medium text-muted">
-                    수정시간
-                  </span>
-                  <span className="w-[4.5rem] text-center text-base font-medium text-muted">
-                    용량
-                  </span>
-                  <span className="w-10 shrink-0" aria-hidden />
-                </div>
-              </div>
-            ) : null}
-          </div>
 
-          <div
-            className={cn(
-              "flex flex-col md:flex-1",
-              LIST_BODY_MIN_CLASS,
-            )}
-          >
-            {viewItems.length === 0 ? (
-              <div className="flex flex-1 items-center justify-center px-4 py-8">
-                <div className="flex items-center gap-3 text-muted">
-                  <Inbox
-                    className="h-6 w-6 shrink-0"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  <p className="text-base leading-5">올린 파일이 없습니다.</p>
-                </div>
-              </div>
-            ) : filtered.length === 0 ? (
-              <p className="flex flex-1 items-center px-4 py-5 text-base leading-5 text-muted sm:px-6">
-                검색 결과가 없습니다.
-              </p>
-            ) : (
-              grouped.map((group) => {
-                const visibleCount = group.items.length;
-                return (
-                <div key={group.key}>
-                  <div className="flex items-baseline justify-between gap-3 bg-card px-4 pb-1 pt-3 sm:px-6 sm:pb-1.5 sm:pt-2.5">
-                    <p className="text-base font-semibold tracking-wide text-muted">
-                      {group.label}
-                    </p>
-                    {visibleCount > 1 ? (
-                      <p className="shrink-0 text-base font-medium tabular-nums text-muted-2">
-                        {visibleCount}개
+            <div className="hidden md:block">
+              <ExpandableMeetingSearch
+                value={query}
+                onChange={setQuery}
+                placeholder="파일 검색"
+                label="파일 검색"
+                toolbar={
+                  <div className="flex min-h-12 min-w-0 items-end gap-2">
+                    <h2 className="min-w-0 flex-1 truncate pb-2.5 text-xl font-bold tracking-tight text-foreground">
+                      {listHeading}
+                    </h2>
+                    {dragOver ? (
+                      <p className="shrink-0 pb-2.5 text-base text-muted-2">
+                        여기에 놓기
                       </p>
-                    ) : null}
+                    ) : (
+                      <span className="shrink-0 pb-2.5 text-base font-medium tabular-nums text-muted">
+                        {filtered.length}
+                        {query.trim() && filtered.length !== viewItems.length
+                          ? ` / ${viewItems.length}`
+                          : null}
+                      </span>
+                    )}
                   </div>
-                  <ul className="divide-y divide-border">
-                    {group.items.map((item) => (
-                      <VaultListItem
-                        key={item.id}
-                        item={item}
-                        busy={busy}
-                        selecting={Boolean(selectMode)}
-                        checked={selected.has(item.id)}
-                        onToggle={() => toggleSelected(item.id)}
-                        onDownload={() => askConfirm("download", [item])}
-                        onShare={() => askConfirm("share", [item])}
-                        onRemove={() => askConfirm("delete", [item])}
-                      />
-                    ))}
-                  </ul>
-                </div>
-                );
-              })
-            )}
+                }
+              />
+            </div>
           </div>
 
-          <nav
-            className="flex min-w-0 flex-wrap items-center justify-center gap-1 border-t border-border bg-card px-2 py-2"
-            aria-label="보관 파일 페이지"
-          >
-            <button
-              type="button"
-              aria-label="이전 페이지"
-              disabled={currentPage <= 1 || filtered.length === 0}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className={cn(
-                "inline-flex min-h-12 min-w-12 items-center justify-center rounded-full transition-colors md:h-10 md:min-h-0 md:w-10 md:min-w-0",
-                currentPage <= 1 || filtered.length === 0
-                  ? "cursor-default text-muted-2"
-                  : "cursor-pointer text-foreground hover:bg-surface",
-              )}
-            >
-              <ChevronLeft className="h-5 w-5" strokeWidth={2.25} />
-            </button>
-            {pageNumbers.map((num) => {
-              const active = num === currentPage && filtered.length > 0;
-              return (
-                <button
-                  type="button"
-                  key={num}
-                  aria-label={`${num}페이지`}
-                  aria-current={active ? "page" : undefined}
-                  disabled={filtered.length === 0}
-                  onClick={() => setPage(num)}
-                  className={cn(
-                    "inline-flex min-h-12 min-w-12 items-center justify-center rounded-full px-2 text-base tabular-nums transition-colors md:h-10 md:min-h-0 md:min-w-10",
-                    filtered.length === 0
-                      ? "cursor-default font-medium text-muted-2"
-                      : active
-                        ? "cursor-default font-bold text-foreground"
-                        : "cursor-pointer font-semibold text-foreground/75 hover:bg-surface hover:text-foreground",
-                  )}
-                >
-                  {num}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              aria-label="다음 페이지"
-              disabled={currentPage >= totalPages || filtered.length === 0}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className={cn(
-                "inline-flex min-h-12 min-w-12 items-center justify-center rounded-full transition-colors md:h-10 md:min-h-0 md:w-10 md:min-w-0",
-                currentPage >= totalPages || filtered.length === 0
-                  ? "cursor-default text-muted-2"
-                  : "cursor-pointer text-foreground hover:bg-surface",
-              )}
-            >
-              <ChevronRight className="h-5 w-5" strokeWidth={2.25} />
-            </button>
-          </nav>
+          <div className="hidden flex-col gap-2 md:grid md:min-h-9 md:grid-cols-[11.5rem_minmax(0,1fr)_11.5rem] md:items-center md:gap-1.5">
+            <div aria-hidden />
+            <div aria-hidden />
+            <div className="flex items-center justify-end">{batchActions}</div>
+          </div>
+
+          {viewItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
+              <Inbox
+                className="h-12 w-12 text-muted-2"
+                strokeWidth={1.5}
+                aria-hidden
+              />
+              <p className="text-base text-muted">올린 파일이 없습니다.</p>
+              <Button
+                type="button"
+                className="min-h-14 w-full max-w-xs cursor-pointer rounded-2xl px-6 text-lg font-semibold md:min-h-11 md:w-auto md:text-base [&_svg]:size-5"
+                disabled={busy}
+                onClick={openUpload}
+              >
+                <Upload strokeWidth={2} />
+                올리기
+              </Button>
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="py-10 text-center text-base text-muted">
+              검색 결과가 없습니다.
+            </p>
+          ) : (
+            <>
+              <div>
+                {grouped.map((group) => {
+                  const visibleCount = group.items.length;
+                  return (
+                    <div key={group.key}>
+                      <p className="flex items-baseline justify-between gap-3 px-0 pb-2 pt-5 first:pt-3">
+                        <span className="text-base font-semibold tracking-tight text-muted">
+                          {group.label}
+                        </span>
+                        {visibleCount > 1 ? (
+                          <span className="shrink-0 text-base font-medium tabular-nums text-muted-2">
+                            {visibleCount}개
+                          </span>
+                        ) : null}
+                      </p>
+                      <ul className="divide-y divide-border">
+                        {group.items.map((item) => (
+                          <VaultListItem
+                            key={item.id}
+                            item={item}
+                            busy={busy}
+                            selecting={Boolean(selectMode)}
+                            checked={selected.has(item.id)}
+                            onToggle={() => toggleSelected(item.id)}
+                            onDownload={() => askConfirm("download", [item])}
+                            onShare={() => askConfirm("share", [item])}
+                            onRemove={() => askConfirm("delete", [item])}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+              <RecordsPageNav
+                page={currentPage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </>
+          )}
         </section>
       </div>
     </PageContainer>
   );
 }
 
-/** 타이틀 아래(모바일) / 크롬 좌측(데스크톱) 용량 게이지. 사용량 / 한도. */
-function VaultQuotaGauge({ usage }: { usage: VaultUsage | null }) {
+/** 용량 메타 — 카드/섹션 배경 없음. 대시보드 supporting meta와 동일 밴드. */
+function VaultQuotaMeta({
+  usage,
+  onOpen,
+}: {
+  usage: VaultUsage | null;
+  onOpen: () => void;
+}) {
   const quota = usage?.quota ?? VAULT_QUOTA_BYTES;
   const used = usage?.used ?? 0;
   const ratio = quota > 0 ? Math.min(1, used / quota) : 0;
-  const pct = Math.round(ratio * 1000) / 10;
-  const barPct = Math.min(100, Math.max(0, (used / Math.max(quota, 1)) * 100));
   const tight = ratio >= 0.9;
+  const barPct = Math.min(100, Math.max(0, (used / Math.max(quota, 1)) * 100));
 
   return (
-    <div
-      className="flex h-11 w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-full bg-card px-3.5 ring-1 ring-border sm:gap-3 sm:px-4"
-      title={`${pct}% 사용, ${formatVaultSize(used)} / ${formatVaultSize(quota)}`}
+    <button
+      type="button"
+      onClick={onOpen}
+      title={`${formatVaultSize(used)} / ${formatVaultSize(quota)}`}
+      className="group flex w-full max-w-sm cursor-pointer flex-col items-center gap-1.5 bg-transparent px-2"
     >
+      <p
+        className={cn(
+          "text-base font-medium tabular-nums leading-none",
+          tight ? "text-warning" : "text-muted",
+        )}
+      >
+        {formatVaultSize(used)}
+        <span className="mx-1 text-muted-2">/</span>
+        {formatVaultSize(quota)}
+      </p>
       <div
-        className="relative h-2 min-w-[5.5rem] flex-1 overflow-hidden rounded-full bg-surface-2"
+        className="h-1 w-full max-w-[12rem] overflow-hidden rounded-full bg-border/70"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -915,15 +860,7 @@ function VaultQuotaGauge({ usage }: { usage: VaultUsage | null }) {
           style={{ width: `${barPct}%` }}
         />
       </div>
-      <p
-        className={cn(
-          "min-w-0 shrink-0 whitespace-nowrap text-right text-base font-semibold tabular-nums leading-none",
-          tight ? "text-warning" : "text-foreground",
-        )}
-      >
-        {formatVaultSize(used)} / {formatVaultSize(quota)}
-      </p>
-    </div>
+    </button>
   );
 }
 
@@ -1041,7 +978,7 @@ function VaultItemMoreMenu({
               <button
                 type="button"
                 role="menuitem"
-                className={cn(MORE_MENU_ITEM_CLASS, "text-masked hover:bg-masked-soft")}
+                className={cn(MORE_MENU_ITEM_CLASS, "text-foreground hover:bg-surface/70")}
                 onClick={() => {
                   setOpen(false);
                   onRemove();
@@ -1104,11 +1041,9 @@ function VaultListItem({
   return (
     <li
       className={cn(
-        "flex min-h-12 min-w-0 items-center gap-2.5 px-4 py-3 transition-colors sm:min-h-14 sm:gap-3 sm:px-6 sm:py-3.5",
+        "group relative flex min-h-[5.5rem] items-center gap-3 py-6 transition-colors hover:bg-surface/70 sm:min-h-[6.25rem] sm:gap-4 sm:py-8",
         selecting && "cursor-pointer",
-        selecting && checked
-          ? "bg-primary/15"
-          : "hover:bg-surface/70",
+        selecting && checked && "bg-primary-soft/40",
       )}
       onClick={
         selecting && !busy
@@ -1139,7 +1074,7 @@ function VaultListItem({
       {selecting ? (
         <span
           className={cn(
-            "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2",
+            "relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2",
             checked
               ? "border-primary bg-primary text-primary-foreground"
               : "border-border-strong bg-card",
@@ -1149,44 +1084,47 @@ function VaultListItem({
           {checked ? <Check className="h-3.5 w-3.5" strokeWidth={2.5} /> : null}
         </span>
       ) : null}
+
+      <div className="relative z-10 w-[4.75rem] shrink-0 sm:w-[5.25rem]">
+        <p className="text-lg tabular-nums leading-6 tracking-tight text-foreground">
+          {timeLabel}
+        </p>
+      </div>
+
       <VaultFileIcon
         name={item.name}
         mime={item.mime}
-        size={20}
-        className="h-10 w-10"
+        size={22}
+        className="relative z-10 h-11 w-11 shrink-0 self-center rounded-full border border-border bg-transparent sm:h-12 sm:w-12"
       />
-      {/* 종류는 타일의 확장자로 읽는다. 모바일 보조문구는 용량만. */}
-      <div className="min-w-0 flex-1">
+
+      <div className="relative z-10 min-w-0 flex-1">
         <p
           className={cn(
-            "truncate text-lg font-semibold leading-6",
-            selecting && checked ? "text-primary" : "text-foreground",
+            "min-w-0 truncate text-lg font-semibold leading-none tracking-tight",
+            selecting && checked
+              ? "text-primary"
+              : "text-foreground group-hover:text-primary",
           )}
+          title={item.name}
         >
           {item.name}
         </p>
-        <p className="mt-0.5 truncate text-base leading-5 text-muted sm:hidden">
-          {sizeLabel}
-        </p>
+        <p className="mt-2 truncate text-base text-muted">{sizeLabel}</p>
       </div>
-      <div className="hidden shrink-0 items-center gap-5 sm:flex">
-        <span className="w-[4.5rem] text-center text-base tabular-nums text-muted">
-          {timeLabel}
-        </span>
-        <span className="w-[4.5rem] text-center text-base tabular-nums text-muted">
-          {sizeLabel}
-        </span>
-      </div>
+
       {selecting ? (
         <span className="w-12 shrink-0 md:w-10" aria-hidden />
       ) : (
-        <VaultItemMoreMenu
-          fileName={item.name}
-          busy={busy}
-          onDownload={onDownload}
-          onShare={onShare}
-          onRemove={onRemove}
-        />
+        <div className="relative z-10 shrink-0">
+          <VaultItemMoreMenu
+            fileName={item.name}
+            busy={busy}
+            onDownload={onDownload}
+            onShare={onShare}
+            onRemove={onRemove}
+          />
+        </div>
       )}
     </li>
   );

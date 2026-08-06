@@ -5,20 +5,23 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Bell,
+  Building2,
   ChevronDown,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Gift,
   Plus,
-  UserRound,
-  UsersRound,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SidebarUsage } from "@/components/layout/sidebar-usage";
+import {
+  RAIL_ICON_CELL,
+  RailHoverCaption,
+} from "@/components/layout/rail-hover-caption";
 import { UserProfile } from "@/components/layout/user-profile";
 import { useAppContext } from "@/context/app-context";
 import { useNotificationsUi } from "@/context/notifications-ui-context";
@@ -35,12 +38,15 @@ import {
   type NavItem,
 } from "@/lib/constants";
 import {
-  DEMAND_SURVEY_ACTIVE,
   TEAM_FEATURE_ADMIN_ONLY,
   TEAM_FEATURE_ENABLED,
 } from "@/lib/feature-flags";
-import { SURVEY_COMPLETED_EVENT } from "@/lib/stt/survey";
 import { cn } from "@/lib/utils";
+import {
+  nextCollapsedAfterPinToggle,
+  resolveSidebarVisual,
+  SIDEBAR_RAIL_MIN_WIDTH_PX,
+} from "@/lib/sidebar-layout";
 import { isMeetingsRoute, isTeamRoute } from "@/lib/workspace-route";
 
 const SIDEBAR_COLLAPSED_KEY = "faith.sidebar.collapsed";
@@ -75,7 +81,7 @@ function sectionHasActive(pathname: string, items: NavItem[]) {
   return items.some((item) => isNavActive(pathname, item.href));
 }
 
-function readStoredOpen(key: string, fallback = true): boolean {
+function readStoredOpen(key: string, fallback = false): boolean {
   try {
     const v = window.localStorage.getItem(key);
     if (v === null) return fallback;
@@ -119,31 +125,45 @@ function AdminNavSection({
         onClick={onToggle}
         className={cn(
           "flex min-h-12 w-full cursor-pointer items-center gap-1 rounded-xl px-3 text-sm font-semibold tracking-wide text-muted-2 outline-none transition-colors",
-          "hover:bg-surface-2 hover:text-foreground",
-          "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
-          rail && "lg:sr-only",
+          "hover:text-foreground",
+          "focus-visible:ring-2 focus-visible:ring-ring",
+          rail && "sr-only",
         )}
       >
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-        {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-        ) : (
-          <ChevronRight className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-        )}
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 transition-transform duration-200 ease-out motion-reduce:transition-none",
+            open ? "rotate-0" : "-rotate-90",
+          )}
+          strokeWidth={1.75}
+          aria-hidden
+        />
       </button>
-      {open ? (
-        <div className="space-y-0.5">
-          {items.map((item) => (
-            <NavLink
-              key={item.href}
-              item={item}
-              active={isNavActive(pathname, item.href)}
-              onNavigate={onNavigate}
-              collapsed={rail}
-            />
-          ))}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div
+            className="space-y-0.5"
+            inert={!open ? true : undefined}
+            aria-hidden={!open}
+          >
+            {items.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={isNavActive(pathname, item.href)}
+                onNavigate={onNavigate}
+                collapsed={rail}
+              />
+            ))}
+          </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -167,14 +187,16 @@ function NavLink({
     <Link
       href={item.href}
       onClick={onNavigate}
-      title={item.title}
+      aria-label={item.title}
       className={cn(
-        "group relative flex cursor-pointer items-center gap-2.5 rounded-xl py-2.5 text-base font-medium outline-none transition-colors",
+        "flex cursor-pointer items-center rounded-xl text-base font-medium outline-none transition-colors",
         "hover:bg-surface-2 hover:text-foreground",
         "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
         "active:bg-surface-2",
         active ? "bg-surface text-foreground" : "text-muted",
-        collapsed ? "justify-center px-2" : "px-3",
+        collapsed
+          ? RAIL_ICON_CELL
+          : "gap-2.5 px-3 py-2.5",
       )}
     >
       <Icon
@@ -183,14 +205,19 @@ function NavLink({
           active ? "text-primary" : "text-muted-2 group-hover:text-foreground",
         )}
       />
-      <span className={cn("min-w-0 flex-1 truncate", collapsed && "sr-only")}>
-        {item.title}
-      </span>
+      {collapsed ? (
+        <>
+          <span className="sr-only">{item.title}</span>
+          <RailHoverCaption>{item.title}</RailHoverCaption>
+        </>
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{item.title}</span>
+      )}
       {!collapsed && trailing ? (
         <span className="inline-flex shrink-0 items-center">{trailing}</span>
       ) : null}
       {collapsed && trailing ? (
-        <span className="absolute right-1 top-1 inline-flex items-center">
+        <span className="absolute right-0.5 top-0.5 inline-flex items-center">
           {trailing}
         </span>
       ) : null}
@@ -209,7 +236,59 @@ function NavLink({
   );
 }
 
-function MeetingsNav({
+function PersonalNav({
+  item,
+  pathname,
+  onNavigate,
+  collapsed = false,
+}: {
+  item: NavItem;
+  pathname: string;
+  onNavigate?: () => void;
+  collapsed?: boolean;
+}) {
+  const { workspaceId, setWorkspaceId } = useAppContext();
+  const meetingsActive = isMeetingsRoute(pathname);
+  const active = workspaceId === "personal" && meetingsActive;
+  const Icon = item.icon;
+
+  return (
+    <Link
+      href={item.href}
+      onClick={() => {
+        setWorkspaceId("personal");
+        onNavigate?.();
+      }}
+      aria-label={item.title}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex cursor-pointer items-center rounded-xl text-base font-medium outline-none transition-colors",
+        "hover:bg-surface-2 hover:text-foreground",
+        "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
+        "active:bg-surface-2",
+        active ? "bg-surface text-foreground" : "text-muted",
+        collapsed ? RAIL_ICON_CELL : "gap-2.5 px-3 py-2.5",
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-5 w-5 shrink-0 transition-colors",
+          active ? "text-primary" : "text-muted-2 group-hover:text-foreground",
+        )}
+      />
+      {collapsed ? (
+        <>
+          <span className="sr-only">{item.title}</span>
+          <RailHoverCaption>{item.title}</RailHoverCaption>
+        </>
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{item.title}</span>
+      )}
+    </Link>
+  );
+}
+
+function TeamNav({
   item,
   pathname,
   onNavigate,
@@ -227,16 +306,15 @@ function MeetingsNav({
   const { resolveRole, isPreviewing, previewRole } = useTeamRolePreview();
   const meetingsActive = isMeetingsRoute(pathname);
   const teamRouteActive = isTeamRoute(pathname);
-  const sectionActive = meetingsActive || teamRouteActive;
+  const sectionActive =
+    workspaceId === "team" && (meetingsActive || teamRouteActive);
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const [teams, setTeams] = useState<
-    Array<
-      {
-        id: string;
-        name: string;
-        role: "OWNER" | "ADMIN" | "MEMBER";
-      }
-    >
+    Array<{
+      id: string;
+      name: string;
+      role: "OWNER" | "ADMIN" | "MEMBER";
+    }>
   >([]);
   const open = userOpen ?? true;
   const Icon = item.icon;
@@ -291,13 +369,34 @@ function MeetingsNav({
   }, [setActiveTeamId, setWorkspaceId, teamEnabled]);
 
   if (collapsed) {
+    if (!teamEnabled) {
+      return (
+        <span
+          aria-disabled="true"
+          title={
+            TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
+              ? "팀 기능은 관리자에게만 제공됩니다"
+              : "팀 설정은 현재 준비 중입니다"
+          }
+          className={cn(RAIL_ICON_CELL, "cursor-not-allowed opacity-50")}
+        >
+          <Icon className="h-5 w-5 shrink-0 text-muted-2" />
+          <span className="sr-only">{item.title}</span>
+          <RailHoverCaption>{item.title}</RailHoverCaption>
+        </span>
+      );
+    }
     return (
       <Link
         href={item.href}
-        onClick={() => onNavigate?.()}
-        title={item.title}
+        onClick={() => {
+          setWorkspaceId("team");
+          onNavigate?.();
+        }}
+        aria-label={item.title}
+        aria-current={sectionActive ? "page" : undefined}
         className={cn(
-          "group flex cursor-pointer items-center justify-center rounded-xl px-2 py-2.5 outline-none transition-colors",
+          RAIL_ICON_CELL,
           "hover:bg-surface-2 hover:text-foreground",
           "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
           sectionActive ? "bg-surface text-foreground" : "text-muted",
@@ -312,6 +411,7 @@ function MeetingsNav({
           )}
         />
         <span className="sr-only">{item.title}</span>
+        <RailHoverCaption>{item.title}</RailHoverCaption>
       </Link>
     );
   }
@@ -324,189 +424,149 @@ function MeetingsNav({
           sectionActive ? "bg-surface text-foreground" : "text-muted",
         )}
       >
-        <Link
-          href={item.href}
-          onClick={() => {
-            onNavigate?.();
-          }}
-          className={cn(
-            "flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-2 text-base font-medium outline-none transition-colors",
-            "hover:text-foreground",
-            "focus-visible:ring-2 focus-visible:ring-ring",
-            sectionActive ? "text-foreground" : "text-muted",
-          )}
-        >
-          <Icon
+        {!teamEnabled ? (
+          <span
+            aria-disabled="true"
+            title={
+              TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
+                ? "팀 기능은 관리자에게만 제공됩니다"
+                : "팀 설정은 현재 준비 중입니다"
+            }
+            className="flex min-w-0 flex-1 cursor-not-allowed items-center gap-2.5 rounded-lg px-1.5 py-2 text-base font-medium text-muted-2 opacity-50"
+          >
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="flex-1 truncate">
+              {TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
+                ? "팀, 관리자 전용"
+                : item.title}
+            </span>
+          </span>
+        ) : (
+          <Link
+            href={item.href}
+            onClick={() => {
+              setWorkspaceId("team");
+              onNavigate?.();
+            }}
             className={cn(
-              "h-5 w-5 shrink-0",
-              sectionActive
-                ? "text-primary"
-                : "text-muted-2 group-hover:text-foreground",
+              "flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-2 text-base font-medium outline-none transition-colors",
+              "hover:text-foreground",
+              "focus-visible:ring-2 focus-visible:ring-ring",
+              sectionActive ? "text-foreground" : "text-muted",
             )}
-          />
-          <span className="flex-1 truncate">{item.title}</span>
-          {item.badge ? (
-            <Badge
-              variant="sidebar"
+          >
+            <Icon
               className={cn(
-                "min-w-5 justify-center px-1.5 py-0 text-xs",
-                sectionActive && "bg-primary-soft text-primary",
+                "h-5 w-5 shrink-0",
+                sectionActive
+                  ? "text-primary"
+                  : "text-muted-2 group-hover:text-foreground",
               )}
-            >
-              {item.badge}
-            </Badge>
-          ) : null}
-        </Link>
+            />
+            <span className="flex-1 truncate">{item.title}</span>
+          </Link>
+        )}
 
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-label={open ? "워크스페이스 접기" : "워크스페이스 펼치기"}
-          onClick={() => setUserOpen((v) => !(v ?? true))}
-          className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
-        >
-          {open ? (
-            <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
-          ) : (
-            <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
-          )}
-        </button>
+        {teamEnabled && teams.length > 0 ? (
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-label={open ? "팀 목록 접기" : "팀 목록 펼치기"}
+            onClick={() => setUserOpen((v) => !(v ?? true))}
+            className="flex h-9 w-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-muted-2 transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            {open ? (
+              <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+            ) : (
+              <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+            )}
+          </button>
+        ) : null}
       </div>
 
-      {open ? (
+      {teamEnabled && open && teams.length === 0 ? (
         <ul className="mt-0.5 space-y-0.5 border-l border-border ml-5 pl-2">
           <li>
-            {!teamEnabled ? (
-              <span
-                aria-disabled="true"
-                title={
-                  TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
-                    ? "팀 기능은 관리자에게만 제공됩니다"
-                      : "팀 설정은 현재 준비 중입니다"
-                }
-                className="flex min-h-12 cursor-not-allowed items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-2 opacity-50"
-              >
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-surface-2 text-muted-2">
-                  <UsersRound className="h-4 w-4" strokeWidth={1.75} />
-                </span>
-                <span className="flex-1">
-                  {TEAM_FEATURE_ENABLED && TEAM_FEATURE_ADMIN_ONLY
-                    ? "팀, 관리자 전용"
-                    : "팀"}
-                </span>
+            <Link
+              href="/team"
+              onClick={() => {
+                setWorkspaceId("team");
+                onNavigate?.();
+              }}
+              className={cn(
+                "flex min-h-12 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm font-semibold transition-colors",
+                "hover:bg-surface-2 hover:text-foreground",
+                workspaceId === "team" && teamRouteActive
+                  ? "bg-primary-soft text-primary"
+                  : "text-muted-2",
+              )}
+            >
+              <span className="grid h-7 w-7 place-items-center rounded-full bg-primary-soft text-primary">
+                <Plus className="h-4 w-4" strokeWidth={2} />
               </span>
-            ) : teams.length === 0 ? (
-              <Link
-                href="/team"
-                onClick={() => {
-                  setWorkspaceId("team");
-                  onNavigate?.();
-                }}
-                className={cn(
-                  "flex min-h-12 cursor-pointer items-center gap-2 rounded-lg px-2 text-sm font-semibold transition-colors",
-                  "hover:bg-surface-2 hover:text-foreground",
-                  workspaceId === "team" && teamRouteActive
-                    ? "bg-primary-soft text-primary"
-                    : "text-muted-2",
-                )}
-              >
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-primary-soft text-primary">
-                  <Plus className="h-4 w-4" strokeWidth={2} />
-                </span>
-                <span>팀</span>
-              </Link>
-            ) : (
-              <ul className="space-y-0.5">
-                {teams.map((team) => {
-                  const teamContextActive =
-                    activeTeamId === team.id &&
-                    workspaceId === "team" &&
-                    (meetingsActive || teamRouteActive);
-                  const teamActive = teamContextActive && pathname === "/team";
-                  const viewRole =
-                    activeTeamId === team.id
-                      ? resolveRole(team.role)
-                      : team.role;
-
-                  return (
-                    <li key={team.id}>
-                      <Link
-                        href="/team"
-                        onClick={() => {
-                          setWorkspaceId("team");
-                          setActiveTeamId(team.id);
-                          onNavigate?.();
-                        }}
-                        className={cn(
-                          "flex min-h-12 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
-                          "hover:bg-surface-2 hover:text-foreground",
-                          teamActive
-                            ? "bg-primary-soft font-medium text-primary"
-                            : teamContextActive
-                              ? "font-medium text-foreground"
-                              : "font-normal text-muted-2",
-                        )}
-                      >
-                        <UsersRound
-                          className={cn(
-                            "h-4 w-4 shrink-0",
-                            teamActive || teamContextActive
-                              ? "text-primary"
-                              : "text-muted-2",
-                          )}
-                          strokeWidth={1.75}
-                          aria-hidden
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate">{team.name}</span>
-                          {viewRole === "MEMBER" ||
-                          (isPreviewing &&
-                            activeTeamId === team.id &&
-                            previewRole) ? (
-                            <span className="block truncate text-sm font-normal text-muted-2">
-                              {TEAM_PREVIEW_ROLE_LABEL[viewRole]}
-                            </span>
-                          ) : null}
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+              <span>팀 만들기</span>
+            </Link>
           </li>
-          <li>
-            {(() => {
-              const wsActive = workspaceId === "personal" && meetingsActive;
+        </ul>
+      ) : null}
 
-              return (
+      {teamEnabled && open && teams.length > 0 ? (
+        <ul className="mt-0.5 space-y-0.5 border-l border-border ml-5 pl-2">
+          {teams.map((team) => {
+            const teamContextActive =
+              activeTeamId === team.id &&
+              workspaceId === "team" &&
+              (meetingsActive || teamRouteActive);
+            const teamActive = teamContextActive && pathname === "/team";
+            const viewRole =
+              activeTeamId === team.id
+                ? resolveRole(team.role)
+                : team.role;
+
+            return (
+              <li key={team.id}>
                 <Link
-                  href="/dashboard"
+                  href="/team"
                   onClick={() => {
-                    setWorkspaceId("personal");
+                    setWorkspaceId("team");
+                    setActiveTeamId(team.id);
                     onNavigate?.();
                   }}
                   className={cn(
                     "flex min-h-12 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
                     "hover:bg-surface-2 hover:text-foreground",
-                    wsActive
+                    teamActive
                       ? "bg-primary-soft font-medium text-primary"
-                      : "font-normal text-muted-2",
+                      : teamContextActive
+                        ? "font-medium text-foreground"
+                        : "font-normal text-muted-2",
                   )}
                 >
-                  <UserRound
+                  <Building2
                     className={cn(
                       "h-4 w-4 shrink-0",
-                      wsActive ? "text-primary" : "text-muted-2",
+                      teamActive || teamContextActive
+                        ? "text-primary"
+                        : "text-muted-2",
                     )}
                     strokeWidth={1.75}
                     aria-hidden
                   />
-                  <span className="min-w-0 flex-1 truncate">개인</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{team.name}</span>
+                    {viewRole === "MEMBER" ||
+                    (isPreviewing &&
+                      activeTeamId === team.id &&
+                      previewRole) ? (
+                      <span className="block truncate text-sm font-normal text-muted-2">
+                        {TEAM_PREVIEW_ROLE_LABEL[viewRole]}
+                      </span>
+                    ) : null}
+                  </span>
                 </Link>
-              );
-            })()}
-          </li>
+              </li>
+            );
+          })}
         </ul>
       ) : null}
     </div>
@@ -525,67 +585,41 @@ export function AppSidebar({
   const teamEnabled =
     TEAM_FEATURE_ENABLED &&
     (!TEAM_FEATURE_ADMIN_ONLY || isAdmin);
-  const [collapsed, setCollapsed] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
-  const [surveyGiftAvailable, setSurveyGiftAvailable] = useState(false);
-  const [opsOpen, setOpsOpen] = useState(true);
-  const [devOpen, setDevOpen] = useState(true);
+  // true = 레일(아이콘) 선호. 펼침은 상단 핀만.
+  const [collapsed, setCollapsed] = useState(true);
+  const [isRailLayout, setIsRailLayout] = useState(false);
+  const [opsOpen, setOpsOpen] = useState(false);
+  const [devOpen, setDevOpen] = useState(false);
 
   useEffect(() => {
     onMobileClose?.();
   }, [pathname, onMobileClose]);
 
   useEffect(() => {
-    if (!DEMAND_SURVEY_ACTIVE || !session?.user?.id) {
-      setSurveyGiftAvailable(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/survey", { cache: "no-store" });
-        const data = (await res.json()) as { ok?: boolean; completed?: boolean };
-        if (!cancelled && data.ok) setSurveyGiftAvailable(!data.completed);
-      } catch {
-        if (!cancelled) setSurveyGiftAvailable(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.user?.id, pathname]);
-
-  useEffect(() => {
-    function onSurveyCompleted() {
-      setSurveyGiftAvailable(false);
-    }
-    window.addEventListener(SURVEY_COMPLETED_EVENT, onSurveyCompleted);
-    return () => {
-      window.removeEventListener(SURVEY_COMPLETED_EVENT, onSurveyCompleted);
-    };
-  }, []);
-
-  useEffect(() => {
     try {
-      setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
+      const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+      // 미설정이면 Cloudflare식 기본: 레일(접힘)
+      setCollapsed(stored === null ? true : stored === "1");
     } catch {
-      setCollapsed(false);
+      setCollapsed(true);
     }
-    setOpsOpen(readStoredOpen(SIDEBAR_OPS_OPEN_KEY, true));
-    setDevOpen(readStoredOpen(SIDEBAR_DEV_OPEN_KEY, true));
+    setOpsOpen(readStoredOpen(SIDEBAR_OPS_OPEN_KEY, false));
+    setDevOpen(readStoredOpen(SIDEBAR_DEV_OPEN_KEY, false));
   }, []);
 
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const sync = () => setIsDesktop(mq.matches);
+    const railMq = window.matchMedia(
+      `(min-width: ${SIDEBAR_RAIL_MIN_WIDTH_PX}px)`,
+    );
+    const sync = () => setIsRailLayout(railMq.matches);
     sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
+    railMq.addEventListener("change", sync);
+    return () => railMq.removeEventListener("change", sync);
   }, []);
 
   function toggleCollapsed() {
     setCollapsed((current) => {
-      const next = !current;
+      const next = nextCollapsedAfterPinToggle(current);
       try {
         window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? "1" : "0");
       } catch {
@@ -611,8 +645,13 @@ export function AppSidebar({
     });
   }
 
-  // 모바일 드로어는 항상 펼침, 데스크톱만 레일 모드
-  const rail = collapsed && isDesktop;
+  const visual = resolveSidebarVisual({
+    isRailLayout,
+    collapsed,
+  });
+  // rail = 아이콘만 보이는 시각 상태 (모바일 드로어는 항상 펼침 크롬)
+  const rail = isRailLayout && !visual.showExpandedChrome;
+  const inFlowExpanded = visual.inFlowExpanded;
   const opsSectionOpen =
     opsOpen || sectionHasActive(pathname, OPS_NAV_ITEMS);
   const devSectionOpen =
@@ -620,20 +659,38 @@ export function AppSidebar({
 
   return (
     <>
+      {/* rail: 레일 슬롯만 예약. pinned: aside 자체가 in-flow w-60 */}
+      {visual.contentOffset === "rail" ? (
+        <div
+          className="relative hidden h-full w-[4.5rem] shrink-0 md:block"
+          aria-hidden
+          data-sidebar-offset="rail"
+        />
+      ) : null}
       <aside
         className={cn(
           "flex shrink-0 flex-col border-r border-border bg-card",
-          "fixed inset-y-0 left-0 z-50 h-dvh transition-[width,transform] duration-200 ease-out",
-          "lg:static lg:inset-auto lg:h-full lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-          rail ? "w-60 lg:w-[4.5rem]" : "w-60",
+          "fixed inset-y-0 left-0 z-50 h-dvh w-60",
+          "transition-[width,transform,box-shadow] duration-200 ease-out",
+          // 모바일(< md): 햄버거 드로어. md+: 항상 보이며 레일/핀.
+          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          isRailLayout &&
+            inFlowExpanded &&
+            "md:static md:inset-auto md:h-full md:w-60 md:shadow-none",
+          isRailLayout &&
+            !inFlowExpanded &&
+            "md:absolute md:inset-y-0 md:left-0 md:h-full md:w-[4.5rem] md:shadow-none",
         )}
+        data-sidebar-mode={visual.mode}
+        data-sidebar-offset={visual.contentOffset}
       >
+        {/* 핀 헤더 — md+ 펼침/접음은 이 버튼만. 모바일은 햄버거 드로어. */}
         <div
           className={cn(
-            "flex h-16 shrink-0 items-center gap-1 px-3",
-            rail ? "justify-between lg:justify-center lg:px-2" : "justify-between",
+            "flex h-16 shrink-0 items-center",
+            rail ? "justify-center px-0" : "justify-between gap-1 px-3",
           )}
+          data-sidebar-zone="pin"
         >
           <Link
             href="/dashboard"
@@ -643,151 +700,184 @@ export function AppSidebar({
             }}
             className={cn(
               "min-w-0 cursor-pointer text-xl font-bold tracking-tight text-foreground transition-opacity hover:opacity-70",
-              rail && "lg:hidden",
+              rail && "hidden",
             )}
           >
             {APP_NAME}
           </Link>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-10 w-10 shrink-0 text-muted hover:bg-surface-2 hover:text-foreground",
-              "hidden lg:inline-flex",
-            )}
-            aria-label={rail ? "메뉴 펼치기" : "메뉴 접기"}
-            aria-expanded={!rail}
-            onClick={toggleCollapsed}
-          >
-            {rail ? (
-              <ChevronsRight className="h-5 w-5" strokeWidth={1.75} />
-            ) : (
-              <ChevronsLeft className="h-5 w-5" strokeWidth={1.75} />
-            )}
-          </Button>
+          {!isRailLayout ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="ml-auto h-12 w-12 shrink-0 text-muted hover:bg-surface-2 hover:text-foreground md:hidden"
+              aria-label="메뉴 닫기"
+              onClick={() => onMobileClose?.()}
+            >
+              <X className="h-5 w-5" strokeWidth={1.75} />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-12 w-12 shrink-0 text-muted hover:bg-surface-2 hover:text-foreground",
+                "hidden md:inline-flex",
+              )}
+              aria-label={
+                collapsed ? "메뉴 고정 펼치기" : "메뉴 고정 해제"
+              }
+              aria-expanded={!collapsed}
+              aria-pressed={!collapsed}
+              title={
+                collapsed
+                  ? "메뉴 펼침 고정"
+                  : "고정 해제 · 아이콘 레일"
+              }
+              data-sidebar-zone="pin"
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleCollapsed();
+              }}
+            >
+              {collapsed ? (
+                <ChevronsRight className="h-5 w-5" strokeWidth={1.75} />
+              ) : (
+                <ChevronsLeft className="h-5 w-5" strokeWidth={1.75} />
+              )}
+            </Button>
+          )}
         </div>
 
-        <nav
-          className={cn(
-            "min-h-0 flex-1 overflow-y-auto overscroll-y-contain py-2",
-            rail ? "px-3 lg:px-2" : "px-3",
-          )}
-        >
-          <div className="space-y-0.5">
-            {NAV_ITEMS.map((item) =>
-              item.href === "/dashboard" ? (
-                <MeetingsNav
-                  key={item.href}
-                  item={item}
-                  pathname={pathname}
-                  onNavigate={onMobileClose}
-                  collapsed={rail}
-                  teamEnabled={teamEnabled}
-                />
-              ) : (
-                <NavLink
-                  key={item.href}
-                  item={item}
-                  active={isNavActive(pathname, item.href)}
-                  onNavigate={onMobileClose}
-                  collapsed={rail}
-                  trailing={
-                    item.href === "/plan" && surveyGiftAvailable ? (
-                      <Gift
-                        className={cn(
-                          "text-primary",
-                          rail ? "h-3.5 w-3.5" : "h-4 w-4",
-                        )}
-                        strokeWidth={1.75}
-                        aria-label="설문 선물 가능"
-                      />
-                    ) : null
-                  }
-                />
-              ),
-            )}
-          </div>
-
-          <SidebarUsage
-            collapsed={rail}
-            onNavigate={onMobileClose}
-          />
-
-          {isAdmin ? (
-            <>
-              <AdminNavSection
-                label="운영"
-                open={opsSectionOpen}
-                onToggle={toggleOpsOpen}
-                items={OPS_NAV_ITEMS}
-                pathname={pathname}
-                onNavigate={onMobileClose}
-                rail={rail}
-              />
-              <AdminNavSection
-                label="개발자"
-                open={devSectionOpen}
-                onToggle={toggleDevOpen}
-                items={DEV_NAV_ITEMS}
-                pathname={pathname}
-                onNavigate={onMobileClose}
-                rail={rail}
-              />
-            </>
-          ) : null}
-        </nav>
-
-        <div className={cn("shrink-0 space-y-1 p-3", rail && "lg:px-2")}>
-          <button
-            type="button"
-            title="알림 센터"
-            aria-label="알림 센터"
-            aria-expanded={notificationsOpen}
-            onClick={() => {
-              onMobileClose?.();
-              openNotifications();
-            }}
+        <div className="flex min-h-0 flex-1 flex-col" data-sidebar-zone="nav">
+          <nav
             className={cn(
-              "group flex w-full cursor-pointer items-center gap-2.5 rounded-xl py-2.5 text-base font-medium text-muted outline-none transition-colors",
-              "hover:bg-surface-2 hover:text-foreground",
-              "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
-              "active:bg-surface-2",
-              notificationsOpen ? "bg-surface text-foreground" : "text-muted",
-              rail ? "justify-center px-2" : "px-3",
+              "min-h-0 flex-1 overscroll-y-contain py-2",
+              rail
+                ? "overflow-x-visible overflow-y-auto px-0 pb-8"
+                : "overflow-y-auto px-3",
             )}
           >
-            <span className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center">
-              <Bell
-                className={cn(
-                  "h-5 w-5 transition-colors",
-                  notificationsOpen
-                    ? "text-primary"
-                    : "text-muted-2 group-hover:text-foreground",
-                )}
-                strokeWidth={1.75}
-                aria-hidden
-              />
-              {notificationCount > 0 ? (
-                <span
-                  className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card"
+            <div className="space-y-0.5">
+              {NAV_ITEMS.map((item) =>
+                item.href === "/dashboard" ? (
+                  <PersonalNav
+                    key={item.href}
+                    item={item}
+                    pathname={pathname}
+                    onNavigate={onMobileClose}
+                    collapsed={rail}
+                  />
+                ) : item.href === "/team" ? (
+                  <TeamNav
+                    key={item.href}
+                    item={item}
+                    pathname={pathname}
+                    onNavigate={onMobileClose}
+                    collapsed={rail}
+                    teamEnabled={teamEnabled}
+                  />
+                ) : (
+                  <NavLink
+                    key={item.href}
+                    item={item}
+                    active={isNavActive(pathname, item.href)}
+                    onNavigate={onMobileClose}
+                    collapsed={rail}
+                  />
+                ),
+              )}
+            </div>
+
+            <SidebarUsage
+              collapsed={rail}
+              onNavigate={onMobileClose}
+            />
+
+            {isAdmin ? (
+              <>
+                <AdminNavSection
+                  label="운영"
+                  open={opsSectionOpen}
+                  onToggle={toggleOpsOpen}
+                  items={OPS_NAV_ITEMS}
+                  pathname={pathname}
+                  onNavigate={onMobileClose}
+                  rail={rail}
+                />
+                <AdminNavSection
+                  label="개발"
+                  open={devSectionOpen}
+                  onToggle={toggleDevOpen}
+                  items={DEV_NAV_ITEMS}
+                  pathname={pathname}
+                  onNavigate={onMobileClose}
+                  rail={rail}
+                />
+              </>
+            ) : null}
+          </nav>
+
+          <div
+            className={cn("shrink-0 space-y-1", rail ? "px-0 py-3" : "p-3")}
+          >
+            <button
+              type="button"
+              aria-label="알림 센터"
+              aria-expanded={notificationsOpen}
+              onClick={() => {
+                onMobileClose?.();
+                openNotifications();
+              }}
+              className={cn(
+                "text-base font-medium text-muted outline-none transition-colors",
+                "hover:bg-surface-2 hover:text-foreground",
+                "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
+                "active:bg-surface-2",
+                notificationsOpen ? "bg-surface text-foreground" : "text-muted",
+                rail
+                  ? RAIL_ICON_CELL
+                  : "flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2.5",
+              )}
+            >
+              <span className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                <Bell
+                  className={cn(
+                    "h-5 w-5 transition-colors",
+                    notificationsOpen
+                      ? "text-primary"
+                      : "text-muted-2 group-hover:text-foreground",
+                  )}
+                  strokeWidth={1.75}
                   aria-hidden
                 />
+                {notificationCount > 0 ? (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card"
+                    aria-hidden
+                  />
+                ) : null}
+              </span>
+              {rail ? (
+                <RailHoverCaption placement="above">알림</RailHoverCaption>
               ) : null}
-            </span>
-            <span className={cn("min-w-0 flex-1 truncate text-left", rail && "sr-only")}>
-              알림
-            </span>
-            {!rail && notificationCount > 0 ? (
-              <Badge
-                variant="sidebar"
-                className="min-w-5 justify-center px-1.5 py-0 text-xs"
-              >
-                {notificationCount}
-              </Badge>
-            ) : null}
-          </button>
-          <UserProfile onNavigate={onMobileClose} compact={rail} />
+              {!rail ? (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-left">알림</span>
+                  {notificationCount > 0 ? (
+                    <Badge
+                      variant="sidebar"
+                      className="min-w-5 justify-center px-1.5 py-0 text-xs"
+                    >
+                      {notificationCount}
+                    </Badge>
+                  ) : null}
+                </>
+              ) : null}
+            </button>
+            <UserProfile onNavigate={onMobileClose} compact={rail} />
+          </div>
         </div>
       </aside>
     </>

@@ -116,13 +116,13 @@ function FeatureStep({
         <StepNode Icon={Icon} />
 
         <div data-feature-sentinel={step.step} className="mt-5 w-full">
-          <span className="text-sm font-semibold tracking-widest text-muted-2">
+          <span className="text-base font-semibold tracking-widest text-muted-2">
             STEP {step.step}
           </span>
-          <h3 className="mt-1.5 text-xl font-semibold text-foreground sm:text-2xl">
+          <h3 className="mt-1.5 break-keep text-xl font-semibold text-foreground sm:text-2xl">
             {step.title}
           </h3>
-          <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-muted">
+          <p className="mx-auto mt-3 max-w-2xl break-keep text-base leading-relaxed text-muted">
             {step.desc}
           </p>
         </div>

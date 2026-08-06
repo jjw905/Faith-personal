@@ -1217,8 +1217,8 @@ export function TeamManagePanel({
                           </span>
                         </span>
                         <ChevronRight
-                          className="h-5 w-5 shrink-0 text-muted-2"
-                          strokeWidth={1.75}
+                          className="h-5 w-5 shrink-0 text-foreground"
+                          strokeWidth={2.25}
                           aria-hidden
                         />
                       </button>

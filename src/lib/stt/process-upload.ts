@@ -123,11 +123,10 @@ function analysisGroupKey(meetingId: string) {
   return `analysis:${meetingId}`;
 }
 
-async function notifyAnalysisResult(params: {
+async function notifyAnalysisFailed(params: {
   userId: string;
   meetingId: string;
   title: string;
-  kind: "analysis_done" | "analysis_failed";
   errorMessage?: string;
 }) {
   const groupKey = analysisGroupKey(params.meetingId);
@@ -143,11 +142,8 @@ async function notifyAnalysisResult(params: {
     await createNotification({
       userId: params.userId,
       type: "storage",
-      kind: params.kind,
-      title:
-        params.kind === "analysis_done"
-          ? "회의 분석이 완료되었습니다"
-          : "회의 분석에 실패했습니다",
+      kind: "analysis_failed",
+      title: "회의 분석에 실패했습니다",
       body: params.title,
       meetingId: params.meetingId,
       data: {
@@ -158,7 +154,7 @@ async function notifyAnalysisResult(params: {
       groupKey,
     });
   } catch (err) {
-    console.warn("[stt] 분석 알림 생성 실패", err);
+    console.warn("[stt] 분석 실패 알림 생성 실패", err);
   }
 }
 
@@ -843,12 +839,6 @@ export async function processUploadedMeeting(params: {
       where: { legacyMeetingId: params.meetingId },
       data: { state: "READY" },
     });
-    await notifyAnalysisResult({
-      userId: params.userId,
-      meetingId: params.meetingId,
-      title: params.title,
-      kind: "analysis_done",
-    });
     try {
       await appendPipelineAttempt({
         meetingId: params.meetingId,
@@ -926,11 +916,10 @@ export async function processUploadedMeeting(params: {
       where: { legacyMeetingId: params.meetingId },
       data: { state: canceled ? "CANCELED" : "FAILED" },
     });
-    await notifyAnalysisResult({
+    await notifyAnalysisFailed({
       userId: params.userId,
       meetingId: params.meetingId,
       title: params.title,
-      kind: "analysis_failed",
       errorMessage: message,
     });
     if (canceled) {

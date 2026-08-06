@@ -6,6 +6,7 @@ import { ChevronLeft, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { PageContainer } from "@/components/layout/page-container";
+import { MeetingCreatePage } from "@/components/meetings/meeting-create-page";
 import { NewMeetingSession } from "@/components/meetings/new-meeting-session";
 import {
   TeamMeetingComposer,
@@ -29,10 +30,13 @@ export function NewMeetingSetup({
   initialWorkspace,
   initialIntent = "start",
   fixedIntent,
+  liveMode = false,
 }: {
   initialWorkspace?: WorkspaceId;
   initialIntent?: "start" | "schedule";
   fixedIntent?: "start" | "schedule";
+  /** 개발·디자인용 실시간 「새 기록」 세션. 기본 생성 경로가 아님. */
+  liveMode?: boolean;
 }) {
   const router = useRouter();
   const { activeTeamId, setActiveTeamId, workspaceId } = useAppContext();
@@ -164,7 +168,10 @@ export function NewMeetingSetup({
   }
 
   if (!isTeamWorkspace) {
-    return <NewMeetingSession />;
+    if (liveMode) {
+      return <NewMeetingSession />;
+    }
+    return <MeetingCreatePage />;
   }
 
   const viewLoading = loading || scenarioId === "loading";

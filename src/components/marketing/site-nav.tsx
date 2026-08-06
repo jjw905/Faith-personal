@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Container } from "@/components/marketing/container";
 import { CtaButton } from "@/components/marketing/cta-button";
 import { scrollToHash } from "@/lib/scroll-to-hash";
+import { cn } from "@/lib/utils";
 
 type NavLink = { label: string; href: string; hash?: boolean };
 
@@ -43,7 +44,7 @@ export function SiteNav() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={linkClass}
+                className={cn(linkClass, "inline-flex min-h-12 items-center")}
                 onClick={(e) => onNavClick(e, link)}
               >
                 {link.label}
@@ -55,7 +56,7 @@ export function SiteNav() {
         <div className="flex shrink-0 items-center gap-2">
           <Link
             href="/login"
-            className="shrink-0 whitespace-nowrap px-[clamp(0.25rem,1vw,0.5rem)] py-2 text-base font-semibold text-foreground/80 transition-colors hover:text-foreground"
+            className="inline-flex min-h-12 shrink-0 items-center whitespace-nowrap px-[clamp(0.25rem,1vw,0.5rem)] text-base font-semibold text-foreground/80 transition-colors hover:text-foreground"
           >
             로그인
           </Link>

@@ -40,9 +40,20 @@ function withContentKeywords(
   }
 
   if (row && (row.phase === "transcribing" || row.phase === "structuring")) {
+    const progressPercent =
+      typeof row.progressPercent === "number" && Number.isFinite(row.progressPercent)
+        ? Math.max(0, Math.min(100, Math.round(row.progressPercent)))
+        : row.phase === "structuring"
+          ? 72
+          : 1;
     return {
       ...meeting,
       status: "in_progress",
+      process: {
+        phase: row.phase,
+        progressPercent,
+        stageLabel: row.stageLabel ?? null,
+      },
     };
   }
 
@@ -89,9 +100,9 @@ export async function getMeetingById(meetingId: string): Promise<Meeting | null>
 
 function enrichSegmentSpeakers(
   timeline: MeetingTimeline,
-  transcript: MeetingTranscript,
+  transcript: MeetingTranscript | null | undefined,
 ): MeetingTimeline {
-  if (!transcript.lines.length) return timeline;
+  if (!transcript?.lines?.length) return timeline;
   const bySegment = new Map<string, Set<string>>();
   for (const line of transcript.lines) {
     if (!line.segmentId || !line.speaker) continue;
@@ -146,7 +157,9 @@ export async function getMeetingTranscript(
   meetingId: string,
 ): Promise<MeetingTranscript> {
   const row = await getUserMeeting(meetingId);
-  if (row) return row.transcript;
+  if (row?.transcript?.lines) return row.transcript;
+  // 처리 중이거나 깨진 행: 목 대본을 섞지 않고 빈 대화로 둔다.
+  if (row) return { meetingId, lines: [] };
   return getMockTranscript(meetingId);
 }
 
@@ -169,7 +182,6 @@ export async function getMeetingsForUser(
   for (const m of mocks) byId.set(m.id, m);
   for (const m of users) byId.set(m.id, m);
   return [...byId.values()]
-    .filter((m) => m.status !== "in_progress")
     .sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );

@@ -44,7 +44,7 @@ function main() {
 
     let hits = 0;
     for (const line of lines) {
-      const result = maskPii(line, { style: "label" });
+      const result = maskPii(line, { style: "partial" });
       for (const match of result.matches) {
         hits += 1;
         const bucket = byType.get(match.type) ?? new Map<string, number>();

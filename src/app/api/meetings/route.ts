@@ -243,5 +243,66 @@ export async function GET(request: Request) {
     toActivityItem(row, vaultNames, queueMetaByMeeting.get(row.id)),
   );
 
-  return NextResponse.json({ ok: true, meetings, activity, purgedCount });
+  const meetingsWithProcess = meetings.map((meeting) => {
+    if (meeting.status !== "in_progress") return meeting;
+    const meta = queueMetaByMeeting.get(meeting.id);
+    const row = activeRows.find((r) => r.id === meeting.id);
+    if (!meta && !row) return meeting;
+    const phase =
+      meeting.process?.phase ??
+      (row?.phase === "structuring" ? "structuring" : "transcribing");
+    const waiting =
+      meta?.jobStatus === "queued" ||
+      /기다리/.test(row?.stageLabel ?? meeting.process?.stageLabel ?? "") ||
+      (typeof (meeting.process?.progressPercent ?? row?.progressPercent) ===
+        "number" &&
+        (meeting.process?.progressPercent ?? row?.progressPercent ?? 0) <= 1 &&
+        phase === "transcribing" &&
+        meta?.jobStatus !== "running");
+    return {
+      ...meeting,
+      process: {
+        phase,
+        progressPercent:
+          meeting.process?.progressPercent ??
+          (typeof row?.progressPercent === "number"
+            ? row.progressPercent
+            : phase === "structuring"
+              ? 72
+              : 1),
+        stageLabel:
+          meeting.process?.stageLabel ?? row?.stageLabel ?? null,
+        waiting: Boolean(waiting),
+        jobStatus: meta?.jobStatus ?? meeting.process?.jobStatus ?? null,
+        queueAhead: waiting
+          ? (meta?.queueAhead ?? meeting.process?.queueAhead ?? null)
+          : null,
+      },
+    };
+  });
+
+  meetingsWithProcess.sort((a, b) => {
+    const aActive = a.status === "in_progress" ? 0 : 1;
+    const bActive = b.status === "in_progress" ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    if (aActive === 0) {
+      const aw = a.process?.waiting ? 1 : 0;
+      const bw = b.process?.waiting ? 1 : 0;
+      if (aw !== bw) return aw - bw;
+      if (aw === 1) {
+        return (a.process?.queueAhead ?? 99) - (b.process?.queueAhead ?? 99);
+      }
+      return (
+        (b.process?.progressPercent ?? 0) - (a.process?.progressPercent ?? 0)
+      );
+    }
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
+
+  return NextResponse.json({
+    ok: true,
+    meetings: meetingsWithProcess,
+    activity,
+    purgedCount,
+  });
 }

@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 
-import { ParticipantsPopup, SortControl } from "@/components/dashboard/recent-meetings-table";
-import { FIXTURE_PARTICIPANTS } from "@/components/design/fixtures";
+import { SortControl } from "@/components/dashboard/recent-meetings-table";
 import { PreviewStage } from "@/components/design/preview-stage";
 import { UserProfile } from "@/components/layout/user-profile";
 import {
@@ -11,25 +10,6 @@ import {
   ResetConfirmDialog,
 } from "@/components/meetings/new-meeting-session";
 import { Button } from "@/components/ui/button";
-
-/** 최근 기록: 참석자 팝업 */
-export function SceneParticipantsPopup() {
-  const [open, setOpen] = useState(true);
-  return (
-    <PreviewStage
-      hint="목록에서 참석자 아바타를 눌렀을 때."
-      open={open}
-      onReopen={() => setOpen(true)}
-    >
-      <ParticipantsPopup
-        participants={FIXTURE_PARTICIPANTS}
-        open={open}
-        contained
-        onClose={() => setOpen(false)}
-      />
-    </PreviewStage>
-  );
-}
 
 /** 실시간 기록: 첨부 메뉴 */
 export function SceneAttachMenuPopup() {

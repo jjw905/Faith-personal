@@ -587,7 +587,7 @@ function MetaRow({
       aria-label={expanded ? `${label} 접기` : `${label} 전체 보기`}
       title={expanded ? undefined : value}
       onClick={() => setExpanded((v) => !v)}
-      className="flex min-w-0 items-start gap-2 text-left"
+      className="flex min-h-12 min-w-0 items-center gap-2 py-1 text-left md:min-h-0 md:items-start md:py-0"
     >
       {iconSlot}
       <span className="sr-only">{label}</span>
@@ -685,7 +685,7 @@ function SortIconSelect({
                     choose(opt.value);
                   }}
                   className={cn(
-                    "flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-semibold",
+                    "flex min-h-12 w-full items-center gap-2.5 px-3 py-3 text-left text-base font-semibold md:min-h-0 md:py-2.5 md:text-sm",
                     selected
                       ? "bg-primary-soft text-primary"
                       : "text-foreground hover:bg-surface",
@@ -877,12 +877,14 @@ function CopyIdButton({
       className="inline-flex h-12 min-w-0 flex-1 items-center justify-between gap-2 rounded-xl bg-surface px-3 text-left transition-colors hover:bg-surface-2 md:h-10"
     >
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-muted">{label}</span>
-        <span className="block truncate font-mono text-sm tabular-nums text-foreground">
+        <span className="block text-base font-semibold text-muted md:text-sm">
+          {label}
+        </span>
+        <span className="block truncate font-mono text-base tabular-nums text-foreground md:text-sm">
           {value}
         </span>
       </span>
-      <span className="shrink-0 text-sm font-semibold text-primary">
+      <span className="shrink-0 text-base font-semibold text-primary md:text-sm">
         {copied ? "복사됨" : "복사"}
       </span>
     </button>
@@ -1755,7 +1757,7 @@ export function UsersAdminPanel({
                       setTeamMemberFilter(null);
                       setTeamPage(1);
                     }}
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full hover:bg-primary/10 md:h-5 md:w-5"
+                    className="grid min-h-12 min-w-12 shrink-0 place-items-center rounded-full hover:bg-primary/10 md:h-5 md:min-h-5 md:w-5 md:min-w-5"
                     aria-label="멤버 필터 해제"
                   >
                     <X className="h-4 w-4 md:h-3.5 md:w-3.5" aria-hidden />
@@ -2472,7 +2474,7 @@ export function UsersAdminPanel({
                               ).toISOString(),
                             })
                           }
-                          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+                          className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-primary px-4 text-base font-semibold text-primary-foreground disabled:opacity-50"
                         >
                           로컬 팀 테스트 활성화
                         </button>
@@ -2565,7 +2567,7 @@ function StatChip({
         "inline-flex items-center gap-1.5 rounded-full transition-colors",
         large
           ? "h-14 w-full justify-between px-5 text-lg"
-          : "h-8 px-3.5 text-base",
+          : "min-h-12 px-3.5 text-base md:h-8 md:min-h-8",
         active
           ? danger
             ? "bg-red-600 text-white"

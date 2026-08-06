@@ -1,13 +1,12 @@
 "use client";
 
 import { Archive, Loader2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { MeetingSearch } from "@/components/dashboard/meeting-search";
-import { Button } from "@/components/ui/button";
 import { VaultFileIcon } from "@/components/vault/vault-file-icon";
 import { usePageUxPreview } from "@/context/page-ux-preview-context";
-import { TOUCH_BUTTON, TOUCH_ICON_BUTTON, TOUCH_ROW } from "@/lib/touch-target";
+import { TOUCH_ICON_BUTTON, TOUCH_ROW } from "@/lib/touch-target";
 import {
   VAULT_CHANGED_EVENT,
   formatVaultSize,
@@ -36,6 +35,7 @@ function formatVaultListDate(iso: string) {
  * 보관함 파일 고르기.
  * 모바일: MD3 expanded bottom sheet (거의 전체 높이, 드래그 핸들, 최근 파일 우선).
  * 데스크탑: 중앙 다이얼로그.
+ * 톤: 대시보드 보관함 리스트 + 기록 확인창 크롬.
  */
 export function VaultPickerDialog({
   open,
@@ -62,6 +62,19 @@ export function VaultPickerDialog({
   const forceEmpty = scenarioId === "popup-vault-picker-empty";
   const showLoading = loading || forceLoading;
 
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await listVaultItems();
+      setItems(next);
+    } catch {
+      setError("보관함을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) {
       setQuery("");
@@ -69,7 +82,7 @@ export function VaultPickerDialog({
     }
 
     let alive = true;
-    async function load() {
+    async function run() {
       setLoading(true);
       setError(null);
       try {
@@ -82,9 +95,9 @@ export function VaultPickerDialog({
       }
     }
 
-    void load();
+    void run();
     function onChanged() {
-      void load();
+      void run();
     }
     window.addEventListener(VAULT_CHANGED_EVENT, onChanged);
     return () => {
@@ -150,6 +163,8 @@ export function VaultPickerDialog({
   const subtitle = audioOnly
     ? "회의에 쓸 음성을 고르세요"
     : "보관함 파일을 회의에 첨부합니다";
+  const showSearch =
+    !showLoading && !error && (viewItems.length > 0 || Boolean(query.trim()));
 
   return (
     <div
@@ -165,14 +180,12 @@ export function VaultPickerDialog({
         aria-modal="true"
         aria-labelledby="vault-picker-title"
         className={cn(
-          // 모바일: MD3 expanded bottom sheet (긴 목록 브라우징용 거의 전체 높이)
           "flex w-full flex-col overflow-hidden bg-card shadow-float",
           "h-[min(92dvh,100%)] max-h-[92dvh] rounded-t-3xl",
           "sm:h-auto sm:max-h-[min(36rem,85vh)] sm:max-w-md sm:rounded-3xl",
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        {/* MD3 drag handle — 시트임을 바로 알 수 있게 */}
         <div
           className="flex shrink-0 justify-center pt-3 pb-1 sm:hidden"
           aria-hidden
@@ -180,19 +193,19 @@ export function VaultPickerDialog({
           <span className="h-1 w-10 rounded-full bg-border" />
         </div>
 
-        <div className="flex shrink-0 items-center gap-2 px-3 pb-2 pt-1 sm:gap-3 sm:px-4 sm:pt-4">
-          <div className="min-w-0 flex-1 px-1">
+        <div className="flex shrink-0 items-start gap-2 px-5 pb-3 pt-2 sm:gap-3 sm:px-7 sm:pt-7">
+          <div className="min-w-0 flex-1">
             <h2
               id="vault-picker-title"
-              className="text-lg font-semibold text-foreground sm:text-base"
+              className="text-xl font-bold tracking-tight text-foreground sm:text-lg"
             >
               {title}
             </h2>
-            <p className="mt-0.5 text-base text-muted sm:text-sm">
+            <p className="mt-1 text-base leading-relaxed text-muted">
               {subtitle}
-              {!showLoading && viewItems.length > 0 ? (
+              {!showLoading && !error && viewItems.length > 0 ? (
                 <span className="tabular-nums text-muted-2">
-                  {`, ${viewItems.length}개`}
+                  {` · ${viewItems.length}개`}
                 </span>
               ) : null}
             </p>
@@ -202,7 +215,7 @@ export function VaultPickerDialog({
             onClick={onClose}
             className={cn(
               TOUCH_ICON_BUTTON,
-              "shrink-0 cursor-pointer rounded-xl text-muted hover:bg-surface hover:text-foreground",
+              "shrink-0 cursor-pointer rounded-xl text-muted hover:bg-surface/70 hover:text-foreground",
             )}
             aria-label="닫기"
           >
@@ -210,8 +223,8 @@ export function VaultPickerDialog({
           </button>
         </div>
 
-        {viewItems.length > 0 || query ? (
-          <div className="shrink-0 px-4 pb-2">
+        {showSearch ? (
+          <div className="shrink-0 px-5 pb-3 sm:px-7">
             <MeetingSearch
               value={query}
               onChange={setQuery}
@@ -222,43 +235,60 @@ export function VaultPickerDialog({
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 sm:px-7">
           {showLoading ? (
-            <div className="flex flex-col items-center gap-3 px-3 py-16 text-center">
+            <div
+              className="flex flex-col items-center gap-3 px-2 py-16 text-center"
+              role="status"
+              aria-live="polite"
+            >
               <Loader2
-                className="h-7 w-7 animate-spin text-primary"
+                className="h-8 w-8 animate-spin text-primary"
                 strokeWidth={1.75}
                 aria-hidden
               />
-              <p className="text-base text-muted sm:text-sm">불러오는 중…</p>
+              <p className="text-lg font-semibold text-foreground">
+                보관함을 불러오는 중
+              </p>
+              <p className="text-base text-muted">잠시만 기다려 주세요.</p>
             </div>
           ) : error ? (
-            <p className="px-3 py-12 text-center text-base text-muted sm:text-sm">
-              {error}
-            </p>
+            <div className="flex flex-col items-center gap-4 px-2 py-14 text-center">
+              <p className="text-base font-medium text-foreground" role="alert">
+                {error}
+              </p>
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-2xl bg-primary px-5 text-base font-bold text-primary-foreground transition-opacity hover:opacity-90 sm:h-11 sm:min-h-0 sm:rounded-xl"
+              >
+                다시 시도
+              </button>
+            </div>
           ) : viewItems.length === 0 ? (
-            <div className="px-3 py-14 text-center">
+            <div className="flex flex-col items-center gap-3 px-2 py-14 text-center">
               <Archive
-                className="mx-auto h-9 w-9 text-muted-2"
+                className="h-12 w-12 text-muted-2"
                 strokeWidth={1.5}
+                aria-hidden
               />
-              <p className="mt-3 text-base font-medium text-foreground sm:text-sm">
+              <p className="text-lg font-semibold text-foreground">
                 {audioOnly
                   ? "올릴 수 있는 음성이 없습니다"
                   : "보관함이 비어 있습니다"}
               </p>
-              <p className="mt-1 text-base text-muted sm:text-sm">
+              <p className="max-w-xs text-base leading-relaxed text-muted">
                 {audioOnly
                   ? "보관함에 음성 파일을 올려 둔 뒤 다시 열어 주세요."
                   : "보관함 메뉴에서 파일을 올려 주세요."}
               </p>
             </div>
           ) : filtered.length === 0 ? (
-            <p className="px-3 py-12 text-center text-base text-muted sm:text-sm">
+            <p className="py-12 text-center text-base text-muted">
               검색 결과가 없습니다.
             </p>
           ) : (
-            <ul className="space-y-0.5 pb-2">
+            <ul className="divide-y divide-border pb-2">
               {filtered.map((item) => {
                 const dateLabel = formatVaultListDate(item.createdAt);
                 const busy = pickingId === item.id;
@@ -271,23 +301,23 @@ export function VaultPickerDialog({
                       aria-label={`${item.name}, ${formatVaultSize(item.size)}${dateLabel ? `, ${dateLabel}` : ""}`}
                       className={cn(
                         TOUCH_ROW,
-                        "flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors",
-                        "hover:bg-surface active:bg-surface",
+                        "flex w-full cursor-pointer items-center gap-3 py-4 text-left transition-colors",
+                        "hover:bg-surface/70",
                         "disabled:cursor-wait disabled:opacity-60",
-                        busy && "bg-surface",
+                        busy && "bg-primary-soft/40",
                       )}
                     >
                       <VaultFileIcon
                         name={item.name}
                         mime={item.mime}
-                        size={20}
-                        className="h-11 w-11 shrink-0 rounded-xl sm:h-9 sm:w-9"
+                        size={22}
+                        className="h-11 w-11 shrink-0 rounded-full border border-border bg-transparent sm:h-12 sm:w-12"
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-lg font-semibold leading-snug text-foreground sm:text-base">
+                        <span className="block truncate text-lg font-semibold leading-snug tracking-tight text-foreground">
                           {item.name}
                         </span>
-                        <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base tabular-nums text-muted sm:text-sm">
+                        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base tabular-nums text-muted">
                           <span>{formatVaultSize(item.size)}</span>
                           {dateLabel ? (
                             <span className="text-muted-2">{dateLabel}</span>
@@ -309,21 +339,14 @@ export function VaultPickerDialog({
           )}
         </div>
 
-        <div
-          className={cn(
-            "shrink-0 border-t border-border px-4 pt-3",
-            "pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]",
-            "sm:pb-4",
-          )}
-        >
-          <Button
+        <div className="shrink-0 bg-card px-5 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:px-7 sm:pb-6">
+          <button
             type="button"
-            variant="outline"
-            className={cn(TOUCH_BUTTON, "w-full cursor-pointer text-base sm:text-sm")}
             onClick={onClose}
+            className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-2xl px-4 text-base font-semibold text-foreground transition-colors hover:bg-surface/70 sm:h-11 sm:min-h-0 sm:rounded-xl"
           >
             취소
-          </Button>
+          </button>
         </div>
       </div>
     </div>

@@ -173,8 +173,8 @@ function ReplayBubble({
     >
       <div
         className={cn(
-            "flex w-[min(78%,28rem)] max-w-full min-w-0 items-start gap-2.5",
-            corrections.length > 0 && "sm:w-[min(86%,34rem)]",
+          "flex w-[min(92%,28rem)] max-w-full min-w-0 items-start gap-2.5 sm:w-[min(78%,28rem)]",
+          corrections.length > 0 && "sm:w-[min(86%,34rem)]",
           meta.mine ? "flex-row-reverse" : "flex-row",
         )}
       >
@@ -200,7 +200,7 @@ function ReplayBubble({
             )}
           >
             <span className="truncate">{meta.label}</span>
-            <span className="shrink-0 font-mono text-sm font-medium tabular-nums text-muted md:text-xs">
+            <span className="shrink-0 font-mono text-base font-medium tabular-nums text-muted md:text-xs">
               {line.time}
             </span>
           </p>
@@ -214,102 +214,120 @@ function ReplayBubble({
             <button
               type="button"
               onClick={() => setEditing(true)}
-              className="inline-flex min-h-12 items-center gap-1.5 rounded-full px-3 text-base font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground md:min-h-9 md:px-2.5 md:text-sm"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full px-4 text-base font-semibold text-muted transition-colors hover:bg-surface/70 hover:text-foreground md:min-h-10 md:gap-1.5 md:px-3 md:text-sm"
             >
-              <MaterialSymbol name="edit_note" size={20} weight={500} />
+              <MaterialSymbol name="edit_note" size={22} weight={500} />
               메모 추가
             </button>
           ) : null}
           {text ? (
             <div
               className={cn(
-                "group/bubble flex max-w-full items-end gap-1",
-                meta.mine ? "flex-row-reverse" : "flex-row",
+                "group/bubble flex max-w-full flex-col gap-2",
+                meta.mine ? "items-end" : "items-start",
               )}
             >
-              {onSeek ? (
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSeek(line)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSeek(line);
-                    }
-                  }}
-                  className={cn(
-                    "inline-block max-w-full cursor-pointer whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed transition-opacity hover:opacity-90 md:text-[15px]",
-                    meta.mine
-                      ? "rounded-br-md bg-primary text-primary-foreground"
-                      : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
-                  )}
-                  aria-label={`${meta.label} 대사부터 재생`}
-                >
-                  <MaskedText
-                    original={text}
-                    matches={matches}
-                    onPrimary={meta.mine}
-                    activeWordRange={activeWordRange}
-                    activeWordStrength={activeWordFocus?.strength}
-                    words={line.words}
-                    onWordSeek={(word) => onSeek(line, word.startSec)}
-                  />
-                </div>
-              ) : (
-                <div
-                  className={cn(
-                    "inline-block max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed md:text-[15px]",
-                    meta.mine
-                      ? "rounded-br-md bg-primary text-primary-foreground"
-                      : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
-                  )}
-                >
-                  <MaskedText
-                    original={text}
-                    matches={matches}
-                    onPrimary={meta.mine}
-                    activeWordRange={activeWordRange}
-                    activeWordStrength={activeWordFocus?.strength}
-                  />
-                </div>
-              )}
-              {!editing ? (
+              <div
+                className={cn(
+                  "flex max-w-full items-end gap-1",
+                  meta.mine ? "flex-row-reverse" : "flex-row",
+                )}
+              >
+                {onSeek ? (
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSeek(line)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSeek(line);
+                      }
+                    }}
+                    className={cn(
+                      "inline-block max-w-full cursor-pointer whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed transition-opacity hover:opacity-90 md:text-[15px]",
+                      meta.mine
+                        ? "rounded-br-md bg-primary text-primary-foreground"
+                        : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
+                    )}
+                    aria-label={`${meta.label} 대사부터 재생`}
+                  >
+                    <MaskedText
+                      original={text}
+                      matches={matches}
+                      onPrimary={meta.mine}
+                      activeWordRange={activeWordRange}
+                      activeWordStrength={activeWordFocus?.strength}
+                      words={line.words}
+                      onWordSeek={(word) => onSeek(line, word.startSec)}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className={cn(
+                      "inline-block max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed md:text-[15px]",
+                      meta.mine
+                        ? "rounded-br-md bg-primary text-primary-foreground"
+                        : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
+                    )}
+                  >
+                    <MaskedText
+                      original={text}
+                      matches={matches}
+                      onPrimary={meta.mine}
+                      activeWordRange={activeWordRange}
+                      activeWordStrength={activeWordFocus?.strength}
+                    />
+                  </div>
+                )}
+                {/* 데스크톱: 말풍선 옆 아이콘. 모바일은 아래 라벨 버튼. */}
+                {!editing ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    aria-label={hasMemo ? "메모 수정" : "메모 추가"}
+                    title={hasMemo ? "메모 수정" : "메모 추가"}
+                    className={cn(
+                      "hidden h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition-all duration-200 ease-out motion-reduce:transition-none md:inline-flex",
+                      "hover:bg-surface/70 hover:text-foreground",
+                      "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      hasMemo
+                        ? "opacity-90"
+                        : "scale-90 opacity-0 group-hover/bubble:scale-100 group-hover/bubble:opacity-100 focus-visible:scale-100",
+                    )}
+                  >
+                    <MaterialSymbol
+                      name="edit_note"
+                      size={22}
+                      weight={hasMemo ? 500 : 400}
+                      filled={hasMemo}
+                    />
+                  </button>
+                ) : null}
+              </div>
+              {!editing && !hasMemo ? (
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
-                  aria-label={hasMemo ? "메모 수정" : "메모 추가"}
-                  title={hasMemo ? "메모 수정" : "메모 추가"}
-                  className={cn(
-                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-muted transition-all duration-200 ease-out motion-reduce:transition-none md:h-9 md:w-9",
-                    "hover:bg-surface-2 hover:text-foreground",
-                    "focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    hasMemo
-                      ? "opacity-80"
-                      : "scale-90 opacity-0 group-hover/bubble:scale-100 group-hover/bubble:opacity-100 max-md:scale-100 max-md:opacity-50 focus-visible:scale-100",
-                  )}
+                  className="inline-flex min-h-12 items-center gap-2 rounded-full px-4 text-base font-semibold text-muted transition-colors hover:bg-surface/70 hover:text-foreground md:hidden"
                 >
-                  <MaterialSymbol
-                    name="edit_note"
-                    size={20}
-                    weight={hasMemo ? 500 : 400}
-                    filled={hasMemo}
-                  />
+                  <MaterialSymbol name="edit_note" size={22} weight={500} />
+                  메모
                 </button>
               ) : null}
             </div>
           ) : null}
 
           {editing ? (
-            <div className="w-full min-w-0 rounded-xl bg-amber-50 p-2 ring-1 ring-amber-200/80">
+            <div className="w-full min-w-0 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200/80 md:p-2.5">
               <textarea
                 ref={textareaRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                rows={3}
+                rows={4}
                 placeholder="이 대사에 메모를 남겨 주세요"
                 aria-label="말풍선 메모"
-                className="w-full resize-none rounded-lg bg-transparent px-1 py-1 text-left text-base font-medium text-foreground outline-none placeholder:text-muted md:text-sm"
+                className="w-full resize-none rounded-lg bg-transparent px-2 py-2 text-left text-base font-medium leading-relaxed text-foreground outline-none placeholder:text-muted"
                 onKeyDown={(e) => {
                   if (e.key === "Escape") {
                     setDraft(memo ?? "");
@@ -321,11 +339,11 @@ function ReplayBubble({
                   }
                 }}
               />
-              <div className="mt-1 flex items-center justify-between gap-2">
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 {hasMemo ? (
                   <button
                     type="button"
-                    className="min-h-10 rounded-lg px-3 text-sm font-semibold text-masked hover:bg-masked-soft"
+                    className="inline-flex min-h-12 items-center rounded-xl px-4 text-base font-semibold text-muted hover:bg-surface/70 hover:text-foreground md:min-h-10 md:px-3 md:text-sm"
                     onClick={() => {
                       setDraft("");
                       onMemoChange(line.id, "");
@@ -340,7 +358,7 @@ function ReplayBubble({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    className="min-h-10 rounded-lg px-3 text-sm font-semibold text-muted hover:text-foreground"
+                    className="inline-flex min-h-12 items-center rounded-xl px-4 text-base font-semibold text-muted hover:text-foreground md:min-h-10 md:px-3 md:text-sm"
                     onClick={() => {
                       setDraft(memo ?? "");
                       setEditing(false);
@@ -350,7 +368,7 @@ function ReplayBubble({
                   </button>
                   <button
                     type="button"
-                    className="min-h-10 rounded-lg bg-foreground px-3 text-sm font-semibold text-background"
+                    className="inline-flex min-h-12 items-center rounded-xl bg-foreground px-4 text-base font-semibold text-background md:min-h-10 md:px-3 md:text-sm"
                     onClick={commitMemo}
                   >
                     저장
@@ -365,13 +383,13 @@ function ReplayBubble({
               aria-label="메모 수정"
               title="메모 수정"
               className={cn(
-                "flex max-w-full min-h-12 items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-left text-base font-medium leading-relaxed text-foreground ring-1 ring-amber-200/80 transition-colors hover:bg-amber-100/80 md:min-h-0 md:text-sm",
+                "flex max-w-full min-h-12 items-start gap-2.5 rounded-xl bg-amber-50 px-3.5 py-3 text-left text-base font-medium leading-relaxed text-foreground ring-1 ring-amber-200/80 transition-colors hover:bg-amber-100/80 md:min-h-0 md:gap-2 md:px-3 md:py-2 md:text-sm",
                 meta.mine && "flex-row-reverse text-right",
               )}
             >
               <MaterialSymbol
                 name="edit_note"
-                size={18}
+                size={22}
                 weight={500}
                 filled
                 className="mt-0.5 shrink-0 text-amber-800/70"
@@ -763,7 +781,7 @@ export function MeetingChatReplay({
       {audioError ? (
         <p
           role="alert"
-          className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700 ring-1 ring-red-200/80"
+          className="rounded-xl bg-red-50 px-3 py-2.5 text-base font-medium text-red-700 ring-1 ring-red-200/80 md:text-sm"
         >
           {audioError}
         </p>
@@ -804,13 +822,13 @@ export function MeetingChatReplay({
         </div>
       </div>
 
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden rounded-2xl bg-white px-2 py-4 ring-1 ring-border/50 sm:px-3 md:px-4">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden rounded-2xl bg-white px-3 py-4 ring-1 ring-border/50 sm:px-3 md:px-4">
         {transcript.lines.length === 0 ? (
           <p className="py-12 text-center text-base text-muted">
             대화기록이 없습니다.
           </p>
         ) : (
-          <ul className="flex flex-col gap-3.5">
+          <ul className="flex flex-col gap-4 md:gap-3.5">
             {transcript.lines.map((line) => (
               <li key={line.id}>
                 <ReplayBubbleMemo

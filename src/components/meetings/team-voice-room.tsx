@@ -407,11 +407,11 @@ export function TeamVoiceRoom({
       <section className="rounded-2xl bg-card p-5 shadow-soft sm:p-7">
         <div className="flex flex-wrap items-center gap-2">
           {waiting ? (
-            <span className="inline-flex min-h-10 items-center rounded-full bg-surface px-3 text-sm font-semibold text-muted">
+            <span className="inline-flex min-h-12 items-center rounded-full bg-surface px-3 text-base font-semibold text-muted">
               대기
             </span>
           ) : null}
-          <span className="inline-flex min-h-10 items-center rounded-full bg-surface px-3 text-sm font-semibold text-muted">
+          <span className="inline-flex min-h-12 items-center rounded-full bg-surface px-3 text-base font-semibold text-muted">
             {recordingActive ? "기록 중" : "기록 전"}
           </span>
         </div>
@@ -890,7 +890,7 @@ function VoiceRoomBody({
           <h1 className="text-xl font-semibold text-foreground">{title}</h1>
           <p
             className={cn(
-              "mt-2 inline-flex min-h-10 items-center rounded-full px-3 text-sm font-semibold",
+              "mt-2 inline-flex min-h-12 items-center rounded-full px-3 text-base font-semibold",
               recordingActive
                 ? "bg-primary text-primary-foreground"
                 : "bg-surface text-muted",
@@ -917,7 +917,7 @@ function VoiceRoomBody({
             </Link>
           ) : null}
         </div>
-        <span className="inline-flex min-h-12 items-center gap-2 rounded-full bg-primary-soft px-3 text-sm font-semibold">
+        <span className="inline-flex min-h-12 items-center gap-2 rounded-full bg-primary-soft px-3 text-base font-semibold">
           <UsersRound className="h-4 w-4" aria-hidden />
           {participants.length}
         </span>
@@ -990,7 +990,7 @@ function VoiceRoomBody({
               {isHost && participant.identity !== localParticipant.identity ? (
                 <button
                   type="button"
-                  className="mt-2 inline-flex min-h-12 items-center gap-1.5 rounded-full px-3 text-sm font-semibold text-muted hover:bg-card"
+                  className="mt-2 inline-flex min-h-12 items-center gap-1.5 rounded-full px-3 text-base font-semibold text-muted hover:bg-card"
                   onClick={() => void removeParticipant(participant.identity)}
                   disabled={busy}
                   aria-label={`${name} 내보내기`}

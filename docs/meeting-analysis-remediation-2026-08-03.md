@@ -2,7 +2,7 @@
 
 ## 목적과 범위
 
-회의 업로드 분석의 시간 동기화, 화자 분리, 키워드 후보, 처리 시간, 재생 권한 문제를 실제 KTV 브리핑과 클로바 노트 정답 페어를 중심으로 점검했다. 이 문서는 이 주제의 **단일 기준 문서(canonical source)**다. 구현 결과, 비용 원장, 운영 정책, 다음 실행 항목을 이 파일에 통합하며 별도 요약 문서를 중복해서 만들지 않는다.
+회의 업로드 분석의 시간 동기화, 화자 분리, 키워드 후보, 처리 시간, 재생 권한 문제를 실제 KTV 브리핑과 클로바 노트 정답 페어를 중심으로 점검한 **2026-08-03 안정화 이력·재현 기록**이다. 현재 지속 개선 데이터와 최신 판정의 단일 기준은 [Faith STT·품질·재생 통합 문서](../Faith-office/03_STT_품질_재생/Faith_STT_품질_재생_통합_2026-08-03.md)이며, 이 문서는 당시의 상세 재현·배포 게이트·변경 이력을 보존한다. 무엇을 어떤 설정으로 실행했는지와 채팅에서 복원한 사건별 값은 [화자분리·표면 전사 실험 사건 원장](./speaker-diarization-experiment-ledger-2026-08-04.md)에 보존한다. 새 실행 결과는 통합 문서의 `15. 지속 개선 데이터 로그`에 추가한다.
 
 ## 읽는 순서와 상태 기준
 
@@ -174,6 +174,20 @@ Clova txt에서 `참석자 N HH:MM`을 파싱해 17개 turn과 16개 실제 화�
 
 단어 시작·끝 MAE는 현재 Clova txt에 단어별 절대 시각이 없으므로 아직 계산하지 않는다. 대신 정밀 결과 word timing coverage 100%, 내부 line-to-first-word p95 0.35초, 역전 0건을 먼저 강제한다. 단어 MAE는 Clova JSON 또는 수동 단어 구간 골드가 확보됐을 때만 활성화한다.
 
+### 2026-08-04 최신 KTV 반복 실행 회귀
+
+같은 원본(`vaultFileId` 동일)을 여러 번 분석한 저장 산출물을 다시 비교했다. 최신 정밀 실행 `mtg-up-8f702480`은 PRIMARY 원문부터 `2기 홍보수통 수석`, `유시스 운영록`, `그러세요`를 만들었고 `김영록`은 만들지 못했다. 따라서 이 네 표기 문제는 요약이나 화면 표시가 아니라 PRIMARY STT 단계에서 이미 발생했다. 최종 `뉴시스`만 고정 언론사 목록의 제한적 후처리로 `유시스`에서 바뀌었으며, 인명은 오교정 위험 때문에 같은 방식으로 자동 치환하지 않는다.
+
+01:55에서는 진행자의 `이성택 기자님` 호출 줄에 `이성택 기자` 이름이 붙고, 바로 뒤 실제 자기소개 줄은 `화자 C`로 남았다. 이는 짧은 호출 구간의 음향 화자 분리, 문맥 재결합, 이름 추정이 결합된 실패다. 이름 추정 프롬프트가 호출자에게 상대 이름을 붙이지 말라고 명시해도 실제 실행이 이를 위반했으므로, 프롬프트 준수만으로는 회귀를 막을 수 없다. 자기소개 줄의 현재 화자에 이름을 우선 결합하고 호출 줄은 그 이름을 소유하지 못하게 하는 결정적 검증 규칙이 필요하다.
+
+최신 결과의 word timing coverage는 37/38이고 역전은 0건이다. 같은 음원의 과거 정밀 결과와 공통 단어 시각을 비교했을 때 전역 지연은 확인되지 않았다. 체감 싱크 문제는 `활동한 ...`처럼 word timing이 통째로 빠진 줄과 인식 단어 불일치가 만든 국소 정렬 공백으로 보는 것이 현재 근거에 맞다. 전체 파일 강제정렬을 되살리기보다 timing이 없거나 앵커 일치율이 낮은 줄만 재정렬해야 한다.
+
+21:12 `brief-ailab` 실행 `mtg-up-d854ddc0`은 같은 `gpt-transcribe/precision` 파이프라인으로 품질 게이트를 통과했다. 다만 이 자료는 화자 2명, 전환 1회인 반면 KTV 정답은 화자 8명, 전환 16회이고 짧은 호명과 연속 자기소개가 반복된다. 따라서 brief 성공은 KTV 화자 분리와 이름 결합의 안정성을 보장하지 않는다.
+
+반복 실행 데이터는 `npm run eval:ktv-run-history`로 API 호출 없이 누적 비교한다. 기존 `gpt-transcribe/precision` 7회에서 홍보소통 직함 원문 정답률 0%, 뉴시스 원문 정답률 0%, 김영록 원문 정답률 0%, 01:55 호명/자기소개 결합 성공률 71.4%, 평균 boundary F1 0.681이었다. 새 분석부터는 사용한 diarization 모델·화자 수, 음향 부착 전후 구간, 이름 치환표, 고정 철자 치환, word timing coverage를 `analysisDiagnostics`에 함께 저장한다. 원문이나 요약을 진단 필드에 중복 저장하지 않는다.
+
+다음 패치 우선순위는 (1) 인명 하드코딩 없이 자기소개/호명 소유권을 검증하는 결정 규칙, (2) 자기소개 구간만 독립 STT로 재검증하는 저비용 2차 통과, (3) word timing이 없는 줄만 제한적으로 재정렬, (4) 저장된 실제 diarization 모델을 기준으로 Sherpa와 Community-1 비용·정확도 A/B 순서다.
+
 ## 저비용 검색 근거 모델 판단
 
 전체 전사문과 마스킹 결과를 검색 모델에 다시 쓰게 하는 것은 채택하지 않는다. 고유명사만 최소 문맥으로 추출해 **원문을 바꾸지 않는 보정 후보**를 만들고, 검색 URL·후보·신뢰도·사용자 확정을 함께 남기는 구조가 적절하다.
@@ -214,7 +228,11 @@ HWP 바이너리를 직접 만들지 않고 한컴이 공개한 XML 기반 국�
 - 재생 저장: AAC-LC M4A 16kHz mono 32kbps + faststart 유지
 - 정밀 분석 청크: 추가 손실을 피하는 FLAC 유지
 - 빠른 분석: 단어용 Whisper를 빼고 저비용 문장 시각 사용
-- WAV/OGG/FLAC/WebM/M4A 입력도 재생용 M4A로 정규화하되, 원본 분석과 재생 파생본의 목적을 분리
+- WAV/OGG/FLAC/WebM/M4A 입력은 재생 파생본을 만들 수 있지만, 원본 파일과 원본 metadata를 별도 보존한다. 재생용 M4A가 원본을 대체하지 않는다.
+- 이미 AAC/Opus로 손실 압축된 M4A/MP4를 FLAC으로 바꿔도 손실된 정보는 복원되지 않는다. FLAC은 분석 입력 파생본이지 품질 복구본이 아니다.
+- 최종 수집은 `원본(source.mp4|source.m4a) → 16kHz mono FLAC/WAV 파생본 → RTTM/transcript/metadata` 계보를 남긴다. 원본 권리가 확정되지 않은 현재 파일럿은 파생본만으로 `pilot_pending`을 유지한다.
+
+음질 구성은 난이도 축과 분리한다. 전체 100시간 계획의 `자연 복합 65 / 상황 집중 25 / 깨끗한 기준 10`과 별개로, 원본 음질은 깨끗한 WAV/FLAC 40시간, 실제 M4A/MP4/AAC/온라인 압축 45시간, 저비트레이트·전화·원거리·방송 재압축·클리핑 15시간을 목표로 한다. 각 파일에는 원본·파생본 hash, codec, sample rate, bit depth, channel, bitrate, 재인코딩 횟수·과정, 장비·거리, SNR/소음·압축 조건을 기록한다.
 
 ## 배포 재현성
 
@@ -253,6 +271,27 @@ HWP 바이너리를 직접 만들지 않고 한컴이 공개한 XML 기반 국�
 3. 118.9–121.6초: 한국일보 이성택 기자(C), “예, 저는 한국일보 이성택입니다.”
 
 이는 영상 속 손들기 여부를 추측해서 정하는 규칙이 아니라, **음향 경계와 사회자 호명/기자 자기소개라는 대화 구조를 함께 보존**하는 방식이다.
+
+## 서버 전용 음성 모델 실험 (2026-08-04)
+
+새 모델 추론은 로컬 장비에서 중단하고 GCP Cloud Run Job의 임대 사양에서만 실행한다. 로컬은 기존 캐시 평가와 보고서 생성에만 사용한다. 전용 비공개 버킷, Artifact Registry, 최소 권한 서비스 계정을 만들었고 고객 음성이나 비밀값은 올리지 않았다.
+
+KTV 11분 44초, 정답 화자 8명·전환 16개를 같은 2초 허용 경계 F1로 평가한 첫 결과는 다음과 같다.
+
+| 실행 | 사양 | 모델 출력 화자 | 현재 제품 후처리 화자 | 경계 F1 | 모델 처리 | RTF | 추정 실행비 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Community-1 | Cloud Run 8 vCPU·32GiB | 8 | 8 | 0.769 | 691.4초 | 0.982 | $0.144 |
+| Sherpa threshold 0.800 | Cloud Run 8 vCPU·32GiB | 14 | 10 | 0.743 | 86.9초 | 0.123 | $0.018 |
+| Sherpa threshold 0.825 | Cloud Run 8 vCPU·32GiB | 13 | 9 | 0.813 | 85.6초 | 0.121 | $0.018 |
+| Sherpa threshold 0.850 | Cloud Run 8 vCPU·32GiB | 11 | 8 | 0.813 | 86.2초 | 0.122 | $0.018 |
+| Sherpa threshold 0.875 | Cloud Run 8 vCPU·32GiB | 11 | 8 | 0.813 | 85.9초 | 0.122 | $0.018 |
+| Sherpa threshold 0.900 | Cloud Run 8 vCPU·32GiB | 11 | 8 | 0.813 | 86.1초 | 0.122 | $0.018 |
+
+Community-1은 화자 수는 맞지만 CPU 확장으로 빨라지지 않았고 Sherpa 0.85~0.90은 같은 8명·F1 0.813을 냈다. 따라서 현재 CPU 운영 후보는 Sherpa이며, Community-1은 GPU에서 다시 비교하기 전까지 CPU 생산 후보로 올리지 않는다. Sherpa 스윕은 특징 추출을 매번 반복해 전체 447.7초가 들었으므로 다음 구현은 분할·임베딩을 한 번 계산하고 클러스터 임계값만 재적용해야 한다.
+
+Cloud Run L4 작업은 첫 배포 단계에서 프로젝트의 무중단 제외 GPU 쿼터 0으로 거부되어 GPU 비용은 발생하지 않았다. Google 문서의 첫 배포 자동 3개 부여 조건과 달리 이 프로젝트는 `NOT_ENOUGH_USAGE_HISTORY` 상태였다. Qwen3-ASR/ForcedAligner, MOSS, Community-1 GPU 실험은 L4 쿼터 또는 별도 임대 GPU 공급자를 확보한 뒤 실행하며 로컬 추론으로 우회하지 않는다.
+
+완료된 CPU 실행의 전체 인스턴스 시간(시작·종료 포함)과 한 번의 43.6초 실패를 합친 추정 비용은 약 $0.254다. Cloud Build와 Artifact Registry/Cloud Storage 보관료는 이 수치에 포함하지 않는다. 현재 실행 중 작업은 없으며 작업 정의는 유휴 상태에서 컴퓨팅 비용이 없다.
 
 ## 배포 상태
 
@@ -356,6 +395,7 @@ WhisperX는 빠른 transcription과 forced alignment, diarization 조합을 제�
 | 모드별 사용량 | `npm run test:analysis-usage`, `src/lib/stt/analysis-mode.ts` |
 | 4개 정답 페어 품질·비용 게이트 | `npm run eval:meeting-quality-gate`, `scripts/eval-meeting-quality-gate.ts` |
 | 빠른/고급 제품 말풍선·화자·요약 근거 게이트 | `npm run eval:product-transcript-quality`, `scripts/eval-product-transcript-quality.ts` |
+| 서버 음성 모델 실행 원장 | `npm run eval:speech-model-ledger`, `scripts/eval-speech-model-ledger.ts`, `experiments/speech-model-lab/README.md` |
 | 단일 마이크 화자 클러스터 | `npm run test:realtime-speaker-clusters`, `src/lib/stt/realtime/speaker-clusters.ts` |
 | 원문 evidence 불변성 | `npm run test:transcript-evidence`, `src/lib/stt/transcript-evidence.ts` |
 | 팀 암호화 v1/v2·변조·Range | `npm run test:team:encryption`, `src/lib/team-encryption-core.ts` |

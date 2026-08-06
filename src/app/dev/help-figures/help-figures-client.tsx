@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   CircleHelp,
   ClipboardList,
-  Gem,
   Menu,
   MessageSquare,
   Mic,
@@ -42,7 +41,6 @@ function FigSidebar({ active = "home" }: { active?: "home" | "other" }) {
   const items = [
     { title: "회의", icon: Mic, nested: true },
     { title: "보관함", icon: Archive },
-    { title: "플랜", icon: Gem },
     { title: "도움말", icon: CircleHelp },
   ];
   return (

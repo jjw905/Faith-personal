@@ -9,7 +9,7 @@ export function HeroIntro() {
     <div className="max-w-2xl">
       <HeroTypingTitle />
 
-      <p className="mt-8 max-w-xl text-lg leading-relaxed text-muted max-md:mt-9 xl:mt-8 xl:text-xl">
+      <p className="mt-8 max-w-xl break-keep text-lg leading-relaxed text-muted max-md:mt-9 xl:mt-8 xl:text-xl">
         회의의 핵심을 더 빠르게.
         <br />
         화자 구분 받아쓰기부터 요약·타임라인까지 Faith가 자동으로 정리합니다.

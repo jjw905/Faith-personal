@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Gauge } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { Gauge, Gift } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Progress } from "@/components/ui/progress";
+import {
+  RAIL_ICON_CELL,
+  RailHoverCaption,
+} from "@/components/layout/rail-hover-caption";
+import { DEMAND_SURVEY_ACTIVE } from "@/lib/feature-flags";
+import { SURVEY_COMPLETED_EVENT } from "@/lib/stt/survey";
 import {
   formatQuotaRemainingLabel,
   monthlyMinutesFromSeconds,
@@ -81,8 +89,12 @@ export function SidebarUsage({
   collapsed?: boolean;
   onNavigate?: () => void;
 }) {
+  const pathname = usePathname();
+  const { data: session } = useSession();
   const [status, setStatus] = useState<QuotaStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [surveyGiftAvailable, setSurveyGiftAvailable] = useState(false);
+  const active = pathname === "/plan" || pathname.startsWith("/plan/");
 
   useEffect(() => {
     let cancelled = false;
@@ -99,6 +111,36 @@ export function SidebarUsage({
     })();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!DEMAND_SURVEY_ACTIVE || !session?.user?.id) {
+      setSurveyGiftAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/survey", { cache: "no-store" });
+        const data = (await res.json()) as { ok?: boolean; completed?: boolean };
+        if (!cancelled && data.ok) setSurveyGiftAvailable(!data.completed);
+      } catch {
+        if (!cancelled) setSurveyGiftAvailable(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id, pathname]);
+
+  useEffect(() => {
+    function onSurveyCompleted() {
+      setSurveyGiftAvailable(false);
+    }
+    window.addEventListener(SURVEY_COMPLETED_EVENT, onSurveyCompleted);
+    return () => {
+      window.removeEventListener(SURVEY_COMPLETED_EVENT, onSurveyCompleted);
     };
   }, []);
 
@@ -127,13 +169,14 @@ export function SidebarUsage({
       <Link
         href="/plan"
         onClick={onNavigate}
-        title={title}
         aria-label={`${label}: ${title}`}
+        aria-current={active ? "page" : undefined}
         className={cn(
-          "group mt-1 flex cursor-pointer items-center justify-center rounded-xl px-2 py-2.5 outline-none transition-colors",
+          RAIL_ICON_CELL,
+          "mt-1",
           "hover:bg-surface-2 hover:text-foreground",
           "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
-          "text-muted",
+          active ? "bg-surface-2 text-foreground" : "text-muted",
         )}
       >
         {loading ? (
@@ -146,9 +189,17 @@ export function SidebarUsage({
             strokeWidth={1.75}
           />
         )}
+        {surveyGiftAvailable ? (
+          <Gift
+            className="absolute right-0.5 top-0.5 h-3 w-3 text-primary"
+            strokeWidth={1.75}
+            aria-label="설문 선물 가능"
+          />
+        ) : null}
         <span className="sr-only">
           {label} {title}
         </span>
+        <RailHoverCaption>{label}</RailHoverCaption>
       </Link>
     );
   }
@@ -157,15 +208,24 @@ export function SidebarUsage({
     <Link
       href="/plan"
       onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
       className={cn(
         "mt-1 block cursor-pointer rounded-xl px-3 py-2.5 outline-none transition-colors",
         "hover:bg-surface-2",
         "focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring",
+        active && "bg-surface-2",
       )}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <p className="min-w-0 truncate text-base font-medium text-muted">
-          {label}
+        <p className="flex min-w-0 items-center gap-1.5 truncate text-base font-medium text-muted">
+          <span className="truncate">{label}</span>
+          {surveyGiftAvailable ? (
+            <Gift
+              className="h-4 w-4 shrink-0 text-primary"
+              strokeWidth={1.75}
+              aria-label="설문 선물 가능"
+            />
+          ) : null}
         </p>
         {loading ? (
           <span className="h-4 w-16 animate-pulse rounded bg-surface-2" />

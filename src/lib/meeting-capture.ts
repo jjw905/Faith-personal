@@ -1,8 +1,8 @@
 import type { Meeting, MeetingCapture } from "@/types/meeting";
 
-/** 실시간 / 업로드 라벨. M3 list overline용 짧은 단어. */
+/** 녹음 / 업로드 라벨. M3 list overline용 짧은 단어. */
 export const MEETING_CAPTURE_LABEL: Record<MeetingCapture, string> = {
-  live: "실시간",
+  live: "녹음",
   upload: "업로드",
 };
 

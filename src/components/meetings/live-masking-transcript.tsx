@@ -19,7 +19,7 @@ type ChatLine = {
   matches: PiiMatch[];
 };
 
-/** 카드형 표면 — 선 대신 소프트 섀도우로 요소를 분리. */
+/** 카드형 표면 대신 기록형 평면 — 얇은 보더만. */
 function Panel({
   children,
   className,
@@ -28,14 +28,19 @@ function Panel({
   className?: string;
 }) {
   return (
-    <div className={cn("rounded-2xl bg-card shadow-soft", className)}>
+    <div
+      className={cn(
+        "rounded-2xl border border-border/60 bg-transparent",
+        className,
+      )}
+    >
       {children}
     </div>
   );
 }
 
 const btnBase =
-  "inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40";
+  "inline-flex min-h-12 items-center justify-center rounded-xl px-4 py-2 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40";
 
 async function maskViaApi(text: string, style: MaskStyle) {
   try {
@@ -143,20 +148,11 @@ export function LiveMaskingTranscript() {
     chatInput.length === 0;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          개인정보 마스킹 실험
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          입력 텍스트에서 개인정보를 실시간으로 감지, 마스킹합니다.
-        </p>
-      </div>
-
+    <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel className="flex h-[560px] min-h-[560px] flex-col overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-4">
-            <h2 className="text-sm font-semibold text-foreground">원문</h2>
+            <h2 className="text-base font-semibold text-foreground">원문</h2>
           </div>
           <div
             ref={origRef}
@@ -198,11 +194,11 @@ export function LiveMaskingTranscript() {
 
         <Panel className="flex h-[560px] min-h-[560px] flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-border px-5 pb-3 pt-4">
-            <h2 className="text-sm font-semibold text-foreground">
+            <h2 className="text-base font-semibold text-foreground">
               마스킹 결과
             </h2>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted">
+              <span className="text-base font-medium text-muted">
                 탐지 {detectionCount}건
               </span>
               <MaskStylePopup value={maskStyle} onChange={setMaskStyle} />
@@ -215,9 +211,9 @@ export function LiveMaskingTranscript() {
               onClick={clearSession}
               title="결과 새로고침"
               aria-label="결과 새로고침"
-              className="absolute right-3 top-0 z-10 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-card text-muted shadow-soft transition-colors hover:bg-surface hover:text-foreground"
+              className="absolute right-3 top-0 z-10 inline-flex h-12 w-12 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface/70 hover:text-foreground"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw className="h-5 w-5" />
             </button>
             <div
               ref={maskRef}
@@ -277,7 +273,7 @@ export function LiveMaskingTranscript() {
           </div>
 
           {/* 채팅 입력창 */}
-          <div className="mt-auto border-t border-border bg-surface/60 px-4 py-3">
+          <div className="mt-auto border-t border-border px-4 py-3">
             <textarea
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
@@ -290,7 +286,7 @@ export function LiveMaskingTranscript() {
               }}
               placeholder="메시지를 입력하세요. 개인정보는 보내는 순간 가려집니다."
               rows={2}
-              className="min-h-14 w-full resize-none rounded-xl bg-card px-3.5 py-3 text-sm leading-6 text-foreground outline-none ring-ring placeholder:text-muted-2 focus:ring-2"
+              className="min-h-14 w-full resize-none rounded-xl bg-transparent px-3.5 py-3 text-base leading-6 text-foreground outline-none ring-1 ring-border/60 placeholder:text-muted-2 focus:ring-2 focus:ring-ring"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">

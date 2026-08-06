@@ -96,13 +96,20 @@ function Toggle({
       disabled={disabled}
       onClick={() => onChange(!on)}
       className={cn(
-        "inline-flex h-8 w-[52px] shrink-0 cursor-pointer items-center rounded-full p-1 transition-colors",
+        "inline-flex min-h-12 min-w-12 shrink-0 cursor-pointer items-center justify-center",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        on ? "justify-end bg-primary" : "justify-start bg-surface-2",
       )}
     >
-      <span className="block h-6 w-6 rounded-full bg-card shadow-[0_1px_2px_rgba(17,24,46,0.18)]" />
+      <span
+        className={cn(
+          "inline-flex h-8 w-[52px] items-center rounded-full p-1 transition-colors",
+          on ? "justify-end bg-primary" : "justify-start bg-surface-2",
+        )}
+        aria-hidden
+      >
+        <span className="block h-6 w-6 rounded-full bg-card shadow-[0_1px_2px_rgba(17,24,46,0.18)]" />
+      </span>
     </button>
   );
 }
@@ -133,7 +140,7 @@ function Segmented({
           disabled={disabled || o.disabled}
           onClick={() => !disabled && !o.disabled && onChange(o.value)}
           className={cn(
-            "inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+            "inline-flex min-h-12 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 md:min-h-9 md:py-1.5 md:text-sm",
             value === o.value
               ? "bg-card text-foreground shadow-soft"
               : "text-muted hover:text-foreground",
@@ -141,7 +148,7 @@ function Segmented({
         >
           {o.label}
           {o.badge ? (
-            <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold text-muted">
+            <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-sm font-semibold text-muted md:text-[11px]">
               {o.badge}
             </span>
           ) : null}
@@ -230,7 +237,7 @@ function RetentionConfirmDialog({
             ? `지금 바로 회의 기록 ${preview.willDeleteMeetings}개, 알림 ${preview.willDeleteNotifications}개가 삭제됩니다. 삭제 후 복구할 수 없습니다.`
             : "지금 삭제되는 기록은 없습니다. 이후 기간이 지난 기록부터 삭제됩니다."}
         </p>
-        <p className="mt-3 rounded-xl bg-surface px-3.5 py-3 text-sm leading-relaxed text-muted">
+        <p className="mt-3 rounded-xl bg-surface px-3.5 py-3 text-base leading-relaxed text-muted">
           감사 로그(활동 기록)는 법령상 최소 2년 보관되며 이 설정과 무관합니다.
         </p>
         <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
@@ -238,7 +245,7 @@ function RetentionConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center rounded-xl px-5 text-base font-semibold text-foreground transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             취소
           </button>
@@ -246,7 +253,7 @@ function RetentionConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-masked px-5 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-masked px-5 text-base font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             {totalDelete > 0 ? "삭제하고 줄이기" : "줄이기"}
@@ -632,7 +639,7 @@ export default function SettingsPage() {
           >
             <a
               href={buildSupportMailto({ subject: "개인정보 열람, 정정, 삭제 요청" })}
-              className="inline-flex h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft"
+              className="inline-flex min-h-12 items-center gap-1.5 rounded-xl px-3 text-base font-semibold text-primary transition-colors hover:bg-primary-soft md:min-h-10 md:text-sm"
             >
               <Mail className="h-4 w-4" strokeWidth={1.75} />
               요청하기

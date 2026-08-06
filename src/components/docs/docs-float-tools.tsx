@@ -22,7 +22,30 @@ function useMounted() {
 
 type FloatBox = { left: number; top: number };
 
-/** 원본 상단 chrome이 화면 위로 벗어나면 true. */
+/**
+ * 도움말·약관·소개 상단 Faith 헤더 (h-16).
+ * 플로팅 검색/돌아가기는 이 아래 + 여백에 둔다 (헤더·타이틀과 겹치지 않음).
+ */
+export const DOCS_SITE_HEADER_PX = 64;
+/** 헤더와 플로팅 사이 간격 (좁은/넓은 창 공통) */
+export const DOCS_FLOAT_GAP_PX = 16;
+
+/** 플로팅 바 viewport top (px). */
+export function docsFloatTopPx(): number {
+  if (typeof window === "undefined") {
+    return DOCS_SITE_HEADER_PX + DOCS_FLOAT_GAP_PX;
+  }
+  const vvTop = window.visualViewport?.offsetTop ?? 0;
+  return Math.max(DOCS_SITE_HEADER_PX, vvTop) + DOCS_FLOAT_GAP_PX;
+}
+
+/** 타이틀 chrome이 사이트 헤더 아래로 완전히 올라갔는지. */
+export function isDocsTitleChromeGone(chrome: HTMLElement): boolean {
+  const threshold = DOCS_SITE_HEADER_PX + DOCS_FLOAT_GAP_PX;
+  return chrome.getBoundingClientRect().bottom < threshold;
+}
+
+/** 원본 상단 chrome이 헤더 아래 영역 위로 벗어나면 true. */
 export function useDocsChromeGone(chromeRef: RefObject<HTMLElement | null>) {
   const [gone, setGone] = useState(false);
 
@@ -31,12 +54,12 @@ export function useDocsChromeGone(chromeRef: RefObject<HTMLElement | null>) {
     let scrollRoot: HTMLElement | null = null;
     let observer: IntersectionObserver | null = null;
     let attached = false;
+    const threshold = DOCS_SITE_HEADER_PX + DOCS_FLOAT_GAP_PX;
 
     const update = () => {
       const chrome = chromeRef.current;
       if (!chrome) return;
-      const rect = chrome.getBoundingClientRect();
-      setGone(rect.bottom < 12);
+      setGone(isDocsTitleChromeGone(chrome));
     };
 
     const opts: AddEventListenerOptions = { passive: true, capture: true };
@@ -51,13 +74,17 @@ export function useDocsChromeGone(chromeRef: RefObject<HTMLElement | null>) {
       attached = true;
       scrollRoot = getScrollParent(chrome);
 
-      // 뷰포트 기준 IO (마케팅 페이지 window 스크롤용)
       observer = new IntersectionObserver(
         ([entry]) => {
           if (!entry) return;
-          setGone(!entry.isIntersecting || entry.boundingClientRect.bottom < 12);
+          const bottom = entry.boundingClientRect.bottom;
+          setGone(!entry.isIntersecting || bottom < threshold);
         },
-        { root: null, threshold: 0, rootMargin: "0px" },
+        {
+          root: null,
+          threshold: 0,
+          rootMargin: `-${threshold}px 0px 0px 0px`,
+        },
       );
       observer.observe(chrome);
 
@@ -87,7 +114,7 @@ export function useDocsChromeGone(chromeRef: RefObject<HTMLElement | null>) {
   return gone;
 }
 
-/** 플로팅 바를 본문 컬럼 왼쪽 상단에 맞춤. */
+/** 플로팅 바를 본문 컬럼 왼쪽 · 사이트 헤더 아래에 맞춤. */
 export function useDocsFloatBox(
   pageRef: RefObject<HTMLElement | null>,
   active: boolean,
@@ -104,9 +131,10 @@ export function useDocsFloatBox(
       const page = pageRef.current;
       if (!page) return;
       const rect = page.getBoundingClientRect();
+      const pad = 16;
       setBox({
-        left: rect.left + 16,
-        top: Math.max(12, window.visualViewport?.offsetTop ?? 0) + 12,
+        left: Math.max(12, rect.left + pad),
+        top: docsFloatTopPx(),
       });
     };
 

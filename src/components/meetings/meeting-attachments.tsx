@@ -1,24 +1,12 @@
 "use client";
 
-import {
-  File,
-  FileArchive,
-  FileAudio,
-  FileCode2,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
-  FileType2,
-  Presentation,
-} from "lucide-react";
-
+import { VaultFileIcon } from "@/components/vault/vault-file-icon";
 import type {
   MeetingTranscript,
   TranscriptAttachment,
   TranscriptAttachmentKind,
   TranscriptLine,
 } from "@/types/transcript";
-import { cn } from "@/lib/utils";
 
 export type TranscriptFileItem = {
   lineId: string;
@@ -29,8 +17,9 @@ export type TranscriptFileItem = {
 };
 
 export function collectTranscriptFiles(
-  transcript: MeetingTranscript,
+  transcript: MeetingTranscript | null | undefined,
 ): TranscriptFileItem[] {
+  if (!transcript?.lines?.length) return [];
   return transcript.lines
     .filter((l): l is TranscriptLine & { attachment: TranscriptAttachment } =>
       Boolean(l.attachment),
@@ -85,62 +74,7 @@ function kindLabel(kind: TranscriptAttachmentKind) {
   }
 }
 
-function KindIcon({
-  kind,
-  className,
-}: {
-  kind: TranscriptAttachmentKind;
-  className?: string;
-}) {
-  const cls = cn("h-4 w-4 shrink-0", className ?? "text-muted");
-  const sw = 1.75;
-  switch (kind) {
-    case "audio":
-      return <FileAudio className={cls} strokeWidth={sw} />;
-    case "pdf":
-      return <FileType2 className={cls} strokeWidth={sw} />;
-    case "doc":
-      return <FileText className={cls} strokeWidth={sw} />;
-    case "sheet":
-      return <FileSpreadsheet className={cls} strokeWidth={sw} />;
-    case "image":
-      return <FileImage className={cls} strokeWidth={sw} />;
-    case "slide":
-      return <Presentation className={cls} strokeWidth={sw} />;
-    case "archive":
-      return <FileArchive className={cls} strokeWidth={sw} />;
-    case "code":
-      return <FileCode2 className={cls} strokeWidth={sw} />;
-    default:
-      return <File className={cls} strokeWidth={sw} />;
-  }
-}
-
-function kindTone(kind: TranscriptAttachmentKind, hostSide: boolean) {
-  if (hostSide) return "bg-white/15 text-primary-foreground";
-  switch (kind) {
-    case "audio":
-      return "bg-[#e8eef4] text-[#3d6a8a]";
-    case "pdf":
-      return "bg-[#f3e8e8] text-[#8a3d3d]";
-    case "doc":
-      return "bg-[#e8eef8] text-[#3d5a8a]";
-    case "sheet":
-      return "bg-[#e7f2ea] text-[#2f6b45]";
-    case "image":
-      return "bg-[#f0ebe6] text-[#7a5c3e]";
-    case "slide":
-      return "bg-[#f3ebe4] text-[#8a5a28]";
-    case "archive":
-      return "bg-[#eeeaf4] text-[#5a3d8a]";
-    case "code":
-      return "bg-[#e8ecef] text-[#3a4550]";
-    default:
-      return "bg-surface-2 text-muted";
-  }
-}
-
-/** 다시보기 말풍선용 첨부 카드. 말풍선과 구분되도록 항상 밝은 톤. */
+/** 다시보기 말풍선용 첨부 카드. 보관함 파일 아이콘 재사용. 색 면 없음. */
 export function TranscriptAttachmentCard({
   attachment,
 }: {
@@ -148,22 +82,15 @@ export function TranscriptAttachmentCard({
   hostSide?: boolean;
 }) {
   const kind = resolveAttachmentKind(attachment);
-  const ext = (attachment.name.split(".").pop() ?? "file").toUpperCase();
 
   return (
-    <div className="w-full max-w-[15.75rem] shrink-0 overflow-hidden rounded-2xl bg-surface text-left text-foreground">
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        <div
-          className={cn(
-            "flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl",
-            kindTone(kind, false),
-          )}
-        >
-          <KindIcon kind={kind} />
-          <span className="mt-0.5 text-[8px] font-bold leading-none tracking-wide opacity-80">
-            {ext}
-          </span>
-        </div>
+    <div className="w-full max-w-[15.75rem] shrink-0 overflow-hidden text-left text-foreground">
+      <div className="flex items-center gap-3 py-1">
+        <VaultFileIcon
+          name={attachment.name}
+          size={22}
+          className="h-11 w-11 shrink-0 rounded-full border border-border bg-transparent"
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold leading-snug">
             {attachment.name}
@@ -180,12 +107,13 @@ export function TranscriptAttachmentCard({
 /**
  * 대화에 올라온 첨부만 모아 보는 리스트.
  * 행 클릭 시 해당 대화 줄로 이동할 수 있게 onSelectLine 제공.
+ * 종류별 색 면 없이 아이콘·텍스트·간격만으로 구분.
  */
 export function MeetingAttachmentsList({
   transcript,
   onSelectLine,
 }: {
-  transcript: MeetingTranscript;
+  transcript?: MeetingTranscript | null;
   onSelectLine?: (lineId: string) => void;
 }) {
   const files = collectTranscriptFiles(transcript);
@@ -193,7 +121,7 @@ export function MeetingAttachmentsList({
   if (files.length === 0) {
     return (
       <section>
-        <p className="py-8 text-center text-base text-muted md:text-sm">
+        <p className="py-8 text-center text-base text-muted">
           첨부된 파일이 없습니다.
         </p>
       </section>
@@ -202,52 +130,49 @@ export function MeetingAttachmentsList({
 
   return (
     <section>
-      <p className="mb-3 text-base font-medium tabular-nums text-muted-2 md:text-xs">
+      <p className="text-sm font-semibold tabular-nums text-muted-2">
         {files.length}개
       </p>
-      <ul className="space-y-1 overflow-hidden rounded-2xl bg-surface p-1">
+      <ul className="mt-3 divide-y divide-border border-y border-border">
         {files.map((item) => {
           const kind = resolveAttachmentKind(item.attachment);
-          const ext = (
-            item.attachment.name.split(".").pop() ?? "file"
-          ).toUpperCase();
           return (
             <li key={item.lineId}>
               <button
                 type="button"
                 onClick={() => onSelectLine?.(item.lineId)}
-                className="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-card sm:px-4 md:min-h-0"
+                className="flex min-h-14 w-full min-w-0 items-center gap-3 bg-transparent py-3.5 text-left transition-opacity hover:opacity-80 sm:gap-4"
               >
-                <div
-                  className={cn(
-                    "flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl md:h-11 md:w-11",
-                    kindTone(kind, false),
-                  )}
-                >
-                  <KindIcon kind={kind} />
-                  <span className="mt-0.5 text-[8px] font-bold leading-none opacity-80">
-                    {ext}
-                  </span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-semibold text-foreground md:text-sm">
+                <VaultFileIcon
+                  name={item.attachment.name}
+                  size={22}
+                  className="h-11 w-11 shrink-0 self-center rounded-full border border-border bg-transparent sm:h-12 sm:w-12"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-semibold text-foreground">
                     {item.attachment.name}
-                  </p>
-                  <p className="mt-0.5 truncate text-base font-medium text-muted md:text-xs">
-                    {kindLabel(kind)} {item.attachment.sizeLabel}
-                    <span className="text-muted-2"> , </span>
-                    {item.speaker}
-                    <span className="text-muted-2"> , </span>
+                  </span>
+                  <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-base text-muted">
+                    <span>
+                      {kindLabel(kind)} · {item.attachment.sizeLabel}
+                    </span>
+                    <span className="text-muted-2" aria-hidden>
+                      ·
+                    </span>
+                    <span className="truncate">{item.speaker}</span>
+                    <span className="text-muted-2" aria-hidden>
+                      ·
+                    </span>
                     <span className="tabular-nums">{item.time}</span>
-                  </p>
-                </div>
+                  </span>
+                </span>
               </button>
             </li>
           );
         })}
       </ul>
       {onSelectLine ? (
-        <p className="mt-2 text-base font-medium text-muted-2 md:text-xs">
+        <p className="mt-3 text-base text-muted-2">
           파일을 누르면 해당 대화 위치로 이동합니다.
         </p>
       ) : null}

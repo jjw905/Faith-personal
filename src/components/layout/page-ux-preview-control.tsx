@@ -11,18 +11,24 @@ import {
 } from "@/context/team-role-preview-context";
 import { cn } from "@/lib/utils";
 
-/** 돌아가기(도움말·약관·개인정보)와 겹치지 않게 우측 배치. */
-function alignPreviewEnd(pathname: string) {
-  return (
-    pathname === "/help" ||
-    pathname === "/privacy" ||
-    pathname === "/terms" ||
-    pathname === "/policy" ||
-    pathname === "/about" ||
-    pathname.startsWith("/privacy/") ||
-    pathname.startsWith("/terms/") ||
-    pathname.startsWith("/policy/") ||
-    pathname.startsWith("/about/")
+/**
+ * 상단 헤더(돌아가기·일자·기록 액션)와 겹치지 않게 좌하단 고정.
+ * 우하단 모바일 추적 바·주요 CTA와 간섭을 피한다.
+ * 모바일 하단 추적 바 위: safe-area + 5.75rem.
+ */
+function previewDockClass(pathname: string) {
+  const aboveMobileBar =
+    pathname === "/dashboard" ||
+    pathname === "/meetings" ||
+    pathname === "/vault" ||
+    pathname.startsWith("/team");
+  return cn(
+    "pointer-events-none fixed z-[90] flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-start gap-2",
+    "left-3 sm:left-5",
+    // 모바일 추적 바: bottom 1.85rem + 바 높이(~4.25rem) 위 여유 → 6.75rem
+    aboveMobileBar
+      ? "bottom-[calc(env(safe-area-inset-bottom,0px)+6.75rem)] md:bottom-5"
+      : "bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:bottom-5",
   );
 }
 
@@ -42,22 +48,13 @@ export function PageUxPreviewControl() {
   const showRole = roleEnabled && roleActive;
   if (!showUx && !showRole) return null;
 
-  const endAligned = alignPreviewEnd(pathname);
-
   return (
-    <div
-      className={cn(
-        "pointer-events-none absolute inset-x-0 top-0 z-[90] flex h-16 items-center gap-2",
-        endAligned
-          ? "justify-end px-4 sm:px-6"
-          : "justify-start pl-14 pr-16 sm:pr-[4.5rem] lg:px-6",
-      )}
-    >
+    <div className={previewDockClass(pathname)}>
       {showUx ? (
         <div
           className={cn(
-            "pointer-events-auto inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card px-1 shadow-soft",
-            !isLive && "ring-1 ring-primary/25",
+            "pointer-events-auto inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card px-1 shadow-float ring-1 ring-border",
+            !isLive && "ring-primary/30",
           )}
           role="group"
           aria-label={`${surface.label} UX 미리보기`}
@@ -65,12 +62,12 @@ export function PageUxPreviewControl() {
           <button
             type="button"
             onClick={prev}
-            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface"
+            className="inline-flex min-h-12 min-w-12 shrink-0 md:h-8 md:w-8 md:min-h-8 md:min-w-8 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface"
             aria-label="이전 UX 상태"
           >
             <ChevronLeft className="h-4 w-4" strokeWidth={2.25} />
           </button>
-          <span className="min-w-0 max-w-[12rem] select-none truncate px-0.5 text-center text-sm font-semibold text-foreground sm:max-w-[16rem]">
+          <span className="min-w-0 max-w-[10rem] select-none truncate px-0.5 text-center text-sm font-semibold text-foreground sm:max-w-[14rem]">
             <span className="text-muted">{surface.label}</span>
             <span className="mx-1 text-muted-2">,</span>
             {scenario.label}
@@ -78,7 +75,7 @@ export function PageUxPreviewControl() {
           <button
             type="button"
             onClick={next}
-            className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface"
+            className="inline-flex min-h-12 min-w-12 shrink-0 md:h-8 md:w-8 md:min-h-8 md:min-w-8 cursor-pointer items-center justify-center rounded-full text-foreground transition-colors hover:bg-surface"
             aria-label="다음 UX 상태"
           >
             <ChevronRight className="h-4 w-4" strokeWidth={2.25} />
@@ -89,8 +86,8 @@ export function PageUxPreviewControl() {
       {showRole ? (
         <div
           className={cn(
-            "pointer-events-auto inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card p-1 shadow-soft",
-            previewRole && "ring-1 ring-primary/25",
+            "pointer-events-auto inline-flex h-10 max-w-full items-center gap-0.5 rounded-full bg-card p-1 shadow-float ring-1 ring-border",
+            previewRole && "ring-primary/30",
           )}
           role="group"
           aria-label="팀 역할 미리보기"
@@ -100,7 +97,7 @@ export function PageUxPreviewControl() {
             aria-pressed={previewRole === null}
             onClick={() => setPreviewRole(null)}
             className={cn(
-              "min-h-8 rounded-full px-3 text-sm font-semibold transition-colors",
+              "min-h-12 rounded-full px-3 text-base font-semibold transition-colors md:min-h-8 md:text-sm",
               previewRole === null
                 ? "bg-primary text-primary-foreground"
                 : "text-muted hover:bg-surface hover:text-foreground",
@@ -115,7 +112,7 @@ export function PageUxPreviewControl() {
               aria-pressed={previewRole === role}
               onClick={() => setPreviewRole(role)}
               className={cn(
-                "min-h-8 rounded-full px-3 text-sm font-semibold transition-colors",
+                "min-h-12 rounded-full px-3 text-base font-semibold transition-colors md:min-h-8 md:text-sm",
                 previewRole === role
                   ? "bg-primary text-primary-foreground"
                   : "text-muted hover:bg-surface hover:text-foreground",

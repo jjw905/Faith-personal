@@ -5,9 +5,9 @@ export type MeetingExportFormatMeta = {
   label: string;
   ext: string;
   mime: string;
-  /** Material Symbols Outlined 리가처 */
+  /** @deprecated UI는 ExportFormatIcon 사용. 메타 호환용 */
   symbol: string;
-  /** Faith soft tone (meeting-attachments kindTone) */
+  /** @deprecated UI는 ExportFormatIcon 사용. 메타 호환용 */
   toneClass: string;
   blurb: string;
   phase: 1 | 2;
@@ -21,8 +21,8 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
     label: "TXT",
     ext: "txt",
     mime: "text/plain;charset=utf-8",
-    symbol: "text_snippet",
-    toneClass: "bg-[#e8eef8] text-[#3d5a8a]",
+    symbol: "notes",
+    toneClass: "bg-[#f3efe6] text-[#7a5c2e]",
     blurb: "일반 텍스트",
     phase: 1,
     popular: true,
@@ -32,8 +32,8 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
     label: "Markdown",
     ext: "md",
     mime: "text/markdown;charset=utf-8",
-    symbol: "markdown",
-    toneClass: "bg-[#e8eef8] text-[#3d5a8a]",
+    symbol: "code",
+    toneClass: "bg-[#ebe8f4] text-[#5a4a7a]",
     blurb: "문서용 마크다운",
     phase: 1,
   },
@@ -63,8 +63,8 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
     label: "SRT",
     ext: "srt",
     mime: "application/x-subrip;charset=utf-8",
-    symbol: "subtitles",
-    toneClass: "bg-[#e8eef4] text-[#3d6a8a]",
+    symbol: "closed_caption",
+    toneClass: "bg-[#e6f3f2] text-[#2f6b66]",
     blurb: "자막 (SubRip)",
     phase: 1,
   },
@@ -80,12 +80,12 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
   },
   {
     id: "docx",
-    label: "DOCX (한글·Word)",
+    label: "DOCX",
     ext: "docx",
     mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    symbol: "description",
+    symbol: "draft",
     toneClass: "bg-[#e8eef8] text-[#3d5a8a]",
-    blurb: "한글에서 열 수 있는 문서",
+    blurb: "한글·Word",
     phase: 2,
     popular: true,
   },
@@ -96,7 +96,7 @@ export const MEETING_EXPORT_FORMATS: MeetingExportFormatMeta[] = [
     mime: "application/pdf",
     symbol: "picture_as_pdf",
     toneClass: "bg-[#f3e8e8] text-[#8a3d3d]",
-    blurb: "PDF 문서",
+    blurb: "문서",
     phase: 2,
     popular: true,
   },

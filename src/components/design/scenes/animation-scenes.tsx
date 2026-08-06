@@ -3,6 +3,7 @@
 import { Mic } from "lucide-react";
 
 import { ReplayStage } from "@/components/design/preview-stage";
+import { HeroTypingTitle } from "@/components/marketing/hero-typing-title";
 import { RunningDots } from "@/components/meetings/live-masking-transcript";
 import { MaskedText } from "@/components/meetings/masked-text";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/components/meetings/new-meeting-session";
 import { LoadingMark } from "@/components/ui/loading-mark";
 import { maskPii } from "@/lib/masking";
+import { heroTypingDoneAtMs } from "@/lib/marketing/hero-typing";
 
 /** 실시간 기록 화면 골격 */
 function LiveSessionChrome({ children }: { children: React.ReactNode }) {
@@ -185,6 +187,26 @@ export function SceneAnimLoadingMark() {
             <div className="rounded-full bg-card px-3 py-1.5 shadow-soft ring-1 ring-border">
               <LoadingMark size="sm" />
             </div>
+          </div>
+        </div>
+      )}
+    </ReplayStage>
+  );
+}
+
+/** 브랜딩 홈 히어로 「… AI가.」 타이핑 */
+export function SceneAnimHeroTyping() {
+  const replayMs = heroTypingDoneAtMs() + 1200;
+  return (
+    <ReplayStage
+      hint="홈 히어로, 말만 하면… AI가. 타이핑."
+      fill
+      autoReplayMs={replayMs}
+    >
+      {() => (
+        <div className="flex h-full min-h-full items-center bg-background px-4 py-8 sm:px-8">
+          <div className="w-full max-w-2xl">
+            <HeroTypingTitle />
           </div>
         </div>
       )}

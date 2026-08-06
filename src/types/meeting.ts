@@ -8,6 +8,17 @@ export type MeetingCapture = "live" | "upload";
 /** 회의록 화자 인식 방식. 비회원도 음성 톤 등으로 구분 가능. */
 export type ParticipantRecognition = "member" | "guest" | "voice";
 
+/** 분석 중(기록 목록용). 대기열 빠른순 정렬·진행 표시. */
+export type MeetingProcessInfo = {
+  phase: "transcribing" | "structuring";
+  progressPercent: number;
+  stageLabel?: string | null;
+  waiting?: boolean;
+  jobStatus?: "queued" | "running" | null;
+  /** 앞에 남은 작업 수. 0이면 곧 시작 */
+  queueAhead?: number | null;
+};
+
 export interface Participant {
   id: string;
   name: string;
@@ -43,6 +54,8 @@ export interface Meeting {
   workspace: WorkspaceId;
   /** 실시간 회화 / 업로드. 없으면 id·태그로 추론. */
   capture?: MeetingCapture;
+  /** 분석 중일 때 진행·대기 정보 (기록 목록). */
+  process?: MeetingProcessInfo;
   /**
    * 다시듣기 원본.
    * - `/samples/...` 공개 샘플

@@ -221,7 +221,7 @@ export function LoginForm({
               <label htmlFor="mfa-code" className={AUTH_LABEL}>
                 추가 인증
               </label>
-              <p className="mb-3 text-sm leading-5 text-muted">
+              <p className="mb-3 text-base leading-5 text-muted">
                 인증 앱의 6자리 코드 또는 저장해 둔 복구 코드 1개를 입력하세요.
               </p>
               <Input

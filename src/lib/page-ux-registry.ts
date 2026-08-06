@@ -364,14 +364,15 @@ const SURFACE_RULES: SurfaceRule[] = [
     match: (pathname) => pathname === "/users",
   },
   {
-    id: "ai-usage",
+    id: "stats",
     label: "통계",
     scenarios: ADMIN_LIST_SCENARIOS,
     match: (pathname) =>
       pathname === "/stats" ||
       pathname === "/ai-usage" ||
       pathname === "/pipeline-stats" ||
-      pathname === "/survey-stats",
+      pathname === "/survey-stats" ||
+      pathname === "/operations",
   },
 ];
 const UNSUPPORTED: PageUxSurface = {

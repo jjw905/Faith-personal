@@ -3,7 +3,7 @@ import { vaultFileExtLabel, vaultFileSymbol } from "@/lib/vault-file-icon";
 import { cn } from "@/lib/utils";
 
 /**
- * 파일 타일. 확장자를 굵은 글자로 직접 보여주고(MP4, JPG),
+ * 파일 타일. 확장자를 익숙한 소문자로 보여준다(m4a, mp4, jpg).
  * 확장자를 못 읽는 파일만 Material 심볼로 대체한다.
  */
 export function VaultFileIcon({
