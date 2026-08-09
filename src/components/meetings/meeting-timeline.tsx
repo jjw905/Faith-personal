@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useLayoutEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -23,6 +23,40 @@ import type {
   TimelineSegmentKind,
 } from "@/types/timeline";
 import { cn } from "@/lib/utils";
+
+/** 보기 문단과 같은 타이포 — 테두리 박스 없이 글자만 */
+function InplaceSegmentSummary({
+  value,
+  disabled,
+  "aria-label": ariaLabel,
+  onChange,
+}: {
+  value: string;
+  disabled?: boolean;
+  "aria-label": string;
+  onChange: (next: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      disabled={disabled}
+      rows={1}
+      aria-label={ariaLabel}
+      className="mt-2 w-full resize-none overflow-hidden border-0 bg-transparent p-0 text-base leading-[1.65] text-muted outline-none ring-0 focus-visible:outline-none disabled:opacity-60"
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
 
 /** 종류별 아이콘 + 짧은 한글 라벨(한눈에 의미). 색 톤·면 없이 아이콘만. */
 const KIND_META: Record<
@@ -227,6 +261,9 @@ export function MeetingTimelineView({
   onClearSpeakerFilter,
   onSegmentSelect,
   chatHref,
+  editMode = false,
+  disabled = false,
+  onChange,
 }: {
   timeline: MeetingTimeline;
   participants?: Participant[];
@@ -237,6 +274,9 @@ export function MeetingTimelineView({
   onSegmentSelect?: (segmentId: string) => void;
   /** 있으면 툴바에 대화·다시듣기 링크 */
   chatHref?: string;
+  editMode?: boolean;
+  disabled?: boolean;
+  onChange?: (next: MeetingTimeline) => void;
 }) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -258,19 +298,21 @@ export function MeetingTimelineView({
         onChange={setQuery}
         placeholder="구간·키워드 검색"
         label="타임라인 검색"
+        keepToolbarBorder
         toolbar={
-          <div className="flex min-h-12 min-w-0 items-center gap-2 pb-2 md:min-h-11 md:gap-2.5 md:pb-2.5">
-            <p className="shrink-0 text-sm font-semibold tracking-wide text-muted-2">
+          <div className="flex w-full min-w-0 flex-1 items-center gap-2 md:gap-2.5">
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold tracking-wide text-muted-2">
               타임라인
+              <span className="font-medium tabular-nums">
+                {" "}
+                - {metaLabel}
+              </span>
             </p>
-            <span className="shrink-0 text-base font-medium tabular-nums text-muted-2">
-              {metaLabel}
-            </span>
             {speakerFilter ? (
               <button
                 type="button"
                 onClick={onClearSpeakerFilter}
-                className="inline-flex min-h-12 max-w-[10rem] cursor-pointer items-center gap-1.5 truncate text-base font-semibold text-primary md:h-8 md:min-h-0"
+                className="inline-flex min-h-12 max-w-[10rem] shrink-0 cursor-pointer items-center gap-1.5 truncate text-base font-semibold text-primary md:h-8 md:min-h-0"
               >
                 <span className="truncate">{speakerFilter}</span>
                 <X className="h-4 w-4 shrink-0" strokeWidth={2} />
@@ -279,9 +321,13 @@ export function MeetingTimelineView({
             {chatHref ? (
               <Link
                 href={chatHref}
-                className="ml-auto hidden min-h-0 shrink-0 items-center gap-2 px-1 text-base font-semibold text-primary transition-colors hover:text-primary-hover md:inline-flex"
+                className="ml-auto hidden shrink-0 items-center gap-2 whitespace-nowrap px-1.5 text-base font-semibold text-primary transition-colors hover:text-primary-hover md:inline-flex md:min-h-9"
               >
-                <MessagesSquare className="h-4 w-4" strokeWidth={1.75} />
+                <MessagesSquare
+                  className="h-4 w-4 shrink-0"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
                 대화, 다시듣기
               </Link>
             ) : null}
@@ -350,7 +396,38 @@ export function MeetingTimelineView({
                 </div>
 
                 <div className="min-w-0 flex-1 pt-1">
-                  {onSegmentSelect ? (
+                  {editMode && onChange ? (
+                    <>
+                      <input
+                        value={seg.title}
+                        disabled={disabled}
+                        aria-label={`${seg.start} 구간 제목`}
+                        className="w-full border-0 bg-transparent p-0 text-lg font-semibold text-foreground outline-none ring-0 focus-visible:outline-none disabled:opacity-60"
+                        onChange={(e) => {
+                          const title = e.target.value;
+                          onChange({
+                            ...timeline,
+                            segments: timeline.segments.map((s) =>
+                              s.id === seg.id ? { ...s, title } : s,
+                            ),
+                          });
+                        }}
+                      />
+                      <InplaceSegmentSummary
+                        value={seg.summary}
+                        disabled={disabled}
+                        aria-label={`${seg.start} 구간 요약`}
+                        onChange={(summary) => {
+                          onChange({
+                            ...timeline,
+                            segments: timeline.segments.map((s) =>
+                              s.id === seg.id ? { ...s, summary } : s,
+                            ),
+                          });
+                        }}
+                      />
+                    </>
+                  ) : onSegmentSelect ? (
                     <button
                       type="button"
                       onClick={() => onSegmentSelect(seg.id)}
@@ -363,9 +440,11 @@ export function MeetingTimelineView({
                       {seg.title}
                     </h3>
                   )}
-                  <p className="mt-2 text-base leading-[1.65] text-muted">
-                    {seg.summary}
-                  </p>
+                  {!editMode ? (
+                    <p className="mt-2 text-base leading-[1.65] text-muted">
+                      {seg.summary}
+                    </p>
+                  ) : null}
                   {seg.points && seg.points.length > 0 ? (
                     <ul className="mt-2.5 flex flex-col gap-1.5">
                       {seg.points.map((point) => (

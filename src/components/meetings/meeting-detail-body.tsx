@@ -12,29 +12,38 @@ import type { MeetingTimeline } from "@/types/timeline";
 import { cn } from "@/lib/utils";
 
 /**
- * 1열(~lg 미만): 요약 — 가로선 — 참석 — 타임라인.
- * 2열(lg+): 요약+참석 | 타임라인. 전폭 가로선 없음.
+ * 1열(~lg 미만): 요약 → 참석 → 타임라인 (섹션 헤더 가로선만 사용).
+ * 2열(lg+): 요약+참석 | 타임라인.
  */
 export function MeetingDetailBody({
   meeting,
   timeline,
   canEditParticipants = false,
   backHref = "/dashboard",
+  editMode = false,
+  draftTimeline,
+  onDraftTimelineChange,
+  editBusy = false,
 }: {
   meeting: Meeting;
   timeline: MeetingTimeline;
   canEditParticipants?: boolean;
   backHref?: string;
+  editMode?: boolean;
+  draftTimeline?: MeetingTimeline;
+  onDraftTimelineChange?: (next: MeetingTimeline) => void;
+  editBusy?: boolean;
 }) {
   const router = useRouter();
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const chatHref = `/meetings/${meeting.id}/chat`;
+  const viewTimeline = editMode && draftTimeline ? draftTimeline : timeline;
   const hasSummary = Boolean(
-    timeline.overallSummary?.trim() ||
-      timeline.decisions?.length ||
-      timeline.actions?.length,
+    editMode ||
+      viewTimeline.overallSummary?.trim() ||
+      viewTimeline.decisions?.length ||
+      viewTimeline.actions?.length,
   );
-  const showStackDivider = hasSummary && meeting.participants.length > 0;
 
   function toggleSpeaker(name: string) {
     setSpeakerFilter((prev) => (prev === name ? null : name));
@@ -53,15 +62,13 @@ export function MeetingDetailBody({
             id="meeting-summary"
             className="scroll-mt-4 lg:col-start-1 lg:row-start-1"
           >
-            <MeetingSummaryCard timeline={timeline} />
+            <MeetingSummaryCard
+              timeline={viewTimeline}
+              editMode={editMode}
+              disabled={editBusy}
+              onChange={onDraftTimelineChange}
+            />
           </div>
-        ) : null}
-
-        {showStackDivider ? (
-          <hr
-            className="border-0 border-t border-border lg:hidden"
-            aria-hidden
-          />
         ) : null}
 
         <aside
@@ -93,14 +100,21 @@ export function MeetingDetailBody({
           )}
         >
           <MeetingTimelineView
-            timeline={timeline}
+            timeline={viewTimeline}
             participants={meeting.participants}
             speakerFilter={speakerFilter}
             onClearSpeakerFilter={() => setSpeakerFilter(null)}
             chatHref={chatHref}
-            onSegmentSelect={(segmentId) => {
-              router.push(`${chatHref}?segment=${segmentId}`);
-            }}
+            editMode={editMode}
+            disabled={editBusy}
+            onChange={onDraftTimelineChange}
+            onSegmentSelect={
+              editMode
+                ? undefined
+                : (segmentId) => {
+                    router.push(`${chatHref}?segment=${segmentId}`);
+                  }
+            }
           />
         </div>
       </div>

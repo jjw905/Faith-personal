@@ -4,7 +4,7 @@ import { normalizeMeetingDateIso } from "@/lib/meeting-date";
 import { canReadMeeting } from "@/lib/meeting-access";
 import { renameParticipantInRecord } from "@/lib/rename-meeting-participant";
 import { requireUser } from "@/lib/require-user";
-import { applyLineCorrection, setLineMemo } from "@/lib/transcript-line-edit";
+import { applyLineCorrection, applyTimelinePatch, setLineMemo, setLineText } from "@/lib/transcript-line-edit";
 import {
   deleteUserMeeting,
   getUserMeeting,
@@ -29,6 +29,13 @@ type PatchBody = {
     endOffset?: number;
   };
   setMemo?: { lineId?: string; memo?: string };
+  setLineText?: { lineId?: string; text?: string };
+  timelinePatch?: {
+    overallSummary?: string;
+    decisions?: string[];
+    actions?: Array<{ owner?: string; task?: string; due?: string }>;
+    segments?: Array<{ id?: string; title?: string; summary?: string }>;
+  };
 };
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -149,6 +156,77 @@ export async function PATCH(request: Request, { params }: Params) {
     }
     const next = await updateUserMeeting(id, { transcript: updated.record.transcript });
     return NextResponse.json({ ok: true, transcript: next?.transcript });
+  }
+
+  if (body.setLineText) {
+    const { lineId, text } = body.setLineText;
+    if (typeof lineId !== "string" || !lineId || typeof text !== "string") {
+      return NextResponse.json(
+        { ok: false, message: "잘못된 요청입니다." },
+        { status: 400 },
+      );
+    }
+    const updated = setLineText(row, lineId, text);
+    if (!updated.ok) {
+      return NextResponse.json(
+        { ok: false, message: updated.message },
+        { status: 400 },
+      );
+    }
+    const next = await updateUserMeeting(id, {
+      transcript: updated.record.transcript,
+    });
+    return NextResponse.json({ ok: true, transcript: next?.transcript });
+  }
+
+  if (body.timelinePatch) {
+    const raw = body.timelinePatch;
+    const segments = Array.isArray(raw.segments)
+      ? raw.segments
+          .filter(
+            (s): s is { id: string; title?: string; summary?: string } =>
+              typeof s?.id === "string" && Boolean(s.id),
+          )
+          .map((s) => ({
+            id: s.id,
+            ...(typeof s.title === "string" ? { title: s.title } : {}),
+            ...(typeof s.summary === "string" ? { summary: s.summary } : {}),
+          }))
+      : undefined;
+    const actions = Array.isArray(raw.actions)
+      ? raw.actions
+          .filter(
+            (a): a is { owner: string; task: string; due?: string } =>
+              typeof a?.owner === "string" && typeof a?.task === "string",
+          )
+          .map((a) => ({
+            owner: a.owner,
+            task: a.task,
+            ...(typeof a.due === "string" ? { due: a.due } : {}),
+          }))
+      : undefined;
+    const patched = applyTimelinePatch(row.timeline, {
+      ...(typeof raw.overallSummary === "string"
+        ? { overallSummary: raw.overallSummary }
+        : {}),
+      ...(Array.isArray(raw.decisions)
+        ? {
+            decisions: raw.decisions.filter(
+              (d): d is string => typeof d === "string",
+            ),
+          }
+        : {}),
+      ...(actions ? { actions } : {}),
+      ...(segments ? { segments } : {}),
+    });
+    if (!patched.ok) {
+      return NextResponse.json(
+        { ok: false, message: patched.message },
+        { status: 400 },
+      );
+    }
+    const next = await updateUserMeeting(id, { timeline: patched.timeline });
+    return NextResponse.json({ ok: true, timeline: next?.timeline });
   }
 
   const patch: { title?: string; date?: string } = {};

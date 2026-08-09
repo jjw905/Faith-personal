@@ -5,7 +5,6 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { DemandSurveyConsentGate } from "@/components/layout/demand-survey-consent-gate";
 import { PageUxPreviewControl } from "@/components/layout/page-ux-preview-control";
 import {
   MeetingChromeProvider,
@@ -73,7 +72,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="relative flex h-dvh min-w-0 overflow-hidden bg-app-canvas">
+    <div className="@container faith-desktop-shell relative flex h-dvh w-full overflow-hidden bg-app-canvas">
       {!hideChrome ? (
         <>
           <div
@@ -103,7 +102,6 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         {!focusMode ? <PageUxPreviewControl /> : null}
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>
       </div>
-      <DemandSurveyConsentGate />
     </div>
   );
 }

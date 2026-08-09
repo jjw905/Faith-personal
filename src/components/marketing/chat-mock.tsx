@@ -199,7 +199,7 @@ function MockBubble({
       </div>
       <div
         className={cn(
-          "flex min-w-0 max-w-[78%] flex-col",
+          "flex min-w-0 max-w-[min(78%,clamp(12rem,55vw,28rem))] flex-col",
           isMe ? "items-start" : "items-end",
         )}
       >

@@ -156,7 +156,7 @@ export function LiveMaskingTranscript() {
           </div>
           <div
             ref={origRef}
-            className="mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-5"
+            className="faith-chat-pane mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-5"
           >
             {isEmpty ? (
               <EmptyHint>입력하거나 무작위 입력을 눌러보세요.</EmptyHint>
@@ -165,23 +165,23 @@ export function LiveMaskingTranscript() {
                 <div className="min-h-0 flex-1" aria-hidden />
                 <div className="flex flex-col gap-2.5">
                   {visible.map((u) => (
-                    <MessageBubble key={u.id} label="샘플" align="start">
+                    <MessageBubble key={u.id} label="샘플" align="end">
                       {u.text}
                     </MessageBubble>
                   ))}
                   {streamingText ? (
-                    <MessageBubble label="샘플" typing align="start">
+                    <MessageBubble label="샘플" typing align="end">
                       {streamingText}
                       <Caret />
                     </MessageBubble>
                   ) : null}
                   {chatLines.map((line) => (
-                    <MessageBubble key={line.id} label={line.speaker} align="end">
+                    <MessageBubble key={line.id} label={line.speaker} align="start">
                       {line.text}
                     </MessageBubble>
                   ))}
                   {chatInput.length > 0 ? (
-                    <MessageBubble label="나" typing align="end">
+                    <MessageBubble label="나" typing align="start">
                       {chatInput}
                       <Caret />
                     </MessageBubble>
@@ -217,7 +217,7 @@ export function LiveMaskingTranscript() {
             </button>
             <div
               ref={maskRef}
-              className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-3 pr-11"
+              className="faith-chat-pane flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-3 pr-11"
             >
             {isEmpty ? (
               <EmptyHint>개인정보가 완성되는 순간 가려집니다.</EmptyHint>
@@ -226,12 +226,12 @@ export function LiveMaskingTranscript() {
                 <div className="min-h-0 flex-1" aria-hidden />
                 <div className="flex flex-col gap-2.5">
                   {maskedUtterances.map((u) => (
-                    <MessageBubble key={u.id} label="샘플" align="start">
+                    <MessageBubble key={u.id} label="샘플" align="end">
                       <MaskedText original={u.text} matches={u.matches} />
                     </MessageBubble>
                   ))}
                   {streamingMasked ? (
-                    <MessageBubble label="샘플" typing align="start">
+                    <MessageBubble label="샘플" typing align="end">
                       <MaskedText
                         original={streamingText}
                         matches={streamingMatches}
@@ -243,7 +243,7 @@ export function LiveMaskingTranscript() {
                     <MessageBubble
                       key={line.id}
                       label={line.speaker}
-                      align="end"
+                      align="start"
                       maskedCount={line.matches.length}
                     >
                       <MaskedText
@@ -256,7 +256,7 @@ export function LiveMaskingTranscript() {
                     <MessageBubble
                       label="나"
                       typing
-                      align="end"
+                      align="start"
                       maskedCount={liveChatMasked?.matches.length ?? 0}
                     >
                       <MaskedText
@@ -352,18 +352,18 @@ function MessageBubble({
   maskedCount?: number;
   children: React.ReactNode;
 }) {
-  const mine = align === "end";
+  const mine = align === "start";
   return (
     <div
       className={cn(
         "flex w-full animate-[bubble-in_240ms_ease-out] motion-reduce:animate-none",
-        mine ? "justify-end" : "justify-start",
+        mine ? "justify-start" : "justify-end",
       )}
     >
       <div
         className={cn(
-          "max-w-[92%] rounded-2xl px-3.5 py-2.5",
-          mine ? "rounded-br-md bg-primary-soft" : "rounded-bl-md bg-surface",
+          "faith-chat-bubble-rail rounded-2xl px-3.5 py-2.5",
+          mine ? "rounded-bl-md bg-primary-soft" : "rounded-br-md bg-surface",
         )}
       >
         <div className="flex items-center gap-2">

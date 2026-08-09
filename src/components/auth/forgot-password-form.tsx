@@ -16,6 +16,7 @@ import {
 } from "@/components/auth/auth-shell";
 import { RecaptchaLegalNote } from "@/components/auth/recaptcha-legal-note";
 import { getRecaptchaToken } from "@/components/auth/recaptcha-v3";
+import { RECAPTCHA_BLOCKED_MESSAGE } from "@/lib/recaptcha";
 import { Input } from "@/components/ui/input";
 import {
   AUTH_MAIL_UNAVAILABLE,
@@ -73,7 +74,7 @@ export function ForgotPasswordForm({
       try {
         captchaToken = await getRecaptchaToken("forgot_password");
       } catch {
-        setError("보안 확인에 실패했습니다. 다시 시도해 주세요.");
+        setError(RECAPTCHA_BLOCKED_MESSAGE);
         return;
       }
       const res = await fetch("/api/auth/forgot-password", {

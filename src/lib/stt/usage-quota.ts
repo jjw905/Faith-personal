@@ -1,4 +1,3 @@
-import { DEMAND_SURVEY_ACTIVE } from "@/lib/feature-flags";
 import { PLAN_CATALOG } from "@/lib/plans";
 import { Prisma } from "@prisma/client";
 
@@ -56,7 +55,7 @@ export type UploadQuotaStatus = {
   resetsAt: string;
   /** 표시용. 예: 8월 15일 */
   resetsAtLabel: string;
-  /** DEMAND_SURVEY_ACTIVE가 꺼지면 서버도 클라이언트도 한도를 적용하지 않는다. */
+  /** 플랜 월간 한도 적용 여부. 수요 설문 캠페인과 별개로 항상 적용한다. */
   enforced: boolean;
 };
 
@@ -264,13 +263,12 @@ async function quotaSnapshot(
   const usedSec = legacyUsedSec + dbUsedSec;
   const remainingSec =
     monthlyRemainingSec + creditRemainingSec + graceRemainingSec;
-  const enforced = DEMAND_SURVEY_ACTIVE;
   return {
     periodKey: context.periodKey,
     monthKey: context.periodKey,
     usedSec,
-    limitSec: enforced ? usedSec + remainingSec : context.monthlyLimitSec,
-    remainingSec: enforced ? remainingSec : context.monthlyLimitSec,
+    limitSec: usedSec + remainingSec,
+    remainingSec,
     monthlyLimitSec: context.monthlyLimitSec,
     monthlyRemainingSec,
     creditRemainingSec,
@@ -278,7 +276,7 @@ async function quotaSnapshot(
     surveyCompleted: context.surveyCompleted,
     resetsAt: context.resetsAt.toISOString(),
     resetsAtLabel: context.resetsAtLabel,
-    enforced,
+    enforced: true,
   };
 }
 
@@ -309,12 +307,6 @@ export type QuotaReservation = {
   chargedSec: number;
   finalize: () => Promise<void>;
   release: () => Promise<void>;
-};
-
-const NOOP_RESERVATION: QuotaReservation = {
-  chargedSec: 0,
-  finalize: async () => {},
-  release: async () => {},
 };
 
 function reservationHandle(
@@ -440,7 +432,6 @@ export async function assertUploadQuota(params: {
   newDurationSec: number;
   analysisMode?: AnalysisMode;
 }): Promise<QuotaReservation> {
-  if (!DEMAND_SURVEY_ACTIVE) return NOOP_RESERVATION;
   const context = await quotaContext(params.userId);
   return reserveWithRetry({
     userId: params.userId,

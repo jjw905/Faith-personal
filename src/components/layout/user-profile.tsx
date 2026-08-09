@@ -167,7 +167,7 @@ export function UserProfile({
   return (
     <div
       ref={rootRef}
-      className="relative"
+      className={cn("relative", compact && menuOpen && "z-[60]")}
       onPointerEnter={(event) => {
         if (event.pointerType !== "mouse" || previewForceOpen) return;
         if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
@@ -180,113 +180,104 @@ export function UserProfile({
     >
       <div
         className={cn(
-          "absolute z-50 shrink-0",
-          // 모바일 드로어: 계정 버튼 위로
-          "bottom-full left-0 right-0 mb-0",
-          // 데스크톱 사이드바: 계정 버튼 오른쪽
-          "lg:bottom-0 lg:left-full lg:right-auto lg:mb-0 lg:ml-1.5 lg:w-max lg:origin-left",
+          "absolute z-50",
+          // 계정 버튼 바로 위. 레일(compact)은 부모(~3rem)에 가두지 않고 내용 너비로 오른쪽 확장.
+          "bottom-full mb-1 origin-bottom",
+          compact
+            ? "left-0 right-auto w-max min-w-[12rem]"
+            : "left-0 right-0",
           "transition-[opacity,transform,visibility] duration-200 ease-out motion-reduce:transition-none",
           menuOpen
-            ? "visible translate-y-0 opacity-100 lg:translate-x-0"
-            : "invisible pointer-events-none translate-y-1 opacity-0 lg:translate-x-[-0.5rem] lg:translate-y-0 lg:scale-[0.98]",
+            ? "visible translate-y-0 opacity-100"
+            : "invisible pointer-events-none translate-y-1 opacity-0",
         )}
       >
         <div className="relative">
-        <div
-          id={menuId}
-          role="menu"
-          aria-label="계정 메뉴"
-          aria-hidden={!menuOpen}
-          className="w-full overflow-hidden rounded-lg bg-surface shadow-float ring-1 ring-border-strong lg:w-max lg:shrink-0"
-        >
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!inviteCode}
-            onClick={() => void copyInviteCode()}
-            className="relative flex min-h-12 w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card disabled:cursor-wait disabled:opacity-60"
+          <span
+            aria-live="polite"
+            className={cn(
+              "pointer-events-none absolute right-2 -top-8 z-10 flex items-center gap-1 rounded-full bg-foreground px-2 py-1 text-xs font-medium whitespace-nowrap text-background shadow-float transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
+              copied
+                ? "visible translate-y-0 opacity-100"
+                : "invisible translate-y-1 opacity-0",
+            )}
           >
-            <UserRoundPlus
-              className="h-4 w-4 shrink-0 text-muted-2"
-              strokeWidth={1.75}
-            />
-            <span className="truncate text-left">초대 코드</span>
-            <Copy className="h-3.5 w-3.5 shrink-0 text-muted-2" aria-hidden />
-            <span
-              aria-live="polite"
-              className={cn(
-                "pointer-events-none absolute right-2 -top-8 z-10 flex items-center gap-1 rounded-full bg-foreground px-2 py-1 text-xs font-medium whitespace-nowrap text-background shadow-float transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none lg:hidden",
-                copied
-                  ? "visible translate-y-0 opacity-100"
-                  : "invisible translate-y-1 opacity-0",
-              )}
+            <Check className="h-3 w-3" aria-hidden />
+            복사되었습니다.
+          </span>
+          <div
+            id={menuId}
+            role="menu"
+            aria-label="계정 메뉴"
+            aria-hidden={!menuOpen}
+            className={cn(
+              "overflow-hidden rounded-lg bg-surface shadow-float ring-1 ring-border-strong",
+              compact ? "w-max min-w-[12rem]" : "w-full",
+            )}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!inviteCode}
+              onClick={() => void copyInviteCode()}
+              className="relative flex min-h-12 w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card disabled:cursor-wait disabled:opacity-60"
             >
-              <Check className="h-3 w-3" aria-hidden />
-              복사되었습니다.
-            </span>
-          </button>
-          {MENU_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const itemActive =
-              pathname === item.href || pathname.startsWith(`${item.href}/`);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                role="menuitem"
-                onClick={() => {
-                  if (!previewForceOpen) setOpen(false);
-                  onNavigate?.();
-                }}
-                className={cn(
-                  "flex min-h-12 cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap outline-none transition-colors",
-                  "hover:bg-card",
-                  "focus-visible:bg-card",
-                  itemActive
-                    ? "bg-card font-medium text-foreground"
-                    : "text-muted",
-                )}
-              >
-                <Icon
+              <UserRoundPlus
+                className="h-4 w-4 shrink-0 text-muted-2"
+                strokeWidth={1.75}
+              />
+              <span className="truncate text-left">초대 코드</span>
+              <Copy className="h-3.5 w-3.5 shrink-0 text-muted-2" aria-hidden />
+            </button>
+            {MENU_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const itemActive =
+                pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  role="menuitem"
+                  onClick={() => {
+                    if (!previewForceOpen) setOpen(false);
+                    onNavigate?.();
+                  }}
                   className={cn(
-                    "h-4 w-4 shrink-0",
-                    itemActive ? "text-primary" : "text-muted-2",
+                    "flex min-h-12 cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap outline-none transition-colors",
+                    "hover:bg-card",
+                    "focus-visible:bg-card",
+                    itemActive
+                      ? "bg-card font-medium text-foreground"
+                      : "text-muted",
                   )}
-                  strokeWidth={1.75}
-                />
-                <span className="truncate">{item.label}</span>
-              </Link>
-            );
-          })}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              if (!previewForceOpen) setOpen(false);
-              void signOut({ callbackUrl: "/" });
-            }}
-            className="flex min-h-12 w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card"
-          >
-            <LogOut
-              className="h-4 w-4 shrink-0 text-muted-2"
-              strokeWidth={1.75}
-            />
-            <span className="truncate">로그아웃</span>
-          </button>
-        </div>
-
-        <div
-          aria-live="polite"
-          className={cn(
-            "pointer-events-none absolute top-1.5 left-full z-10 ml-1.5 hidden items-center gap-1 rounded-full bg-foreground px-2 py-1 text-xs font-medium whitespace-nowrap text-background shadow-float transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none lg:flex",
-            copied
-              ? "visible translate-x-0 opacity-100"
-              : "invisible -translate-x-1 opacity-0",
-          )}
-        >
-          <Check className="h-3 w-3" aria-hidden />
-          복사되었습니다.
-        </div>
+                >
+                  <Icon
+                    className={cn(
+                      "h-4 w-4 shrink-0",
+                      itemActive ? "text-primary" : "text-muted-2",
+                    )}
+                    strokeWidth={1.75}
+                  />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                if (!previewForceOpen) setOpen(false);
+                void signOut({ callbackUrl: "/" });
+              }}
+              className="flex min-h-12 w-full cursor-pointer items-center gap-2 py-2 pl-2.5 pr-5 text-base whitespace-nowrap text-muted outline-none transition-colors hover:bg-card hover:text-foreground focus-visible:bg-card"
+            >
+              <LogOut
+                className="h-4 w-4 shrink-0 text-muted-2"
+                strokeWidth={1.75}
+              />
+              <span className="truncate">로그아웃</span>
+            </button>
+          </div>
         </div>
       </div>
 

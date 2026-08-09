@@ -8,6 +8,7 @@ import {
   UsageLimitDialog,
   type UsageLimitTimeStatus,
 } from "@/components/dashboard/usage-limit-dialog";
+import { DEMAND_SURVEY_ACTIVE } from "@/lib/feature-flags";
 import {
   formatQuotaLimitLabel,
   formatQuotaRemainingLabel,
@@ -22,8 +23,7 @@ type QuotaStatus = UsageLimitTimeStatus & {
 };
 
 /**
- * 오픈 준비 기간 한정 안내. 실시간·팀 회의는 대상이 아니고 업로드
- * 분석에만 적용되므로 이 배너도 업로드 화면에만 둔다.
+ * 업로드 분석 월간 잔여 안내. 실시간·팀 회의는 대상이 아니다.
  */
 export function UploadQuotaBanner() {
   const [status, setStatus] = useState<QuotaStatus | null>(null);
@@ -63,7 +63,7 @@ export function UploadQuotaBanner() {
           low ? "bg-primary-soft" : "bg-surface",
         )}
       >
-        <p className="whitespace-nowrap text-base font-medium text-foreground">
+        <p className="text-base font-medium text-foreground [text-wrap:balance]">
           {remainingLabel}
           <span className="text-muted">
             {" "}
@@ -71,10 +71,10 @@ export function UploadQuotaBanner() {
           </span>
         </p>
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-          {!status.surveyCompleted ? (
+          {DEMAND_SURVEY_ACTIVE && !status.surveyCompleted ? (
             <Link
               href="/survey"
-              className="inline-flex min-h-12 items-center gap-1 whitespace-nowrap text-base font-semibold text-primary hover:underline"
+              className="inline-flex min-h-12 items-center gap-1 text-base font-semibold text-primary hover:underline"
             >
               <Gift className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
               {formatSurveyCta(monthlyLimitMin)}
@@ -83,7 +83,7 @@ export function UploadQuotaBanner() {
           {low ? (
             <button
               type="button"
-              className="inline-flex min-h-12 items-center whitespace-nowrap text-base font-semibold text-primary hover:underline"
+              className="inline-flex min-h-12 items-center text-base font-semibold text-primary hover:underline"
               onClick={() => setDetailOpen(true)}
             >
               자세히 보기

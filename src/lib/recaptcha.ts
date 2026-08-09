@@ -4,6 +4,9 @@ const SITEVERIFY_URL = "https://www.google.com/recaptcha/api/siteverify";
 /** 0.0~1.0. 낮을수록 봇 가능성. */
 const DEFAULT_MIN_SCORE = 0.5;
 
+/** 캡챠에 막혔을 때 사용자에게 보이는 단일 문구. */
+export const RECAPTCHA_BLOCKED_MESSAGE = "요청을 처리할 수 없습니다.";
+
 export type RecaptchaAction =
   | "login"
   | "signup_otp"
@@ -30,17 +33,14 @@ export async function verifyRecaptchaToken(params: {
 
   if (!secret || !site) {
     if (process.env.NODE_ENV === "production") {
-      return {
-        ok: false,
-        message: "보안 검증이 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.",
-      };
+      return { ok: false, message: RECAPTCHA_BLOCKED_MESSAGE };
     }
     return { ok: true };
   }
 
   const token = typeof params.token === "string" ? params.token.trim() : "";
   if (!token) {
-    return { ok: false, message: "보안 확인에 실패했습니다. 다시 시도해 주세요." };
+    return { ok: false, message: RECAPTCHA_BLOCKED_MESSAGE };
   }
 
   const body = new URLSearchParams();
@@ -61,33 +61,21 @@ export async function verifyRecaptchaToken(params: {
     };
 
     if (!data.success) {
-      return {
-        ok: false,
-        message: "보안 확인에 실패했습니다. 다시 시도해 주세요.",
-      };
+      return { ok: false, message: RECAPTCHA_BLOCKED_MESSAGE };
     }
 
     if (data.action && data.action !== params.action) {
-      return {
-        ok: false,
-        message: "보안 확인에 실패했습니다. 다시 시도해 주세요.",
-      };
+      return { ok: false, message: RECAPTCHA_BLOCKED_MESSAGE };
     }
 
     const min = params.minScore ?? DEFAULT_MIN_SCORE;
     const score = typeof data.score === "number" ? data.score : 0;
     if (score < min) {
-      return {
-        ok: false,
-        message: "요청을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.",
-      };
+      return { ok: false, message: RECAPTCHA_BLOCKED_MESSAGE };
     }
 
     return { ok: true, score };
   } catch {
-    return {
-      ok: false,
-      message: "보안 확인 중 오류가 났습니다. 잠시 후 다시 시도해 주세요.",
-    };
+    return { ok: false, message: RECAPTCHA_BLOCKED_MESSAGE };
   }
 }

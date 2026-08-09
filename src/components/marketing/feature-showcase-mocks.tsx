@@ -277,11 +277,11 @@ export function MockAutoMask() {
               네, 연락처는{" "}
               <span
                 className={cn(
-                  "mx-0.5 inline-block rounded-md px-1.5 py-0.5 font-semibold transition-all duration-500 motion-reduce:animate-none motion-reduce:transition-none",
+                  "mx-0.5 inline-block px-0.5 font-mono font-bold transition-all duration-500 motion-reduce:animate-none motion-reduce:transition-none",
                   masked
-                    ? "animate-[mask-chip-in_220ms_ease-out] bg-masked-soft text-masked"
+                    ? "animate-[mask-chip-in_220ms_ease-out] text-foreground underline decoration-dotted underline-offset-2"
                     : scanning
-                      ? "bg-primary/15 text-foreground"
+                      ? "text-foreground underline decoration-dotted underline-offset-2"
                       : "text-foreground",
                 )}
               >
@@ -457,7 +457,7 @@ export function MockReplayHighlight() {
 export function MockSecureVault() {
   const ref = useRef<HTMLDivElement>(null);
   const rows = [
-    { name: "마스킹 규칙 점검.wav", meta: "음성 · 980KB", access: "본인만" },
+    { name: "캠페인 킥오프.wav", meta: "음성 · 980KB", access: "본인만" },
     { name: "주간 리뷰 요약.md", meta: "문서 · 18KB", access: "열람 가능" },
     { name: "예외 케이스.xlsx", meta: "표 · 54KB", access: "열람 가능" },
   ];

@@ -29,9 +29,10 @@ type QuotaStatus = {
   enforced?: boolean;
 };
 
-function gaugeTone(pct: number): string {
-  if (pct >= 100) return "bg-red-600";
-  if (pct >= 80) return "bg-warning";
+/** 사용 비율 기준 색. 게이지 채움은 잔여 비율(가득=할당량 남음). */
+function gaugeTone(usedPct: number): string {
+  if (usedPct >= 100) return "bg-red-600";
+  if (usedPct >= 80) return "bg-warning";
   return "bg-primary";
 }
 
@@ -46,10 +47,11 @@ function CircularMiniGauge({
   const c = 2 * Math.PI * r;
   const clamped = Math.min(100, Math.max(0, pct));
   const offset = c * (1 - clamped / 100);
+  const usedPct = 100 - clamped;
   const stroke =
-    clamped >= 100
+    usedPct >= 100
       ? "stroke-red-600"
-      : clamped >= 80
+      : usedPct >= 80
         ? "stroke-warning"
         : "stroke-primary";
 
@@ -153,16 +155,29 @@ export function SidebarUsage({
     ? Math.floor(status.remainingSec / 60)
     : 0;
   const limitMin = monthlyMinutesFromSeconds(effectiveLimitSec);
-  const pct =
+  // 가득 찬 게이지 = 할당량이 남은 상태(쓸수록 줄어듦).
+  const remainingPct =
     status && effectiveLimitSec > 0
-      ? (status.usedSec / effectiveLimitSec) * 100
+      ? Math.min(
+          100,
+          Math.max(0, (status.remainingSec / effectiveLimitSec) * 100),
+        )
       : 0;
+  const usedPct = 100 - remainingPct;
   const title =
     status && enforced
       ? formatQuotaRemainingLabel(status.remainingSec, effectiveLimitSec)
       : status && !enforced
         ? "이용 제한 없음"
         : label;
+  const hoverCaption =
+    loading || !status
+      ? label
+      : !enforced
+        ? "제한 없음"
+        : remainingMin <= 0
+          ? "잔여 없음"
+          : `${remainingMin}분 남음`;
 
   if (collapsed) {
     return (
@@ -182,7 +197,7 @@ export function SidebarUsage({
         {loading ? (
           <span className="h-5 w-5 animate-pulse rounded-full bg-surface-2" />
         ) : status && enforced ? (
-          <CircularMiniGauge pct={pct} />
+          <CircularMiniGauge pct={remainingPct} />
         ) : (
           <Gauge
             className="h-5 w-5 text-muted-2 group-hover:text-foreground"
@@ -199,7 +214,9 @@ export function SidebarUsage({
         <span className="sr-only">
           {label} {title}
         </span>
-        <RailHoverCaption>{label}</RailHoverCaption>
+        <RailHoverCaption className="max-w-[5.5rem] whitespace-nowrap">
+          {hoverCaption}
+        </RailHoverCaption>
       </Link>
     );
   }
@@ -250,9 +267,9 @@ export function SidebarUsage({
         <div className="mt-2 h-2 w-full animate-pulse rounded-full bg-surface-2" />
       ) : status && enforced ? (
         <Progress
-          value={pct}
+          value={remainingPct}
           className="mt-2 h-2"
-          indicatorClassName={gaugeTone(pct)}
+          indicatorClassName={gaugeTone(usedPct)}
         />
       ) : null}
 

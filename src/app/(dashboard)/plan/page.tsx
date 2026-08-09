@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { PAID_PLANS_ENABLED } from "@/lib/feature-flags";
+import { DEMAND_SURVEY_ACTIVE, PAID_PLANS_ENABLED } from "@/lib/feature-flags";
 import {
   PLAN_CATALOG,
   TOPUP_PACKS,
@@ -108,6 +108,13 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
     : 0;
   const monthlyLimitMin = monthlyMinutesFromSeconds(monthlyLimitSec);
   const remainingMin = status ? Math.floor(status.remainingSec / 60) : 0;
+  const remainingPct =
+    status && monthlyLimitSec > 0
+      ? Math.min(
+          100,
+          Math.max(0, (status.remainingSec / monthlyLimitSec) * 100),
+        )
+      : 0;
 
   return (
     <Card className={CARD_SHADOW}>
@@ -153,11 +160,7 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
             </p>
 
             <Progress
-              value={
-                status.limitSec > 0
-                  ? (status.usedSec / status.limitSec) * 100
-                  : 0
-              }
+              value={remainingPct}
               className="mt-4 h-2.5"
             />
 
@@ -172,22 +175,24 @@ function UsageHeroCard({ tier }: { tier: AccountTier }) {
               ) : (
                 <span />
               )}
-              {status.surveyCompleted ? (
-                <span className="whitespace-nowrap text-base font-semibold text-primary">
-                  설문으로 {monthlyLimitMin}분 적용 중
-                </span>
-              ) : (
-                <Button
-                  asChild
-                  size="sm"
-                  className="min-h-12 shrink-0 rounded-full px-4 text-base md:h-10 md:min-h-10 md:text-sm"
-                >
-                  <Link href="/survey" className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                    <Gift className="h-4 w-4" strokeWidth={1.75} />
-                    {formatSurveyCta(monthlyLimitMin)}
-                  </Link>
-                </Button>
-              )}
+              {DEMAND_SURVEY_ACTIVE ? (
+                status.surveyCompleted ? (
+                  <span className="text-base font-semibold text-primary">
+                    설문으로 {monthlyLimitMin}분 적용 중
+                  </span>
+                ) : (
+                  <Button
+                    asChild
+                    size="sm"
+                    className="min-h-12 shrink-0 rounded-full px-4 text-base md:h-10 md:min-h-10 md:text-sm"
+                  >
+                    <Link href="/survey" className="inline-flex items-center gap-1.5">
+                      <Gift className="h-4 w-4" strokeWidth={1.75} />
+                      {formatSurveyCta(monthlyLimitMin)}
+                    </Link>
+                  </Button>
+                )
+              ) : null}
             </div>
           </>
         )}

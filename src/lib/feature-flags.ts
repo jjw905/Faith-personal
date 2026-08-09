@@ -31,11 +31,10 @@ export function isTeamFeatureEnabledForRole(role?: string | null) {
 }
 
 /**
- * 오픈 준비 캠페인(업로드 월간 쿼터 + 설문 유도 + 최초 진입 고지) on/off.
- * 캠페인이 끝나면 이 값만 false로 내리면 쿼터 검사, 배너, 최초 동의 모달이
- * 전부 자연히 꺼진다. 응답 데이터·통계 코드는 그대로 남는다.
+ * 수요 설문 캠페인(설문 유도·최초 진입 고지·설문으로 무료 한도 해금 CTA) on/off.
+ * 플랜별 월간 잔여 시간 표시·차감은 이 값과 무관하게 항상 적용한다.
  */
-export const DEMAND_SURVEY_ACTIVE = true;
+export const DEMAND_SURVEY_ACTIVE = false;
 
 /**
  * 오픈 준비 기간 동안 실시간 회화(음성) 기록은 검증 범위 밖이다(업로드

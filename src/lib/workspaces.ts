@@ -56,7 +56,7 @@ const PROFILES: Record<WorkspaceId, WorkspaceProfile> = {
     upcomingAddLabel: "일정 추가",
     recordsTitle: "기록",
     recordsEmpty: "이 기간에 해당하는 기록이 없습니다.",
-    searchPlaceholder: "회의 검색",
+    searchPlaceholder: "일정, 회의 검색",
     settingsNavTitle: "개인 설정",
     settingsTitle: "개인 설정",
     settingsDescription:

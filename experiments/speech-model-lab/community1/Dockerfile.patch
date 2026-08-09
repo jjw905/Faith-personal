@@ -1,0 +1,4 @@
+FROM asia-southeast1-docker.pkg.dev/project-e80b5533-27b9-4476-9a4/faith-speech-model-lab/community1:pyannote-4.0.7
+
+COPY run.py /app/run.py
+ENTRYPOINT ["python", "/app/run.py"]

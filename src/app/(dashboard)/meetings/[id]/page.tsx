@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { MeetingAccessNotice } from "@/components/meetings/meeting-access-notice";
 import { LiveMaskingTranscript } from "@/components/meetings/live-masking-transcript";
-import { MeetingDetailBody } from "@/components/meetings/meeting-detail-body";
 import { MeetingDetailHeader } from "@/components/meetings/meeting-detail-header";
 import { MeetingProcessBanner } from "@/components/meetings/meeting-process-banner";
 import { requireAdmin } from "@/lib/admin";
@@ -104,6 +103,8 @@ export default async function MeetingDetailPage({
       keywords={keywords}
       fillHeight={fillHeight}
       wide={!fillHeight && showDetailBody}
+      showDetailBody={showDetailBody}
+      canEditParticipants={canEditMeta}
     >
       {showProcessBanner ? (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -113,16 +114,6 @@ export default async function MeetingDetailPage({
             initialProgressPercent={userRow!.progressPercent}
             initialErrorMessage={userRow!.errorMessage}
             initialStageLabel={userRow!.stageLabel}
-          />
-        </div>
-      ) : null}
-
-      {showDetailBody ? (
-        <div className="mt-5 space-y-5">
-          <MeetingDetailBody
-            meeting={meeting}
-            timeline={timeline}
-            canEditParticipants={canEditMeta}
           />
         </div>
       ) : null}

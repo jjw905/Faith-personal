@@ -37,6 +37,7 @@ import {
   PLACE_PRESETS,
   TEAM_ONLINE_LOCATION_PRESETS,
   resolveWorkspacePerson,
+  scheduleKindOf,
   WORKSPACE_PEOPLE,
   type UpcomingItem,
 } from "@/lib/workspace-data";
@@ -172,27 +173,43 @@ function AddAction({
 }
 
 function fromForm(item: UpcomingItem, form: FormState): UpcomingItem {
+  const kind = scheduleKindOf(item);
   const participants = form.participants.map((v) => v.trim()).filter(Boolean);
   const agenda = form.agenda.map((v) => v.trim()).filter(Boolean);
   const location =
-    form.platform === "custom"
-      ? form.location.trim() || "직접 입력"
-      : form.location.trim() || platformDefaultLocation(form.platform);
+    kind === "event"
+      ? form.location.trim()
+      : form.platform === "custom"
+        ? form.location.trim() || "직접 입력"
+        : form.location.trim() || platformDefaultLocation(form.platform);
   const dateLabel = form.dateLabel.trim() || item.dateLabel;
   const timeLabel = form.timeLabel.trim() || item.timeLabel;
   const duration = canonicalizeDuration(form.duration.trim() || item.duration);
+  const dateIso = dateLabelToIso(dateLabel) ?? item.dateIso ?? seoulDateKey();
 
   return {
     ...item,
-    title: form.title.trim() || item.title || "새 예정 회의",
+    kind,
+    title:
+      form.title.trim() ||
+      item.title ||
+      (kind === "event" ? "새 일정" : "새 예정 회의"),
     dateLabel,
+    dateIso,
     timeLabel,
     duration,
     location,
-    platform: form.platform,
+    platform: kind === "event" ? "custom" : form.platform,
     organizer: form.organizer.trim() || item.organizer,
-    participants: participants.length ? participants : item.participants,
-    agenda,
+    participants:
+      kind === "event"
+        ? participants.length
+          ? participants
+          : [form.organizer.trim() || item.organizer || "나"]
+        : participants.length
+          ? participants
+          : item.participants,
+    agenda: kind === "event" ? [] : agenda,
     notes: form.notes.trim(),
     when: formatUpcomingScheduleSummary(dateLabel, timeLabel, duration),
   };
@@ -628,29 +645,49 @@ function UpcomingAnalysisPageShell({
 
 /** 보기 본문 — 일정·제목은 셸 헤더. 장소·참석·안건·메모만. */
 function UpcomingDetailViewBody({ item }: { item: UpcomingItem }) {
+  const kind = scheduleKindOf(item);
+  const isMeeting = kind === "meeting";
   const platform = resolvePlatform(item);
-  const hasAgenda = item.agenda.length > 0;
+  const hasAgenda = isMeeting && item.agenda.length > 0;
   const hasNotes = Boolean(item.notes.trim());
-  const hasPeople = item.participants.length > 0;
+  const hasPeople = isMeeting && item.participants.length > 0;
+  const hasPlace = isMeeting && Boolean(item.location.trim());
+
+  if (!isMeeting) {
+    return (
+      <div className="space-y-6">
+        {hasNotes ? (
+          <div className="space-y-2.5">
+            <p className="text-base font-semibold text-muted">메모</p>
+            <p className="text-lg leading-relaxed text-foreground">{item.notes}</p>
+          </div>
+        ) : (
+          <p className="text-base text-muted">메모가 없습니다.</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2 text-lg font-medium text-muted">
-          <MeetingPlatformIcon platform={platform} size="sm" />
-          <span className="min-w-0 truncate">{item.location}</span>
-        </div>
-        {hasPeople ? (
-          <div
-            className="flex shrink-0 -space-x-2"
-            aria-label={`참석자 ${item.participants.length}명`}
-          >
-            {item.participants.slice(0, 3).map((name) => (
-              <PersonAvatar key={name} name={name} size="sm" />
-            ))}
+      {hasPlace ? (
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 text-lg font-medium text-muted">
+            <MeetingPlatformIcon platform={platform} size="sm" />
+            <span className="min-w-0 truncate">{item.location}</span>
           </div>
-        ) : null}
-      </div>
+          {hasPeople ? (
+            <div
+              className="flex shrink-0 -space-x-2"
+              aria-label={`참석자 ${item.participants.length}명`}
+            >
+              {item.participants.slice(0, 3).map((name) => (
+                <PersonAvatar key={name} name={name} size="sm" />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {hasAgenda ? (
         <div className="space-y-2.5">
@@ -809,6 +846,8 @@ export function UpcomingDetailPanel({
     : editing
       ? "일정 수정"
       : view.title;
+  const viewKind = scheduleKindOf(view);
+  const isMeetingItem = viewKind === "meeting";
 
   if (!editing) {
     return (
@@ -861,18 +900,32 @@ export function UpcomingDetailPanel({
                 삭제
               </Button>
             ) : null}
-            <Button
-              asChild
-              className={cn(
-                TOUCH_BUTTON,
-                "col-span-2 inline-flex w-full cursor-pointer items-center justify-center text-base leading-none sm:col-span-1 sm:ml-auto sm:w-auto sm:min-w-[5.5rem]",
-                !onDelete && "col-span-2",
-              )}
-            >
-              <Link href={view.href} onClick={onClose}>
-                회의 시작
-              </Link>
-            </Button>
+            {isMeetingItem ? (
+              <Button
+                asChild
+                className={cn(
+                  TOUCH_BUTTON,
+                  "col-span-2 inline-flex w-full cursor-pointer items-center justify-center text-base leading-none sm:col-span-1 sm:ml-auto sm:w-auto sm:min-w-[5.5rem]",
+                  !onDelete && "col-span-2",
+                )}
+              >
+                <Link href={view.href} onClick={onClose}>
+                  회의 시작
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className={cn(
+                  TOUCH_BUTTON,
+                  "col-span-2 inline-flex w-full cursor-pointer items-center justify-center text-base leading-none sm:col-span-1 sm:ml-auto sm:w-auto sm:min-w-[5.5rem]",
+                  !onDelete && "col-span-2",
+                )}
+                onClick={onClose}
+              >
+                확인
+              </Button>
+            )}
           </div>
         }
       >
@@ -920,8 +973,8 @@ export function UpcomingDetailPanel({
           value={data.title}
           onChange={(e) => update("title", e.target.value)}
           className="w-full border-b border-foreground bg-transparent py-0.5 text-2xl font-bold tracking-tight text-foreground outline-none placeholder:text-muted-2"
-          placeholder="회의 제목"
-          aria-label="회의 제목"
+          placeholder={isMeetingItem ? "회의 제목" : "일정 제목"}
+          aria-label={isMeetingItem ? "회의 제목" : "일정 제목"}
         />
       }
       footer={
@@ -963,6 +1016,8 @@ export function UpcomingDetailPanel({
                       />
                   </div>
 
+                  {isMeetingItem ? (
+                  <>
                   <div className="py-4">
                     <DetailRow
                       label="장소"
@@ -1390,8 +1445,11 @@ export function UpcomingDetailPanel({
                       )}
                     </DetailRow>
                   </div>
+                  </>
+                  ) : null}
                 </section>
 
+                {isMeetingItem ? (
                 <section className="border-t border-border py-4">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 className="text-base font-medium text-muted md:text-xs">안건</h3>
@@ -1470,6 +1528,7 @@ export function UpcomingDetailPanel({
                     <p className="text-base text-muted md:text-sm">안건 없음</p>
                   )}
                 </section>
+                ) : null}
 
                 <section className="border-t border-border py-4">
                   <h3 className="mb-3 text-base font-medium text-muted md:text-xs">메모</h3>

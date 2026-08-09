@@ -78,7 +78,6 @@ import {
   SceneRecordExpandFlow,
 } from "@/components/design/scenes/processing-scenes";
 import {
-  SceneDemandSurveyConsent,
   SceneLegalPolicy,
   SceneLegalPrivacy,
   SceneLegalTerms,
@@ -442,14 +441,6 @@ export const DESIGN_CATEGORIES: DesignCategory[] = [
         route: "/survey",
         kind: "trigger",
         Preview: SceneSurveyCompleted,
-      },
-      {
-        id: "survey-consent",
-        label: "오픈 준비 기간 안내",
-        route: "최초 진입",
-        kind: "popup",
-        trigger: "DemandSurveyConsentGate",
-        Preview: SceneDemandSurveyConsent,
       },
     ],
   },

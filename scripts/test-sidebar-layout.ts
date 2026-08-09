@@ -5,6 +5,8 @@
 import assert from "node:assert/strict";
 
 import {
+  DESKTOP_SHELL_MIN_WIDTH_PX,
+  preferDesktopChrome,
   SIDEBAR_RAIL_MIN_WIDTH_PX,
   nextCollapsedAfterPinToggle,
   pinnedDoesNotCoverContent,
@@ -69,6 +71,7 @@ function run() {
 
   scenario("데스크톱 이하(태블릿 md+): 레일 유지, 사라지지 않음", () => {
     assert.equal(SIDEBAR_RAIL_MIN_WIDTH_PX, 768);
+    assert.equal(DESKTOP_SHELL_MIN_WIDTH_PX, 1024);
     const tabletRail = resolveSidebarVisual({
       isRailLayout: true,
       collapsed: true,
@@ -92,6 +95,49 @@ function run() {
     assert.equal(v.contentOffset, "none");
     assert.equal(v.showExpandedChrome, true);
     assert.equal(sidebarOverlapsMainContent(v), false);
+  });
+
+  scenario("preferDesktopChrome: 정밀 포인터는 좁은 폭에서도 데스크톱", () => {
+    assert.equal(
+      preferDesktopChrome({
+        pointerFine: true,
+        viewportWidthPx: 600,
+      }),
+      true,
+    );
+    assert.equal(
+      preferDesktopChrome({
+        pointerFine: false,
+        viewportWidthPx: 600,
+      }),
+      false,
+    );
+    assert.equal(
+      preferDesktopChrome({
+        pointerFine: false,
+        viewportWidthPx: 800,
+      }),
+      true,
+    );
+  });
+
+  scenario("preferDesktopChrome: 디자인 스테이지 폭 우선", () => {
+    assert.equal(
+      preferDesktopChrome({
+        designStageWidthPx: 390,
+        pointerFine: true,
+        viewportWidthPx: 1400,
+      }),
+      false,
+    );
+    assert.equal(
+      preferDesktopChrome({
+        designStageWidthPx: 900,
+        pointerFine: false,
+        viewportWidthPx: 400,
+      }),
+      true,
+    );
   });
 
   console.log("\nAll sidebar layout scenarios passed.");

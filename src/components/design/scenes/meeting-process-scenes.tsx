@@ -92,9 +92,7 @@ function DetailChrome({
         title={
           <div className="flex min-w-0 items-center gap-3">
             <MeetingTitleHeading
-              meetingId={meeting.id}
               title={meeting.title}
-              canEdit={false}
               className="min-w-0 flex-1"
             />
             <MeetingCaptureChip meeting={meeting} className="shrink-0" />

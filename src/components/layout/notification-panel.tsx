@@ -7,11 +7,12 @@ import {
   EyeOff,
   HardDrive,
   Loader2,
-  Megaphone,
+  LogIn,
+  MailPlus,
   Settings2,
   ShieldAlert,
-  UserPlus,
   Users,
+  Volume2,
   X,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -124,12 +125,12 @@ function groupNotificationsByDay(items: AppNotification[]) {
 function notificationIcon(type: NotificationType) {
   if (type === "masking") return EyeOff;
   if (type === "storage") return HardDrive;
-  if (type === "invite") return UserPlus;
+  if (type === "invite") return MailPlus;
   if (type === "team") return Users;
   if (type === "meeting") return CalendarDays;
-  if (type === "urgent") return Megaphone;
+  if (type === "urgent") return Volume2;
   if (type === "system") return Settings2;
-  if (type === "access") return ShieldAlert;
+  if (type === "access") return LogIn;
   return ShieldAlert;
 }
 
@@ -891,7 +892,7 @@ export function NotificationPanel({
               </div>
             </div>
           ) : (
-            <div className="px-2 py-2">
+            <div className="px-0 py-2">
               {tab === "unread" ? (
                 <NotificationGroup
                   label="안 읽음"
@@ -1003,13 +1004,13 @@ function NotificationGroup({
   return (
     <div className="mb-1">
       {!hideLabel ? (
-        <p className="sticky top-0 z-[1] bg-card px-3 pb-2 pt-5 text-base font-semibold tracking-tight text-foreground first:pt-3">
+        <p className="sticky top-0 z-[1] bg-card px-4 pb-2 pt-5 text-base font-semibold tracking-tight text-foreground first:pt-3">
           {label}
         </p>
       ) : (
         <div className="pt-2" />
       )}
-      <ul className="space-y-1">
+      <ul className="space-y-0">
         {items.map((n) => {
           const Icon = notificationIcon(n.type);
           const urgent = isUrgentNotification(n.type, n.data);
@@ -1033,7 +1034,7 @@ function NotificationGroup({
                 aria-expanded={expanded}
                 aria-label={`${typeLabel}. ${n.title}`}
                 className={cn(
-                  "group flex w-full cursor-pointer items-start gap-3 rounded-xl px-3 py-4 text-left transition-colors hover:bg-surface/70 sm:gap-3.5 sm:px-3.5 sm:py-5",
+                  "group w-full cursor-pointer px-4 py-4 text-left transition-colors hover:bg-surface/70 sm:py-5",
                   "min-h-12",
                   expanded && "bg-surface/80",
                 )}
@@ -1045,32 +1046,27 @@ function NotificationGroup({
                   }
                 }}
               >
-                <span
-                  className={cn(
-                    "mt-0.5 inline-flex h-12 w-12 shrink-0 items-center justify-center md:h-10 md:w-10",
-                    urgent ? "text-red-600" : "text-muted",
-                  )}
-                  aria-hidden
-                >
-                  <Icon className="h-5 w-5" strokeWidth={1.75} />
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "inline-flex size-7 shrink-0 items-center justify-center",
+                        urgent ? "text-red-600" : "text-muted",
+                      )}
+                      aria-hidden
+                    >
+                      <Icon className="h-5 w-5" strokeWidth={1.75} />
+                    </span>
                     <p
                       className={cn(
-                        "text-base font-semibold tracking-wide",
-                        urgent
-                          ? "text-red-600"
-                          : n.unread
-                            ? "text-foreground"
-                            : "text-muted-2",
+                        "min-w-0 flex-1 text-lg leading-7 tracking-tight text-foreground",
+                        n.unread ? "font-semibold" : "font-medium",
                       )}
                     >
-                      {typeLabel}
+                      {n.title}
                     </p>
                     <span
-                      className="shrink-0 text-base tabular-nums text-muted-2"
+                      className="shrink-0 text-base leading-7 tabular-nums text-muted-2"
                       title={
                         n.createdAt
                           ? formatRecordsDayParts(n.createdAt).absolute
@@ -1085,16 +1081,9 @@ function NotificationGroup({
                   </div>
                   <p
                     className={cn(
-                      "mt-1 text-lg leading-snug tracking-tight text-foreground",
-                      n.unread ? "font-semibold" : "font-medium",
-                    )}
-                  >
-                    {n.title}
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-1.5 text-base leading-relaxed text-muted",
-                      !expanded && (browseMode ? "line-clamp-3" : "line-clamp-2"),
+                      "mt-1.5 pl-10 text-base leading-relaxed text-muted",
+                      !expanded &&
+                        (browseMode ? "line-clamp-3" : "line-clamp-2"),
                     )}
                   >
                     {n.body}
@@ -1102,7 +1091,7 @@ function NotificationGroup({
 
                   {hasActions ? (
                     <div
-                      className="mt-3 space-y-2"
+                      className="mt-3 space-y-2 pl-10"
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >

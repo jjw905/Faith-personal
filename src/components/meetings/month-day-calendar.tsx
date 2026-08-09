@@ -22,18 +22,25 @@ export function MonthDayCalendar({
   selectedIso,
   minIso,
   maxIso,
+  markedIsos,
   onSelect,
   className,
 }: {
   selectedIso: string;
   minIso?: string;
   maxIso?: string;
+  /** 일정이 있는 날 (점 표시). */
+  markedIsos?: ReadonlySet<string> | readonly string[];
   onSelect: (iso: string) => void;
   className?: string;
 }) {
   const todayIso = seoulDateKey();
   const selectedParts = parseIsoDateParts(selectedIso);
   const minParts = minIso ? parseIsoDateParts(minIso) : null;
+  const marked =
+    markedIsos instanceof Set
+      ? markedIsos
+      : new Set(markedIsos ?? []);
   const [view, setView] = useState(() => ({
     year: selectedParts?.year ?? minParts?.year ?? 2026,
     month: selectedParts?.month ?? minParts?.month ?? 1,
@@ -104,6 +111,7 @@ export function MonthDayCalendar({
             Boolean(maxIso && cell.iso > maxIso);
           const selected = cell.iso === selectedIso;
           const isToday = cell.iso === todayIso;
+          const hasEvents = marked.has(cell.iso);
           return (
             <div
               key={cell.iso}
@@ -116,20 +124,34 @@ export function MonthDayCalendar({
                 aria-pressed={selected}
                 onClick={() => onSelect(cell.iso)}
                 className={cn(
-                  "inline-flex h-12 w-12 cursor-pointer items-center justify-center rounded-full text-base font-semibold tabular-nums transition-colors",
+                  "relative inline-flex h-12 w-12 cursor-pointer flex-col items-center justify-center rounded-full text-base font-semibold tabular-nums transition-colors",
                   !cell.inMonth && !selected && "text-muted-2",
                   cell.inMonth &&
                     !selected &&
                     "text-foreground hover:bg-surface",
-                  // 오늘: 색만으로는 primary가 foreground와 거의 구별 안 돼 링으로 표시 (M3 date picker 패턴)
-                  isToday && !selected && "text-primary ring-2 ring-inset ring-primary",
+                  isToday &&
+                    !selected &&
+                    "text-primary ring-2 ring-inset ring-primary",
                   selected &&
                     "bg-primary font-semibold text-primary-foreground",
-                  selected && isToday && "ring-2 ring-inset ring-primary-foreground/70",
+                  selected &&
+                    isToday &&
+                    "ring-2 ring-inset ring-primary-foreground/70",
                   disabled && "pointer-events-none opacity-30",
                 )}
               >
-                {cell.day}
+                <span className="leading-none">{cell.day}</span>
+                <span
+                  className={cn(
+                    "absolute bottom-1.5 h-1 w-1 rounded-full",
+                    hasEvents
+                      ? selected
+                        ? "bg-primary-foreground"
+                        : "bg-foreground/55"
+                      : "bg-transparent",
+                  )}
+                  aria-hidden
+                />
               </button>
             </div>
           );

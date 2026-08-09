@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MEETING_SECTION_RULE_ROW } from "@/lib/meeting-section-header";
 import type { Participant } from "@/types/meeting";
 import { cn } from "@/lib/utils";
 
@@ -561,7 +562,7 @@ export function MeetingParticipants({
 
   return (
     <section aria-label={`참석자 ${participants.length}명`}>
-      <div className="mb-3 flex flex-wrap items-baseline gap-2">
+      <div className={cn(MEETING_SECTION_RULE_ROW, "gap-2")}>
         <h2 className="text-sm font-semibold tracking-wide text-muted-2">
           참석
         </h2>
@@ -574,6 +575,7 @@ export function MeetingParticipants({
           </span>
         ) : null}
       </div>
+      <div className="mt-3">
       {useContributionList ? (
         <SpeakerContributionList
           rows={buildContributionRows(visibleParticipants)}
@@ -589,6 +591,7 @@ export function MeetingParticipants({
           {...editProps}
         />
       )}
+      </div>
       {needsCollapse ? (
         <button
           type="button"

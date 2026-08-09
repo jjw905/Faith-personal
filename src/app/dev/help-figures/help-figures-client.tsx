@@ -301,7 +301,7 @@ function TimelineScene({ vp }: { vp: HelpFigVp }) {
   if (isMobile) {
     return (
       <div className="flex h-full flex-col bg-background">
-        <MobileTopBar title="주간 보안 싱크" />
+        <MobileTopBar title="3분기 마케팅 캠페인 킥오프" />
         {panel}
       </div>
     );
@@ -333,13 +333,13 @@ function MaskingScene({ vp }: { vp: HelpFigVp }) {
           <span className="text-base font-semibold">돌아가기</span>
         </div>
       ) : null}
-      <div className="min-h-0 flex-1 space-y-4 overflow-hidden px-4 py-5 sm:px-8">
+      <div className="faith-chat-pane min-h-0 flex-1 space-y-4 overflow-hidden px-4 py-5 sm:px-8">
         {HELP_FIG_MASKING.lines.map((line) => {
-          const mine = line.side === "right";
+          const mine = line.side === "left";
           return (
             <div
               key={line.time + line.speaker.name}
-              className={cn("flex gap-2.5", mine && "flex-row-reverse")}
+              className={cn("flex gap-2.5", !mine && "flex-row-reverse")}
             >
               <Avatar className="h-9 w-9 shrink-0">
                 <AvatarFallback
@@ -351,7 +351,7 @@ function MaskingScene({ vp }: { vp: HelpFigVp }) {
                   {line.speaker.initial}
                 </AvatarFallback>
               </Avatar>
-              <div className={cn("min-w-0 max-w-[min(85%,28rem)]", mine && "text-right")}>
+              <div className={cn("faith-chat-bubble-rail min-w-0", !mine && "text-right")}>
                 <p className="mb-1.5 flex items-baseline gap-1.5 text-sm font-semibold text-foreground">
                   <span>{line.speaker.name}</span>
                   <span className="font-mono text-xs font-medium tabular-nums text-muted">
@@ -362,8 +362,8 @@ function MaskingScene({ vp }: { vp: HelpFigVp }) {
                   className={cn(
                     "inline-block rounded-2xl px-3.5 py-2.5 text-left text-base font-medium leading-relaxed",
                     mine
-                      ? "rounded-br-md bg-primary text-primary-foreground"
-                      : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
+                      ? "rounded-bl-md bg-primary text-primary-foreground"
+                      : "rounded-br-md bg-surface text-foreground ring-1 ring-border",
                   )}
                 >
                   {line.mask ? (

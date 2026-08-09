@@ -2559,7 +2559,7 @@ function StatChip({
         "inline-flex items-center gap-1.5 rounded-full transition-colors",
         large
           ? "h-14 w-full justify-between px-5 text-lg"
-          : "min-h-12 px-3.5 text-base md:h-8 md:min-h-8",
+          : "min-h-12 px-3.5 text-base md:h-9 md:min-h-9",
         active
           ? danger
             ? "bg-red-600 text-white"

@@ -225,9 +225,6 @@ export function LegalDocsView({ doc }: { doc: LegalDoc }) {
                   </h1>
                   <p className="mt-2 text-base text-muted">
                     시행일: {meta.effectiveDateLabel}
-                    <span className="ml-2 text-muted-2">
-                      버전 {meta.versionLabel}
-                    </span>
                   </p>
                   <div className="mt-5 max-w-md">
                     <DocsSearchInput

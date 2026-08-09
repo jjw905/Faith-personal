@@ -227,8 +227,6 @@ function FileAttachmentCard({
               isMe ? "text-primary-foreground/75" : "text-muted",
             )}
           >
-            <span>오디오</span>
-            <span aria-hidden>,</span>
             <span className="tabular-nums">{sizeLabel}</span>
             {isTest ? (
               <span
@@ -277,13 +275,13 @@ export function ChatBubble({
     <div
       className={cn(
         "flex w-full min-w-0 animate-[bubble-in_320ms_ease-out] motion-reduce:animate-none",
-        isMe ? "justify-end" : "justify-start",
+        isMe ? "justify-start" : "justify-end",
       )}
     >
       <div
         className={cn(
-          "flex max-w-[min(85%,22rem)] items-end gap-2.5",
-          isMe ? "flex-row-reverse" : "flex-row",
+          "faith-chat-bubble-rail flex min-w-0 items-end gap-2.5",
+          isMe ? "flex-row" : "flex-row-reverse",
         )}
       >
       <div
@@ -299,13 +297,13 @@ export function ChatBubble({
       <div
         className={cn(
           "min-w-0",
-          isMe ? "text-right" : "text-left",
+          isMe ? "text-left" : "text-right",
         )}
       >
         <p
           className={cn(
             "mb-1 flex min-w-0 items-baseline gap-1.5 text-xs font-semibold",
-            isMe ? "flex-row-reverse text-primary" : "text-foreground",
+            isMe ? "text-primary" : "flex-row-reverse text-foreground",
           )}
         >
           <span className="truncate">{name}</span>
@@ -316,7 +314,7 @@ export function ChatBubble({
           ) : null}
         </p>
         {attachment ? (
-          <div className={cn("flex", isMe ? "justify-end" : "justify-start")}>
+          <div className={cn("flex", isMe ? "justify-start" : "justify-end")}>
             <FileAttachmentCard
               name={attachment.name}
               sizeLabel={attachment.sizeLabel}
@@ -329,8 +327,8 @@ export function ChatBubble({
             className={cn(
               "inline-block max-w-full whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2.5 text-left text-[14px] font-medium leading-relaxed xl:text-[15px]",
               isMe
-                ? "rounded-br-md bg-primary text-primary-foreground"
-                : "rounded-bl-md bg-surface text-foreground ring-1 ring-border",
+                ? "rounded-bl-md bg-primary text-primary-foreground"
+                : "rounded-br-md bg-surface text-foreground ring-1 ring-border",
             )}
           >
             <MaskedText
@@ -343,7 +341,7 @@ export function ChatBubble({
         {corrections?.length ? (
           <CorrectionHint
             corrections={corrections}
-            align={isMe ? "end" : "start"}
+            align={isMe ? "start" : "end"}
             className="mt-2"
           />
         ) : null}
@@ -1476,7 +1474,7 @@ export function NewMeetingSession() {
               memo={memo}
               onChange={setMemo}
             />
-            <div ref={listRef} className="absolute inset-0 overflow-y-auto">
+            <div ref={listRef} className="faith-chat-pane absolute inset-0 overflow-y-auto">
               <div className="flex min-h-full flex-col gap-3.5 pb-1">
                 <div className="min-h-0 flex-1 shrink-0" aria-hidden />
                 {visibleMessages.map((msg) => (

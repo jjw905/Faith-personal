@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Check,
   Download,
   MoreHorizontal,
   Paperclip,
@@ -60,161 +61,78 @@ function hideMockMeeting(meetingId: string) {
   }
 }
 
-/** 제목 인라인 수정. 타이틀·작은 연필을 붙여 이름 변경을 드러냄. */
+/** 회의 제목. 보기 전용. editMode일 때만 입력. */
 export function MeetingTitleHeading({
-  meetingId,
   title,
-  canEdit,
   className,
   align = "start",
   size = "page",
-  /** 헤더 「수정」 클릭 시 증가 → 편집 모드 진입 */
-  editNonce = 0,
+  editMode = false,
+  draftTitle,
+  onDraftTitleChange,
+  disabled = false,
 }: {
-  meetingId: string;
   title: string;
-  canEdit: boolean;
   className?: string;
   align?: "start" | "center";
-  /** page: 상세 본문, header: 대화·다시듣기 상단 */
+  /** page: 상세 본문, header: 대화·다시듣기 상단(대시보드 타이틀과 같은 높이대) */
   size?: "page" | "header";
-  editNonce?: number;
+  editMode?: boolean;
+  draftTitle?: string;
+  onDraftTitleChange?: (next: string) => void;
+  disabled?: boolean;
 }) {
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [editing, setEditing] = useState(false);
-  const [displayTitle, setDisplayTitle] = useState(title);
-  const [value, setValue] = useState(title);
-  const [busy, setBusy] = useState(false);
+  const value = draftTitle ?? title;
 
   const titleClass =
-    size === "header"
-      ? "text-xl font-bold tracking-tight text-foreground sm:text-2xl md:text-xl"
-      : "text-2xl font-bold tracking-tight text-foreground";
+    "text-2xl font-bold tracking-tight text-foreground";
   const alignClass = align === "center" ? "text-center" : "text-left";
 
   useEffect(() => {
-    setDisplayTitle(title);
-    setValue(title);
-  }, [title]);
-
-  useEffect(() => {
-    if (!editNonce || !canEdit) return;
-    setEditing(true);
-  }, [editNonce, canEdit]);
-
-  useEffect(() => {
-    if (!editing) return;
+    if (!editMode) return;
     const el = inputRef.current;
     if (!el) return;
     el.focus();
-    el.select();
-  }, [editing]);
+    // 전체 선택은 내용이 사라진 것처럼 보일 수 있어 끝으로만 이동
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }, [editMode]);
 
-  async function saveTitle() {
-    const next = value.trim();
-    if (!next || next === displayTitle || busy) {
-      setEditing(false);
-      setValue(displayTitle);
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/meetings/${meetingId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: next }),
-      });
-      const data = (await res.json()) as { ok?: boolean; message?: string };
-      if (!res.ok || !data.ok) {
-        throw new Error(data.message ?? "수정 실패");
-      }
-      setDisplayTitle(next);
-      setValue(next);
-      setEditing(false);
-      router.refresh();
-    } catch {
-      setValue(displayTitle);
-      setEditing(false);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function cancel() {
-    setValue(displayTitle);
-    setEditing(false);
-  }
-
-  if (!canEdit) {
+  if (editMode && onDraftTitleChange) {
     return (
-      <h1 className={cn("min-w-0 truncate", titleClass, alignClass, className)}>
-        {displayTitle}
-      </h1>
-    );
-  }
-
-  if (editing) {
-    return (
-      <form
-        className={cn("min-w-0 flex-1", className)}
-        onSubmit={(e) => {
-          e.preventDefault();
-          void saveTitle();
-        }}
-      >
+      <div className={cn("min-w-0", className)}>
         <input
           ref={inputRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={() => void saveTitle()}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              cancel();
-            }
-          }}
-          disabled={busy}
+          onChange={(e) => onDraftTitleChange(e.target.value)}
+          disabled={disabled}
           aria-label="회의 제목"
           className={cn(
-            "w-full border-b border-foreground bg-transparent py-0.5 outline-none placeholder:text-muted disabled:opacity-60",
+            "w-full border-0 bg-transparent py-0.5 outline-none placeholder:text-muted disabled:opacity-60",
             titleClass,
             alignClass,
           )}
         />
-      </form>
+      </div>
     );
   }
 
   return (
-    <div className={cn("min-w-0 flex-1", className)}>
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className={cn(
-          "group max-w-full cursor-text rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-          size === "header" ? "min-h-12 py-2" : "",
-          align === "center" ? "mx-auto block w-full" : "text-left",
-        )}
-        title="제목 수정"
-        aria-label={`제목 수정: ${displayTitle}`}
-      >
-        <span
-          className={cn(
-            "inline max-w-full decoration-muted/50 underline-offset-4 group-hover:underline",
-            titleClass,
-            align === "center" ? "line-clamp-2 break-words" : "",
-          )}
-        >
-          {displayTitle}
-          <Pencil
-            className="ml-1 inline-block h-5 w-5 shrink-0 translate-y-[-0.1em] text-muted transition-colors group-hover:text-foreground"
-            strokeWidth={2}
-            aria-hidden
-          />
-        </span>
-      </button>
-    </div>
+    <h1
+      className={cn(
+        "min-w-0",
+        align === "center" ? "line-clamp-2 break-words" : "truncate",
+        size === "header" && align === "center"
+          ? "leading-none"
+          : undefined,
+        titleClass,
+        alignClass,
+        className,
+      )}
+    >
+      {title}
+    </h1>
   );
 }
 
@@ -587,6 +505,8 @@ export function MeetingRecordActions({
   summary,
   processing = false,
   canEdit = false,
+  editMode = false,
+  editBusy = false,
   onEdit,
 }: {
   meetingId: string;
@@ -597,8 +517,10 @@ export function MeetingRecordActions({
   summary?: string;
   /** 분석 중에는 아직 완성되지 않은 기록이므로 다운로드·삭제를 막는다. */
   processing?: boolean;
-  /** 제목·날짜 수정 가능(본인 업로드). 수정 아이콘은 항상 노출. */
+  /** 제목·요약·타임라인 수정 가능(본인 업로드). 수정 아이콘은 항상 노출. */
   canEdit?: boolean;
+  editMode?: boolean;
+  editBusy?: boolean;
   onEdit?: () => void;
 }) {
   const router = useRouter();
@@ -758,18 +680,24 @@ export function MeetingRecordActions({
             variant="ghost"
             size="icon"
             className={iconBtnClass}
-            aria-label="수정"
+            aria-label={editMode ? "완료" : "수정"}
             title={
               processing
                 ? "분석이 끝나면 수정할 수 있습니다"
-                : canEdit
-                  ? "제목 수정"
-                  : "본인이 올린 기록만 수정할 수 있습니다"
+                : !canEdit
+                  ? "본인이 올린 기록만 수정할 수 있습니다"
+                  : editMode
+                    ? "완료"
+                    : "기록 수정"
             }
-            disabled={disabled}
+            disabled={disabled || editBusy}
             onClick={handleEdit}
           >
-            <Pencil strokeWidth={1.75} />
+            {editMode ? (
+              <Check strokeWidth={1.75} />
+            ) : (
+              <Pencil strokeWidth={1.75} />
+            )}
           </Button>
           <Button
             type="button"
@@ -870,7 +798,7 @@ export function MeetingRecordActions({
               <button
                 type="button"
                 role="menuitem"
-                disabled={disabled}
+                disabled={disabled || editBusy}
                 className={cn(
                   menuItemClass,
                   "text-foreground hover:bg-surface-2",
@@ -881,8 +809,12 @@ export function MeetingRecordActions({
                   })
                 }
               >
-                <Pencil className="h-5 w-5 shrink-0" strokeWidth={1.75} />
-                수정
+                {editMode ? (
+                  <Check className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                ) : (
+                  <Pencil className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+                )}
+                {editMode ? "완료" : "수정"}
               </button>
               <button
                 type="button"

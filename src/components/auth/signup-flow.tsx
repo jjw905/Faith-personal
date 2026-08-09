@@ -24,6 +24,7 @@ import {
   AuthOrDivider,
 } from "@/components/auth/social-signup-buttons";
 import { getRecaptchaToken } from "@/components/auth/recaptcha-v3";
+import { RECAPTCHA_BLOCKED_MESSAGE } from "@/lib/recaptcha";
 import { Input } from "@/components/ui/input";
 import { AUTH_PASSWORD_HINT, AUTH_PASSWORD_INVALID } from "@/lib/auth-messages";
 import {
@@ -42,7 +43,7 @@ async function requestSignupOtp(email: string) {
   } catch {
     return {
       ok: false,
-      message: "보안 확인에 실패했습니다. 다시 시도해 주세요.",
+      message: RECAPTCHA_BLOCKED_MESSAGE,
     };
   }
   const res = await fetch("/api/auth/signup-verify/request", {

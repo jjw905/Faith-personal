@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlignVerticalJustifyCenter,
   Download,
   Highlighter,
   MoreVertical,
@@ -15,7 +14,6 @@ import {
   exportMeetingDownload,
 } from "@/components/meetings/meeting-record-actions";
 import { MeetingRecordsActionDialog } from "@/components/meetings/meeting-records-action-dialog";
-import { MaterialSymbol } from "@/components/ui/material-symbol";
 import type { ChatReplaySettings } from "@/components/meetings/meeting-chat-replay-bar";
 import type { MeetingExportFormat } from "@/lib/meeting-export";
 import {
@@ -110,12 +108,10 @@ export function ChatReplayTools({
   onReplaySettingsChange: (partial: Partial<ChatReplaySettings>) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [maskOpen, setMaskOpen] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareHint, setShareHint] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const moreBtnRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
 
   useEffect(() => {
@@ -200,8 +196,8 @@ export function ChatReplayTools({
   return (
     <>
       {/*
-        모든 폭: 다운로드·공유는 항상 노출.
-        모바일: 따라가기·포커스·가림은 … 메뉴.
+        모든 폭: 마스킹 · 다운로드 · 공유는 항상 노출.
+        모바일: 따라가기·포커스는 … 메뉴.
         데스크톱: 도구 전부 한 줄.
       */}
       <div className="relative flex items-center justify-end gap-1.5">
@@ -211,7 +207,7 @@ export function ChatReplayTools({
             label="채팅 따라가기"
             onClick={() => onReplaySettingsChange({ followChat: !followChat })}
           >
-            <AlignVerticalJustifyCenter className="h-5 w-5" strokeWidth={1.75} />
+            <span className="text-[11px] font-bold tracking-wide">LIVE</span>
           </ReplayToggleBtn>
           <ReplayToggleBtn
             pressed={wordFocus}
@@ -220,16 +216,16 @@ export function ChatReplayTools({
           >
             <Highlighter className="h-5 w-5" strokeWidth={1.75} />
           </ReplayToggleBtn>
+          <MaskStylePopup value={maskStyle} onChange={onMaskChange} />
           {renderDownloadBtn()}
           {renderShareBtn()}
-          <MaskStylePopup value={maskStyle} onChange={onMaskChange} />
         </div>
 
         <div ref={menuRef} className="flex items-center gap-1.5 md:hidden">
+          <MaskStylePopup value={maskStyle} onChange={onMaskChange} />
           {renderDownloadBtn()}
           {renderShareBtn()}
           <button
-            ref={moreBtnRef}
             type="button"
             aria-expanded={menuOpen}
             aria-controls={menuId}
@@ -265,10 +261,7 @@ export function ChatReplayTools({
                   onReplaySettingsChange({ followChat: !followChat })
                 }
               >
-                <AlignVerticalJustifyCenter
-                  className="h-5 w-5"
-                  strokeWidth={1.75}
-                />
+                <span className="text-[11px] font-bold tracking-wide">LIVE</span>
               </ReplayToggleBtn>
               <ReplayToggleBtn
                 pressed={wordFocus}
@@ -280,36 +273,8 @@ export function ChatReplayTools({
               >
                 <Highlighter className="h-5 w-5" strokeWidth={1.75} />
               </ReplayToggleBtn>
-              <button
-                type="button"
-                role="menuitem"
-                aria-label="개인정보 가림"
-                title="개인정보 가림"
-                className={cn(
-                  toolBtn,
-                  "bg-surface text-foreground hover:bg-surface-2",
-                )}
-                onClick={() => {
-                  setMenuOpen(false);
-                  setMaskOpen(true);
-                }}
-              >
-                <MaterialSymbol
-                  name={maskStyle === "off" ? "visibility" : "visibility_off"}
-                  size={22}
-                />
-              </button>
             </div>
           ) : null}
-
-          <MaskStylePopup
-            value={maskStyle}
-            onChange={onMaskChange}
-            open={maskOpen}
-            onOpenChange={setMaskOpen}
-            hideTrigger
-            anchorRef={moreBtnRef}
-          />
         </div>
 
         {shareHint ? (

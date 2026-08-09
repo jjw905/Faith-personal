@@ -420,7 +420,7 @@ export default function VaultPage() {
             variant="ghost"
             className={cn(
               TOUCH_ICON_BUTTON,
-              "min-w-0 cursor-pointer px-3 text-base font-semibold md:h-9 md:min-h-9 md:min-w-0 md:px-2.5 md:text-xs",
+              "min-w-0 cursor-pointer px-3 text-base font-semibold md:h-9 md:min-h-9 md:min-w-0 md:px-2.5 md:text-sm",
             )}
             onClick={toggleSelectAll}
             disabled={filtered.length === 0 || busy}

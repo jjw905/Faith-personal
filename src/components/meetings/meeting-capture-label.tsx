@@ -80,7 +80,7 @@ export function MeetingCaptureOverline({
   );
 }
 
-/** 상세 제목 행용 — 제목 오른쪽, lg. */
+/** 상세 제목 행용 — 제목 왼쪽, lg. */
 export function MeetingCaptureChip({
   meeting,
   className,

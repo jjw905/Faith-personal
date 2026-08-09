@@ -102,10 +102,17 @@ html {
   }
 }
 
-/* 대시보드(lg+) 최소 가로폭. 이보다 좁으면 가로 스크롤로 표기 유지. */
-@media (min-width: 1024px) {
+/*
+ * 정밀 포인터(데스크톱): 창을 줄여도 모바일 UI로 바꾸지 않음.
+ * 대시보드 셸을 lg(1024px) 바닥에 고정하고 가로 스크롤로 맞춤.
+ * 터치(pointer: coarse)는 min-width 없음 → 기존 유동 모바일.
+ */
+@media (pointer: fine) {
   html {
     overflow-x: auto;
+  }
+  .faith-desktop-shell {
+    min-width: 64rem; /* 1024px */
   }
 }
 
@@ -414,6 +421,55 @@ body {
   }
   to {
     opacity: 1;
+  }
+}
+
+/**
+ * 대화 말풍선 폭 — 채팅 판(container) 너비 비율별로 상한을 바꾼다.
+ * Tailwind 임의 min()/clamp()는 중첩 콤마에서 유틸이 빠질 수 있어 CSS로 고정.
+ * 짧은 문장: max-content만큼. 긴 문장: 상한에서 2줄+로 감쌈.
+ */
+.faith-chat-pane {
+  container-type: inline-size;
+  container-name: chat-pane;
+}
+
+.faith-chat-bubble-rail {
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(92cqi, 16.5rem);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+
+.faith-chat-bubble-rail--wide {
+  max-width: min(94cqi, 18rem);
+}
+
+@container chat-pane (min-width: 28rem) {
+  .faith-chat-bubble-rail {
+    max-width: min(78cqi, 22rem);
+  }
+  .faith-chat-bubble-rail--wide {
+    max-width: min(84cqi, 24rem);
+  }
+}
+
+@container chat-pane (min-width: 40rem) {
+  .faith-chat-bubble-rail {
+    max-width: min(62cqi, 26rem);
+  }
+  .faith-chat-bubble-rail--wide {
+    max-width: min(68cqi, 28rem);
+  }
+}
+
+@container chat-pane (min-width: 52rem) {
+  .faith-chat-bubble-rail {
+    max-width: min(52cqi, 30rem);
+  }
+  .faith-chat-bubble-rail--wide {
+    max-width: min(58cqi, 32rem);
   }
 }
 
@@ -774,4 +830,12 @@ body {
   .survey-gift-pop {
     animation: none;
   }
+}
+
+/*
+ * reCAPTCHA v3: 우측 배지는 숨기고, 인증 폼의 영문 한 줄만 고지.
+ * (Google: 배지 숨김 시 대체 브랜딩 문구 필요)
+ */
+.grecaptcha-badge {
+  visibility: hidden !important;
 }

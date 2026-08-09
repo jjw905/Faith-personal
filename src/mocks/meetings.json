@@ -243,16 +243,14 @@
     },
     {
       "id": "mtg-cmp-mini",
-      "title": "다화자 180초, gpt-4o-mini-transcribe",
+      "title": "제품 데모 리허설",
       "tags": [
-        "모델비교",
-        "mini",
-        "업로드"
+        "데모",
+        "제품"
       ],
       "summaryTags": [
-        "모델비교",
-        "mini",
-        "업로드"
+        "시나리오",
+        "피드백"
       ],
       "date": "2026-07-26T17:35:20.915Z",
       "duration": "3분",
@@ -264,7 +262,7 @@
           "color": "bg-blue-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
+          "recognitionNote": "대화 속 호명으로 추정",
           "summary": "차관님에게 설계비 반영의 필요성을 강조하고 약속을 받음",
           "tags": [
             "의원",
@@ -278,7 +276,7 @@
           "color": "bg-emerald-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
+          "recognitionNote": "대화 속 호명으로 추정",
           "summary": "803 국립공원 센테 탐방로 조성을 위한 설계비를 2026년 본 예산에 편성",
           "tags": [
             "803"
@@ -293,16 +291,14 @@
     },
     {
       "id": "mtg-cmp-faster",
-      "title": "다화자 180초, faster-whisper large-v3",
+      "title": "고객 문의 응대 점검",
       "tags": [
-        "모델비교",
-        "faster-whisper",
-        "업로드"
+        "고객지원",
+        "응대"
       ],
       "summaryTags": [
-        "모델비교",
-        "faster-whisper",
-        "업로드"
+        "FAQ",
+        "톤"
       ],
       "date": "2026-07-26T17:35:34.758Z",
       "duration": "3분",
@@ -314,7 +310,7 @@
           "color": "bg-blue-500",
           "isMember": false,
           "recognition": "voice",
-          "recognitionNote": "AI 화자 분리 라벨",
+          "recognitionNote": "대화 속 호명으로 추정",
           "summary": "차관님 임명 축하 및 설계비 반영 요청",
           "tags": [
             "의원",
@@ -330,17 +326,17 @@
     },
     {
       "id": "mtg-001",
-      "title": "Q3 보안 정책 검토",
+      "title": "3분기 마케팅 캠페인 킥오프",
       "tags": [
-        "보안",
-        "마스킹",
-        "정책"
+        "마케팅",
+        "캠페인",
+        "킥오프"
       ],
       "summaryTags": [
-        "안건",
-        "결정",
-        "후속",
-        "배포"
+        "채널",
+        "예산",
+        "일정",
+        "KPI"
       ],
       "daysAgo": 2,
       "time": "14:00:00",
@@ -355,7 +351,7 @@
           "isHost": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "안건 확인·자동 마스킹 결정 주도",
+          "summary": "캠페인 목표·채널 우선순위 확정 주도",
           "tags": [
             "진행",
             "결정"
@@ -369,10 +365,10 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "마스킹 규칙 PR·통합 테스트 담당",
+          "summary": "콘텐츠·랜딩 일정과 제작 범위 정리",
           "tags": [
-            "마스킹",
-            "개발"
+            "콘텐츠",
+            "일정"
           ]
         },
         {
@@ -383,9 +379,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "낮은 톤, '민수'로 호칭됨",
-          "summary": "NER 보조·노이즈 환경 STT 리스크 점검",
+          "summary": "광고비·성과 지표 리스크 점검",
           "tags": [
-            "STT",
+            "성과",
             "리스크"
           ]
         },
@@ -397,10 +393,10 @@
           "isMember": false,
           "recognition": "guest",
           "recognitionNote": "외부 게스트, 입장명으로 표시",
-          "summary": "배포 체크리스트·검수 큐 분리",
+          "summary": "대행사 협업·론칭 체크리스트 담당",
           "tags": [
-            "배포",
-            "검수"
+            "협업",
+            "운영"
           ]
         },
         {
@@ -411,7 +407,7 @@
           "isMember": true,
           "recognition": "voice",
           "recognitionNote": "빠른 말투, 높은 톤",
-          "summary": "정책 범위 논의 참여",
+          "summary": "채널별 메시지·타깃 논의 참여",
           "tags": [
             "논의"
           ]
@@ -424,7 +420,7 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "조용한 톤, 질문 위주",
-          "summary": "일정·후속 확인 질문",
+          "summary": "일정·승인 경로 질의",
           "tags": [
             "질의"
           ]
@@ -437,17 +433,17 @@
     },
     {
       "id": "mtg-002",
-      "title": "마스킹 규칙 점검",
+      "title": "신제품 출시 D-60 일정 조율",
       "tags": [
-        "개인",
-        "마스킹"
+        "출시",
+        "일정",
+        "제품"
       ],
       "summaryTags": [
-        "논의",
-        "미결",
-        "예외",
-        "검수",
-        "배포"
+        "로드맵",
+        "품질",
+        "마케팅",
+        "지원"
       ],
       "daysAgo": 1,
       "time": "10:30:00",
@@ -461,11 +457,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "예외·미결 규칙을 총괄 점검하고 우선순위를 확정",
+          "summary": "출시 게이트·우선순위 조율",
           "tags": [
-            "검수",
-            "총괄",
-            "마스킹"
+            "진행"
           ],
           "isHost": true
         },
@@ -477,10 +471,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "전화·이메일 패턴 강화안을 초안하고 PR 범위를 제안",
+          "summary": "제품 완성도·베타 피드백 공유",
           "tags": [
-            "개발",
-            "규칙"
+            "제품"
           ]
         },
         {
@@ -491,10 +484,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "음성 추정",
-          "summary": "노이즈·겹침 화자 샘플에서 오탐/미탐을 측정",
+          "summary": "품질·성능 리스크 점검",
           "tags": [
-            "STT",
-            "벤치"
+            "품질"
           ]
         },
         {
@@ -505,10 +497,9 @@
           "isMember": false,
           "recognition": "guest",
           "recognitionNote": "외부 게스트",
-          "summary": "검수 큐·예외 목록 UX와 배포 체크리스트를 정리",
+          "summary": "출시 운영·지원 준비",
           "tags": [
-            "배포",
-            "UX"
+            "운영"
           ]
         },
         {
@@ -519,10 +510,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "약어·호칭 변형 사전을 수집해 예외표에 반영",
+          "summary": "가격·패키지 논의",
           "tags": [
-            "사전",
-            "예외"
+            "가격"
           ]
         },
         {
@@ -533,10 +523,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "음성 추정",
-          "summary": "QA 시나리오와 재현 오디오 체크리스트를 작성",
+          "summary": "고객 커뮤니케이션 초안",
           "tags": [
-            "QA",
-            "재현"
+            "커뮤니케이션"
           ]
         },
         {
@@ -547,10 +536,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "개인정보 유형 분류(식별자/준식별자) 기준을 제안",
+          "summary": "디자인·브랜드 자산 일정",
           "tags": [
-            "정책",
-            "분류"
+            "디자인"
           ]
         },
         {
@@ -561,10 +549,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "음성 추정",
-          "summary": "계좌·카드 숫자 읽기 변형 케이스를 정리",
+          "summary": "영업 교육·데모 자료",
           "tags": [
-            "금융",
-            "패턴"
+            "영업"
           ]
         },
         {
@@ -575,10 +562,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "팀 공유용 점검 노트와 미결 트래커를 업데이트",
+          "summary": "고객지원 FAQ·응대 시나리오",
           "tags": [
-            "문서",
-            "트래커"
+            "지원"
           ]
         },
         {
@@ -589,10 +575,9 @@
           "isMember": false,
           "recognition": "guest",
           "recognitionNote": "외부 게스트",
-          "summary": "외부 미팅 환경 리스크와 재검증 게이트를 제안",
+          "summary": "법무·약관 검토 일정",
           "tags": [
-            "리스크",
-            "게이트"
+            "법무"
           ]
         },
         {
@@ -603,10 +588,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "음성 추정",
-          "summary": "모델 보조 NER 후보와 비용·지연을 비교",
+          "summary": "인프라·용량 계획",
           "tags": [
-            "NER",
-            "비용"
+            "인프라"
           ]
         },
         {
@@ -617,10 +601,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "고객 문의에서 나온 마스킹 불만 케이스를 분류",
+          "summary": "파트너·유통 일정",
           "tags": [
-            "고객",
-            "피드백"
+            "파트너"
           ]
         }
       ],
@@ -631,15 +614,15 @@
     },
     {
       "id": "mtg-003",
-      "title": "RBAC 권한 체계 개편 회의",
+      "title": "고객지원 프로세스 개선 회의",
       "tags": [
-        "권한",
-        "접근"
+        "고객지원",
+        "프로세스"
       ],
       "summaryTags": [
-        "안건",
-        "논의",
-        "액션"
+        "SLA",
+        "티켓",
+        "핸드오프"
       ],
       "daysAgo": 0,
       "time": "15:00:00",
@@ -653,10 +636,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "역할 계층·권한 매트릭스 초안을 제시하고 마이그레이션 범위 조율",
+          "summary": "티켓 분류·우선순위안 제안",
           "tags": [
-            "RBAC",
-            "설계"
+            "프로세스"
           ]
         },
         {
@@ -667,9 +649,8 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "낮은 톤, '민수'로 호칭됨",
-          "summary": "레거시 ACL 충돌·감사 로그 누락 리스크를 지적",
+          "summary": "에스컬레이션·도구 연동 리스크",
           "tags": [
-            "보안",
             "리스크"
           ]
         },
@@ -681,10 +662,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "조용한 톤, 질문 위주",
-          "summary": "게스트·외부 협업자 권한 시나리오와 QA 체크리스트 확인",
+          "summary": "응대 가이드·교육 일정",
           "tags": [
-            "QA",
-            "게스트"
+            "교육"
           ]
         }
       ],
@@ -718,10 +698,9 @@
           "isHost": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "스프린트 블로커를 취합하고 우선순위를 재배치",
+          "summary": "우선순위 재배치·결정",
           "tags": [
-            "진행",
-            "블로커"
+            "진행"
           ]
         },
         {
@@ -732,10 +711,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "마스킹 PR 리뷰 대기·API 스펙 확정 필요를 공유",
+          "summary": "디자인 리뷰·카피 블로커 공유",
           "tags": [
-            "개발",
-            "리뷰"
+            "디자인"
           ]
         },
         {
@@ -746,10 +724,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "낮은 톤",
-          "summary": "벤치 환경 GPU 쿼터 부족으로 재측정 일정 조정 요청",
+          "summary": "벤더 회신·일정 조정 요청",
           "tags": [
-            "인프라",
-            "STT"
+            "일정"
           ]
         }
       ],
@@ -760,14 +737,14 @@
     },
     {
       "id": "mtg-005",
-      "title": "STT 엔진 성능 벤치마크",
+      "title": "하반기 예산 배정 사전 협의",
       "tags": [
-        "STT",
-        "성능"
+        "예산",
+        "기획"
       ],
       "summaryTags": [
-        "논의",
-        "합의",
+        "배분",
+        "우선순위",
         "마감"
       ],
       "daysAgo": 3,
@@ -783,11 +760,9 @@
           "isHost": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "모델별 WER·지연·비용을 비교하고 기본 엔진 후보를 좁힘",
+          "summary": "부서별 요청안 정리·합의 주도",
           "tags": [
-            "벤치",
-            "STT",
-            "의사결정"
+            "예산"
           ]
         }
       ],
@@ -798,14 +773,15 @@
     },
     {
       "id": "mtg-006",
-      "title": "발표 연습 녹음",
+      "title": "이사회 보고 리허설",
       "tags": [
-        "연습"
+        "리허설",
+        "보고"
       ],
       "summaryTags": [
-        "안건",
-        "일정",
-        "피드백"
+        "스토리",
+        "피드백",
+        "자료"
       ],
       "daysAgo": 12,
       "time": "19:00:00",
@@ -820,11 +796,9 @@
           "isHost": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "발표 흐름·시간 배분·질의 대비 멘트를 녹음해 스스로 피드백",
+          "summary": "보고 흐름·핵심 메시지 연습",
           "tags": [
-            "발표",
-            "연습",
-            "피드백"
+            "발표"
           ]
         }
       ],
@@ -835,15 +809,15 @@
     },
     {
       "id": "mtg-007",
-      "title": "외부 파트너 킥오프",
+      "title": "한빛커머스 공동마케팅 킥오프",
       "tags": [
         "파트너",
-        "킥오프"
+        "마케팅"
       ],
       "summaryTags": [
-        "안건",
         "역할",
-        "일정"
+        "일정",
+        "성과"
       ],
       "daysAgo": -1,
       "time": "10:00:00",
@@ -858,10 +832,9 @@
           "isHost": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "파트너 킥오프 목표·커뮤니케이션 채널·주간 리듬을 제안",
+          "summary": "공동 목표·역할 분담 확정",
           "tags": [
-            "킥오프",
-            "조율"
+            "진행"
           ]
         },
         {
@@ -872,10 +845,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "기술 연동 범위·샌드박스 일정·API 키 발급 절차를 정리",
+          "summary": "콘텐츠·이벤트 일정 조율",
           "tags": [
-            "연동",
-            "API"
+            "콘텐츠"
           ]
         },
         {
@@ -886,10 +858,9 @@
           "isMember": false,
           "recognition": "guest",
           "recognitionNote": "외부 파트너",
-          "summary": "계약·보안 검토 일정과 납품 마일스톤을 공유",
+          "summary": "운영·측정 체계 정리",
           "tags": [
-            "파트너",
-            "일정"
+            "운영"
           ]
         }
       ],
@@ -900,10 +871,10 @@
     },
     {
       "id": "mtg-008",
-      "title": "상반기 보안 감사 준비",
+      "title": "상반기 내부감사 대응 준비",
       "tags": [
         "감사",
-        "보안"
+        "컴플라이언스"
       ],
       "summaryTags": [
         "체크리스트",
@@ -923,10 +894,9 @@
           "isHost": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "감사 범위·증거 목록을 확정하고 담당 매트릭스를 배정",
+          "summary": "감사 범위·자료 목록 확정",
           "tags": [
-            "감사",
-            "총괄"
+            "진행"
           ]
         },
         {
@@ -937,10 +907,9 @@
           "isMember": false,
           "recognition": "voice",
           "recognitionNote": "낮은 톤",
-          "summary": "접근 로그·암호화 키 로테이션 증빙 수집 상태를 보고",
+          "summary": "증빙·로그 수집 리스크",
           "tags": [
-            "로그",
-            "암호"
+            "리스크"
           ]
         },
         {
@@ -951,10 +920,9 @@
           "isMember": false,
           "recognition": "guest",
           "recognitionNote": "외부 게스트",
-          "summary": "벤더 질문지·정책 문서 갭을 점검하고 보완 일정을 제시",
+          "summary": "일정·담당 배정",
           "tags": [
-            "정책",
-            "문서"
+            "운영"
           ]
         }
       ],
@@ -965,15 +933,15 @@
     },
     {
       "id": "mtg-009",
-      "title": "연초 운영 계획 회의",
+      "title": "2026 연간 운영 계획 회의",
       "tags": [
         "계획",
         "운영"
       ],
       "summaryTags": [
         "목표",
-        "합의",
-        "후속"
+        "인력",
+        "투자"
       ],
       "daysAgo": 180,
       "time": "14:30:00",
@@ -988,10 +956,9 @@
           "isHost": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "연간 OKR·운영 예산 한도와 분기별 점검 리듬을 제안",
+          "summary": "연간 목표·우선순위 합의",
           "tags": [
-            "OKR",
-            "운영"
+            "전략"
           ]
         },
         {
@@ -1002,10 +969,9 @@
           "isMember": true,
           "recognition": "member",
           "recognitionNote": "계정 프로필과 매칭",
-          "summary": "제품 로드맵·채용·기술 부채 상환 우선순위를 조율",
+          "summary": "채용·교육·운영 과제 정리",
           "tags": [
-            "로드맵",
-            "채용"
+            "운영"
           ]
         }
       ],

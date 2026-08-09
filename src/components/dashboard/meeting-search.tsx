@@ -81,6 +81,11 @@ export function ExpandableMeetingSearch({
   className,
   /** false면 검색 토글·펼침 숨김 (모바일은 하단 엄지 존 검색만 쓸 때) */
   showSearchToggle = true,
+  /**
+   * true면 좁은 컨테이너에서도 툴바 가로선 유지 (회의 상세 타임라인).
+   * 대시보드 탭은 기본(false) — 모바일에서 탭 밑줄과 겹치지 않게 선 제거.
+   */
+  keepToolbarBorder = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -90,6 +95,7 @@ export function ExpandableMeetingSearch({
   toolbar: ReactNode;
   className?: string;
   showSearchToggle?: boolean;
+  keepToolbarBorder?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -151,11 +157,14 @@ export function ExpandableMeetingSearch({
     >
       <div
         className={cn(
-          "flex min-w-0 items-end gap-2 border-b border-border",
-          showSearchToggle && "max-md:border-b-0 md:gap-1",
+          "flex h-12 min-w-0 items-end gap-2 border-b border-border md:h-11",
+          showSearchToggle && !keepToolbarBorder && "max-md:border-b-0",
+          showSearchToggle && "md:gap-1",
         )}
       >
-        <div className="min-w-0 flex-1">{toolbar}</div>
+        <div className="flex h-full min-w-0 w-full flex-1 items-center">
+          {toolbar}
+        </div>
         {showSearchToggle ? (
           <button
             type="button"
@@ -164,7 +173,7 @@ export function ExpandableMeetingSearch({
             aria-expanded={expanded}
             title={label}
             className={cn(
-              "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center bg-transparent text-muted transition-colors",
+              "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center bg-transparent text-muted transition-colors md:h-11 md:w-11",
               "hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               "md:-mb-px md:border-b-2",

@@ -174,7 +174,7 @@ export function fixtureMeetingsFull(
   const hit = cachedMeetingsFull.get(workspace);
   if (hit) return hit;
   const titles = [
-    "주간 보안 싱크",
+    "주간 마케팅 싱크",
     "제품 로드맵 리뷰",
     "고객 인터뷰 정리",
     "스프린트 계획",
@@ -190,8 +190,8 @@ export function fixtureMeetingsFull(
   const list = titles.map((title, index) => ({
     id: `ux-mtg-${index + 1}`,
     title,
-    tags: index % 2 === 0 ? ["보안", "일정"] : ["제품"],
-    summaryTags: index % 2 === 0 ? ["보안", "일정"] : ["제품"],
+    tags: index % 2 === 0 ? ["마케팅", "일정"] : ["제품"],
+    summaryTags: index % 2 === 0 ? ["마케팅", "일정"] : ["제품"],
     date: daysAgoIso(index),
     duration: `${20 + (index % 5) * 8}분`,
     participants: [

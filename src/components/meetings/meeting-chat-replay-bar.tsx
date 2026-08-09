@@ -597,7 +597,7 @@ export function MeetingChatReplayBar({
                         aria-checked={settings.rate === rate}
                         onClick={() => patch({ rate })}
                         className={cn(
-                          "min-h-12 rounded-[10px] text-base font-semibold tabular-nums transition-[transform,background-color,color,box-shadow] duration-150 ease-out active:scale-95 motion-reduce:active:scale-100 md:min-h-8 md:text-xs",
+                          "min-h-12 rounded-[10px] text-base font-semibold tabular-nums transition-[transform,background-color,color,box-shadow] duration-150 ease-out active:scale-95 motion-reduce:active:scale-100 md:min-h-9 md:text-sm",
                           settings.rate === rate
                             ? "bg-white text-[#111111] shadow-soft"
                             : "text-white/60 hover:bg-white/10 hover:text-white",

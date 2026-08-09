@@ -25,11 +25,18 @@ scenario("globals · sm/md/lg 가 @container 기준", () => {
   );
   assert.match(css, /@custom-variant sm \(@container/);
   assert.match(css, /@custom-variant lg \(@container/);
+  assert.match(css, /@media \(pointer: fine\)/);
+  assert.match(css, /\.faith-desktop-shell\s*\{[\s\S]*min-width:\s*64rem/);
 });
 
 scenario("body · @container 루트", () => {
   const layout = read("src/app/layout.tsx");
   assert.match(layout, /className="@container min-h-full"/);
+});
+
+scenario("dashboard shell · 데스크톱 바닥 컨테이너", () => {
+  const shell = read("src/components/layout/dashboard-shell.tsx");
+  assert.match(shell, /@container faith-desktop-shell/);
 });
 
 scenario("DesignFrame · 전 씬 뷰포트 스테이지", () => {

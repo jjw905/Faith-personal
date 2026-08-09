@@ -43,9 +43,11 @@ import {
 } from "@/lib/feature-flags";
 import { cn } from "@/lib/utils";
 import {
+  DESKTOP_POINTER_QUERY,
+  MD_UP_QUERY,
   nextCollapsedAfterPinToggle,
+  preferDesktopChrome,
   resolveSidebarVisual,
-  SIDEBAR_RAIL_MIN_WIDTH_PX,
 } from "@/lib/sidebar-layout";
 import { isMeetingsRoute, isTeamRoute } from "@/lib/workspace-route";
 
@@ -608,13 +610,16 @@ export function AppSidebar({
   }, []);
 
   useEffect(() => {
-    const railMq = window.matchMedia(
-      `(min-width: ${SIDEBAR_RAIL_MIN_WIDTH_PX}px)`,
-    );
-    const sync = () => setIsRailLayout(railMq.matches);
+    const widthMq = window.matchMedia(MD_UP_QUERY);
+    const pointerMq = window.matchMedia(DESKTOP_POINTER_QUERY);
+    const sync = () => setIsRailLayout(preferDesktopChrome());
     sync();
-    railMq.addEventListener("change", sync);
-    return () => railMq.removeEventListener("change", sync);
+    widthMq.addEventListener("change", sync);
+    pointerMq.addEventListener("change", sync);
+    return () => {
+      widthMq.removeEventListener("change", sync);
+      pointerMq.removeEventListener("change", sync);
+    };
   }, []);
 
   function toggleCollapsed() {
@@ -669,7 +674,7 @@ export function AppSidebar({
       ) : null}
       <aside
         className={cn(
-          "flex shrink-0 flex-col border-r border-border bg-card",
+          "flex shrink-0 flex-col overflow-x-visible border-r border-border bg-card",
           "fixed inset-y-0 left-0 z-50 h-dvh w-60",
           "transition-[width,transform,box-shadow] duration-200 ease-out",
           // 모바일(< md): 햄버거 드로어. md+: 항상 보이며 레일/핀.
@@ -820,7 +825,10 @@ export function AppSidebar({
           </nav>
 
           <div
-            className={cn("shrink-0 space-y-1", rail ? "px-0 py-3" : "p-3")}
+            className={cn(
+              "relative z-10 shrink-0 space-y-1 overflow-visible",
+              rail ? "px-0 py-3" : "p-3",
+            )}
           >
             <button
               type="button"

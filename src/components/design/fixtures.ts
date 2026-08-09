@@ -6,7 +6,7 @@ import type { Meeting } from "@/types/meeting";
 export const FIXTURE_PROCESSING_MULTI = [
   {
     id: "design-mtg-structuring",
-    title: "주간-보안-싱크",
+    title: "주간-마케팅-싱크",
     status: "structuring",
     phase: "structuring",
     progressPercent: 78,
@@ -16,7 +16,7 @@ export const FIXTURE_PROCESSING_MULTI = [
   },
   {
     id: "design-mtg-transcribing",
-    title: "assembly2-envlabor-20250704",
+    title: "신제품-출시-일정-조율",
     status: "transcribing",
     phase: "transcribing",
     progressPercent: 0,
@@ -28,7 +28,7 @@ export const FIXTURE_PROCESSING_MULTI = [
   },
   {
     id: "design-mtg-waiting-2",
-    title: "brief-ailab (1)",
+    title: "고객지원-프로세스-개선",
     status: "transcribing",
     phase: "transcribing",
     progressPercent: 0,
@@ -42,7 +42,7 @@ export const FIXTURE_PROCESSING_MULTI = [
 
 export const FIXTURE_MEETING: Meeting = {
   id: "design-mtg-detail",
-  title: "assembly2-envlabor-20250704",
+  title: "3분기 마케팅 캠페인 킥오프",
   tags: [],
   summaryTags: [],
   date: new Date().toISOString(),
@@ -67,6 +67,6 @@ export const FIXTURE_MEETING_DONE: Meeting = {
   id: "design-mtg-done",
   status: "completed",
   duration: "42분",
-  tags: ["예산", "심사"],
-  summaryTags: ["예산", "심사"],
+  tags: ["캠페인", "일정"],
+  summaryTags: ["캠페인", "일정"],
 };

@@ -189,7 +189,22 @@ export function listUpcomingDays(
   count = 14,
   now: Date = new Date(),
 ): UpcomingDayOption[] {
-  return Array.from({ length: count }, (_, offset) => {
+  return listDayStripRange(0, count, now);
+}
+
+/**
+ * 일정 가로 스트립용. startOffset부터 count일 (음수=과거).
+ * 예: listDayStripRange(-7, 36) → 오늘 기준 -7 ~ +28.
+ */
+export function listDayStripRange(
+  startOffset: number,
+  count: number,
+  now: Date = new Date(),
+): UpcomingDayOption[] {
+  const start = Math.trunc(startOffset);
+  const n = Math.max(0, Math.trunc(count));
+  return Array.from({ length: n }, (_, i) => {
+    const offset = start + i;
     const parts = seoulDayOffset(now, offset);
     const weekday = new Date(
       toUtcDay(parts.year, parts.month, parts.day),
@@ -203,6 +218,29 @@ export function listUpcomingDays(
       iso: `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`,
     };
   });
+}
+
+/** YYYY-MM-DD → 요일 한 글자. */
+export function weekdayShortFromIso(iso: string): string {
+  const parts = parseIsoDateParts(iso);
+  if (!parts) return "";
+  const weekday = new Date(
+    toUtcDay(parts.year, parts.month, parts.day),
+  ).getUTCDay();
+  return WEEKDAY_SHORT[weekday] ?? "";
+}
+
+/** YYYY-MM-DD → 오늘부터 남은 일수 (오늘=0). */
+export function daysUntilFromIso(
+  iso: string,
+  now: Date = new Date(),
+): number | null {
+  const parts = parseIsoDateParts(iso);
+  if (!parts) return null;
+  const today = seoulParts(now);
+  const todayMs = toUtcDay(today.year, today.month, today.day);
+  const targetMs = toUtcDay(parts.year, parts.month, parts.day);
+  return Math.round((targetMs - todayMs) / (24 * 60 * 60 * 1000));
 }
 
 export type MonthDayCell = {

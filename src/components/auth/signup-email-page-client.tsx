@@ -6,6 +6,7 @@ import { useState } from "react";
 import { SignupEmailVerify } from "@/components/auth/signup-email-verify";
 import { AUTH_ALERT_ERROR } from "@/components/auth/auth-shell";
 import { getRecaptchaToken } from "@/components/auth/recaptcha-v3";
+import { RECAPTCHA_BLOCKED_MESSAGE } from "@/lib/recaptcha";
 
 async function requestSignupOtp(email: string) {
   let captchaToken: string | null = null;
@@ -14,7 +15,7 @@ async function requestSignupOtp(email: string) {
   } catch {
     return {
       ok: false,
-      message: "보안 확인에 실패했습니다. 다시 시도해 주세요.",
+      message: RECAPTCHA_BLOCKED_MESSAGE,
     };
   }
   const res = await fetch("/api/auth/signup-verify/request", {

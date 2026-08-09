@@ -51,29 +51,6 @@ export function resolveAttachmentKind(
   return "file";
 }
 
-function kindLabel(kind: TranscriptAttachmentKind) {
-  switch (kind) {
-    case "audio":
-      return "오디오";
-    case "pdf":
-      return "PDF";
-    case "doc":
-      return "문서";
-    case "sheet":
-      return "표";
-    case "image":
-      return "이미지";
-    case "slide":
-      return "슬라이드";
-    case "archive":
-      return "압축";
-    case "code":
-      return "코드";
-    default:
-      return "파일";
-  }
-}
-
 /** 다시보기 말풍선용 첨부 카드. 보관함 파일 아이콘 재사용. 색 면 없음. */
 export function TranscriptAttachmentCard({
   attachment,
@@ -81,8 +58,6 @@ export function TranscriptAttachmentCard({
   attachment: TranscriptAttachment;
   hostSide?: boolean;
 }) {
-  const kind = resolveAttachmentKind(attachment);
-
   return (
     <div className="w-full max-w-[15.75rem] shrink-0 overflow-hidden text-left text-foreground">
       <div className="flex items-center gap-3 py-1">
@@ -96,7 +71,7 @@ export function TranscriptAttachmentCard({
             {attachment.name}
           </p>
           <p className="mt-1 text-xs font-medium tabular-nums text-muted">
-            {kindLabel(kind)} {attachment.sizeLabel}
+            {attachment.sizeLabel}
           </p>
         </div>
       </div>
@@ -135,7 +110,6 @@ export function MeetingAttachmentsList({
       </p>
       <ul className="mt-3 divide-y divide-border border-y border-border">
         {files.map((item) => {
-          const kind = resolveAttachmentKind(item.attachment);
           return (
             <li key={item.lineId}>
               <button
@@ -153,8 +127,8 @@ export function MeetingAttachmentsList({
                     {item.attachment.name}
                   </span>
                   <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-base text-muted">
-                    <span>
-                      {kindLabel(kind)} · {item.attachment.sizeLabel}
+                    <span className="tabular-nums">
+                      {item.attachment.sizeLabel}
                     </span>
                     <span className="text-muted-2" aria-hidden>
                       ·

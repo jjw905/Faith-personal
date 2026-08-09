@@ -85,7 +85,7 @@ export function SceneRecordsDownloadMany() {
     {
       ...FIXTURE_MEETING_DONE,
       id: "design-mtg-export-1",
-      title: "주간 보안 싱크",
+      title: "주간 팀 스탠드업",
       duration: "20분",
       capture: "live" as const,
       date: "2026-08-03T12:40:00+09:00",
@@ -145,8 +145,8 @@ export function SceneRecordsDeleteMany() {
   const [open, setOpen] = useState(true);
   const meetings = [
     FIXTURE_MEETING_DONE,
-    { ...FIXTURE_MEETING_DONE, id: "design-mtg-2", title: "주간 보안 싱크" },
-    { ...FIXTURE_MEETING_DONE, id: "design-mtg-3", title: "RBAC 개편 회의" },
+    { ...FIXTURE_MEETING_DONE, id: "design-mtg-2", title: "주간 팀 스탠드업" },
+    { ...FIXTURE_MEETING_DONE, id: "design-mtg-3", title: "고객지원 프로세스 개선" },
   ];
   return (
     <PreviewStage

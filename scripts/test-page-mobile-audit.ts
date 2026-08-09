@@ -167,7 +167,7 @@ scenario("/settings·/plan·/account", () => {
 scenario("/users·다이얼로그·음성방", () => {
   assert.match(
     read("src/components/admin/users-admin-panel.tsx"),
-    /min-h-12 px-3\.5 text-base md:h-8/,
+    /min-h-12 px-3\.5 text-base md:h-9/,
   );
   const dlg = read("src/components/admin/user-admin-change-dialog.tsx");
   assert.match(dlg, /min-h-12 items-center rounded-full px-4 text-base/);
@@ -196,6 +196,21 @@ scenario("/stats·/team·셸", () => {
   assert.match(legal, /text-base/);
   const profile = read("src/components/layout/user-profile.tsx");
   assert.match(profile, /min-h-12 w-full cursor-pointer[\s\S]*text-base/);
+  // 레일(compact)에서 lg 미만에도 메뉴가 레일 폭에 가두지 않음
+  assert.match(profile, /left-0 right-auto w-max min-w-\[12rem\]/);
+  assert.match(profile, /compact \? "w-max min-w-\[12rem\]"/);
+  assert.doesNotMatch(profile, /lg:w-max/);
+  assert.doesNotMatch(profile, /lg:right-auto/);
+  const settings = read("src/app/(dashboard)/settings/page.tsx");
+  assert.match(
+    settings,
+    /flex flex-col items-stretch[\s\S]*md:flex-row md:items-center md:justify-between/,
+  );
+  const quotaBanner = read("src/components/dashboard/upload-quota-banner.tsx");
+  assert.doesNotMatch(
+    quotaBanner,
+    /whitespace-nowrap text-base font-medium text-foreground/,
+  );
   assert.match(
     read("src/components/layout/app-header.tsx"),
     /h-12 w-12[\s\S]*md:hidden/,
@@ -208,6 +223,12 @@ scenario("뷰포트 fidelity · container breakpoint", () => {
     css,
     /@custom-variant md \(@container \(min-width: 768px\)\)/,
   );
+  assert.match(css, /@media \(pointer: fine\)/);
+  assert.match(css, /\.faith-desktop-shell\s*\{[\s\S]*min-width:\s*64rem/);
+  assert.match(
+    read("src/components/layout/dashboard-shell.tsx"),
+    /@container faith-desktop-shell/,
+  );
   assert.match(read("src/app/layout.tsx"), /@container min-h-full/);
 });
 
@@ -215,6 +236,7 @@ scenario("기록 헤더 · md 판정 · 확인 다이얼로그 열", () => {
   const layout = read("src/components/meetings/meeting-record-layout.tsx");
   assert.match(layout, /showLeadingOnMobile/);
   assert.match(read("src/hooks/use-md-up.ts"), /data-faith-design-viewport/);
+  assert.match(read("src/hooks/use-md-up.ts"), /preferDesktopChrome/);
   assert.match(
     read("src/components/meetings/meeting-records-action-dialog.tsx"),
     /w-\[5\.75rem\]/,

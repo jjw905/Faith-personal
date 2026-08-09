@@ -59,8 +59,8 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3.5">
-      <div className="min-w-0 flex-1 pr-3">
+    <div className="flex flex-col items-stretch gap-2.5 py-3.5 md:flex-row md:items-center md:justify-between md:gap-4">
+      <div className="min-w-0 flex-1 md:pr-3">
         <p className="text-base font-semibold leading-5 text-foreground">
           {label}
         </p>
@@ -70,7 +70,9 @@ function SettingRow({
           </p>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center">{children}</div>
+      <div className="flex min-w-0 shrink-0 items-center max-md:w-full max-md:justify-start md:justify-end">
+        {children}
+      </div>
     </div>
   );
 }
@@ -129,7 +131,7 @@ function Segmented({
 }) {
   return (
     <div
-      className="inline-flex max-w-full flex-wrap rounded-xl bg-surface p-1"
+      className="flex w-full max-w-full flex-wrap rounded-xl bg-surface p-1 md:inline-flex md:w-auto"
       role="group"
       aria-label={ariaLabel}
     >

@@ -27,6 +27,7 @@ import { RecaptchaLegalNote } from "@/components/auth/recaptcha-legal-note";
 import { getRecaptchaToken } from "@/components/auth/recaptcha-v3";
 import { Input } from "@/components/ui/input";
 import { normalizeAuthEmail } from "@/lib/auth-validation";
+import { RECAPTCHA_BLOCKED_MESSAGE } from "@/lib/recaptcha";
 import { cn } from "@/lib/utils";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -52,7 +53,7 @@ const CODE_MESSAGES: Record<string, string> = {
   email_unverified:
     "이메일 인증이 완료되지 않은 계정입니다. 고객지원에 문의해 주세요.",
   credentials: "이메일 또는 비밀번호가 올바르지 않습니다.",
-  captcha_failed: "보안 확인에 실패했습니다. 다시 시도해 주세요.",
+  captcha_failed: RECAPTCHA_BLOCKED_MESSAGE,
   mfa_required: "인증 앱의 6자리 코드 또는 복구 코드를 입력해 주세요.",
   mfa_invalid: "인증 앱 코드 또는 복구 코드가 올바르지 않습니다.",
 };
@@ -113,7 +114,7 @@ export function LoginForm({
       try {
         captchaToken = await getRecaptchaToken("login");
       } catch {
-        setError("보안 확인에 실패했습니다. 다시 시도해 주세요.");
+        setError(RECAPTCHA_BLOCKED_MESSAGE);
         return;
       }
       const res = await signIn("credentials", {

@@ -238,16 +238,17 @@ export function MaskedText({
             className={cn(
               // 본문과 같은 baseline. min-h/inline-flex는 줄 높이만 키워 위아래가 어긋난다.
               // 모바일 터치 48은 ::before로만 넓힌다(레이아웃에는 영향 없음).
-              "relative mx-0.5 inline-block align-baseline rounded-md px-1 font-mono text-[0.95em] font-semibold leading-[inherit]",
+              // 색면(테이프 톤) 없이 검정 볼드로 구분 — 클릭 가능함이 먼저 보이게.
+              "relative mx-0.5 inline-block align-baseline px-0.5 font-mono text-[0.95em] font-bold leading-[inherit]",
               "before:absolute before:left-1/2 before:top-1/2 before:z-0 before:min-h-12 before:min-w-12 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] md:before:content-none",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               open
                 ? onPrimary
-                  ? "bg-white/25 text-primary-foreground underline decoration-dotted underline-offset-2"
-                  : "bg-success-soft text-success underline decoration-dotted underline-offset-2"
+                  ? "text-primary-foreground underline decoration-2 underline-offset-2"
+                  : "text-foreground underline decoration-2 underline-offset-2"
                 : onPrimary
-                  ? "cursor-pointer bg-white/20 text-primary-foreground hover:bg-white/30"
-                  : "animate-[mask-chip-in_220ms_ease-out] motion-reduce:animate-none cursor-pointer bg-masked-soft text-masked hover:brightness-95",
+                  ? "animate-[mask-chip-in_220ms_ease-out] motion-reduce:animate-none cursor-pointer text-primary-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid"
+                  : "animate-[mask-chip-in_220ms_ease-out] motion-reduce:animate-none cursor-pointer text-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid",
               isActive && markClass,
             )}
             style={isActive ? markStyle : undefined}

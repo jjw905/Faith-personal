@@ -1,9 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
-import { PreviewStage } from "@/components/design/preview-stage";
-import { DemandSurveyConsentGate } from "@/components/layout/demand-survey-consent-gate";
 import { LegalDocsView } from "@/components/legal/legal-docs-view";
 import { SurveyForm } from "@/components/survey/survey-form";
 import { SURVEY_UNLOCKED_MONTHLY_MINUTES } from "@/lib/stt/survey";
@@ -61,25 +57,6 @@ export function SceneSurveyCompleted() {
         <SurveyForm preview previewCompleted />
       </SurveyPageShell>
     </PageSceneFrame>
-  );
-}
-
-/** 최초 진입 오픈 준비 기간 고지 */
-export function SceneDemandSurveyConsent() {
-  const [open, setOpen] = useState(true);
-  return (
-    <PreviewStage
-      hint="가입 후 최초 진입 시 1회 고지."
-      open={open}
-      onReopen={() => setOpen(true)}
-    >
-      <DemandSurveyConsentGate
-        preview
-        forceOpen={open}
-        contained
-        onPreviewClose={() => setOpen(false)}
-      />
-    </PreviewStage>
   );
 }
 
